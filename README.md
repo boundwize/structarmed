@@ -54,7 +54,7 @@ return Architecture::define()
 ### Multiple presets
 
 ```php
-->withPresets(Preset::PSR4(), Preset::DDD())
+->withPresets(Preset::PSR4(), Preset::DDD(), Preset::MVC())
 ```
 
 ### Custom layers and rules
