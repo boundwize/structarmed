@@ -67,6 +67,14 @@ final class MayNotUseClassRuleTest extends TestCase
         $this->assertTrue($rule->appliesTo($node));
     }
 
+    public function testAppliesToLayerWhenNoPatternConfigured(): void
+    {
+        $rule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: \DateTime::class);
+        $node = $this->makeNode([]);
+
+        $this->assertTrue($rule->appliesTo($node));
+    }
+
     public function testDoesNotApplyToNonMatchingClassNamePattern(): void
     {
         $rule = new MayNotUseClassRule(

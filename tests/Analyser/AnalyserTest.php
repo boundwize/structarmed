@@ -74,4 +74,46 @@ final class AnalyserTest extends TestCase
 
         $this->assertFalse($violations->hasViolations());
     }
+
+    public function testAnalyserSkipsFilesWithParseErrors(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Domain/Broken.php' => '<?php class Broken {',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/');
+
+        $violations = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($violations->hasViolations());
+    }
+
+    public function testAnalyserSkipsFilesWithEmptyAst(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Domain/Empty.php' => '<?php',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/');
+
+        $violations = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($violations->hasViolations());
+    }
+
+    /** @param array<string, string> $files */
+    private function makeTempProject(array $files): string
+    {
+        $basePath = '/private/tmp/structarmed-analyser-' . bin2hex(random_bytes(6));
+
+        foreach ($files as $file => $contents) {
+            $path = $basePath . '/' . $file;
+            mkdir(dirname($path), 0777, true);
+            file_put_contents($path, $contents);
+        }
+
+        return $basePath;
+    }
 }

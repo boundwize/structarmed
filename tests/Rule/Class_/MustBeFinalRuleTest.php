@@ -74,6 +74,14 @@ final class MustBeFinalRuleTest extends TestCase
         $this->assertTrue($rule->appliesTo($node));
     }
 
+    public function testAppliesToLayerWhenNoPatternConfigured(): void
+    {
+        $rule = new MustBeFinalRule(layer: 'Domain');
+        $node = $this->makeNode();
+
+        $this->assertTrue($rule->appliesTo($node));
+    }
+
     public function testDoesNotApplyToNonMatchingPattern(): void
     {
         $rule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\ClassCollector;
+use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -14,7 +16,16 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ClassCollector::class)]
 final class ClassCollectorTest extends TestCase
 {
-    private function collect(string $code): \Boundwize\StructArmed\Analyser\ClassNode
+    private function collect(string $code, bool $resolveNames = false): ClassNode
+    {
+        $nodes = $this->collectNodes($code, $resolveNames);
+        $this->assertNotEmpty($nodes, 'No class nodes collected');
+
+        return $nodes[0];
+    }
+
+    /** @return ClassNode[] */
+    private function collectNodes(string $code, bool $resolveNames = false): array
     {
         $resolver  = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], getcwd());
         $collector = new ClassCollector($resolver);
@@ -24,13 +35,15 @@ final class ClassCollectorTest extends TestCase
         $collector->setCurrentFile('/fake/path/Foo.php');
 
         $traverser = new NodeTraverser();
+
+        if ($resolveNames) {
+            $traverser->addVisitor(new NameResolver());
+        }
+
         $traverser->addVisitor($collector);
         $traverser->traverse($ast ?? []);
 
-        $nodes = $collector->getNodes();
-        $this->assertNotEmpty($nodes, 'No class nodes collected');
-
-        return $nodes[0];
+        return $collector->getNodes();
     }
 
     public function testCollectsFinalClass(): void
@@ -57,6 +70,21 @@ final class ClassCollectorTest extends TestCase
         $this->assertTrue($node->isInterface);
     }
 
+    public function testIgnoresAnonymousClasses(): void
+    {
+        $nodes = $this->collectNodes('<?php $foo = new class {};');
+
+        $this->assertSame([], $nodes);
+    }
+
+    public function testCollectsExtendedClassAndImplementedInterfaces(): void
+    {
+        $node = $this->collect('<?php class Foo extends BaseFoo implements First, Second {}');
+
+        $this->assertSame('BaseFoo', $node->extends);
+        $this->assertSame(['First', 'Second'], $node->implements);
+    }
+
     public function testCollectsMethodReturnType(): void
     {
         $node = $this->collect('<?php class Foo { public function bar(): string { return "x"; } }');
@@ -64,6 +92,14 @@ final class ClassCollectorTest extends TestCase
         $this->assertCount(1, $node->methods);
         $this->assertTrue($node->methods[0]->hasReturnType);
         $this->assertSame('bar', $node->methods[0]->name);
+    }
+
+    public function testCollectsProtectedAndPrivateMethodVisibility(): void
+    {
+        $node = $this->collect('<?php class Foo { protected function one(): void {} private function two(): void {} }');
+
+        $this->assertSame('protected', $node->methods[0]->visibility);
+        $this->assertSame('private', $node->methods[1]->visibility);
     }
 
     public function testDetectsMissingReturnType(): void
@@ -125,10 +161,18 @@ PHP;
         $this->assertContains('App\Domain\Order', $node->dependencies);
     }
 
+    public function testCollectsFullyQualifiedDependencies(): void
+    {
+        $node = $this->collect('<?php class Foo { public function bar(): void { new \DateTimeImmutable(); } }');
+
+        $this->assertContains('DateTimeImmutable', $node->dependencies);
+    }
+
     public function testShortNameExtraction(): void
     {
-        $node = $this->collect('<?php namespace App\Domain; final class OrderEntity {}');
+        $node = $this->collect('<?php namespace App\Domain; final class OrderEntity {}', resolveNames: true);
 
+        $this->assertSame('App\Domain\OrderEntity', $node->className);
         $this->assertSame('OrderEntity', $node->shortName());
     }
 }

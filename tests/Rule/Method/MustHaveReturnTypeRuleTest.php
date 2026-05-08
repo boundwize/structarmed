@@ -115,4 +115,12 @@ final class MustHaveReturnTypeRuleTest extends TestCase
 
         $this->assertTrue($rule->appliesTo($node));
     }
+
+    public function testAppliesToLayerWhenNoPatternConfigured(): void
+    {
+        $rule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $node = $this->makeNode([]);
+
+        $this->assertTrue($rule->appliesTo($node));
+    }
 }

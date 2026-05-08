@@ -65,6 +65,14 @@ final class MustBeInterfaceRuleTest extends TestCase
         $this->assertTrue($rule->appliesTo($node));
     }
 
+    public function testAppliesToLayerWhenNoPatternConfigured(): void
+    {
+        $rule = new MustBeInterfaceRule(layer: 'Domain');
+        $node = $this->makeNode();
+
+        $this->assertTrue($rule->appliesTo($node));
+    }
+
     public function testDoesNotApplyToNonMatchingPattern(): void
     {
         $rule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');

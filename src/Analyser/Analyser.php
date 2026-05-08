@@ -47,7 +47,7 @@ final class Analyser
                     $code = (string) file_get_contents($file);
                     $ast  = $parser->parse($code);
 
-                    if ($ast === null) {
+                    if ($ast === []) {
                         continue;
                     }
 
