@@ -4,18 +4,13 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Progress;
 
-use function basename;
 use function fflush;
 use function fprintf;
 use function getenv;
 use function max;
 use function min;
-use function rtrim;
-use function str_pad;
 use function str_repeat;
 use function stream_isatty;
-use function strlen;
-use function substr;
 
 use const PHP_EOL;
 use const STDERR;
@@ -48,28 +43,28 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
         $this->total   = max(0, $total);
         $this->current = 0;
 
-        $this->render('');
+        $this->render();
     }
 
     public function advance(string $file): void
     {
         $this->current = min($this->total, $this->current + 1);
 
-        $this->render($file);
+        $this->render();
     }
 
     public function finish(): void
     {
         if ($this->total > 0) {
             $this->current = $this->total;
-            $this->render('');
+            $this->render();
         }
 
         fprintf($this->stream, PHP_EOL);
         fflush($this->stream);
     }
 
-    private function render(string $file): void
+    private function render(): void
     {
         $percent = $this->total > 0
             ? (int) (($this->current / $this->total) * 100)
@@ -81,18 +76,16 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
             str_repeat('=', $filled),
             '32'
         ) . $this->color(str_repeat('-', $this->width - $filled), '90');
-        $label   = $file !== '' ? ' ' . $this->truncate(basename($file), 30) : '';
         $status  = $this->color('Analyzing', '36');
 
         fprintf(
             $this->stream,
-            "\r%s [%s] %3d%% %d/%d%s",
+            "\r%s [%s] %3d%% %d/%d",
             $status,
             $bar,
             $percent,
             $this->current,
-            $this->total,
-            $label
+            $this->total
         );
         fflush($this->stream);
     }
@@ -117,16 +110,5 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
         }
 
         return "\033[" . $code . 'm' . $value . "\033[0m";
-    }
-
-    private function truncate(string $value, int $length): string
-    {
-        $value = rtrim($value);
-
-        if (strlen($value) <= $length) {
-            return $value;
-        }
-
-        return str_pad(substr($value, 0, $length - 3), $length - 3) . '...';
     }
 }

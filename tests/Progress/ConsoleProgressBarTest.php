@@ -32,8 +32,8 @@ final class ConsoleProgressBarTest extends TestCase
         $output = (string) stream_get_contents($stream);
 
         $this->assertStringContainsString('Analyzing [==========] 100% 2/2', $output);
-        $this->assertStringContainsString('Foo.php', $output);
-        $this->assertStringContainsString('Bar.php', $output);
+        $this->assertStringNotContainsString('Foo.php', $output);
+        $this->assertStringNotContainsString('Bar.php', $output);
     }
 
     public function testProgressBarCanRenderWithColor(): void
@@ -122,7 +122,7 @@ final class ConsoleProgressBarTest extends TestCase
         );
     }
 
-    public function testProgressBarHandlesZeroTotalAndLongFileNames(): void
+    public function testProgressBarHandlesZeroTotalWithoutRenderingFileName(): void
     {
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
@@ -136,7 +136,7 @@ final class ConsoleProgressBarTest extends TestCase
         $output = (string) stream_get_contents($stream);
 
         $this->assertStringContainsString('100% 0/0', $output);
-        $this->assertStringContainsString('VeryLongClassNameThatNeedsT...', $output);
+        $this->assertStringNotContainsString('VeryLongClassNameThatNeedsTruncating.php', $output);
     }
 
     /**
