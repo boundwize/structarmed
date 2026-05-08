@@ -78,6 +78,7 @@ final readonly class DddPreset implements PresetInterface
     public function apply(Architecture $architecture): void
     {
         $this
+            ->applyDefaultLayers($architecture)
             ->applyLayerRules($architecture)
             ->applyEntityRules($architecture)
             ->applyValueObjectRules($architecture)
@@ -85,6 +86,26 @@ final readonly class DddPreset implements PresetInterface
             ->applyServiceRules($architecture)
             ->applyEventRules($architecture)
             ->applySafetyRules($architecture);
+    }
+
+    private function applyDefaultLayers(Architecture $architecture): self
+    {
+        $layers        = $architecture->getLayers();
+        $defaultLayers = [
+            'Domain'         => 'src/Domain/',
+            'Application'    => 'src/Application/',
+            'Infrastructure' => 'src/Infrastructure/',
+        ];
+
+        foreach ($defaultLayers as $layer => $path) {
+            if (isset($layers[$layer])) {
+                continue;
+            }
+
+            $architecture->layer($layer, $path);
+        }
+
+        return $this;
     }
 
     private function applyLayerRules(Architecture $architecture): self

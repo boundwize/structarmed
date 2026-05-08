@@ -77,6 +77,24 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertSame('Source', $layer);
     }
 
+    public function testResolvesMostSpecificMatchingLayerPath(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                'Source'         => 'src/',
+                'Infrastructure' => 'src/Infrastructure/',
+            ],
+            basePath: $this->basePath
+        );
+
+        $layer = $namespaceLayerResolver->resolve(
+            'App\\Infrastructure\\SQLAlbumRepository',
+            $this->basePath . '/src/Infrastructure/Persistence/Album/SQLAlbumRepository.php'
+        );
+
+        $this->assertSame('Infrastructure', $layer);
+    }
+
     public function testPatternResolverMatchesClassName(): void
     {
         $patternLayerResolver = new PatternLayerResolver([

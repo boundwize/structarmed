@@ -10,6 +10,7 @@ use function realpath;
 use function rtrim;
 use function str_replace;
 use function str_starts_with;
+use function strlen;
 use function trim;
 
 use const DIRECTORY_SEPARATOR;
@@ -34,7 +35,9 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
     public function resolve(string $className, string $filePath): ?string
     {
-        $normalised = $this->normalisePath($filePath);
+        $normalised    = $this->normalisePath($filePath);
+        $matchedLayer  = null;
+        $matchedLength = -1;
 
         foreach ($this->layers as $layerName => $layerPaths) {
             foreach ((array) $layerPaths as $layerPath) {
@@ -43,12 +46,17 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
                 );
 
                 if (str_starts_with($normalised, $normalisedLayer)) {
-                    return $layerName;
+                    $length = strlen($normalisedLayer);
+
+                    if ($length > $matchedLength) {
+                        $matchedLayer  = $layerName;
+                        $matchedLength = $length;
+                    }
                 }
             }
         }
 
-        return null;
+        return $matchedLayer;
     }
 
     private function normalisePath(string $path): string
