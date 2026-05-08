@@ -357,7 +357,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $functions = get_defined_functions();
         $internal  = [];
 
-        foreach ($functions['internal'] ?? [] as $function) {
+        foreach ($functions['internal'] as $function) {
             $internal[] = strtolower($function);
         }
 
