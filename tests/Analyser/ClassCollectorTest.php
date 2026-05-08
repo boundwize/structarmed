@@ -193,6 +193,17 @@ PHP;
         $this->assertContains('App\Support\debug', $classNode->functionCalls);
     }
 
+    public function testKeepsUnresolvedFunctionCallsAsWrittenInsideNamespace(): void
+    {
+        $classNode = $this->collect(
+            '<?php namespace App\Support; class Foo { public function bar(): void { missing_function("x"); } }',
+            resolveNames: true
+        );
+
+        $this->assertContains('missing_function', $classNode->functionCalls);
+        $this->assertNotContains('App\Support\missing_function', $classNode->functionCalls);
+    }
+
     public function testCollectsSuperglobals(): void
     {
         $classNode = $this->collect('<?php class Foo { public function bar(): void { $x = $_GET["id"]; } }');
