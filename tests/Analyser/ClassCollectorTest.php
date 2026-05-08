@@ -73,6 +73,23 @@ final class ClassCollectorTest extends TestCase
         $this->assertTrue($classNode->isInterface);
     }
 
+    public function testCollectsTrait(): void
+    {
+        $classNode = $this->collect('<?php trait FooTrait {}');
+
+        $this->assertSame('FooTrait', $classNode->className);
+        $this->assertFalse($classNode->isInterface);
+    }
+
+    public function testCollectsEnum(): void
+    {
+        $classNode = $this->collect('<?php enum Status: string implements Stringable { case Draft = "draft"; }');
+
+        $this->assertSame('Status', $classNode->className);
+        $this->assertSame(['Stringable'], $classNode->implements);
+        $this->assertFalse($classNode->isInterface);
+    }
+
     public function testIgnoresAnonymousClasses(): void
     {
         $nodes = $this->collectNodes('<?php $foo = new class {};');

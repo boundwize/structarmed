@@ -20,9 +20,11 @@ use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Case_;
 use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Do_;
 use PhpParser\Node\Stmt\ElseIf_;
+use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\For_;
 use PhpParser\Node\Stmt\Foreach_;
 use PhpParser\Node\Stmt\If_;
@@ -84,7 +86,7 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
-        if (! $node instanceof Class_ && ! $node instanceof Interface_) {
+        if (! $node instanceof ClassLike) {
             return null;
         }
 
@@ -122,7 +124,7 @@ final class ClassCollector extends NodeVisitorAbstract
         return null;
     }
 
-    private function resolveClassName(Class_|Interface_ $node): string
+    private function resolveClassName(ClassLike $node): string
     {
         return isset($node->namespacedName)
             ? implode('\\', $node->namespacedName->getParts())
@@ -132,7 +134,7 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return string[]
      */
-    private function collectDependencies(Class_|Interface_ $node): array
+    private function collectDependencies(ClassLike $node): array
     {
         $nodeTraverser = new NodeTraverser();
         $visitor       = new class extends NodeVisitorAbstract {
@@ -158,11 +160,11 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return string[]
      */
-    private function collectImplements(Class_|Interface_ $node): array
+    private function collectImplements(ClassLike $node): array
     {
         $interfaces = [];
 
-        if ($node instanceof Class_) {
+        if ($node instanceof Class_ || $node instanceof Enum_) {
             foreach ($node->implements as $interface) {
                 $interfaces[] = implode('\\', $interface->getParts());
             }
@@ -174,7 +176,7 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return MethodNode[]
      */
-    private function collectMethods(Class_|Interface_ $node): array
+    private function collectMethods(ClassLike $node): array
     {
         $methods = [];
 
@@ -253,7 +255,7 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return string[]
      */
-    private function collectFunctionCalls(Class_|Interface_ $node): array
+    private function collectFunctionCalls(ClassLike $node): array
     {
         $nodeTraverser = new NodeTraverser();
         $visitor       = new class extends NodeVisitorAbstract {
@@ -282,7 +284,7 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return string[]
      */
-    private function collectSuperglobals(Class_|Interface_ $node): array
+    private function collectSuperglobals(ClassLike $node): array
     {
         $nodeTraverser = new NodeTraverser();
         $visitor       = new class extends NodeVisitorAbstract {
