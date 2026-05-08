@@ -7,6 +7,8 @@ namespace Boundwize\StructArmed\Analyser;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use PhpParser\Error;
@@ -25,9 +27,13 @@ final class Analyser
         $this->basePath = $basePath !== '' ? $basePath : (string) getcwd();
     }
 
-    public function analyse(Architecture $architecture): RuleViolationCollection
+    /**
+     * @param list<string> $scanPaths
+     */
+    public function analyse(Architecture $architecture, array $scanPaths = []): RuleViolationCollection
     {
         $violations = new RuleViolationCollection();
+        $layers     = $this->resolveLayers($architecture);
 
         foreach ($architecture->getProjectRules() as $key => $rule) {
             $violation = $rule->evaluateProject($this->basePath, $architecture);
@@ -47,37 +53,35 @@ final class Analyser
         }
 
         $resolver   = new ChainLayerResolver(
-            new NamespaceLayerResolver($architecture->getLayers(), $this->basePath)
+            new NamespaceLayerResolver($layers, $this->basePath)
         );
 
         $collector = new ClassCollector($resolver);
         $parser    = (new ParserFactory())->createForNewestSupportedVersion();
 
-        foreach ($architecture->getLayers() as $layerPaths) {
-            foreach ((array) $layerPaths as $layerPath) {
-                $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
+        foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
+            $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
 
-                if (! is_dir($fullPath)) {
-                    continue;
-                }
+            if (! is_dir($fullPath)) {
+                continue;
+            }
 
-                foreach ($this->phpFiles($fullPath) as $file) {
-                    try {
-                        $code = (string) file_get_contents($file);
-                        $ast  = $parser->parse($code);
+            foreach ($this->phpFiles($fullPath) as $file) {
+                try {
+                    $code = (string) file_get_contents($file);
+                    $ast  = $parser->parse($code);
 
-                        if ($ast === null || $ast === []) {
-                            continue;
-                        }
-
-                        $collector->setCurrentFile($file);
-
-                        $traverser = new NodeTraverser();
-                        $traverser->addVisitor($collector);
-                        $traverser->traverse($ast);
-                    } catch (Error) {
-                        // Skip files with parse errors
+                    if ($ast === null || $ast === []) {
+                        continue;
                     }
+
+                    $collector->setCurrentFile($file);
+
+                    $traverser = new NodeTraverser();
+                    $traverser->addVisitor($collector);
+                    $traverser->traverse($ast);
+                } catch (Error) {
+                    // Skip files with parse errors
                 }
             }
         }
@@ -109,6 +113,47 @@ final class Analyser
         }
 
         return $violations;
+    }
+
+    /**
+     * @return array<string, string|list<string>>
+     */
+    private function resolveLayers(Architecture $architecture): array
+    {
+        $layers = $architecture->getLayers();
+
+        foreach ($architecture->getProjectRules() as $rule) {
+            if (
+                $rule instanceof Psr4SourcePathsRule
+                && ($layers[Psr4Preset::SOURCE_LAYER] ?? null) === []
+            ) {
+                $layers[Psr4Preset::SOURCE_LAYER] = $rule->sourcePathsFor($this->basePath);
+            }
+        }
+
+        return $layers;
+    }
+
+    /**
+     * @param array<string, string|list<string>> $layers
+     * @param list<string> $scanPaths
+     * @return list<string>
+     */
+    private function scanPaths(array $layers, array $scanPaths): array
+    {
+        if ($scanPaths !== []) {
+            return $scanPaths;
+        }
+
+        $paths = [];
+
+        foreach ($layers as $layerPaths) {
+            foreach ((array) $layerPaths as $layerPath) {
+                $paths[] = $layerPath;
+            }
+        }
+
+        return $paths;
     }
 
     /**

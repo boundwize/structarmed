@@ -114,7 +114,7 @@ return Architecture::define()
 ))
 
 ->withPreset(Preset::PSR4(
-    sourcePaths: ['src/', 'tests/'], // default: ['src/']
+    sourcePaths: ['src/', 'tests/'], // default: read composer.json PSR-4 paths
 ))
 ```
 
@@ -145,6 +145,10 @@ Violations cause the test run to fail before any tests execute.
 # Analyse with default config discovery
 vendor/bin/structarmed analyse
 vendor/bin/structarmed analyze
+
+# Analyse only specific paths
+vendor/bin/structarmed analyse src
+vendor/bin/structarmed analyze src tests
 
 # Custom config path
 vendor/bin/structarmed analyse --config=path/to/structarmed.php

@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -125,6 +126,39 @@ final class AnalyserTest extends TestCase
         $violations = (new Analyser($basePath))->analyse($architecture);
 
         $this->assertFalse($violations->hasViolations());
+    }
+
+    public function testAnalyserUsesComposerPsr4PathsForDefaultPsr4Preset(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"app/"}}}',
+            'app/Foo.php'   => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR4())
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+    }
+
+    public function testAnalyserCanLimitScanToSpecificPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'   => '<?php namespace App; class Foo {}',
+            'tests/Bar.php' => '<?php namespace App\Tests; class Bar {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', ['src/', 'tests/'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+        $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
     }
 
     /** @param array<string, string> $files */

@@ -121,6 +121,29 @@ JSON);
         $this->assertNull($rule->evaluateProject($basePath, Architecture::define()));
     }
 
+    public function testReadsSourcePathsFromComposerWhenSourcePathsAreNotConfigured(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "App\\Tests\\": ["tests/", "specs/"]
+        }
+    }
+}
+JSON);
+
+        $rule = new Psr4SourcePathsRule(null);
+
+        $this->assertNull($rule->evaluateProject($basePath, Architecture::define()));
+        $this->assertSame(['app', 'tests', 'specs'], $rule->sourcePathsFor($basePath));
+    }
+
     private function makeTempProject(string $composerJson): string
     {
         $basePath = $this->makeTempDir();

@@ -10,7 +10,7 @@ use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 
 final class Psr4Preset implements PresetInterface
 {
-    private const SOURCE_LAYER = 'Source';
+    public const SOURCE_LAYER = 'Source';
 
     public const SOURCE_PATHS_MUST_BE_IN_COMPOSER = 'psr4.source_paths.must_be_in_composer';
 
@@ -18,13 +18,13 @@ final class Psr4Preset implements PresetInterface
      * @param list<string> $sourcePaths
      */
     public function __construct(
-        private readonly array $sourcePaths = ['src/'],
+        private readonly ?array $sourcePaths = null,
     ) {
     }
 
     public function apply(Architecture $architecture): void
     {
-        $architecture->layer(self::SOURCE_LAYER, $this->sourcePaths);
+        $architecture->layer(self::SOURCE_LAYER, $this->sourcePaths ?? []);
         $architecture->projectRule(
             self::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
             new Psr4SourcePathsRule($this->sourcePaths)

@@ -34,6 +34,19 @@ final class PresetTest extends TestCase
         );
     }
 
+    public function testPsr4PresetUsesComposerSourcePathsByDefault(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR4()->apply($architecture);
+
+        $this->assertSame(['Source' => []], $architecture->getLayers());
+        $this->assertArrayHasKey(
+            Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
+            $architecture->getProjectRules()
+        );
+    }
+
     public function testDddPresetRegistersAllDefaultRules(): void
     {
         $architecture = Architecture::define();

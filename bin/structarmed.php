@@ -35,7 +35,7 @@ $printUsage = static function (): void {
     echo <<<'TXT'
 Usage:
   structarmed init
-  structarmed analyse|analyze [--config=path/to/structarmed.php] [--report=console|json]
+  structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php] [--report=console|json]
 
 TXT;
 };
@@ -77,6 +77,15 @@ if (! in_array($command, ['analyse', 'analyze'], true)) {
 }
 
 $reportType = $options['report'] ?? 'console';
+$scanPaths = [];
+
+foreach (array_slice($argv, 2) as $argument) {
+    if (str_starts_with($argument, '--')) {
+        continue;
+    }
+
+    $scanPaths[] = $argument;
+}
 
 // Load config
 try {
@@ -90,7 +99,7 @@ try {
 // Run analysis
 $start    = microtime(true);
 $analyser = new Analyser($basePath);
-$violations = $analyser->analyse($architecture);
+$violations = $analyser->analyse($architecture, $scanPaths);
 $elapsed  = microtime(true) - $start;
 
 // Render report

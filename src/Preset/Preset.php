@@ -23,7 +23,7 @@ final class Preset
      * @param list<string> $sourcePaths
      */
     public static function PSR4(
-        array $sourcePaths = ['src/'],
+        ?array $sourcePaths = null,
     ): Psr4Preset {
         return new Psr4Preset(
             sourcePaths: $sourcePaths,

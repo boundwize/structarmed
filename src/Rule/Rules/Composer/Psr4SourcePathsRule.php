@@ -5,17 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function array_map;
 use function file_exists;
-use function file_get_contents;
 use function implode;
 use function in_array;
-use function is_array;
-use function is_string;
-use function json_decode;
 use function rtrim;
 use function sprintf;
 use function str_replace;
@@ -27,8 +24,21 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
      * @param list<string> $sourcePaths
      */
     public function __construct(
-        private readonly array $sourcePaths,
+        private readonly ?array $sourcePaths,
+        private readonly Psr4PathResolver $pathResolver = new Psr4PathResolver(),
     ) {
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function sourcePathsFor(string $basePath): array
+    {
+        if ($this->sourcePaths === null) {
+            return $this->pathResolver->paths($basePath);
+        }
+
+        return $this->normalisePaths($this->sourcePaths);
     }
 
     public function evaluateProject(string $basePath, Architecture $architecture): ?RuleViolation
@@ -42,17 +52,20 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
             );
         }
 
-        $composer = json_decode((string) file_get_contents($composerFile), true);
+        $composer = $this->pathResolver->composerConfig($basePath);
 
-        if (! is_array($composer)) {
+        if ($composer === null) {
             return $this->violation(
                 'composer.json is not valid JSON',
                 $composerFile
             );
         }
 
-        /** @var array<string, mixed> $composer */
-        $autoloadPaths = $this->psr4Paths($composer);
+        if ($this->sourcePaths === null) {
+            return null;
+        }
+
+        $autoloadPaths = $this->pathResolver->paths($basePath);
         $missingPaths  = [];
 
         foreach ($this->normalisePaths($this->sourcePaths) as $sourcePath) {
@@ -72,39 +85,6 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
             ),
             $composerFile
         );
-    }
-
-    /**
-     * @param array<string, mixed> $composer
-     * @return list<string>
-     */
-    private function psr4Paths(array $composer): array
-    {
-        $paths = [];
-
-        foreach (['autoload', 'autoload-dev'] as $section) {
-            $autoload = $composer[$section] ?? [];
-
-            if (! is_array($autoload)) {
-                continue;
-            }
-
-            $psr4 = $autoload['psr-4'] ?? [];
-
-            if (! is_array($psr4)) {
-                continue;
-            }
-
-            foreach ($psr4 as $pathConfig) {
-                foreach ((array) $pathConfig as $path) {
-                    if (is_string($path)) {
-                        $paths[] = $path;
-                    }
-                }
-            }
-        }
-
-        return $this->normalisePaths($paths);
     }
 
     /**
