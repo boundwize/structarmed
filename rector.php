@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
+use Rector\DeadCode\Rector\ClassMethod\RemoveUnusedPrivateMethodParameterRector;
+use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
 
 return RectorConfig::configure()
     ->withPhpSets(php82: true)
@@ -20,4 +22,9 @@ return RectorConfig::configure()
     ->withParallel()
     ->withRootFiles()
     ->withPaths([__DIR__ . '/src', __DIR__ . '/tests'])
-    ->withImportNames();
+    ->withImportNames()
+    ->withSkip([
+        RenameParamToMatchTypeRector::class => [
+            __DIR__ . '/src/Analyser/ClassCollector.php',
+        ],
+    ]);
