@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
+      - name: Run Structarmed
+        run: composer structarmed
+
       - name: Run coding standard check
         run: composer cs-check
 

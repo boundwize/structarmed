@@ -57,7 +57,8 @@
         "cs-fix": "phpcbf",
         "phpstan": "phpstan",
         "rector": "rector process --dry-run",
-        "test": "phpunit"
+        "test": "phpunit",
+        "structarmed": "php bin/structarmed analyze"
     },
     "bin": [
         "bin/structarmed"
