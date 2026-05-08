@@ -20,13 +20,13 @@ foreach ($autoloaderPaths as $autoloader) {
     }
 }
 
-$basePath   = getcwd();
-$command    = $argv[1] ?? null;
+$basePath = getcwd();
+$command  = $argv[1] ?? null;
 
 $printUsage = static function (): void {
     echo <<<'TXT'
 Usage:
-  structarmed init
+  structarmed init [--preset=ddd|mvc|psr4|all]
   structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php] [--report=console|json]
 
 TXT;
@@ -39,6 +39,41 @@ if ($command === null || $command === '--help' || $command === '-h') {
 
 // Handle `init` command — generate a sample config
 if ($command === 'init') {
+    $preset    = 'psr4';
+    $arguments = array_slice($argv, 2);
+
+    for ($i = 0; $i < count($arguments); $i++) {
+        $argument = $arguments[$i];
+
+        if (str_starts_with($argument, '--preset=')) {
+            $preset = strtolower(substr($argument, strlen('--preset=')));
+            continue;
+        }
+
+        if ($argument === '--preset') {
+            $preset = strtolower($arguments[++$i] ?? '');
+            continue;
+        }
+
+        echo sprintf("Unknown option: %s\n\n", $argument);
+        $printUsage();
+        exit(1);
+    }
+
+    $presetConfig = match ($preset) {
+        'ddd' => '    ->withPreset(Preset::DDD());',
+        'mvc' => '    ->withPreset(Preset::MVC());',
+        'psr4' => '    ->withPreset(Preset::PSR4());',
+        'all' => '    ->withPresets(Preset::PSR4(), Preset::DDD(), Preset::MVC());',
+        default => null,
+    };
+
+    if ($presetConfig === null) {
+        echo sprintf("Invalid preset: %s\n\n", $preset);
+        $printUsage();
+        exit(1);
+    }
+
     $target = $basePath . '/structarmed.php';
 
     if (file_exists($target)) {
@@ -55,8 +90,8 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 
 return Architecture::define()
-    ->withPreset(Preset::PSR4());
 PHP);
+    file_put_contents($target, "\n" . $presetConfig . "\n", FILE_APPEND);
 
     echo "Created structarmed.php\n";
     exit(0);
@@ -68,7 +103,7 @@ if (! in_array($command, ['analyse', 'analyze'], true)) {
     exit(1);
 }
 
-$options = [];
+$options   = [];
 $scanPaths = [];
 $arguments = array_slice($argv, 2);
 
@@ -99,7 +134,6 @@ for ($i = 0; $i < count($arguments); $i++) {
         echo sprintf("Unknown option: %s\n\n", $argument);
         $printUsage();
         exit(1);
-        continue;
     }
 
     $scanPaths[] = $argument;
@@ -132,10 +166,10 @@ try {
 }
 
 // Run analysis
-$start    = microtime(true);
-$analyser = new Analyser($basePath);
+$start      = microtime(true);
+$analyser   = new Analyser($basePath);
 $violations = $analyser->analyse($architecture, $scanPaths);
-$elapsed  = microtime(true) - $start;
+$elapsed    = microtime(true) - $start;
 
 // Render report
 $report = match ($reportType) {

@@ -22,6 +22,10 @@ composer require --dev boundwize/structarmed
 
 ```bash
 vendor/bin/structarmed init
+vendor/bin/structarmed init --preset=ddd
+vendor/bin/structarmed init --preset=mvc
+vendor/bin/structarmed init --preset=psr4
+vendor/bin/structarmed init --preset=all
 ```
 
 Generates a `structarmed.php` in your project root. Edit it to match your structure, then run:
@@ -177,6 +181,10 @@ vendor/bin/structarmed analyze --report=json
 
 # Generate initial config
 vendor/bin/structarmed init
+vendor/bin/structarmed init --preset=ddd
+vendor/bin/structarmed init --preset=mvc
+vendor/bin/structarmed init --preset=psr4
+vendor/bin/structarmed init --preset=all
 ```
 
 ## Layer resolution
