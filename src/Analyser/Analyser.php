@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
+use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
@@ -21,6 +22,8 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
+use function array_unique;
+use function array_values;
 use function file_get_contents;
 use function fnmatch;
 use function getcwd;
@@ -133,21 +136,25 @@ final readonly class Analyser
                     continue;
                 }
 
-                $violation = $rule->evaluate($classNode);
+                $violations = $rule instanceof MultipleRuleViolationInterface
+                    ? $rule->evaluateAll($classNode)
+                    : [$rule->evaluate($classNode)];
 
-                if (! $violation instanceof RuleViolation) {
-                    continue;
+                foreach ($violations as $violation) {
+                    if (! $violation instanceof RuleViolation) {
+                        continue;
+                    }
+
+                    // Inject the rule key into the violation
+                    $ruleViolationCollection->add(new RuleViolation(
+                        ruleKey:   $key,
+                        message:   $violation->message,
+                        file:      $violation->file,
+                        line:      $violation->line,
+                        className: $violation->className,
+                        layer:     $violation->layer,
+                    ));
                 }
-
-                // Inject the rule key into the violation
-                $ruleViolationCollection->add(new RuleViolation(
-                    ruleKey:   $key,
-                    message:   $violation->message,
-                    file:      $violation->file,
-                    line:      $violation->line,
-                    className: $violation->className,
-                    layer:     $violation->layer,
-                ));
             }
         }
 
@@ -181,7 +188,7 @@ final readonly class Analyser
     private function scanPaths(array $layers, array $scanPaths): array
     {
         if ($scanPaths !== []) {
-            return $scanPaths;
+            return array_values(array_unique($scanPaths));
         }
 
         $paths = [];
@@ -192,7 +199,7 @@ final readonly class Analyser
             }
         }
 
-        return $paths;
+        return array_values(array_unique($paths));
     }
 
     /**

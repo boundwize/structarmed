@@ -40,6 +40,22 @@ final class MaxMethodLengthRuleTest extends TestCase
         );
     }
 
+    private function makeNodeWithMethods(MethodNode ...$methods): ClassNode
+    {
+        return new ClassNode(
+            className:   'App\\Controller\\OrderController',
+            file:        '/fake.php',
+            line:        1,
+            layer:       'Controller',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     true,
+            isInterface: false,
+            isReadonly:  false,
+            methods:     $methods,
+        );
+    }
+
     public function testPassesWhenMethodUnderLimit(): void
     {
         $maxMethodLengthRule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
@@ -66,6 +82,24 @@ final class MaxMethodLengthRuleTest extends TestCase
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('35', $violation->message);
         $this->assertStringContainsString('20', $violation->message);
+    }
+
+    public function testReportsAllMethodsOverLimit(): void
+    {
+        $maxMethodLengthRule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
+        $classNode           = $this->makeNodeWithMethods(
+            new MethodNode('store', 'public', true, false, 1, 2, 35, 11),
+            new MethodNode('update', 'public', true, false, 1, 2, 28, 47),
+            new MethodNode('show', 'public', true, false, 1, 2, 12, 83),
+        );
+
+        $violations = $maxMethodLengthRule->evaluateAll($classNode);
+
+        $this->assertCount(2, $violations);
+        $this->assertStringContainsString('store', $violations[0]->message);
+        $this->assertSame(11, $violations[0]->line);
+        $this->assertStringContainsString('update', $violations[1]->message);
+        $this->assertSame(47, $violations[1]->line);
     }
 
     public function testDoesNotApplyToWrongLayer(): void

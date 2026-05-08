@@ -14,6 +14,7 @@ final readonly class MethodNode
         public int $paramCount,
         public int $cyclomaticComplexity,
         public int $lineCount,
+        public int $line = 0,
     ) {
     }
 
