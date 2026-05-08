@@ -4,9 +4,12 @@ Contributions are welcome via Pull Requests on [GitHub](https://github.com/bound
 
 ## Setup
 
+Fork the repository on GitHub, then clone your fork:
+
 ```bash
-git clone https://github.com/boundwize/structarmed.git
+git clone https://github.com/<your-username>/structarmed.git
 cd structarmed
+git remote add upstream https://github.com/boundwize/structarmed.git
 composer install
 ```
 

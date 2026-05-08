@@ -3,8 +3,9 @@
     "type": "library",
     "description": "Configurable PHP architecture enforcement — define your layers and rules, enforce them forever in CI",
     "keywords": [
+        "dev",
         "architecture",
-        "static-analysis",
+        "analysis",
         "ddd",
         "mvc",
         "cqrs",
@@ -25,12 +26,12 @@
     ],
     "require": {
         "php": "^8.2",
-        "nikic/php-parser": "^5.0"
+        "nikic/php-parser": "^5.7"
     },
     "require-dev": {
-        "laminas/laminas-coding-standard": "^3.0",
-        "phpstan/phpstan": "^2.0",
-        "phpunit/phpunit": "^11.0",
+        "laminas/laminas-coding-standard": "^3.1",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^11.5",
         "rector/rector": "dev-main"
     },
     "config": {

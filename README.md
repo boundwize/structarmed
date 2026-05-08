@@ -1,6 +1,6 @@
 # structarmed
 
-<img width="1672" height="941" alt="Image" src="https://github.com/user-attachments/assets/2f2bd8c5-cb62-4f39-803b-dde8c1a3413b" />
+<img width="1672" height="420" alt="StructArmed" src="https://github.com/user-attachments/assets/2f2bd8c5-cb62-4f39-803b-dde8c1a3413b" />
 
 [![Latest Version](https://img.shields.io/github/release/boundwize/structarmed.svg?style=flat-square)](https://github.com/boundwize/structarmed/releases)
 [![ci build](https://github.com/boundwize/structarmed/workflows/ci%20build/badge.svg)](https://github.com/boundwize/structarmed/actions)
