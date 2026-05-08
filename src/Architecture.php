@@ -110,10 +110,9 @@ final class Architecture
         return $this;
     }
 
-    // -------------------------------------------------------------------------
-    // Preset management
-    // -------------------------------------------------------------------------
-
+    /**
+     * Preset management
+     */
     public function withPreset(PresetInterface $preset): self
     {
         $preset->apply($this);

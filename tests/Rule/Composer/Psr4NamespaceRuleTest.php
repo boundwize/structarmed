@@ -27,7 +27,10 @@ final class Psr4NamespaceRuleTest extends TestCase
 
         $psr4NamespaceRule = new Psr4NamespaceRule('Source');
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $file)));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $file))
+        );
     }
 
     public function testFailsWhenClassDoesNotMatchComposerPsr4Path(): void
@@ -59,14 +62,20 @@ final class Psr4NamespaceRuleTest extends TestCase
 
         $psr4NamespaceRule = new Psr4NamespaceRule('Source');
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4NamespaceRule->evaluate($this->makeNode('Foo', $basePath . '/src/Foo.php')));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('Foo', $basePath . '/src/Foo.php'))
+        );
     }
 
     public function testPassesWhenRelativeFileCannotFindComposerJson(): void
     {
         $psr4NamespaceRule = new Psr4NamespaceRule('Source');
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4NamespaceRule->evaluate($this->makeNode('Foo', 'Foo.php')));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('Foo', 'Foo.php'))
+        );
     }
 
     public function testPassesWhenFileIsOutsideComposerPsr4Path(): void
@@ -103,7 +112,10 @@ final class Psr4NamespaceRuleTest extends TestCase
 
         $psr4NamespaceRule = new Psr4NamespaceRule('Source');
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $file)));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $file))
+        );
     }
 
     public function testCachesMappingsPerBasePath(): void
@@ -114,8 +126,14 @@ final class Psr4NamespaceRuleTest extends TestCase
         file_put_contents($basePath . '/tests/Foo.php', '<?php namespace App\Tests; class Foo {}');
         file_put_contents($basePath . '/tests/Bar.php', '<?php namespace App\Tests; class Bar {}');
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $basePath . '/tests/Foo.php')));
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Bar', $basePath . '/tests/Bar.php')));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $basePath . '/tests/Foo.php'))
+        );
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Bar', $basePath . '/tests/Bar.php'))
+        );
     }
 
     private function makeNode(string $className, string $file, string $layer = 'Source'): ClassNode

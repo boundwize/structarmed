@@ -1,7 +1,7 @@
 {
     "name": "boundwize/structarmed",
     "type": "library",
-    "description": "Configurable PHP architecture enforcement — define your layers and rules, enforce them forever in CI",
+    "description": "Configurable PHP architecture guards — define your layers and rules, then check them in CI",
     "keywords": [
         "dev",
         "architecture",

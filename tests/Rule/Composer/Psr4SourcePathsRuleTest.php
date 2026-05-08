@@ -37,7 +37,10 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src', 'tests']);
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define()));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        );
     }
 
     public function testFailsWhenSourcePathIsMissingFromComposerPsr4Autoloads(): void
@@ -99,7 +102,10 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/', 'tests/']);
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define()));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        );
     }
 
     public function testSkipsComposerPsr4SectionWithInvalidShape(): void
@@ -119,7 +125,10 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['tests/']);
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define()));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        );
     }
 
     public function testReadsSourcePathsFromComposerWhenSourcePathsAreNotConfigured(): void
@@ -141,7 +150,10 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(null);
 
-        $this->assertNotInstanceOf(RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define()));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        );
         $this->assertSame(['app', 'tests', 'specs'], $psr4SourcePathsRule->sourcePathsFor($basePath));
     }
 

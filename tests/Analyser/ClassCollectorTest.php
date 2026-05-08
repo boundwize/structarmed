@@ -99,7 +99,14 @@ final class ClassCollectorTest extends TestCase
 
     public function testCollectsProtectedAndPrivateMethodVisibility(): void
     {
-        $classNode = $this->collect('<?php class Foo { protected function one(): void {} private function two(): void {} }');
+        $classNode = $this->collect(
+            <<<CODE
+            <?php class Foo {
+                protected function one(): void {}
+                private function two(): void {}
+            }
+            CODE
+        );
 
         $this->assertSame('protected', $classNode->methods[0]->visibility);
         $this->assertSame('private', $classNode->methods[1]->visibility);

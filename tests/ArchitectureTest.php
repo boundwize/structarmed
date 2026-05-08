@@ -116,7 +116,6 @@ final class ArchitectureTest extends TestCase
 
     public function testReplaceRuleReplacesExistingRule(): void
     {
-        new MustBeFinalRule(layer: 'Domain');
         $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');
 
         $architecture = Architecture::define()
