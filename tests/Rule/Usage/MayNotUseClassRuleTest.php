@@ -6,6 +6,8 @@ namespace Boundwize\StructArmed\Tests\Rule\Usage;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
+use DateTime;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,60 +33,60 @@ final class MayNotUseClassRuleTest extends TestCase
 
     public function testPassesWhenForbiddenClassNotUsed(): void
     {
-        $rule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: \DateTime::class);
-        $node = $this->makeNode(['DateTimeImmutable']);
+        $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class);
+        $classNode          = $this->makeNode(['DateTimeImmutable']);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseClassRule->evaluate($classNode));
     }
 
     public function testViolatesWhenForbiddenClassIsUsed(): void
     {
-        $rule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: \DateTime::class);
-        $node = $this->makeNode([\DateTime::class]);
+        $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class);
+        $classNode          = $this->makeNode([DateTime::class]);
 
-        $violation = $rule->evaluate($node);
+        $violation = $mayNotUseClassRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('DateTime', $violation->message);
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: \DateTime::class);
-        $node = $this->makeNode([\DateTime::class], layer: 'Infrastructure');
+        $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class);
+        $classNode          = $this->makeNode([DateTime::class], layer: 'Infrastructure');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mayNotUseClassRule->appliesTo($classNode));
     }
 
     public function testAppliesToMatchingClassNamePattern(): void
     {
-        $rule = new MayNotUseClassRule(
+        $mayNotUseClassRule = new MayNotUseClassRule(
             layer: 'Domain',
-            forbiddenClass: \DateTime::class,
+            forbiddenClass: DateTime::class,
             classNamePattern: '/ValueObject$/'
         );
-        $node = $this->makeNode([]);
+        $classNode          = $this->makeNode([]);
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mayNotUseClassRule->appliesTo($classNode));
     }
 
     public function testAppliesToLayerWhenNoPatternConfigured(): void
     {
-        $rule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: \DateTime::class);
-        $node = $this->makeNode([]);
+        $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class);
+        $classNode          = $this->makeNode([]);
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mayNotUseClassRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToNonMatchingClassNamePattern(): void
     {
-        $rule = new MayNotUseClassRule(
+        $mayNotUseClassRule = new MayNotUseClassRule(
             layer: 'Domain',
-            forbiddenClass: \DateTime::class,
+            forbiddenClass: DateTime::class,
             classNamePattern: '/Entity$/'
         );
-        $node = $this->makeNode([]);
+        $classNode          = $this->makeNode([]);
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mayNotUseClassRule->appliesTo($classNode));
     }
 }

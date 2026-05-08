@@ -11,6 +11,10 @@ use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function json_decode;
+
+use const PHP_FLOAT_EPSILON;
+
 #[CoversClass(ConsoleReport::class)]
 #[CoversClass(JsonReport::class)]
 final class ReportTest extends TestCase
@@ -25,10 +29,10 @@ final class ReportTest extends TestCase
 
     public function testConsoleReportRendersViolationsWithLayer(): void
     {
-        $collection = new RuleViolationCollection();
-        $collection->add($this->violation());
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation());
 
-        $report = (new ConsoleReport())->render($collection, 0.34);
+        $report = (new ConsoleReport())->render($ruleViolationCollection, 0.34);
 
         $this->assertStringContainsString('Found 1 violation(s):', $report);
         $this->assertStringContainsString('[rule.key]', $report);
@@ -38,10 +42,10 @@ final class ReportTest extends TestCase
 
     public function testJsonReportRendersPayload(): void
     {
-        $collection = new RuleViolationCollection();
-        $collection->add($this->violation());
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation());
 
-        $json = (new JsonReport())->render($collection, 1.23);
+        $json = (new JsonReport())->render($ruleViolationCollection, 1.23);
         $data = json_decode($json, true);
 
         $this->assertIsArray($data);
@@ -50,7 +54,7 @@ final class ReportTest extends TestCase
         $this->assertSame('rule.key', $data['violations'][0]['rule']);
         $this->assertSame(1, $data['total']);
         $this->assertFalse($data['passed']);
-        $this->assertSame(1.23, $data['elapsed']);
+        $this->assertEqualsWithDelta(1.23, $data['elapsed'], PHP_FLOAT_EPSILON);
     }
 
     private function violation(): RuleViolation

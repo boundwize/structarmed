@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Layer;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,59 +32,59 @@ final class MayNotDependOnRuleTest extends TestCase
 
     public function testPassesWhenNoDependencyOnForbiddenLayer(): void
     {
-        $rule = new MayNotDependOnRule(
+        $mayNotDependOnRule = new MayNotDependOnRule(
             from:   'Domain',
             to:     'Infrastructure',
             toPath: 'Infrastructure'
         );
-        $node = $this->makeNode('Domain', [
+        $classNode          = $this->makeNode('Domain', [
             'App\Domain\Order',
             'App\Domain\OrderRepository',
         ]);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 
     public function testViolatesWhenDependencyOnForbiddenLayer(): void
     {
-        $rule = new MayNotDependOnRule(
+        $mayNotDependOnRule = new MayNotDependOnRule(
             from:   'Domain',
             to:     'Infrastructure',
             toPath: 'Infrastructure'
         );
-        $node = $this->makeNode('Domain', [
+        $classNode          = $this->makeNode('Domain', [
             'App\Infrastructure\Persistence\DoctrineOrderRepository',
         ]);
 
-        $violation = $rule->evaluate($node);
+        $violation = $mayNotDependOnRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('Infrastructure', $violation->message);
     }
 
     public function testDoesNotApplyToWrongSourceLayer(): void
     {
-        $rule = new MayNotDependOnRule(
+        $mayNotDependOnRule = new MayNotDependOnRule(
             from:   'Domain',
             to:     'Infrastructure',
             toPath: 'Infrastructure'
         );
-        $node = $this->makeNode('Application', [
+        $classNode          = $this->makeNode('Application', [
             'App\Infrastructure\Cache\RedisCache',
         ]);
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mayNotDependOnRule->appliesTo($classNode));
     }
 
     public function testAppliesToCorrectSourceLayer(): void
     {
-        $rule = new MayNotDependOnRule(
+        $mayNotDependOnRule = new MayNotDependOnRule(
             from:   'Domain',
             to:     'Infrastructure',
             toPath: 'Infrastructure'
         );
-        $node = $this->makeNode('Domain');
+        $classNode          = $this->makeNode('Domain');
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mayNotDependOnRule->appliesTo($classNode));
     }
 }

@@ -15,50 +15,65 @@ use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use DateTime;
+use Exception;
 
-final class DddPreset implements PresetInterface
+use function sprintf;
+use function strtolower;
+
+final readonly class DddPreset implements PresetInterface
 {
     // -------------------------------------------------------------------------
     // Rule key constants — use these with replaceRule() and withoutRule()
     // -------------------------------------------------------------------------
 
     // Layer rules
-    public const DOMAIN_NOT_DEPEND_APPLICATION        = 'ddd.layer.domain_not_depend_application';
-    public const DOMAIN_NOT_DEPEND_INFRASTRUCTURE     = 'ddd.layer.domain_not_depend_infrastructure';
+    public const DOMAIN_NOT_DEPEND_APPLICATION = 'ddd.layer.domain_not_depend_application';
+
+    public const DOMAIN_NOT_DEPEND_INFRASTRUCTURE = 'ddd.layer.domain_not_depend_infrastructure';
+
     public const APPLICATION_NOT_DEPEND_INFRASTRUCTURE = 'ddd.layer.application_not_depend_infrastructure';
 
     // Entity rules
-    public const ENTITY_MUST_BE_FINAL                 = 'ddd.entity.must_be_final';
-    public const ENTITY_MUST_HAVE_RETURN_TYPES        = 'ddd.entity.must_have_return_types';
+    public const ENTITY_MUST_BE_FINAL = 'ddd.entity.must_be_final';
+
+    public const ENTITY_MUST_HAVE_RETURN_TYPES = 'ddd.entity.must_have_return_types';
 
     // Value object rules
-    public const VALUE_OBJECT_MUST_BE_FINAL           = 'ddd.value_object.must_be_final';
-    public const VALUE_OBJECT_NO_DATETIME             = 'ddd.value_object.no_datetime';
+    public const VALUE_OBJECT_MUST_BE_FINAL = 'ddd.value_object.must_be_final';
+
+    public const VALUE_OBJECT_NO_DATETIME = 'ddd.value_object.no_datetime';
 
     // Repository rules
-    public const REPOSITORY_MUST_BE_INTERFACE         = 'ddd.repository.must_be_interface';
-    public const REPOSITORY_IMPL_IN_INFRASTRUCTURE    = 'ddd.repository.implementation_in_infrastructure';
+    public const REPOSITORY_MUST_BE_INTERFACE = 'ddd.repository.must_be_interface';
+
+    public const REPOSITORY_IMPL_IN_INFRASTRUCTURE = 'ddd.repository.implementation_in_infrastructure';
 
     // Service rules
-    public const DOMAIN_SERVICE_IN_DOMAIN             = 'ddd.service.domain_service_in_domain';
-    public const APP_SERVICE_IN_APPLICATION           = 'ddd.service.app_service_in_application';
+    public const DOMAIN_SERVICE_IN_DOMAIN = 'ddd.service.domain_service_in_domain';
+
+    public const APP_SERVICE_IN_APPLICATION = 'ddd.service.app_service_in_application';
 
     // Event rules
-    public const EVENT_MUST_BE_FINAL                  = 'ddd.event.must_be_final';
-    public const EVENT_IN_DOMAIN                      = 'ddd.event.must_be_in_domain';
-    public const EVENT_NO_DATETIME                    = 'ddd.event.no_datetime';
+    public const EVENT_MUST_BE_FINAL = 'ddd.event.must_be_final';
+
+    public const EVENT_IN_DOMAIN = 'ddd.event.must_be_in_domain';
+
+    public const EVENT_NO_DATETIME = 'ddd.event.no_datetime';
 
     // Safety rules
-    public const DOMAIN_NO_DATETIME                   = 'ddd.safety.domain_no_datetime';
-    public const DOMAIN_NO_BASE_EXCEPTION             = 'ddd.safety.domain_no_base_exception';
+    public const DOMAIN_NO_DATETIME = 'ddd.safety.domain_no_datetime';
+
+    public const DOMAIN_NO_BASE_EXCEPTION = 'ddd.safety.domain_no_base_exception';
 
     public function __construct(
-        private readonly int $maxComplexity = 5,
-        private readonly int $maxMethodLength = 20,
-        private readonly bool $enforceFinalEntities = true,
-        private readonly bool $enforceFinalValueObjects = true,
-        private readonly bool $enforceFinalEvents = true,
-    ) {}
+        private int $maxComplexity = 5,
+        private int $maxMethodLength = 20,
+        private bool $enforceFinalEntities = true,
+        private bool $enforceFinalValueObjects = true,
+        private bool $enforceFinalEvents = true,
+    ) {
+    }
 
     public function apply(Architecture $architecture): void
     {
@@ -122,8 +137,8 @@ final class DddPreset implements PresetInterface
             self::VALUE_OBJECT_NO_DATETIME,
             new MayNotUseClassRule(
                 layer: 'Domain',
-                classNamePattern: '/ValueObject$/',
-                forbiddenClass: \DateTime::class
+                forbiddenClass: DateTime::class,
+                classNamePattern: '/ValueObject$/'
             )
         );
 
@@ -192,8 +207,8 @@ final class DddPreset implements PresetInterface
             self::EVENT_NO_DATETIME,
             new MayNotUseClassRule(
                 layer: 'Domain',
-                classNamePattern: '/Event$/',
-                forbiddenClass: \DateTime::class
+                forbiddenClass: DateTime::class,
+                classNamePattern: '/Event$/'
             )
         );
 
@@ -204,12 +219,12 @@ final class DddPreset implements PresetInterface
     {
         $architecture->rule(
             self::DOMAIN_NO_DATETIME,
-            new MayNotUseClassRule(layer: 'Domain', forbiddenClass: \DateTime::class)
+            new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class)
         );
 
         $architecture->rule(
             self::DOMAIN_NO_BASE_EXCEPTION,
-            new MayNotUseClassRule(layer: 'Domain', forbiddenClass: \Exception::class)
+            new MayNotUseClassRule(layer: 'Domain', forbiddenClass: Exception::class)
         );
 
         foreach (['Domain', 'Application'] as $layer) {

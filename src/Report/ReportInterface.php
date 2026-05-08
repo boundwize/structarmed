@@ -8,5 +8,5 @@ use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
 interface ReportInterface
 {
-    public function render(RuleViolationCollection $violations, float $elapsedSeconds): string;
+    public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string;
 }

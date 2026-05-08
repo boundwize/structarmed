@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Usage;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,44 +32,44 @@ final class MayNotCallFunctionRuleTest extends TestCase
 
     public function testPassesWhenForbiddenFunctionNotCalled(): void
     {
-        $rule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
-        $node = $this->makeNode(['array_map', 'array_filter']);
+        $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
+        $classNode              = $this->makeNode(['array_map', 'array_filter']);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotCallFunctionRule->evaluate($classNode));
     }
 
     public function testViolatesWhenForbiddenFunctionIsCalled(): void
     {
-        $rule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
-        $node = $this->makeNode(['var_dump']);
+        $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
+        $classNode              = $this->makeNode(['var_dump']);
 
-        $violation = $rule->evaluate($node);
+        $violation = $mayNotCallFunctionRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('var_dump', $violation->message);
     }
 
     public function testViolatesForDdFunction(): void
     {
-        $rule = new MayNotCallFunctionRule(layer: 'Domain', function: 'dd');
-        $node = $this->makeNode(['dd']);
+        $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'dd');
+        $classNode              = $this->makeNode(['dd']);
 
-        $this->assertNotNull($rule->evaluate($node));
+        $this->assertInstanceOf(RuleViolation::class, $mayNotCallFunctionRule->evaluate($classNode));
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
-        $node = $this->makeNode(['var_dump'], layer: 'Infrastructure');
+        $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
+        $classNode              = $this->makeNode(['var_dump'], layer: 'Infrastructure');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mayNotCallFunctionRule->appliesTo($classNode));
     }
 
     public function testAppliesToCorrectLayer(): void
     {
-        $rule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
-        $node = $this->makeNode([]);
+        $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
+        $classNode              = $this->makeNode([]);
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mayNotCallFunctionRule->appliesTo($classNode));
     }
 }

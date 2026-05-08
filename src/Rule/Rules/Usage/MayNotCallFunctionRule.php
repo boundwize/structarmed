@@ -8,21 +8,24 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-final class MayNotCallFunctionRule implements RuleInterface
+use function sprintf;
+
+final readonly class MayNotCallFunctionRule implements RuleInterface
 {
     public function __construct(
-        private readonly string $layer,
-        private readonly string $function,
-    ) {}
-
-    public function appliesTo(ClassNode $node): bool
-    {
-        return $node->layer === $this->layer;
+        private string $layer,
+        private string $function,
+    ) {
     }
 
-    public function evaluate(ClassNode $node): ?RuleViolation
+    public function appliesTo(ClassNode $classNode): bool
     {
-        if (! $node->callsFunction($this->function)) {
+        return $classNode->layer === $this->layer;
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        if (! $classNode->callsFunction($this->function)) {
             return null;
         }
 
@@ -30,13 +33,13 @@ final class MayNotCallFunctionRule implements RuleInterface
             ruleKey:   '',
             message:   sprintf(
                 'Class [%s] must not call function [%s()]',
-                $node->className,
+                $classNode->className,
                 $this->function
             ),
-            file:      $node->file,
-            line:      $node->line,
-            className: $node->className,
-            layer:     $node->layer,
+            file:      $classNode->file,
+            line:      $classNode->line,
+            className: $classNode->className,
+            layer:     $classNode->layer,
         );
     }
 }

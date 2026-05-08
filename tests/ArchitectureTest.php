@@ -8,8 +8,8 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
-use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -23,27 +23,27 @@ final class ArchitectureTest extends TestCase
 
     public function testLayerRegistration(): void
     {
-        $arch = Architecture::define()
+        $architecture = Architecture::define()
             ->layer('Domain', 'src/Domain/')
             ->layer('Application', 'src/Application/');
 
         $this->assertSame(
             ['Domain' => 'src/Domain/', 'Application' => 'src/Application/'],
-            $arch->getLayers()
+            $architecture->getLayers()
         );
     }
 
     public function testLayerRegistrationAcceptsMultiplePaths(): void
     {
-        $arch = Architecture::define()
+        $architecture = Architecture::define()
             ->layer('Source', ['src/', 'tests/']);
 
-        $this->assertSame(['Source' => ['src/', 'tests/']], $arch->getLayers());
+        $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
     }
 
     public function testSkipPathsAreRegistered(): void
     {
-        $arch = Architecture::define()
+        $architecture = Architecture::define()
             ->skip([
                 'tests/Fixtures/',
                 'var/cache/*',
@@ -52,82 +52,82 @@ final class ArchitectureTest extends TestCase
 
         $this->assertSame(
             ['tests/Fixtures/', 'var/cache/*'],
-            $arch->getSkipPaths()
+            $architecture->getSkipPaths()
         );
         $this->assertSame(
             ['my.custom.rule' => ['storage/framework/']],
-            $arch->getRuleSkipPaths()
+            $architecture->getRuleSkipPaths()
         );
     }
 
     public function testSkipPathAliasesUseUnifiedSkipConfiguration(): void
     {
-        $arch = Architecture::define()
+        $architecture = Architecture::define()
             ->skipPath('tests/Fixtures/')
             ->skipPaths(['var/cache/', 'storage/framework/']);
 
         $this->assertSame(
             ['tests/Fixtures/', 'var/cache/', 'storage/framework/'],
-            $arch->getSkipPaths()
+            $architecture->getSkipPaths()
         );
-        $this->assertSame([], $arch->getRuleSkipPaths());
+        $this->assertSame([], $architecture->getRuleSkipPaths());
     }
 
     public function testRuleIsAdded(): void
     {
-        $rule = new MustBeFinalRule(layer: 'Domain');
-        $arch = Architecture::define()
-            ->rule('my.custom.rule', $rule);
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $architecture    = Architecture::define()
+            ->rule('my.custom.rule', $mustBeFinalRule);
 
-        $this->assertArrayHasKey('my.custom.rule', $arch->getRules());
+        $this->assertArrayHasKey('my.custom.rule', $architecture->getRules());
     }
 
     public function testProjectRuleIsAdded(): void
     {
-        $rule = new Psr4SourcePathsRule(['src/']);
-        $arch = Architecture::define()
-            ->projectRule('my.project.rule', $rule);
+        $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/']);
+        $architecture        = Architecture::define()
+            ->projectRule('my.project.rule', $psr4SourcePathsRule);
 
-        $this->assertSame(['my.project.rule' => $rule], $arch->getProjectRules());
+        $this->assertSame(['my.project.rule' => $psr4SourcePathsRule], $architecture->getProjectRules());
     }
 
     public function testWithPresetAddsRules(): void
     {
-        $arch = Architecture::define()
+        $architecture = Architecture::define()
             ->layer('Domain', 'src/Domain/')
             ->layer('Application', 'src/Application/')
             ->layer('Infrastructure', 'src/Infrastructure/')
             ->withPreset(Preset::DDD());
 
-        $this->assertArrayHasKey(DddPreset::ENTITY_MUST_BE_FINAL, $arch->getRules());
-        $this->assertArrayHasKey(DddPreset::DOMAIN_NO_DATETIME, $arch->getRules());
+        $this->assertArrayHasKey(DddPreset::ENTITY_MUST_BE_FINAL, $architecture->getRules());
+        $this->assertArrayHasKey(DddPreset::DOMAIN_NO_DATETIME, $architecture->getRules());
     }
 
     public function testWithPresetsAddsAllRules(): void
     {
-        $arch = Architecture::define()
+        $architecture = Architecture::define()
             ->layer('Domain', 'src/Domain/')
             ->layer('Application', 'src/Application/')
             ->layer('Infrastructure', 'src/Infrastructure/')
             ->withPresets(Preset::DDD(), Preset::MVC());
 
-        $this->assertArrayHasKey(DddPreset::ENTITY_MUST_BE_FINAL, $arch->getRules());
+        $this->assertArrayHasKey(DddPreset::ENTITY_MUST_BE_FINAL, $architecture->getRules());
     }
 
     public function testReplaceRuleReplacesExistingRule(): void
     {
-        $originalRule    = new MustBeFinalRule(layer: 'Domain');
-        $replacementRule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');
+        new MustBeFinalRule(layer: 'Domain');
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');
 
-        $arch = Architecture::define()
+        $architecture = Architecture::define()
             ->layer('Domain', 'src/Domain/')
             ->layer('Application', 'src/Application/')
             ->layer('Infrastructure', 'src/Infrastructure/')
             ->withPreset(Preset::DDD())
-            ->replaceRule(DddPreset::ENTITY_MUST_BE_FINAL, $replacementRule);
+            ->replaceRule(DddPreset::ENTITY_MUST_BE_FINAL, $mustBeFinalRule);
 
-        $rules = $arch->getRules();
-        $this->assertSame($replacementRule, $rules[DddPreset::ENTITY_MUST_BE_FINAL]);
+        $rules = $architecture->getRules();
+        $this->assertSame($mustBeFinalRule, $rules[DddPreset::ENTITY_MUST_BE_FINAL]);
     }
 
     public function testReplaceRuleThrowsIfKeyNotFound(): void
@@ -140,14 +140,14 @@ final class ArchitectureTest extends TestCase
 
     public function testWithoutRuleRemovesRule(): void
     {
-        $arch = Architecture::define()
+        $architecture = Architecture::define()
             ->layer('Domain', 'src/Domain/')
             ->layer('Application', 'src/Application/')
             ->layer('Infrastructure', 'src/Infrastructure/')
             ->withPreset(Preset::DDD())
             ->withoutRule(DddPreset::DOMAIN_NO_BASE_EXCEPTION);
 
-        $this->assertArrayNotHasKey(DddPreset::DOMAIN_NO_BASE_EXCEPTION, $arch->getRules());
+        $this->assertArrayNotHasKey(DddPreset::DOMAIN_NO_BASE_EXCEPTION, $architecture->getRules());
     }
 
     public function testWithoutRuleThrowsIfKeyNotFound(): void

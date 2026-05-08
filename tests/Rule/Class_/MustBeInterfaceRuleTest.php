@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeInterfaceRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -32,52 +33,52 @@ final class MustBeInterfaceRuleTest extends TestCase
 
     public function testPassesWhenClassIsInterface(): void
     {
-        $rule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
-        $node = $this->makeNode(isInterface: true);
+        $mustBeInterfaceRule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
+        $classNode           = $this->makeNode(isInterface: true);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mustBeInterfaceRule->evaluate($classNode));
     }
 
     public function testViolatesWhenClassIsNotInterface(): void
     {
-        $rule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
-        $node = $this->makeNode(isInterface: false);
+        $mustBeInterfaceRule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
+        $classNode           = $this->makeNode(isInterface: false);
 
-        $violation = $rule->evaluate($node);
+        $violation = $mustBeInterfaceRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('interface', $violation->message);
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MustBeInterfaceRule(layer: 'Domain');
-        $node = $this->makeNode(layer: 'Infrastructure');
+        $mustBeInterfaceRule = new MustBeInterfaceRule(layer: 'Domain');
+        $classNode           = $this->makeNode(layer: 'Infrastructure');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mustBeInterfaceRule->appliesTo($classNode));
     }
 
     public function testAppliesToMatchingPattern(): void
     {
-        $rule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
-        $node = $this->makeNode();
+        $mustBeInterfaceRule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
+        $classNode           = $this->makeNode();
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mustBeInterfaceRule->appliesTo($classNode));
     }
 
     public function testAppliesToLayerWhenNoPatternConfigured(): void
     {
-        $rule = new MustBeInterfaceRule(layer: 'Domain');
-        $node = $this->makeNode();
+        $mustBeInterfaceRule = new MustBeInterfaceRule(layer: 'Domain');
+        $classNode           = $this->makeNode();
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mustBeInterfaceRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToNonMatchingPattern(): void
     {
-        $rule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
-        $node = $this->makeNode(className: 'App\\Domain\\Services\\OrderService');
+        $mustBeInterfaceRule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
+        $classNode           = $this->makeNode(className: 'App\\Domain\\Services\\OrderService');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mustBeInterfaceRule->appliesTo($classNode));
     }
 }

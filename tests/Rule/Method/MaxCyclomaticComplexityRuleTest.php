@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Method;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxCyclomaticComplexityRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -41,37 +42,37 @@ final class MaxCyclomaticComplexityRuleTest extends TestCase
 
     public function testPassesWhenComplexityUnderLimit(): void
     {
-        $rule = new MaxCyclomaticComplexityRule(layer: 'Controller', maxComplexity: 5);
-        $node = $this->makeNode(complexity: 3);
+        $maxCyclomaticComplexityRule = new MaxCyclomaticComplexityRule(layer: 'Controller', maxComplexity: 5);
+        $classNode                   = $this->makeNode(complexity: 3);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $maxCyclomaticComplexityRule->evaluate($classNode));
     }
 
     public function testPassesWhenComplexityAtLimit(): void
     {
-        $rule = new MaxCyclomaticComplexityRule(layer: 'Controller', maxComplexity: 5);
-        $node = $this->makeNode(complexity: 5);
+        $maxCyclomaticComplexityRule = new MaxCyclomaticComplexityRule(layer: 'Controller', maxComplexity: 5);
+        $classNode                   = $this->makeNode(complexity: 5);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $maxCyclomaticComplexityRule->evaluate($classNode));
     }
 
     public function testViolatesWhenComplexityOverLimit(): void
     {
-        $rule = new MaxCyclomaticComplexityRule(layer: 'Controller', maxComplexity: 5);
-        $node = $this->makeNode(complexity: 8);
+        $maxCyclomaticComplexityRule = new MaxCyclomaticComplexityRule(layer: 'Controller', maxComplexity: 5);
+        $classNode                   = $this->makeNode(complexity: 8);
 
-        $violation = $rule->evaluate($node);
+        $violation = $maxCyclomaticComplexityRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('8', $violation->message);
         $this->assertStringContainsString('5', $violation->message);
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MaxCyclomaticComplexityRule(layer: 'Controller', maxComplexity: 5);
-        $node = $this->makeNode(complexity: 100, layer: 'Domain');
+        $maxCyclomaticComplexityRule = new MaxCyclomaticComplexityRule(layer: 'Controller', maxComplexity: 5);
+        $classNode                   = $this->makeNode(complexity: 100, layer: 'Domain');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($maxCyclomaticComplexityRule->appliesTo($classNode));
     }
 }

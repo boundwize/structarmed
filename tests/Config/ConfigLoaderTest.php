@@ -10,6 +10,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
+use function bin2hex;
+use function file_put_contents;
+use function mkdir;
+use function random_bytes;
+use function tempnam;
+use function touch;
+
 #[CoversClass(ConfigLoader::class)]
 final class ConfigLoaderTest extends TestCase
 {
@@ -66,7 +73,7 @@ final class ConfigLoaderTest extends TestCase
     private function writeTempConfig(string $body): string
     {
         $path = tempnam('/private/tmp', 'structarmed-config-');
-        self::assertIsString($path);
+        $this->assertIsString($path);
         file_put_contents($path, "<?php\n\n" . $body . "\n");
 
         return $path;

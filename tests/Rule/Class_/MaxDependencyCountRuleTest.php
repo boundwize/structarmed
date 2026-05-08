@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Rule\Rules\Class_\MaxDependencyCountRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -43,37 +44,37 @@ final class MaxDependencyCountRuleTest extends TestCase
 
     public function testPassesWhenUnderLimit(): void
     {
-        $rule = new MaxDependencyCountRule(layer: 'Controller', maxCount: 5);
-        $node = $this->makeNode(constructorParams: 3);
+        $maxDependencyCountRule = new MaxDependencyCountRule(layer: 'Controller', maxCount: 5);
+        $classNode              = $this->makeNode(constructorParams: 3);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $maxDependencyCountRule->evaluate($classNode));
     }
 
     public function testPassesWhenAtLimit(): void
     {
-        $rule = new MaxDependencyCountRule(layer: 'Controller', maxCount: 5);
-        $node = $this->makeNode(constructorParams: 5);
+        $maxDependencyCountRule = new MaxDependencyCountRule(layer: 'Controller', maxCount: 5);
+        $classNode              = $this->makeNode(constructorParams: 5);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $maxDependencyCountRule->evaluate($classNode));
     }
 
     public function testViolatesWhenOverLimit(): void
     {
-        $rule = new MaxDependencyCountRule(layer: 'Controller', maxCount: 5);
-        $node = $this->makeNode(constructorParams: 7);
+        $maxDependencyCountRule = new MaxDependencyCountRule(layer: 'Controller', maxCount: 5);
+        $classNode              = $this->makeNode(constructorParams: 7);
 
-        $violation = $rule->evaluate($node);
+        $violation = $maxDependencyCountRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('7', $violation->message);
         $this->assertStringContainsString('5', $violation->message);
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MaxDependencyCountRule(layer: 'Controller', maxCount: 5);
-        $node = $this->makeNode(constructorParams: 10, layer: 'Domain');
+        $maxDependencyCountRule = new MaxDependencyCountRule(layer: 'Controller', maxCount: 5);
+        $classNode              = $this->makeNode(constructorParams: 10, layer: 'Domain');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($maxDependencyCountRule->appliesTo($classNode));
     }
 }

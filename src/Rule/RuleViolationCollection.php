@@ -4,10 +4,18 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule;
 
+use ArrayIterator;
 use Countable;
 use IteratorAggregate;
-use ArrayIterator;
 use Traversable;
+
+use function array_filter;
+use function array_map;
+use function array_values;
+use function count;
+use function json_encode;
+
+use const JSON_PRETTY_PRINT;
 
 /**
  * @implements IteratorAggregate<int, RuleViolation>
@@ -17,9 +25,9 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
     /** @var RuleViolation[] */
     private array $violations = [];
 
-    public function add(RuleViolation $violation): void
+    public function add(RuleViolation $ruleViolation): void
     {
-        $this->violations[] = $violation;
+        $this->violations[] = $ruleViolation;
     }
 
     public function merge(self $other): void
@@ -55,7 +63,7 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
         return array_values(
             array_filter(
                 $this->violations,
-                static fn(RuleViolation $v) => $v->layer === $layer
+                static fn(RuleViolation $ruleViolation): bool => $ruleViolation->layer === $layer
             )
         );
     }
@@ -66,7 +74,7 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
         return array_values(
             array_filter(
                 $this->violations,
-                static fn(RuleViolation $v) => $v->ruleKey === $ruleKey
+                static fn(RuleViolation $ruleViolation): bool => $ruleViolation->ruleKey === $ruleKey
             )
         );
     }
@@ -75,7 +83,7 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
     public function toArray(): array
     {
         return array_values(array_map(
-            static fn(RuleViolation $v) => $v->toArray(),
+            static fn(RuleViolation $ruleViolation): array => $ruleViolation->toArray(),
             $this->violations
         ));
     }

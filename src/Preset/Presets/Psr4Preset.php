@@ -9,7 +9,7 @@ use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 
-final class Psr4Preset implements PresetInterface
+final readonly class Psr4Preset implements PresetInterface
 {
     public const SOURCE_LAYER = 'Source';
 
@@ -21,7 +21,7 @@ final class Psr4Preset implements PresetInterface
      * @param list<string> $sourcePaths
      */
     public function __construct(
-        private readonly ?array $sourcePaths = null,
+        private ?array $sourcePaths = null,
     ) {
     }
 

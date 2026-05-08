@@ -8,29 +8,33 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-final class MustBeInterfaceRule implements RuleInterface
+use function preg_match;
+use function sprintf;
+
+final readonly class MustBeInterfaceRule implements RuleInterface
 {
     public function __construct(
-        private readonly string $layer,
-        private readonly ?string $classNamePattern = null,
-    ) {}
+        private string $layer,
+        private ?string $classNamePattern = null,
+    ) {
+    }
 
-    public function appliesTo(ClassNode $node): bool
+    public function appliesTo(ClassNode $classNode): bool
     {
-        if ($node->layer !== $this->layer) {
+        if ($classNode->layer !== $this->layer) {
             return false;
         }
 
         if ($this->classNamePattern !== null) {
-            return (bool) preg_match($this->classNamePattern, $node->shortName());
+            return (bool) preg_match($this->classNamePattern, $classNode->shortName());
         }
 
         return true;
     }
 
-    public function evaluate(ClassNode $node): ?RuleViolation
+    public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ($node->isInterface) {
+        if ($classNode->isInterface) {
             return null;
         }
 
@@ -38,12 +42,12 @@ final class MustBeInterfaceRule implements RuleInterface
             ruleKey:   '',
             message:   sprintf(
                 'Class [%s] must be an interface',
-                $node->className
+                $classNode->className
             ),
-            file:      $node->file,
-            line:      $node->line,
-            className: $node->className,
-            layer:     $node->layer,
+            file:      $classNode->file,
+            line:      $classNode->line,
+            className: $classNode->className,
+            layer:     $classNode->layer,
         );
     }
 }

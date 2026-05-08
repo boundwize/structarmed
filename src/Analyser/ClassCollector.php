@@ -6,19 +6,50 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use PhpParser\Node;
-use PhpParser\Node\Stmt\Class_;
-use PhpParser\Node\Stmt\Interface_;
-use PhpParser\NodeVisitorAbstract;
-use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\BinaryOp\BooleanOr;
+use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
+use PhpParser\Node\Expr\BinaryOp\LogicalOr;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Match_;
+use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
+use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\Stmt\Case_;
+use PhpParser\Node\Stmt\Catch_;
+use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Do_;
+use PhpParser\Node\Stmt\ElseIf_;
+use PhpParser\Node\Stmt\For_;
+use PhpParser\Node\Stmt\Foreach_;
+use PhpParser\Node\Stmt\If_;
+use PhpParser\Node\Stmt\Interface_;
+use PhpParser\Node\Stmt\UseUse;
+use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitorAbstract;
+
+use function array_merge;
+use function array_unique;
+use function count;
+use function implode;
+use function in_array;
+use function is_string;
 
 final class ClassCollector extends NodeVisitorAbstract
 {
     private const SUPERGLOBALS = [
-        '_GET', '_POST', '_REQUEST', '_SESSION',
-        '_COOKIE', '_SERVER', '_ENV', '_FILES',
+        '_GET',
+        '_POST',
+        '_REQUEST',
+        '_SESSION',
+        '_COOKIE',
+        '_SERVER',
+        '_ENV',
+        '_FILES',
     ];
 
     /** @var ClassNode[] */
@@ -31,7 +62,8 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
-    ) {}
+    ) {
+    }
 
     public function setCurrentFile(string $file): void
     {
@@ -47,7 +79,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function enterNode(Node $node): null
     {
-        if ($node instanceof Node\Stmt\UseUse) {
+        if ($node instanceof UseUse) {
             $this->fileUses[] = implode('\\', $node->name->getParts());
             return null;
         }
@@ -56,24 +88,24 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
-        if ($node->name === null) {
+        if (! $node->name instanceof Identifier) {
             return null;
         }
 
-        $className    = $this->resolveClassName($node);
-        $layer        = $this->layerResolver->resolve($className, $this->currentFile);
-        $dependencies = $this->collectDependencies($node);
-        $methods      = $this->collectMethods($node);
+        $className     = $this->resolveClassName($node);
+        $layer         = $this->layerResolver->resolve($className, $this->currentFile);
+        $dependencies  = $this->collectDependencies($node);
+        $methods       = $this->collectMethods($node);
         $functionCalls = $this->collectFunctionCalls($node);
-        $superglobals = $this->collectSuperglobals($node);
-        $implements   = $this->collectImplements($node);
+        $superglobals  = $this->collectSuperglobals($node);
+        $implements    = $this->collectImplements($node);
 
         $this->nodes[] = new ClassNode(
             className:     $className,
             file:          $this->currentFile,
             line:          $node->getStartLine(),
             layer:         $layer,
-            extends:       $node instanceof Class_ && $node->extends !== null
+            extends:       $node instanceof Class_ && $node->extends instanceof Name
                                ? implode('\\', $node->extends->getParts())
                                : null,
             isAbstract:    $node instanceof Class_ && $node->isAbstract(),
@@ -98,19 +130,18 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * @param Class_|Interface_ $node
      * @return string[]
      */
     private function collectDependencies(Class_|Interface_ $node): array
     {
-        $traverser = new NodeTraverser();
-        $visitor   = new class extends NodeVisitorAbstract {
+        $nodeTraverser = new NodeTraverser();
+        $visitor       = new class extends NodeVisitorAbstract {
             /** @var string[] */
             public array $names = [];
 
             public function enterNode(Node $node): null
             {
-                if ($node instanceof Node\Name\FullyQualified) {
+                if ($node instanceof FullyQualified) {
                     $this->names[] = implode('\\', $node->getParts());
                 }
 
@@ -118,14 +149,13 @@ final class ClassCollector extends NodeVisitorAbstract
             }
         };
 
-        $traverser->addVisitor($visitor);
-        $traverser->traverse([$node]);
+        $nodeTraverser->addVisitor($visitor);
+        $nodeTraverser->traverse([$node]);
 
         return array_unique(array_merge($this->fileUses, $visitor->names));
     }
 
     /**
-     * @param Class_|Interface_ $node
      * @return string[]
      */
     private function collectImplements(Class_|Interface_ $node): array
@@ -142,66 +172,66 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * @param Class_|Interface_ $node
      * @return MethodNode[]
      */
     private function collectMethods(Class_|Interface_ $node): array
     {
         $methods = [];
 
-        foreach ($node->getMethods() as $method) {
+        foreach ($node->getMethods() as $classMethod) {
             $methods[] = new MethodNode(
-                name:                 (string) $method->name,
-                visibility:           $this->resolveVisibility($method),
-                hasReturnType:        $method->returnType !== null,
-                isStatic:             $method->isStatic(),
-                paramCount:           count($method->params),
-                cyclomaticComplexity: $this->calculateComplexity($method),
-                lineCount:            ($method->getEndLine() - $method->getStartLine()) + 1,
+                name:                 (string) $classMethod->name,
+                visibility:           $this->resolveVisibility($classMethod),
+                hasReturnType:        $classMethod->returnType !== null,
+                isStatic:             $classMethod->isStatic(),
+                paramCount:           count($classMethod->params),
+                cyclomaticComplexity: $this->calculateComplexity($classMethod),
+                lineCount:            ($classMethod->getEndLine() - $classMethod->getStartLine()) + 1,
             );
         }
 
         return $methods;
     }
 
-    private function resolveVisibility(ClassMethod $method): string
+    private function resolveVisibility(ClassMethod $classMethod): string
     {
-        if ($method->isPublic()) {
+        if ($classMethod->isPublic()) {
             return 'public';
         }
-        if ($method->isProtected()) {
+
+        if ($classMethod->isProtected()) {
             return 'protected';
         }
 
         return 'private';
     }
 
-    private function calculateComplexity(ClassMethod $method): int
+    private function calculateComplexity(ClassMethod $classMethod): int
     {
         // Start at 1, add 1 for each branch point
         $complexity = 1;
 
-        $traverser = new NodeTraverser();
-        $visitor   = new class extends NodeVisitorAbstract {
+        $nodeTraverser = new NodeTraverser();
+        $visitor       = new class extends NodeVisitorAbstract {
             public int $count = 0;
 
             public function enterNode(Node $node): null
             {
                 if (
-                    $node instanceof Node\Stmt\If_
-                    || $node instanceof Node\Stmt\ElseIf_
-                    || $node instanceof Node\Stmt\For_
-                    || $node instanceof Node\Stmt\Foreach_
-                    || $node instanceof Node\Stmt\While_
-                    || $node instanceof Node\Stmt\Do_
-                    || $node instanceof Node\Stmt\Case_
-                    || $node instanceof Node\Stmt\Catch_
-                    || $node instanceof Node\Expr\Ternary
-                    || $node instanceof Node\Expr\BinaryOp\BooleanAnd
-                    || $node instanceof Node\Expr\BinaryOp\BooleanOr
-                    || $node instanceof Node\Expr\BinaryOp\LogicalAnd
-                    || $node instanceof Node\Expr\BinaryOp\LogicalOr
-                    || $node instanceof Node\Expr\Match_
+                    $node instanceof If_
+                    || $node instanceof ElseIf_
+                    || $node instanceof For_
+                    || $node instanceof Foreach_
+                    || $node instanceof While_
+                    || $node instanceof Do_
+                    || $node instanceof Case_
+                    || $node instanceof Catch_
+                    || $node instanceof Ternary
+                    || $node instanceof BooleanAnd
+                    || $node instanceof BooleanOr
+                    || $node instanceof LogicalAnd
+                    || $node instanceof LogicalOr
+                    || $node instanceof Match_
                 ) {
                     $this->count++;
                 }
@@ -210,23 +240,22 @@ final class ClassCollector extends NodeVisitorAbstract
             }
         };
 
-        $traverser->addVisitor($visitor);
+        $nodeTraverser->addVisitor($visitor);
 
-        if ($method->stmts !== null) {
-            $traverser->traverse($method->stmts);
+        if ($classMethod->stmts !== null) {
+            $nodeTraverser->traverse($classMethod->stmts);
         }
 
         return $complexity + $visitor->count;
     }
 
     /**
-     * @param Class_|Interface_ $node
      * @return string[]
      */
     private function collectFunctionCalls(Class_|Interface_ $node): array
     {
-        $traverser = new NodeTraverser();
-        $visitor   = new class extends NodeVisitorAbstract {
+        $nodeTraverser = new NodeTraverser();
+        $visitor       = new class extends NodeVisitorAbstract {
             /** @var string[] */
             public array $calls = [];
 
@@ -234,7 +263,7 @@ final class ClassCollector extends NodeVisitorAbstract
             {
                 if (
                     $node instanceof FuncCall
-                    && $node->name instanceof Node\Name
+                    && $node->name instanceof Name
                 ) {
                     $this->calls[] = (string) $node->name;
                 }
@@ -243,20 +272,19 @@ final class ClassCollector extends NodeVisitorAbstract
             }
         };
 
-        $traverser->addVisitor($visitor);
-        $traverser->traverse([$node]);
+        $nodeTraverser->addVisitor($visitor);
+        $nodeTraverser->traverse([$node]);
 
         return array_unique($visitor->calls);
     }
 
     /**
-     * @param Class_|Interface_ $node
      * @return string[]
      */
     private function collectSuperglobals(Class_|Interface_ $node): array
     {
-        $traverser = new NodeTraverser();
-        $visitor   = new class extends NodeVisitorAbstract {
+        $nodeTraverser = new NodeTraverser();
+        $visitor       = new class extends NodeVisitorAbstract {
             /** @var string[] */
             public array $found = [];
 
@@ -278,8 +306,9 @@ final class ClassCollector extends NodeVisitorAbstract
         };
 
         $visitor->superglobals = self::SUPERGLOBALS;
-        $traverser->addVisitor($visitor);
-        $traverser->traverse([$node]);
+
+        $nodeTraverser->addVisitor($visitor);
+        $nodeTraverser->traverse([$node]);
 
         return array_unique($visitor->found);
     }

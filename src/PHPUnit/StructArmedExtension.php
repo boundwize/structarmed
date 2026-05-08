@@ -13,6 +13,10 @@ use PHPUnit\Runner\Extension\Facade;
 use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
 
+use function getcwd;
+use function microtime;
+use function sprintf;
+
 final class StructArmedExtension implements Extension
 {
     public function bootstrap(
@@ -29,17 +33,17 @@ final class StructArmedExtension implements Extension
         $architecture = ConfigLoader::load($configFile);
         $analyser     = new Analyser($basePath);
 
-        $start      = microtime(true);
-        $violations = $analyser->analyse($architecture);
-        $elapsed    = microtime(true) - $start;
+        $start                   = microtime(true);
+        $ruleViolationCollection = $analyser->analyse($architecture);
+        $elapsed                 = microtime(true) - $start;
 
-        $report = (new ConsoleReport())->render($violations, $elapsed);
+        $report = (new ConsoleReport())->render($ruleViolationCollection, $elapsed);
         echo $report;
 
-        if ($violations->hasViolations()) {
+        if ($ruleViolationCollection->hasViolations()) {
             throw new ViolationsFoundException(sprintf(
                 'StructArmed found %d architecture violation(s). Fix them before running tests.',
-                $violations->count()
+                $ruleViolationCollection->count()
             ));
         }
     }

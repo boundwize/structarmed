@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -33,60 +34,60 @@ final class MustBeFinalRuleTest extends TestCase
 
     public function testPassesWhenClassIsFinal(): void
     {
-        $rule = new MustBeFinalRule(layer: 'Domain');
-        $node = $this->makeNode(isFinal: true);
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode(isFinal: true);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mustBeFinalRule->evaluate($classNode));
     }
 
     public function testViolatesWhenClassIsNotFinal(): void
     {
-        $rule = new MustBeFinalRule(layer: 'Domain');
-        $node = $this->makeNode(isFinal: false);
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode(isFinal: false);
 
-        $violation = $rule->evaluate($node);
+        $violation = $mustBeFinalRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('final', $violation->message);
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MustBeFinalRule(layer: 'Domain');
-        $node = $this->makeNode(layer: 'Infrastructure');
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode(layer: 'Infrastructure');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToInterfaces(): void
     {
-        $rule = new MustBeFinalRule(layer: 'Domain');
-        $node = $this->makeNode(isInterface: true);
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode(isInterface: true);
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
     }
 
     public function testAppliesToMatchingPattern(): void
     {
-        $rule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');
-        $node = $this->makeNode(className: 'App\\Domain\\OrderEntity');
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');
+        $classNode       = $this->makeNode(className: 'App\\Domain\\OrderEntity');
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mustBeFinalRule->appliesTo($classNode));
     }
 
     public function testAppliesToLayerWhenNoPatternConfigured(): void
     {
-        $rule = new MustBeFinalRule(layer: 'Domain');
-        $node = $this->makeNode();
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode();
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mustBeFinalRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToNonMatchingPattern(): void
     {
-        $rule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');
-        $node = $this->makeNode(className: 'App\\Domain\\OrderService');
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');
+        $classNode       = $this->makeNode(className: 'App\\Domain\\OrderService');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
     }
 }

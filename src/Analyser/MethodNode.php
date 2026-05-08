@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
-final class MethodNode
+final readonly class MethodNode
 {
     public function __construct(
-        public readonly string $name,
-        public readonly string $visibility,   // public, protected, private
-        public readonly bool $hasReturnType,
-        public readonly bool $isStatic,
-        public readonly int $paramCount,
-        public readonly int $cyclomaticComplexity,
-        public readonly int $lineCount,
-    ) {}
+        public string $name,
+        public string $visibility, // public, protected, private
+        public bool $hasReturnType,
+        public bool $isStatic,
+        public int $paramCount,
+        public int $cyclomaticComplexity,
+        public int $lineCount,
+    ) {
+    }
 
     public function isPublic(): bool
     {

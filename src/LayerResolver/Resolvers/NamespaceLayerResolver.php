@@ -6,6 +6,14 @@ namespace Boundwize\StructArmed\LayerResolver\Resolvers;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 
+use function realpath;
+use function rtrim;
+use function str_replace;
+use function str_starts_with;
+use function trim;
+
+use const DIRECTORY_SEPARATOR;
+
 /**
  * Resolves a layer by matching the file path against registered layer paths.
  *
@@ -13,15 +21,16 @@ use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
  *   'Domain' → 'src/Domain/'
  *   A file at 'src/Domain/Entities/Order.php' resolves to 'Domain'
  */
-final class NamespaceLayerResolver implements LayerResolverInterface
+final readonly class NamespaceLayerResolver implements LayerResolverInterface
 {
     /**
      * @param array<string, string|list<string>> $layers  Map of layer name → path prefixes
      */
     public function __construct(
-        private readonly array $layers,
-        private readonly string $basePath,
-    ) {}
+        private array $layers,
+        private string $basePath,
+    ) {
+    }
 
     public function resolve(string $className, string $filePath): ?string
     {

@@ -18,14 +18,14 @@ use function sprintf;
 use function str_replace;
 use function trim;
 
-final class Psr4SourcePathsRule implements ProjectRuleInterface
+final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
 {
     /**
      * @param list<string> $sourcePaths
      */
     public function __construct(
-        private readonly ?array $sourcePaths,
-        private readonly Psr4PathResolver $pathResolver = new Psr4PathResolver(),
+        private ?array $sourcePaths,
+        private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
     ) {
     }
 
@@ -35,7 +35,7 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
     public function sourcePathsFor(string $basePath): array
     {
         if ($this->sourcePaths === null) {
-            return $this->pathResolver->paths($basePath);
+            return $this->psr4PathResolver->paths($basePath);
         }
 
         return $this->normalisePaths($this->sourcePaths);
@@ -52,7 +52,7 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
             );
         }
 
-        $composer = $this->pathResolver->composerConfig($basePath);
+        $composer = $this->psr4PathResolver->composerConfig($basePath);
 
         if ($composer === null) {
             return $this->violation(
@@ -65,7 +65,7 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
             return null;
         }
 
-        $autoloadPaths = $this->pathResolver->paths($basePath);
+        $autoloadPaths = $this->psr4PathResolver->paths($basePath);
         $missingPaths  = [];
 
         foreach ($this->normalisePaths($this->sourcePaths) as $sourcePath) {

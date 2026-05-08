@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Class_\NamingConventionRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -32,61 +33,61 @@ final class NamingConventionRuleTest extends TestCase
 
     public function testPassesWhenClassIsInCorrectLayer(): void
     {
-        $rule = new NamingConventionRule(
+        $namingConventionRule = new NamingConventionRule(
             classNamePattern: '/Service$/',
             mustBeInLayer: 'Application'
         );
-        $node = $this->makeNode('App\\Application\\OrderService', 'Application');
+        $classNode            = $this->makeNode('App\\Application\\OrderService', 'Application');
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $namingConventionRule->evaluate($classNode));
     }
 
     public function testViolatesWhenClassIsInWrongLayer(): void
     {
-        $rule = new NamingConventionRule(
+        $namingConventionRule = new NamingConventionRule(
             classNamePattern: '/Service$/',
             mustBeInLayer: 'Application'
         );
-        $node = $this->makeNode('App\\Infrastructure\\OrderService', 'Infrastructure');
+        $classNode            = $this->makeNode('App\\Infrastructure\\OrderService', 'Infrastructure');
 
-        $violation = $rule->evaluate($node);
+        $violation = $namingConventionRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('Application', $violation->message);
     }
 
     public function testExcludesInterfacesWhenFlagSet(): void
     {
-        $rule = new NamingConventionRule(
+        $namingConventionRule = new NamingConventionRule(
             classNamePattern: '/Repository$/',
             mustBeInLayer: 'Infrastructure',
             excludeInterfaces: true
         );
-        $node = $this->makeNode('App\\Domain\\OrderRepository', 'Domain', isInterface: true);
+        $classNode            = $this->makeNode('App\\Domain\\OrderRepository', 'Domain', isInterface: true);
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($namingConventionRule->appliesTo($classNode));
     }
 
     public function testExcludePatternSkipsMatchingClasses(): void
     {
-        $rule = new NamingConventionRule(
+        $namingConventionRule = new NamingConventionRule(
             classNamePattern: '/Service$/',
             mustBeInLayer: 'Application',
             excludePattern: '/DomainService$/'
         );
-        $node = $this->makeNode('App\\Domain\\OrderDomainService', 'Domain');
+        $classNode            = $this->makeNode('App\\Domain\\OrderDomainService', 'Domain');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($namingConventionRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyWhenPatternDoesNotMatch(): void
     {
-        $rule = new NamingConventionRule(
+        $namingConventionRule = new NamingConventionRule(
             classNamePattern: '/Handler$/',
             mustBeInLayer: 'Application'
         );
-        $node = $this->makeNode('App\\Application\\OrderService', 'Application');
+        $classNode            = $this->makeNode('App\\Application\\OrderService', 'Application');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($namingConventionRule->appliesTo($classNode));
     }
 }

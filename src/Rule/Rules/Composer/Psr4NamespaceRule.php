@@ -29,20 +29,20 @@ final class Psr4NamespaceRule implements RuleInterface
 
     public function __construct(
         private readonly string $layer,
-        private readonly Psr4PathResolver $pathResolver = new Psr4PathResolver(),
+        private readonly Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
     ) {
     }
 
-    public function appliesTo(ClassNode $node): bool
+    public function appliesTo(ClassNode $classNode): bool
     {
-        return $node->layer === $this->layer;
+        return $classNode->layer === $this->layer;
     }
 
-    public function evaluate(ClassNode $node): ?RuleViolation
+    public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        $expectedClassName = $this->expectedClassName($node->file);
+        $expectedClassName = $this->expectedClassName($classNode->file);
 
-        if ($expectedClassName === null || $node->className === $expectedClassName) {
+        if ($expectedClassName === null || $classNode->className === $expectedClassName) {
             return null;
         }
 
@@ -50,13 +50,13 @@ final class Psr4NamespaceRule implements RuleInterface
             ruleKey:   '',
             message:   sprintf(
                 'Class [%s] must match PSR-4 class [%s]',
-                $node->className,
+                $classNode->className,
                 $expectedClassName
             ),
-            file:      $node->file,
-            line:      $node->line,
-            className: $node->className,
-            layer:     $node->layer,
+            file:      $classNode->file,
+            line:      $classNode->line,
+            className: $classNode->className,
+            layer:     $classNode->layer,
         );
     }
 
@@ -122,7 +122,7 @@ final class Psr4NamespaceRule implements RuleInterface
     private function mappingsFor(string $basePath): array
     {
         if (! isset($this->mappingsByBasePath[$basePath])) {
-            $this->mappingsByBasePath[$basePath] = $this->pathResolver->namespacePaths($basePath);
+            $this->mappingsByBasePath[$basePath] = $this->psr4PathResolver->namespacePaths($basePath);
         }
 
         return $this->mappingsByBasePath[$basePath];

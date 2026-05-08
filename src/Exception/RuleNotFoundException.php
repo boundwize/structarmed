@@ -6,4 +6,6 @@ namespace Boundwize\StructArmed\Exception;
 
 use InvalidArgumentException;
 
-final class RuleNotFoundException extends InvalidArgumentException {}
+final class RuleNotFoundException extends InvalidArgumentException
+{
+}

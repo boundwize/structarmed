@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Method;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -41,37 +42,37 @@ final class MaxMethodLengthRuleTest extends TestCase
 
     public function testPassesWhenMethodUnderLimit(): void
     {
-        $rule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
-        $node = $this->makeNode(lineCount: 10);
+        $maxMethodLengthRule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
+        $classNode           = $this->makeNode(lineCount: 10);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $maxMethodLengthRule->evaluate($classNode));
     }
 
     public function testPassesWhenMethodAtLimit(): void
     {
-        $rule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
-        $node = $this->makeNode(lineCount: 20);
+        $maxMethodLengthRule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
+        $classNode           = $this->makeNode(lineCount: 20);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $maxMethodLengthRule->evaluate($classNode));
     }
 
     public function testViolatesWhenMethodOverLimit(): void
     {
-        $rule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
-        $node = $this->makeNode(lineCount: 35);
+        $maxMethodLengthRule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
+        $classNode           = $this->makeNode(lineCount: 35);
 
-        $violation = $rule->evaluate($node);
+        $violation = $maxMethodLengthRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('35', $violation->message);
         $this->assertStringContainsString('20', $violation->message);
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 5);
-        $node = $this->makeNode(lineCount: 100, layer: 'Domain');
+        $maxMethodLengthRule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 5);
+        $classNode           = $this->makeNode(lineCount: 100, layer: 'Domain');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($maxMethodLengthRule->appliesTo($classNode));
     }
 }

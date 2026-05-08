@@ -8,20 +8,24 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-final class MayNotUseSuperglobalsRule implements RuleInterface
+use function implode;
+use function sprintf;
+
+final readonly class MayNotUseSuperglobalsRule implements RuleInterface
 {
     public function __construct(
-        private readonly string $layer,
-    ) {}
-
-    public function appliesTo(ClassNode $node): bool
-    {
-        return $node->layer === $this->layer;
+        private string $layer,
+    ) {
     }
 
-    public function evaluate(ClassNode $node): ?RuleViolation
+    public function appliesTo(ClassNode $classNode): bool
     {
-        if (! $node->accessesSuperglobals()) {
+        return $classNode->layer === $this->layer;
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        if (! $classNode->accessesSuperglobals()) {
             return null;
         }
 
@@ -29,13 +33,13 @@ final class MayNotUseSuperglobalsRule implements RuleInterface
             ruleKey:   '',
             message:   sprintf(
                 'Class [%s] must not access superglobals directly (%s)',
-                $node->className,
-                implode(', ', $node->superglobals)
+                $classNode->className,
+                implode(', ', $classNode->superglobals)
             ),
-            file:      $node->file,
-            line:      $node->line,
-            className: $node->className,
-            layer:     $node->layer,
+            file:      $classNode->file,
+            line:      $classNode->line,
+            className: $classNode->className,
+            layer:     $classNode->layer,
         );
     }
 }

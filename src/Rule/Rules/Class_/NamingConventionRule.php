@@ -8,34 +8,38 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-final class NamingConventionRule implements RuleInterface
+use function preg_match;
+use function sprintf;
+
+final readonly class NamingConventionRule implements RuleInterface
 {
     public function __construct(
-        private readonly string $classNamePattern,
-        private readonly string $mustBeInLayer,
-        private readonly bool $excludeInterfaces = false,
-        private readonly ?string $excludePattern = null,
-    ) {}
+        private string $classNamePattern,
+        private string $mustBeInLayer,
+        private bool $excludeInterfaces = false,
+        private ?string $excludePattern = null,
+    ) {
+    }
 
-    public function appliesTo(ClassNode $node): bool
+    public function appliesTo(ClassNode $classNode): bool
     {
-        if ($this->excludeInterfaces && $node->isInterface) {
+        if ($this->excludeInterfaces && $classNode->isInterface) {
             return false;
         }
 
         if (
             $this->excludePattern !== null
-            && (bool) preg_match($this->excludePattern, $node->shortName())
+            && (bool) preg_match($this->excludePattern, $classNode->shortName())
         ) {
             return false;
         }
 
-        return (bool) preg_match($this->classNamePattern, $node->shortName());
+        return (bool) preg_match($this->classNamePattern, $classNode->shortName());
     }
 
-    public function evaluate(ClassNode $node): ?RuleViolation
+    public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ($node->layer === $this->mustBeInLayer) {
+        if ($classNode->layer === $this->mustBeInLayer) {
             return null;
         }
 
@@ -43,15 +47,15 @@ final class NamingConventionRule implements RuleInterface
             ruleKey:   '',
             message:   sprintf(
                 'Class [%s] matching pattern [%s] must live in layer [%s], found in layer [%s]',
-                $node->className,
+                $classNode->className,
                 $this->classNamePattern,
                 $this->mustBeInLayer,
-                $node->layer ?? 'unknown'
+                $classNode->layer ?? 'unknown'
             ),
-            file:      $node->file,
-            line:      $node->line,
-            className: $node->className,
-            layer:     $node->layer,
+            file:      $classNode->file,
+            line:      $classNode->line,
+            className: $classNode->className,
+            layer:     $classNode->layer,
         );
     }
 }

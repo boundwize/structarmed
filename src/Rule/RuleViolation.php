@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule;
 
-final class RuleViolation
+use function sprintf;
+
+final readonly class RuleViolation
 {
     public function __construct(
-        public readonly string $ruleKey,
-        public readonly string $message,
-        public readonly string $file,
-        public readonly int $line,
-        public readonly string $className,
-        public readonly ?string $layer = null,
-    ) {}
+        public string $ruleKey,
+        public string $message,
+        public string $file,
+        public int $line,
+        public string $className,
+        public ?string $layer = null,
+    ) {
+    }
 
     public function toString(): string
     {
@@ -30,12 +33,12 @@ final class RuleViolation
     public function toArray(): array
     {
         return [
-            'rule'      => $this->ruleKey,
-            'message'   => $this->message,
-            'file'      => $this->file,
-            'line'      => $this->line,
-            'class'     => $this->className,
-            'layer'     => $this->layer,
+            'rule'    => $this->ruleKey,
+            'message' => $this->message,
+            'file'    => $this->file,
+            'line'    => $this->line,
+            'class'   => $this->className,
+            'layer'   => $this->layer,
         ];
     }
 }

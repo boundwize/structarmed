@@ -8,22 +8,28 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-final class MayNotDependOnRule implements RuleInterface
+use function sprintf;
+use function str_contains;
+use function str_replace;
+use function str_starts_with;
+
+final readonly class MayNotDependOnRule implements RuleInterface
 {
     public function __construct(
-        private readonly string $from,
-        private readonly string $to,
-        private readonly string $toPath,
-    ) {}
-
-    public function appliesTo(ClassNode $node): bool
-    {
-        return $node->layer === $this->from;
+        private string $from,
+        private string $to,
+        private string $toPath,
+    ) {
     }
 
-    public function evaluate(ClassNode $node): ?RuleViolation
+    public function appliesTo(ClassNode $classNode): bool
     {
-        foreach ($node->dependencies as $dependency) {
+        return $classNode->layer === $this->from;
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        foreach ($classNode->dependencies as $dependency) {
             $depPath = str_replace('\\', '/', $dependency);
             $toPath  = str_replace('\\', '/', $this->toPath);
 
@@ -35,15 +41,15 @@ final class MayNotDependOnRule implements RuleInterface
                     ruleKey:   '',
                     message:   sprintf(
                         'Class [%s] in layer [%s] must not depend on [%s] which belongs to layer [%s]',
-                        $node->className,
+                        $classNode->className,
                         $this->from,
                         $dependency,
                         $this->to
                     ),
-                    file:      $node->file,
-                    line:      $node->line,
-                    className: $node->className,
-                    layer:     $node->layer,
+                    file:      $classNode->file,
+                    line:      $classNode->line,
+                    className: $classNode->className,
+                    layer:     $classNode->layer,
                 );
             }
         }

@@ -19,7 +19,20 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-final class Analyser
+use function file_get_contents;
+use function fnmatch;
+use function getcwd;
+use function is_dir;
+use function ltrim;
+use function realpath;
+use function rtrim;
+use function str_replace;
+use function str_starts_with;
+use function strlen;
+use function strpbrk;
+use function substr;
+
+final readonly class Analyser
 {
     private string $basePath;
 
@@ -33,19 +46,19 @@ final class Analyser
      */
     public function analyse(Architecture $architecture, array $scanPaths = []): RuleViolationCollection
     {
-        $violations = new RuleViolationCollection();
-        $layers     = $this->resolveLayers($architecture);
-        $skipPaths  = $architecture->getSkipPaths();
-        $ruleSkipPaths = $architecture->getRuleSkipPaths();
+        $ruleViolationCollection = new RuleViolationCollection();
+        $layers                  = $this->resolveLayers($architecture);
+        $skipPaths               = $architecture->getSkipPaths();
+        $ruleSkipPaths           = $architecture->getRuleSkipPaths();
 
-        foreach ($architecture->getProjectRules() as $key => $rule) {
-            $violation = $rule->evaluateProject($this->basePath, $architecture);
+        foreach ($architecture->getProjectRules() as $key => $projectRule) {
+            $violation = $projectRule->evaluateProject($this->basePath, $architecture);
 
             if ($violation === null) {
                 continue;
             }
 
-            $violations->add(new RuleViolation(
+            $ruleViolationCollection->add(new RuleViolation(
                 ruleKey:   $key,
                 message:   $violation->message,
                 file:      $violation->file,
@@ -55,12 +68,12 @@ final class Analyser
             ));
         }
 
-        $resolver   = new ChainLayerResolver(
+        $chainLayerResolver = new ChainLayerResolver(
             new NamespaceLayerResolver($layers, $this->basePath)
         );
 
-        $collector = new ClassCollector($resolver);
-        $parser    = (new ParserFactory())->createForNewestSupportedVersion();
+        $classCollector = new ClassCollector($chainLayerResolver);
+        $parser         = (new ParserFactory())->createForNewestSupportedVersion();
 
         foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
             $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
@@ -86,11 +99,11 @@ final class Analyser
                         continue;
                     }
 
-                    $collector->setCurrentFile($file);
+                    $classCollector->setCurrentFile($file);
 
                     $traverser = new NodeTraverser();
                     $traverser->addVisitor(new NameResolver());
-                    $traverser->addVisitor($collector);
+                    $traverser->addVisitor($classCollector);
                     $traverser->traverse($ast);
                 } catch (Error) {
                     // Skip files with parse errors
@@ -100,24 +113,24 @@ final class Analyser
 
         $rules = $architecture->getRules();
 
-        foreach ($collector->getNodes() as $node) {
-            foreach ($rules as $key => $rule) {
-                if ($this->isSkipped($node->file, $ruleSkipPaths[$key] ?? [])) {
+        foreach ($classCollector->getNodes() as $classNode) {
+            foreach ($rules as $key => $projectRule) {
+                if ($this->isSkipped($classNode->file, $ruleSkipPaths[$key] ?? [])) {
                     continue;
                 }
 
-                if (! $rule->appliesTo($node)) {
+                if (! $projectRule->appliesTo($classNode)) {
                     continue;
                 }
 
-                $violation = $rule->evaluate($node);
+                $violation = $projectRule->evaluate($classNode);
 
                 if ($violation === null) {
                     continue;
                 }
 
                 // Inject the rule key into the violation
-                $violations->add(new RuleViolation(
+                $ruleViolationCollection->add(new RuleViolation(
                     ruleKey:   $key,
                     message:   $violation->message,
                     file:      $violation->file,
@@ -128,7 +141,7 @@ final class Analyser
             }
         }
 
-        return $violations;
+        return $ruleViolationCollection;
     }
 
     /**
@@ -138,12 +151,12 @@ final class Analyser
     {
         $layers = $architecture->getLayers();
 
-        foreach ($architecture->getProjectRules() as $rule) {
+        foreach ($architecture->getProjectRules() as $projectRule) {
             if (
-                $rule instanceof Psr4SourcePathsRule
+                $projectRule instanceof Psr4SourcePathsRule
                 && ($layers[Psr4Preset::SOURCE_LAYER] ?? null) === []
             ) {
-                $layers[Psr4Preset::SOURCE_LAYER] = $rule->sourcePathsFor($this->basePath);
+                $layers[Psr4Preset::SOURCE_LAYER] = $projectRule->sourcePathsFor($this->basePath);
             }
         }
 
@@ -163,8 +176,8 @@ final class Analyser
 
         $paths = [];
 
-        foreach ($layers as $layerPaths) {
-            foreach ((array) $layerPaths as $layerPath) {
+        foreach ($layers as $layer) {
+            foreach ((array) $layer as $layerPath) {
                 $paths[] = $layerPath;
             }
         }
@@ -177,7 +190,7 @@ final class Analyser
      */
     private function isSkipped(string $path, array $skipPaths): bool
     {
-        $path = $this->normalisePath($path);
+        $path         = $this->normalisePath($path);
         $relativePath = $this->relativePath($path);
 
         foreach ($skipPaths as $skipPath) {
@@ -206,6 +219,7 @@ final class Analyser
 
         $fullSkipPath = rtrim($this->basePath, '/') . '/' . ltrim($skipPath, '/');
         $fullSkipPath = $this->normalisePath($fullSkipPath);
+
         $normalisedPath = $this->normalisePath($path);
 
         return $normalisedPath === $fullSkipPath

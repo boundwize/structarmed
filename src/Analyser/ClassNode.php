@@ -4,7 +4,14 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
-final class ClassNode
+use function end;
+use function explode;
+use function in_array;
+use function preg_match;
+use function str_ends_with;
+use function str_starts_with;
+
+final readonly class ClassNode
 {
     /**
      * @param string[]      $dependencies   Fully-qualified class names this class depends on
@@ -14,21 +21,22 @@ final class ClassNode
      * @param string[]      $superglobals   Superglobals accessed ($_GET, $_POST, etc.)
      */
     public function __construct(
-        public readonly string $className,
-        public readonly string $file,
-        public readonly int $line,
-        public readonly ?string $layer,
-        public readonly ?string $extends,
-        public readonly bool $isAbstract,
-        public readonly bool $isFinal,
-        public readonly bool $isInterface,
-        public readonly bool $isReadonly,
-        public readonly array $dependencies = [],
-        public readonly array $implements = [],
-        public readonly array $methods = [],
-        public readonly array $functionCalls = [],
-        public readonly array $superglobals = [],
-    ) {}
+        public string $className,
+        public string $file,
+        public int $line,
+        public ?string $layer,
+        public ?string $extends,
+        public bool $isAbstract,
+        public bool $isFinal,
+        public bool $isInterface,
+        public bool $isReadonly,
+        public array $dependencies = [],
+        public array $implements = [],
+        public array $methods = [],
+        public array $functionCalls = [],
+        public array $superglobals = [],
+    ) {
+    }
 
     public function shortName(): string
     {

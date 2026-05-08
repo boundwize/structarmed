@@ -6,6 +6,10 @@ namespace Boundwize\StructArmed\LayerResolver\Resolvers;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 
+use function end;
+use function explode;
+use function preg_match;
+
 /**
  * Resolves a layer by matching the class short name against regex patterns.
  *
@@ -15,14 +19,15 @@ use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
  * Example:
  *   'Domain' → '/Entity$|ValueObject$|AggregateRoot$/'
  */
-final class PatternLayerResolver implements LayerResolverInterface
+final readonly class PatternLayerResolver implements LayerResolverInterface
 {
     /**
      * @param array<string, string> $patterns  Map of layer name → regex pattern
      */
     public function __construct(
-        private readonly array $patterns
-    ) {}
+        private array $patterns
+    ) {
+    }
 
     public function resolve(string $className, string $filePath): ?string
     {

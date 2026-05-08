@@ -13,6 +13,8 @@ use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function getcwd;
+
 #[CoversClass(ClassCollector::class)]
 final class ClassCollectorTest extends TestCase
 {
@@ -27,48 +29,48 @@ final class ClassCollectorTest extends TestCase
     /** @return ClassNode[] */
     private function collectNodes(string $code, bool $resolveNames = false): array
     {
-        $cwd       = getcwd();
-        $resolver  = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], $cwd !== false ? $cwd : '');
-        $collector = new ClassCollector($resolver);
-        $parser    = (new ParserFactory())->createForNewestSupportedVersion();
-        $ast       = $parser->parse($code);
+        $cwd                    = getcwd();
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], $cwd !== false ? $cwd : '');
+        $classCollector         = new ClassCollector($namespaceLayerResolver);
+        $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
+        $ast                    = $parser->parse($code);
 
-        $collector->setCurrentFile('/fake/path/Foo.php');
+        $classCollector->setCurrentFile('/fake/path/Foo.php');
 
-        $traverser = new NodeTraverser();
+        $nodeTraverser = new NodeTraverser();
 
         if ($resolveNames) {
-            $traverser->addVisitor(new NameResolver());
+            $nodeTraverser->addVisitor(new NameResolver());
         }
 
-        $traverser->addVisitor($collector);
-        $traverser->traverse($ast ?? []);
+        $nodeTraverser->addVisitor($classCollector);
+        $nodeTraverser->traverse($ast ?? []);
 
-        return $collector->getNodes();
+        return $classCollector->getNodes();
     }
 
     public function testCollectsFinalClass(): void
     {
-        $node = $this->collect('<?php final class Foo {}');
+        $classNode = $this->collect('<?php final class Foo {}');
 
-        $this->assertTrue($node->isFinal);
-        $this->assertFalse($node->isAbstract);
-        $this->assertFalse($node->isInterface);
+        $this->assertTrue($classNode->isFinal);
+        $this->assertFalse($classNode->isAbstract);
+        $this->assertFalse($classNode->isInterface);
     }
 
     public function testCollectsAbstractClass(): void
     {
-        $node = $this->collect('<?php abstract class Foo {}');
+        $classNode = $this->collect('<?php abstract class Foo {}');
 
-        $this->assertTrue($node->isAbstract);
-        $this->assertFalse($node->isFinal);
+        $this->assertTrue($classNode->isAbstract);
+        $this->assertFalse($classNode->isFinal);
     }
 
     public function testCollectsInterface(): void
     {
-        $node = $this->collect('<?php interface FooInterface {}');
+        $classNode = $this->collect('<?php interface FooInterface {}');
 
-        $this->assertTrue($node->isInterface);
+        $this->assertTrue($classNode->isInterface);
     }
 
     public function testIgnoresAnonymousClasses(): void
@@ -80,54 +82,54 @@ final class ClassCollectorTest extends TestCase
 
     public function testCollectsExtendedClassAndImplementedInterfaces(): void
     {
-        $node = $this->collect('<?php class Foo extends BaseFoo implements First, Second {}');
+        $classNode = $this->collect('<?php class Foo extends BaseFoo implements First, Second {}');
 
-        $this->assertSame('BaseFoo', $node->extends);
-        $this->assertSame(['First', 'Second'], $node->implements);
+        $this->assertSame('BaseFoo', $classNode->extends);
+        $this->assertSame(['First', 'Second'], $classNode->implements);
     }
 
     public function testCollectsMethodReturnType(): void
     {
-        $node = $this->collect('<?php class Foo { public function bar(): string { return "x"; } }');
+        $classNode = $this->collect('<?php class Foo { public function bar(): string { return "x"; } }');
 
-        $this->assertCount(1, $node->methods);
-        $this->assertTrue($node->methods[0]->hasReturnType);
-        $this->assertSame('bar', $node->methods[0]->name);
+        $this->assertCount(1, $classNode->methods);
+        $this->assertTrue($classNode->methods[0]->hasReturnType);
+        $this->assertSame('bar', $classNode->methods[0]->name);
     }
 
     public function testCollectsProtectedAndPrivateMethodVisibility(): void
     {
-        $node = $this->collect('<?php class Foo { protected function one(): void {} private function two(): void {} }');
+        $classNode = $this->collect('<?php class Foo { protected function one(): void {} private function two(): void {} }');
 
-        $this->assertSame('protected', $node->methods[0]->visibility);
-        $this->assertSame('private', $node->methods[1]->visibility);
+        $this->assertSame('protected', $classNode->methods[0]->visibility);
+        $this->assertSame('private', $classNode->methods[1]->visibility);
     }
 
     public function testDetectsMissingReturnType(): void
     {
-        $node = $this->collect('<?php class Foo { public function bar() { return "x"; } }');
+        $classNode = $this->collect('<?php class Foo { public function bar() { return "x"; } }');
 
-        $this->assertCount(1, $node->methods);
-        $this->assertFalse($node->methods[0]->hasReturnType);
+        $this->assertCount(1, $classNode->methods);
+        $this->assertFalse($classNode->methods[0]->hasReturnType);
     }
 
     public function testCollectsFunctionCalls(): void
     {
-        $node = $this->collect('<?php class Foo { public function bar(): void { var_dump("x"); } }');
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { var_dump("x"); } }');
 
-        $this->assertContains('var_dump', $node->functionCalls);
+        $this->assertContains('var_dump', $classNode->functionCalls);
     }
 
     public function testCollectsSuperglobals(): void
     {
-        $node = $this->collect('<?php class Foo { public function bar(): void { $x = $_GET["id"]; } }');
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { $x = $_GET["id"]; } }');
 
-        $this->assertContains('$_GET', $node->superglobals);
+        $this->assertContains('$_GET', $classNode->superglobals);
     }
 
     public function testCalculatesCyclomaticComplexity(): void
     {
-        $code = <<<'PHP'
+        $code      = <<<'PHP'
 <?php
 class Foo {
     public function bar(int $x): string {
@@ -141,39 +143,39 @@ class Foo {
     }
 }
 PHP;
-        $node = $this->collect($code);
+        $classNode = $this->collect($code);
 
         // Base 1 + if + elseif = 3
-        $this->assertGreaterThanOrEqual(3, $node->methods[0]->cyclomaticComplexity);
+        $this->assertGreaterThanOrEqual(3, $classNode->methods[0]->cyclomaticComplexity);
     }
 
     public function testCollectsDependencies(): void
     {
-        $code = <<<'PHP'
+        $code      = <<<'PHP'
 <?php
 use DateTime;
 use App\Domain\Order;
 
 class Foo {}
 PHP;
-        $node = $this->collect($code);
+        $classNode = $this->collect($code);
 
-        $this->assertContains('DateTime', $node->dependencies);
-        $this->assertContains('App\Domain\Order', $node->dependencies);
+        $this->assertContains('DateTime', $classNode->dependencies);
+        $this->assertContains('App\Domain\Order', $classNode->dependencies);
     }
 
     public function testCollectsFullyQualifiedDependencies(): void
     {
-        $node = $this->collect('<?php class Foo { public function bar(): void { new \DateTimeImmutable(); } }');
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { new \DateTimeImmutable(); } }');
 
-        $this->assertContains('DateTimeImmutable', $node->dependencies);
+        $this->assertContains('DateTimeImmutable', $classNode->dependencies);
     }
 
     public function testShortNameExtraction(): void
     {
-        $node = $this->collect('<?php namespace App\Domain; final class OrderEntity {}', resolveNames: true);
+        $classNode = $this->collect('<?php namespace App\Domain; final class OrderEntity {}', resolveNames: true);
 
-        $this->assertSame('App\Domain\OrderEntity', $node->className);
-        $this->assertSame('OrderEntity', $node->shortName());
+        $this->assertSame('App\Domain\OrderEntity', $classNode->className);
+        $this->assertSame('OrderEntity', $classNode->shortName());
     }
 }

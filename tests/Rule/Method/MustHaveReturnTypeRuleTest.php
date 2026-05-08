@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Method;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -48,80 +49,80 @@ final class MustHaveReturnTypeRuleTest extends TestCase
 
     public function testPassesWhenAllPublicMethodsHaveReturnTypes(): void
     {
-        $rule = new MustHaveReturnTypeRule(layer: 'Domain');
-        $node = $this->makeNode([
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([
             $this->method('handle', hasReturnType: true),
             $this->method('getName', hasReturnType: true),
         ]);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mustHaveReturnTypeRule->evaluate($classNode));
     }
 
     public function testViolatesWhenPublicMethodMissingReturnType(): void
     {
-        $rule = new MustHaveReturnTypeRule(layer: 'Domain');
-        $node = $this->makeNode([
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([
             $this->method('handle', hasReturnType: false),
         ]);
 
-        $violation = $rule->evaluate($node);
+        $violation = $mustHaveReturnTypeRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('handle', $violation->message);
     }
 
     public function testIgnoresConstructor(): void
     {
-        $rule = new MustHaveReturnTypeRule(layer: 'Domain');
-        $node = $this->makeNode([
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([
             $this->method('__construct', hasReturnType: false),
         ]);
 
         // Constructor missing return type should NOT trigger violation
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mustHaveReturnTypeRule->evaluate($classNode));
     }
 
     public function testIgnoresPrivateMethods(): void
     {
-        $rule = new MustHaveReturnTypeRule(layer: 'Domain');
-        $node = $this->makeNode([
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([
             $this->method('helper', hasReturnType: false, visibility: 'private'),
         ]);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mustHaveReturnTypeRule->evaluate($classNode));
     }
 
     public function testIgnoresProtectedMethods(): void
     {
-        $rule = new MustHaveReturnTypeRule(layer: 'Domain');
-        $node = $this->makeNode([
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([
             $this->method('helper', hasReturnType: false, visibility: 'protected'),
         ]);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mustHaveReturnTypeRule->evaluate($classNode));
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MustHaveReturnTypeRule(layer: 'Domain');
-        $node = $this->makeNode([], layer: 'Infrastructure');
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([], layer: 'Infrastructure');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mustHaveReturnTypeRule->appliesTo($classNode));
     }
 
     public function testAppliesToMatchingPattern(): void
     {
-        $rule = new MustHaveReturnTypeRule(layer: 'Domain', classNamePattern: '/Service$/');
-        $node = $this->makeNode([]);
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain', classNamePattern: '/Service$/');
+        $classNode              = $this->makeNode([]);
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mustHaveReturnTypeRule->appliesTo($classNode));
     }
 
     public function testAppliesToLayerWhenNoPatternConfigured(): void
     {
-        $rule = new MustHaveReturnTypeRule(layer: 'Domain');
-        $node = $this->makeNode([]);
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([]);
 
-        $this->assertTrue($rule->appliesTo($node));
+        $this->assertTrue($mustHaveReturnTypeRule->appliesTo($classNode));
     }
 }

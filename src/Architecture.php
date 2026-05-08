@@ -9,6 +9,9 @@ use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 
+use function is_int;
+use function sprintf;
+
 /**
  * Fluent architecture definition builder.
  *
@@ -49,7 +52,9 @@ final class Architecture
     /** @var array<string, list<string>> */
     private array $ruleSkipPaths = [];
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     public static function define(): self
     {
@@ -140,9 +145,9 @@ final class Architecture
         return $this;
     }
 
-    public function projectRule(string $key, ProjectRuleInterface $rule): self
+    public function projectRule(string $key, ProjectRuleInterface $projectRule): self
     {
-        $this->projectRules[$key] = $rule;
+        $this->projectRules[$key] = $projectRule;
 
         return $this;
     }

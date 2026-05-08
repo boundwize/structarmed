@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Usage;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseSuperglobalsRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,48 +32,48 @@ final class MayNotUseSuperglobalsRuleTest extends TestCase
 
     public function testPassesWhenNoSuperglobalsAccessed(): void
     {
-        $rule = new MayNotUseSuperglobalsRule(layer: 'Model');
-        $node = $this->makeNode([]);
+        $mayNotUseSuperglobalsRule = new MayNotUseSuperglobalsRule(layer: 'Model');
+        $classNode                 = $this->makeNode([]);
 
-        $this->assertNull($rule->evaluate($node));
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseSuperglobalsRule->evaluate($classNode));
     }
 
     public function testViolatesWhenGetAccessed(): void
     {
-        $rule = new MayNotUseSuperglobalsRule(layer: 'Model');
-        $node = $this->makeNode(['$_GET']);
+        $mayNotUseSuperglobalsRule = new MayNotUseSuperglobalsRule(layer: 'Model');
+        $classNode                 = $this->makeNode(['$_GET']);
 
-        $violation = $rule->evaluate($node);
+        $violation = $mayNotUseSuperglobalsRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('$_GET', $violation->message);
     }
 
     public function testViolatesWhenPostAccessed(): void
     {
-        $rule = new MayNotUseSuperglobalsRule(layer: 'Model');
-        $node = $this->makeNode(['$_POST']);
+        $mayNotUseSuperglobalsRule = new MayNotUseSuperglobalsRule(layer: 'Model');
+        $classNode                 = $this->makeNode(['$_POST']);
 
-        $this->assertNotNull($rule->evaluate($node));
+        $this->assertInstanceOf(RuleViolation::class, $mayNotUseSuperglobalsRule->evaluate($classNode));
     }
 
     public function testViolatesWhenMultipleSuperglobalsAccessed(): void
     {
-        $rule = new MayNotUseSuperglobalsRule(layer: 'Model');
-        $node = $this->makeNode(['$_GET', '$_SESSION']);
+        $mayNotUseSuperglobalsRule = new MayNotUseSuperglobalsRule(layer: 'Model');
+        $classNode                 = $this->makeNode(['$_GET', '$_SESSION']);
 
-        $violation = $rule->evaluate($node);
+        $violation = $mayNotUseSuperglobalsRule->evaluate($classNode);
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('$_GET', $violation->message);
         $this->assertStringContainsString('$_SESSION', $violation->message);
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule = new MayNotUseSuperglobalsRule(layer: 'Model');
-        $node = $this->makeNode(['$_GET'], layer: 'Controller');
+        $mayNotUseSuperglobalsRule = new MayNotUseSuperglobalsRule(layer: 'Model');
+        $classNode                 = $this->makeNode(['$_GET'], layer: 'Controller');
 
-        $this->assertFalse($rule->appliesTo($node));
+        $this->assertFalse($mayNotUseSuperglobalsRule->appliesTo($classNode));
     }
 }

@@ -6,4 +6,6 @@ namespace Boundwize\StructArmed\Exception;
 
 use RuntimeException;
 
-final class ViolationsFoundException extends RuntimeException {}
+final class ViolationsFoundException extends RuntimeException
+{
+}

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\LayerResolver;
 
-final class ChainLayerResolver implements LayerResolverInterface
+final readonly class ChainLayerResolver implements LayerResolverInterface
 {
     /** @var LayerResolverInterface[] */
     private array $resolvers;

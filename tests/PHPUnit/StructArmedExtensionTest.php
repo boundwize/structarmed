@@ -15,6 +15,14 @@ use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
 use ReflectionClass;
 
+use function bin2hex;
+use function chdir;
+use function file_put_contents;
+use function getcwd;
+use function mkdir;
+use function random_bytes;
+use function tempnam;
+
 #[CoversClass(StructArmedExtension::class)]
 final class StructArmedExtensionTest extends TestCase
 {
@@ -33,9 +41,9 @@ final class StructArmedExtensionTest extends TestCase
 
     public function testBootstrapDiscoversConfigWhenParameterIsMissing(): void
     {
-        $basePath = $this->makeTempProjectConfig('return ' . Architecture::class . '::define();');
+        $basePath     = $this->makeTempProjectConfig('return ' . Architecture::class . '::define();');
         $previousPath = getcwd();
-        self::assertIsString($previousPath);
+        $this->assertIsString($previousPath);
 
         chdir($basePath);
 
@@ -52,7 +60,6 @@ final class StructArmedExtensionTest extends TestCase
         }
     }
 
-
     public function testBootstrapThrowsWhenViolationsAreFound(): void
     {
         $configPath = $this->writeConfig(
@@ -63,7 +70,7 @@ final class StructArmedExtensionTest extends TestCase
 
         $this->expectException(ViolationsFoundException::class);
         $this->expectExceptionMessage('StructArmed found');
-        $this->expectOutputRegex('/Found [0-9]+ violation/');
+        $this->expectOutputRegex('/Found \d+ violation/');
 
         (new StructArmedExtension())->bootstrap(
             $this->configuration(),
@@ -80,7 +87,7 @@ final class StructArmedExtensionTest extends TestCase
     private function writeConfig(string $body): string
     {
         $path = tempnam('/private/tmp', 'structarmed-extension-');
-        self::assertIsString($path);
+        $this->assertIsString($path);
         file_put_contents($path, "<?php\n\n" . $body . "\n");
 
         return $path;

@@ -18,10 +18,10 @@ final class Psr4PathResolverTest extends TestCase
 {
     public function testReturnsEmptyPathsWhenComposerJsonIsMissing(): void
     {
-        $resolver = new Psr4PathResolver();
+        $psr4PathResolver = new Psr4PathResolver();
 
-        $this->assertSame([], $resolver->paths($this->makeTempDir()));
-        $this->assertSame([], $resolver->namespacePaths($this->makeTempDir()));
+        $this->assertSame([], $psr4PathResolver->paths($this->makeTempDir()));
+        $this->assertSame([], $psr4PathResolver->namespacePaths($this->makeTempDir()));
     }
 
     public function testReturnsNullComposerConfigWhenComposerJsonIsInvalid(): void
@@ -57,16 +57,16 @@ final class Psr4PathResolverTest extends TestCase
 }
 JSON);
 
-        $resolver = new Psr4PathResolver();
+        $psr4PathResolver = new Psr4PathResolver();
 
-        $this->assertSame(['src', '.', 'legacy'], $resolver->paths($basePath));
+        $this->assertSame(['src', '.', 'legacy'], $psr4PathResolver->paths($basePath));
         $this->assertSame(
             [
-                'App\\' => ['src'],
+                'App\\'  => ['src'],
                 'Root\\' => ['.'],
-                '' => ['legacy'],
+                ''       => ['legacy'],
             ],
-            $resolver->namespacePaths($basePath)
+            $psr4PathResolver->namespacePaths($basePath)
         );
     }
 
@@ -81,10 +81,10 @@ JSON);
 }
 JSON);
 
-        $resolver = new Psr4PathResolver();
+        $psr4PathResolver = new Psr4PathResolver();
 
-        $this->assertSame([], $resolver->paths($basePath));
-        $this->assertSame([], $resolver->namespacePaths($basePath));
+        $this->assertSame([], $psr4PathResolver->paths($basePath));
+        $this->assertSame([], $psr4PathResolver->namespacePaths($basePath));
     }
 
     private function makeTempProject(string $composerJson): string

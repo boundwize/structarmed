@@ -6,66 +6,93 @@ namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
-use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
-use Boundwize\StructArmed\Rule\Rules\Class_\NamingConventionRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MaxDependencyCountRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
-use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxCyclomaticComplexityRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
-use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseSuperglobalsRule;
+use DateTime;
+use PDO;
 
-final class MvcPreset implements PresetInterface
+use function sprintf;
+use function strtolower;
+
+final readonly class MvcPreset implements PresetInterface
 {
     // -------------------------------------------------------------------------
     // Rule key constants — use these with replaceRule() and withoutRule()
     // -------------------------------------------------------------------------
 
     // Layer rules
-    public const CONTROLLER_NOT_DEPEND_VIEW       = 'mvc.layer.controller_not_depend_view';
-    public const MODEL_NOT_DEPEND_CONTROLLER      = 'mvc.layer.model_not_depend_controller';
-    public const MODEL_NOT_DEPEND_VIEW            = 'mvc.layer.model_not_depend_view';
-    public const VIEW_NOT_DEPEND_CONTROLLER       = 'mvc.layer.view_not_depend_controller';
-    public const VIEW_NOT_DEPEND_MODEL            = 'mvc.layer.view_not_depend_model';
+    public const CONTROLLER_NOT_DEPEND_VIEW = 'mvc.layer.controller_not_depend_view';
+
+    public const MODEL_NOT_DEPEND_CONTROLLER = 'mvc.layer.model_not_depend_controller';
+
+    public const MODEL_NOT_DEPEND_VIEW = 'mvc.layer.model_not_depend_view';
+
+    public const VIEW_NOT_DEPEND_CONTROLLER = 'mvc.layer.view_not_depend_controller';
+
+    public const VIEW_NOT_DEPEND_MODEL = 'mvc.layer.view_not_depend_model';
 
     // Controller rules
-    public const CONTROLLER_MUST_BE_FINAL         = 'mvc.controller.must_be_final';
-    public const CONTROLLER_MAX_COMPLEXITY        = 'mvc.controller.max_complexity';
-    public const CONTROLLER_MAX_METHOD_LENGTH     = 'mvc.controller.max_method_length';
-    public const CONTROLLER_MAX_DEPENDENCIES      = 'mvc.controller.max_dependencies';
-    public const CONTROLLER_NO_PDO                = 'mvc.controller.no_pdo';
-    public const CONTROLLER_NO_SUPERGLOBALS       = 'mvc.controller.no_superglobals';
+    public const CONTROLLER_MUST_BE_FINAL = 'mvc.controller.must_be_final';
+
+    public const CONTROLLER_MAX_COMPLEXITY = 'mvc.controller.max_complexity';
+
+    public const CONTROLLER_MAX_METHOD_LENGTH = 'mvc.controller.max_method_length';
+
+    public const CONTROLLER_MAX_DEPENDENCIES = 'mvc.controller.max_dependencies';
+
+    public const CONTROLLER_NO_PDO = 'mvc.controller.no_pdo';
+
+    public const CONTROLLER_NO_SUPERGLOBALS = 'mvc.controller.no_superglobals';
+
     public const CONTROLLER_MUST_HAVE_RETURN_TYPES = 'mvc.controller.must_have_return_types';
 
     // Model rules
-    public const MODEL_NO_ECHO                    = 'mvc.model.no_echo';
-    public const MODEL_NO_PRINT                   = 'mvc.model.no_print';
-    public const MODEL_NO_HEADER                  = 'mvc.model.no_header';
-    public const MODEL_NO_SUPERGLOBALS            = 'mvc.model.no_superglobals';
-    public const MODEL_NO_DATETIME                = 'mvc.model.no_datetime';
-    public const MODEL_MUST_HAVE_RETURN_TYPES     = 'mvc.model.must_have_return_types';
+    public const MODEL_NO_ECHO = 'mvc.model.no_echo';
+
+    public const MODEL_NO_PRINT = 'mvc.model.no_print';
+
+    public const MODEL_NO_HEADER = 'mvc.model.no_header';
+
+    public const MODEL_NO_SUPERGLOBALS = 'mvc.model.no_superglobals';
+
+    public const MODEL_NO_DATETIME = 'mvc.model.no_datetime';
+
+    public const MODEL_MUST_HAVE_RETURN_TYPES = 'mvc.model.must_have_return_types';
 
     // View rules
-    public const VIEW_MAX_COMPLEXITY              = 'mvc.view.max_complexity';
-    public const VIEW_NO_PDO                      = 'mvc.view.no_pdo';
-    public const VIEW_NO_HEADER                   = 'mvc.view.no_header';
-    public const VIEW_NO_SUPERGLOBALS             = 'mvc.view.no_superglobals';
+    public const VIEW_MAX_COMPLEXITY = 'mvc.view.max_complexity';
+
+    public const VIEW_NO_PDO = 'mvc.view.no_pdo';
+
+    public const VIEW_NO_HEADER = 'mvc.view.no_header';
+
+    public const VIEW_NO_SUPERGLOBALS = 'mvc.view.no_superglobals';
 
     // Service rules
-    public const SERVICE_MUST_BE_FINAL            = 'mvc.service.must_be_final';
-    public const SERVICE_NO_ECHO                  = 'mvc.service.no_echo';
-    public const SERVICE_NO_HEADER                = 'mvc.service.no_header';
-    public const SERVICE_NO_SUPERGLOBALS          = 'mvc.service.no_superglobals';
-    public const SERVICE_MUST_HAVE_RETURN_TYPES   = 'mvc.service.must_have_return_types';
+    public const SERVICE_MUST_BE_FINAL = 'mvc.service.must_be_final';
+
+    public const SERVICE_NO_ECHO = 'mvc.service.no_echo';
+
+    public const SERVICE_NO_HEADER = 'mvc.service.no_header';
+
+    public const SERVICE_NO_SUPERGLOBALS = 'mvc.service.no_superglobals';
+
+    public const SERVICE_MUST_HAVE_RETURN_TYPES = 'mvc.service.must_have_return_types';
 
     public function __construct(
-        private readonly int $controllerMaxComplexity = 5,
-        private readonly int $controllerMaxMethodLength = 20,
-        private readonly int $controllerMaxDependencies = 5,
-        private readonly int $viewMaxComplexity = 3,
-    ) {}
+        private int $controllerMaxComplexity = 5,
+        private int $controllerMaxMethodLength = 20,
+        private int $controllerMaxDependencies = 5,
+        private int $viewMaxComplexity = 3,
+    ) {
+    }
 
     public function apply(Architecture $architecture): void
     {
@@ -141,7 +168,7 @@ final class MvcPreset implements PresetInterface
 
         $architecture->rule(
             self::CONTROLLER_NO_PDO,
-            new MayNotUseClassRule(layer: 'Controller', forbiddenClass: \PDO::class)
+            new MayNotUseClassRule(layer: 'Controller', forbiddenClass: PDO::class)
         );
 
         $architecture->rule(
@@ -181,7 +208,7 @@ final class MvcPreset implements PresetInterface
 
         $architecture->rule(
             self::MODEL_NO_DATETIME,
-            new MayNotUseClassRule(layer: 'Model', forbiddenClass: \DateTime::class)
+            new MayNotUseClassRule(layer: 'Model', forbiddenClass: DateTime::class)
         );
 
         $architecture->rule(
@@ -204,7 +231,7 @@ final class MvcPreset implements PresetInterface
 
         $architecture->rule(
             self::VIEW_NO_PDO,
-            new MayNotUseClassRule(layer: 'View', forbiddenClass: \PDO::class)
+            new MayNotUseClassRule(layer: 'View', forbiddenClass: PDO::class)
         );
 
         $architecture->rule(

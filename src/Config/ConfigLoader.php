@@ -7,6 +7,9 @@ namespace Boundwize\StructArmed\Config;
 use Boundwize\StructArmed\Architecture;
 use RuntimeException;
 
+use function file_exists;
+use function sprintf;
+
 final class ConfigLoader
 {
     public static function load(string $configPath): Architecture
@@ -39,9 +42,9 @@ final class ConfigLoader
             $basePath . '/structarmed.dist.php',
         ];
 
-        foreach ($candidates as $path) {
-            if (file_exists($path)) {
-                return $path;
+        foreach ($candidates as $candidate) {
+            if (file_exists($candidate)) {
+                return $candidate;
             }
         }
 

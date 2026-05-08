@@ -12,7 +12,8 @@ final class Order
     public function __construct(
         private readonly string $id,
         private readonly string $customerId,
-    ) {}
+    ) {
+    }
 
     public function id(): string
     {

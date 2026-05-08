@@ -11,6 +11,11 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function bin2hex;
+use function dirname;
+use function file_put_contents;
+use function mkdir;
+use function random_bytes;
 use function symlink;
 
 #[CoversClass(Analyser::class)]
@@ -23,12 +28,12 @@ final class AnalyserTest extends TestCase
             ->layer('Application', 'tests/Fixtures/sample/src/Application/')
             ->layer('Infrastructure', 'tests/Fixtures/sample/src/Infrastructure/');
 
-        $analyser   = new Analyser(dirname(__DIR__, 2));
-        $violations = $analyser->analyse($architecture);
+        $analyser                = new Analyser(dirname(__DIR__, 2));
+        $ruleViolationCollection = $analyser->analyse($architecture);
 
         // Order.php is a valid entity — should produce no layer violations
-        $this->assertEmpty($violations->forLayer('Application'));
-        $this->assertEmpty($violations->forLayer('Infrastructure'));
+        $this->assertEmpty($ruleViolationCollection->forLayer('Application'));
+        $this->assertEmpty($ruleViolationCollection->forLayer('Infrastructure'));
     }
 
     public function testAnalyserDetectsViolationsInBadCode(): void
@@ -39,11 +44,11 @@ final class AnalyserTest extends TestCase
             ->layer('Infrastructure', 'tests/Fixtures/sample/src/Infrastructure/')
             ->withPreset(Preset::DDD());
 
-        $analyser   = new Analyser(dirname(__DIR__, 2));
-        $violations = $analyser->analyse($architecture);
+        $analyser                = new Analyser(dirname(__DIR__, 2));
+        $ruleViolationCollection = $analyser->analyse($architecture);
 
         // BadOrderEntity.php uses DateTime and is not final — should have violations
-        $this->assertTrue($violations->hasViolations());
+        $this->assertTrue($ruleViolationCollection->hasViolations());
     }
 
     public function testAnalyserReturnsEmptyCollectionForEmptyLayers(): void
@@ -51,11 +56,11 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->layer('Domain', 'tests/Fixtures/sample/src/Domain/Events/');
 
-        $analyser   = new Analyser(dirname(__DIR__, 2));
-        $violations = $analyser->analyse($architecture);
+        $analyser                = new Analyser(dirname(__DIR__, 2));
+        $ruleViolationCollection = $analyser->analyse($architecture);
 
         // Events directory is empty — no violations
-        $this->assertFalse($violations->hasViolations());
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testAnalyserSkipsNonExistentPaths(): void
@@ -66,9 +71,9 @@ final class AnalyserTest extends TestCase
         $analyser = new Analyser(dirname(__DIR__, 2));
 
         // Should not throw — simply skip missing directories
-        $violations = $analyser->analyse($architecture);
+        $ruleViolationCollection = $analyser->analyse($architecture);
 
-        $this->assertFalse($violations->hasViolations());
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testAnalyserSkipsFilesWithParseErrors(): void
@@ -80,9 +85,9 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->layer('Domain', 'src/Domain/');
 
-        $violations = (new Analyser($basePath))->analyse($architecture);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertFalse($violations->hasViolations());
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testAnalyserSkipsFilesWithEmptyAst(): void
@@ -94,9 +99,9 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->layer('Domain', 'src/Domain/');
 
-        $violations = (new Analyser($basePath))->analyse($architecture);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertFalse($violations->hasViolations());
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testAnalyserEvaluatesProjectRules(): void
@@ -109,10 +114,10 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->withPreset(Preset::PSR4(sourcePaths: ['src/', 'tests/']));
 
-        $violations = (new Analyser($basePath))->analyse($architecture);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertTrue($violations->hasViolations());
-        $this->assertCount(1, $violations->forRule('psr4.source_paths.must_be_in_composer'));
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $this->assertCount(1, $ruleViolationCollection->forRule('psr4.source_paths.must_be_in_composer'));
     }
 
     public function testAnalyserContinuesWhenProjectRulePasses(): void
@@ -125,9 +130,9 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->withPreset(Preset::PSR4(sourcePaths: ['src/']));
 
-        $violations = (new Analyser($basePath))->analyse($architecture);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertFalse($violations->hasViolations());
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testAnalyserUsesComposerPsr4PathsForDefaultPsr4Preset(): void
@@ -141,9 +146,9 @@ final class AnalyserTest extends TestCase
             ->withPreset(Preset::PSR4())
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
     public function testAnalyserCanLimitScanToSpecificPaths(): void
@@ -157,10 +162,10 @@ final class AnalyserTest extends TestCase
             ->layer('Source', ['src/', 'tests/'])
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
-        $this->assertCount(1, $violations->forRule('source.must_be_final'));
-        $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+        $this->assertStringEndsWith('/src/Foo.php', $ruleViolationCollection->forRule('source.must_be_final')[0]->file);
     }
 
     public function testDefaultPsr4PresetDetectsClassesThatDoNotMatchScannedComposerPath(): void
@@ -173,12 +178,12 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->withPreset(Preset::PSR4());
 
-        $violations = (new Analyser($basePath))->analyse($architecture, ['tests/']);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['tests/']);
 
-        $this->assertCount(1, $violations->forRule('psr4.classes.must_match_composer'));
+        $this->assertCount(1, $ruleViolationCollection->forRule('psr4.classes.must_match_composer'));
         $this->assertStringContainsString(
             'App\\Tests\\Foo',
-            $violations->forRule('psr4.classes.must_match_composer')[0]->message
+            $ruleViolationCollection->forRule('psr4.classes.must_match_composer')[0]->message
         );
     }
 
@@ -194,10 +199,10 @@ final class AnalyserTest extends TestCase
             ->skip(['src/Fixtures/'])
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
-        $this->assertCount(1, $violations->forRule('source.must_be_final'));
-        $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+        $this->assertStringEndsWith('/src/Foo.php', $ruleViolationCollection->forRule('source.must_be_final')[0]->file);
     }
 
     public function testAnalyserSkipsEntireConfiguredScanPath(): void
@@ -211,9 +216,9 @@ final class AnalyserTest extends TestCase
             ->skip(['src/'])
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertFalse($violations->hasViolations());
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testAnalyserCanCompareBasePathWhenCheckingSkips(): void
@@ -227,16 +232,16 @@ final class AnalyserTest extends TestCase
             ->skip(['does-not-match'])
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
     public function testAnalyserSkipsConfiguredGlobPaths(): void
     {
         $basePath = $this->makeTempProject([
-            'src/Foo.php'                  => '<?php namespace App; class Foo {}',
-            'src/Generated/Ignored.php'    => '<?php namespace App\Generated; class Ignored {}',
+            'src/Foo.php'                   => '<?php namespace App; class Foo {}',
+            'src/Generated/Ignored.php'     => '<?php namespace App\Generated; class Ignored {}',
             'src/Generated/Nested/Nope.php' => '<?php namespace App\Generated\Nested; class Nope {}',
         ]);
 
@@ -245,10 +250,10 @@ final class AnalyserTest extends TestCase
             ->skip(['src/Generated/*'])
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
-        $this->assertCount(1, $violations->forRule('source.must_be_final'));
-        $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+        $this->assertStringEndsWith('/src/Foo.php', $ruleViolationCollection->forRule('source.must_be_final')[0]->file);
     }
 
     public function testAnalyserKeepsFilesWhenGlobSkipDoesNotMatch(): void
@@ -262,15 +267,15 @@ final class AnalyserTest extends TestCase
             ->skip(['tests/*'])
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
-        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
     public function testAnalyserSkipsConfiguredPathsForSpecificRuleOnly(): void
     {
         $basePath = $this->makeTempProject([
-            'src/Foo.php'       => '<?php namespace App; class Foo {}',
+            'src/Foo.php'        => '<?php namespace App; class Foo {}',
             'src/Legacy/Old.php' => '<?php namespace App\Legacy; class Old {}',
         ]);
 
@@ -280,16 +285,16 @@ final class AnalyserTest extends TestCase
             ->rule('source.must_be_final', new MustBeFinalRule('Source'))
             ->rule('source.must_be_final_too', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
-        $this->assertCount(1, $violations->forRule('source.must_be_final'));
-        $this->assertCount(2, $violations->forRule('source.must_be_final_too'));
-        $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+        $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final_too'));
+        $this->assertStringEndsWith('/src/Foo.php', $ruleViolationCollection->forRule('source.must_be_final')[0]->file);
     }
 
     public function testAnalyserCanCheckRuleSkipsForRealPathOutsideBasePath(): void
     {
-        $basePath = $this->makeTempProject([
+        $basePath    = $this->makeTempProject([
             'src/.keep' => '',
         ]);
         $outsidePath = '/private/tmp/structarmed-outside-' . bin2hex(random_bytes(6)) . '.php';
@@ -301,9 +306,9 @@ final class AnalyserTest extends TestCase
             ->skip(['source.must_be_final' => ['does-not-match']])
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $violations = (new Analyser($basePath))->analyse($architecture);
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertFalse($violations->hasViolations());
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     /** @param array<string, string> $files */

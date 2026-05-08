@@ -14,7 +14,7 @@ final class ClassNodeTest extends TestCase
 {
     public function testNameHelpersAndLayerChecks(): void
     {
-        $node = new ClassNode(
+        $classNode = new ClassNode(
             className:    'App\\Domain\\CreateOrderHandler',
             file:         '/src/CreateOrderHandler.php',
             line:         12,
@@ -26,17 +26,17 @@ final class ClassNodeTest extends TestCase
             isReadonly:   false,
         );
 
-        $this->assertSame('CreateOrderHandler', $node->shortName());
-        $this->assertTrue($node->isInLayer('Application'));
-        $this->assertFalse($node->isInLayer('Domain'));
-        $this->assertTrue($node->nameStartsWith('Create'));
-        $this->assertTrue($node->nameEndsWith('Handler'));
-        $this->assertTrue($node->nameMatches('/Order/'));
+        $this->assertSame('CreateOrderHandler', $classNode->shortName());
+        $this->assertTrue($classNode->isInLayer('Application'));
+        $this->assertFalse($classNode->isInLayer('Domain'));
+        $this->assertTrue($classNode->nameStartsWith('Create'));
+        $this->assertTrue($classNode->nameEndsWith('Handler'));
+        $this->assertTrue($classNode->nameMatches('/Order/'));
     }
 
     public function testDependencyInterfaceCallAndSuperglobalHelpers(): void
     {
-        $node = new ClassNode(
+        $classNode = new ClassNode(
             className:     'App\\Domain\\OrderService',
             file:          '/src/OrderService.php',
             line:          5,
@@ -52,11 +52,11 @@ final class ClassNodeTest extends TestCase
             superglobals:  ['$_SERVER'],
         );
 
-        $this->assertTrue($node->dependsOn('App\\Infrastructure'));
-        $this->assertFalse($node->dependsOn('App\\Application'));
-        $this->assertTrue($node->implementsInterface('App\\Contracts\\OrderService'));
-        $this->assertTrue($node->callsFunction('var_dump'));
-        $this->assertTrue($node->accessesSuperglobals());
+        $this->assertTrue($classNode->dependsOn('App\\Infrastructure'));
+        $this->assertFalse($classNode->dependsOn('App\\Application'));
+        $this->assertTrue($classNode->implementsInterface('App\\Contracts\\OrderService'));
+        $this->assertTrue($classNode->callsFunction('var_dump'));
+        $this->assertTrue($classNode->accessesSuperglobals());
     }
 
     public function testConstructorParamCountReturnsConstructorParamsOrZero(): void
