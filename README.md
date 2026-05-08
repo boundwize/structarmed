@@ -8,7 +8,7 @@
 [![PHPStan](https://img.shields.io/badge/style-level%20max-brightgreen.svg?style=flat-square&label=phpstan)](https://github.com/phpstan/phpstan)
 [![Downloads](https://poser.pugx.org/boundwize/structarmed/downloads)](https://packagist.org/packages/boundwize/structarmed)
 
-Configurable PHP architecture guards. Define your layers once, guard them forever.
+Configurable PHP architecture guards — define your layers and rules, then keep them enforced.
 
 ## Installation
 
