@@ -9,7 +9,6 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function array_map;
-use function array_values;
 use function file_exists;
 use function file_get_contents;
 use function implode;
@@ -43,8 +42,7 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
             );
         }
 
-        $contents = file_get_contents($composerFile);
-        $composer = is_string($contents) ? json_decode($contents, true) : null;
+        $composer = json_decode((string) file_get_contents($composerFile), true);
 
         if (! is_array($composer)) {
             return $this->violation(
@@ -53,6 +51,7 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
             );
         }
 
+        /** @var array<string, mixed> $composer */
         $autoloadPaths = $this->psr4Paths($composer);
         $missingPaths  = [];
 
@@ -77,7 +76,6 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
 
     /**
      * @param array<string, mixed> $composer
-     *
      * @return list<string>
      */
     private function psr4Paths(array $composer): array
@@ -85,7 +83,13 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
         $paths = [];
 
         foreach (['autoload', 'autoload-dev'] as $section) {
-            $psr4 = $composer[$section]['psr-4'] ?? [];
+            $autoload = $composer[$section] ?? [];
+
+            if (! is_array($autoload)) {
+                continue;
+            }
+
+            $psr4 = $autoload['psr-4'] ?? [];
 
             if (! is_array($psr4)) {
                 continue;
@@ -105,15 +109,14 @@ final class Psr4SourcePathsRule implements ProjectRuleInterface
 
     /**
      * @param list<string> $paths
-     *
      * @return list<string>
      */
     private function normalisePaths(array $paths): array
     {
-        return array_values(array_map(
+        return array_map(
             static fn(string $path): string => rtrim(str_replace('\\', '/', trim($path)), '/'),
             $paths
-        ));
+        );
     }
 
     private function violation(string $message, string $file): RuleViolation

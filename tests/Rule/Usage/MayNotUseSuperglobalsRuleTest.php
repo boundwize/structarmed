@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MayNotUseSuperglobalsRule::class)]
 final class MayNotUseSuperglobalsRuleTest extends TestCase
 {
+    /** @param array<string> $superglobals */
     private function makeNode(array $superglobals, string $layer = 'Model'): ClassNode
     {
         return new ClassNode(

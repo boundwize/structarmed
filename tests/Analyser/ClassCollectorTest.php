@@ -27,7 +27,8 @@ final class ClassCollectorTest extends TestCase
     /** @return ClassNode[] */
     private function collectNodes(string $code, bool $resolveNames = false): array
     {
-        $resolver  = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], getcwd());
+        $cwd       = getcwd();
+        $resolver  = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], $cwd !== false ? $cwd : '');
         $collector = new ClassCollector($resolver);
         $parser    = (new ParserFactory())->createForNewestSupportedVersion();
         $ast       = $parser->parse($code);

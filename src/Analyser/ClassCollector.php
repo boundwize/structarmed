@@ -202,7 +202,6 @@ final class ClassCollector extends NodeVisitorAbstract
                     || $node instanceof Node\Expr\BinaryOp\LogicalAnd
                     || $node instanceof Node\Expr\BinaryOp\LogicalOr
                     || $node instanceof Node\Expr\Match_
-                    || $node instanceof Node\Stmt\Match_
                 ) {
                     $this->count++;
                 }

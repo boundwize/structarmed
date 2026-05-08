@@ -10,10 +10,11 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\NamingConventionRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
-use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxCyclomaticComplexityRule;
-use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
+use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 
 final class DddPreset implements PresetInterface
 {
@@ -212,6 +213,16 @@ final class DddPreset implements PresetInterface
         );
 
         foreach (['Domain', 'Application'] as $layer) {
+            $architecture->rule(
+                sprintf('ddd.safety.%s_max_complexity', strtolower($layer)),
+                new MaxCyclomaticComplexityRule(layer: $layer, maxComplexity: $this->maxComplexity)
+            );
+
+            $architecture->rule(
+                sprintf('ddd.safety.%s_max_method_length', strtolower($layer)),
+                new MaxMethodLengthRule(layer: $layer, maxLines: $this->maxMethodLength)
+            );
+
             foreach (['dd', 'dump', 'var_dump', 'print_r', 'die', 'exit'] as $fn) {
                 $architecture->rule(
                     sprintf('ddd.safety.%s_no_%s', strtolower($layer), $fn),

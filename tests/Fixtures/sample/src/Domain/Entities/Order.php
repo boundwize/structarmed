@@ -6,6 +6,7 @@ namespace App\Domain\Entities;
 
 final class Order
 {
+    /** @var array<int, array<string, mixed>> */
     private array $items = [];
 
     public function __construct(

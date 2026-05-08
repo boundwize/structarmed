@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MayNotDependOnRule::class)]
 final class MayNotDependOnRuleTest extends TestCase
 {
+    /** @param array<string> $dependencies */
     private function makeNode(string $layer, array $dependencies = []): ClassNode
     {
         return new ClassNode(

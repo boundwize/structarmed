@@ -20,7 +20,8 @@ final class StructArmedExtension implements Extension
         Facade $facade,
         ParameterCollection $parameters
     ): void {
-        $basePath   = getcwd();
+        $cwd        = getcwd();
+        $basePath   = $cwd !== false ? $cwd : '';
         $configFile = $parameters->has('config')
             ? $parameters->get('config')
             : ConfigLoader::discover($basePath);

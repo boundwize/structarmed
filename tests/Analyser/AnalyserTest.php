@@ -13,13 +13,6 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Analyser::class)]
 final class AnalyserTest extends TestCase
 {
-    private string $fixturesPath;
-
-    protected function setUp(): void
-    {
-        $this->fixturesPath = dirname(__DIR__) . '/Fixtures/sample';
-    }
-
     public function testAnalyserReturnsNoViolationsForValidCode(): void
     {
         $architecture = Architecture::define()
@@ -97,6 +90,37 @@ final class AnalyserTest extends TestCase
 
         $architecture = Architecture::define()
             ->layer('Domain', 'src/Domain/');
+
+        $violations = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($violations->hasViolations());
+    }
+
+    public function testAnalyserEvaluatesProjectRules(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR4(sourcePaths: ['src/', 'tests/']));
+
+        $violations = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertTrue($violations->hasViolations());
+        $this->assertCount(1, $violations->forRule('psr4.source_paths.must_be_in_composer'));
+    }
+
+    public function testAnalyserContinuesWhenProjectRulePasses(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR4(sourcePaths: ['src/']));
 
         $violations = (new Analyser($basePath))->analyse($architecture);
 

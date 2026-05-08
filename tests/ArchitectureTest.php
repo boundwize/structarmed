@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -47,6 +48,15 @@ final class ArchitectureTest extends TestCase
             ->rule('my.custom.rule', $rule);
 
         $this->assertArrayHasKey('my.custom.rule', $arch->getRules());
+    }
+
+    public function testProjectRuleIsAdded(): void
+    {
+        $rule = new Psr4SourcePathsRule(['src/']);
+        $arch = Architecture::define()
+            ->projectRule('my.project.rule', $rule);
+
+        $this->assertSame(['my.project.rule' => $rule], $arch->getProjectRules());
     }
 
     public function testWithPresetAddsRules(): void

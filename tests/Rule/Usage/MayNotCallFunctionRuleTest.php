@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MayNotCallFunctionRule::class)]
 final class MayNotCallFunctionRuleTest extends TestCase
 {
+    /** @param array<string> $functionCalls */
     private function makeNode(array $functionCalls, string $layer = 'Domain'): ClassNode
     {
         return new ClassNode(

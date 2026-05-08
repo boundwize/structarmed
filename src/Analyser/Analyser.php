@@ -9,9 +9,9 @@ use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use PhpParser\Error;
 use PhpParser\NodeTraverser;
 use PhpParser\ParserFactory;
-use PhpParser\Error;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
@@ -22,7 +22,7 @@ final class Analyser
 
     public function __construct(string $basePath = '')
     {
-        $this->basePath = $basePath ?: getcwd();
+        $this->basePath = $basePath !== '' ? $basePath : (string) getcwd();
     }
 
     public function analyse(Architecture $architecture): RuleViolationCollection
@@ -66,7 +66,7 @@ final class Analyser
                         $code = (string) file_get_contents($file);
                         $ast  = $parser->parse($code);
 
-                        if ($ast === []) {
+                        if ($ast === null || $ast === []) {
                             continue;
                         }
 
@@ -123,8 +123,10 @@ final class Analyser
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            if ($file->getExtension() === 'php') {
-                $files[] = $file->getRealPath();
+            $realPath = $file->getRealPath();
+
+            if ($file->getExtension() === 'php' && $realPath !== false) {
+                $files[] = $realPath;
             }
         }
 

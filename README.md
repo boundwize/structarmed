@@ -114,9 +114,7 @@ return Architecture::define()
 ))
 
 ->withPreset(Preset::PSR4(
-    sourcePaths:     ['src/', 'tests/'], // default: ['src/']
-    maxComplexity:   5,      // default: 5
-    maxMethodLength: 20,     // default: 20
+    sourcePaths: ['src/', 'tests/'], // default: ['src/']
 ))
 ```
 
@@ -124,7 +122,7 @@ return Architecture::define()
 
 | Preset | Rules |
 |---|---|
-| `Preset::PSR4()` | Default `src/` source paths, return types, complexity, method length, dependencies, debug-call safety |
+| `Preset::PSR4()` | Verifies configured source paths exist in composer.json `autoload` or `autoload-dev` PSR-4 mappings |
 | `Preset::DDD()` | Layer isolation, entity/VO/repository/event/service conventions |
 | `Preset::MVC()` | Layer isolation, thin controllers, model/view/service rules |
 

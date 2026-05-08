@@ -13,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MustHaveReturnTypeRule::class)]
 final class MustHaveReturnTypeRuleTest extends TestCase
 {
+    /** @param array<MethodNode> $methods */
     private function makeNode(array $methods, string $layer = 'Domain'): ClassNode
     {
         return new ClassNode(

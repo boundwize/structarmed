@@ -44,6 +44,9 @@ final class ReportTest extends TestCase
         $json = (new JsonReport())->render($collection, 1.23);
         $data = json_decode($json, true);
 
+        $this->assertIsArray($data);
+        $this->assertIsArray($data['violations']);
+        $this->assertIsArray($data['violations'][0]);
         $this->assertSame('rule.key', $data['violations'][0]['rule']);
         $this->assertSame(1, $data['total']);
         $this->assertFalse($data['passed']);

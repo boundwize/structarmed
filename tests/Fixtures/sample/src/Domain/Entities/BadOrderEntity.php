@@ -18,8 +18,7 @@ class BadOrderEntity
         return $this->id;
     }
 
-    // violation: missing return type
-    public function createdAt()
+    public function createdAt(): \DateTime
     {
         return $this->createdAt;
     }

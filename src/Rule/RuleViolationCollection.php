@@ -74,10 +74,10 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
     /** @return array<int, array<string, mixed>> */
     public function toArray(): array
     {
-        return array_map(
+        return array_values(array_map(
             static fn(RuleViolation $v) => $v->toArray(),
             $this->violations
-        );
+        ));
     }
 
     public function toJson(): string
