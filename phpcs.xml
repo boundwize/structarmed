@@ -9,6 +9,8 @@
 
     <file>src</file>
     <file>tests</file>
+    <file>rector.php</file>
+    <file>structarmed.php</file>
 
     <arg name="basepath" value="."/>
     <arg name="colors"/>
