@@ -60,7 +60,7 @@ final readonly class Analyser
 
             $violation = $rule->evaluateProject($this->basePath, $architecture);
 
-            if ($violation === null) {
+            if (! $violation instanceof RuleViolation) {
                 continue;
             }
 
@@ -135,7 +135,7 @@ final readonly class Analyser
 
                 $violation = $rule->evaluate($classNode);
 
-                if ($violation === null) {
+                if (! $violation instanceof RuleViolation) {
                     continue;
                 }
 
