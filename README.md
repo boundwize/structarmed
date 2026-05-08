@@ -51,6 +51,12 @@ return Architecture::define()
     ->withPreset(Preset::PSR4());
 ```
 
+### Multiple presets
+
+```php
+->withPresets(Preset::PSR4(), Preset::DDD())
+```
+
 ### Custom layers and rules
 
 ```php
@@ -75,12 +81,6 @@ return Architecture::define()
         'domain.public_methods_must_have_return_types',
         new MustHaveReturnTypeRule(layer: 'Domain')
     );
-```
-
-### Multiple presets
-
-```php
-->withPresets(Preset::PSR4(), Preset::DDD())
 ```
 
 ### Override preset rules
