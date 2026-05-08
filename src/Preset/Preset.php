@@ -24,15 +24,9 @@ final class Preset
      */
     public static function PSR4(
         array $sourcePaths = ['src/'],
-        int $maxComplexity = 5,
-        int $maxMethodLength = 20,
-        int $maxDependencies = 5,
     ): Psr4Preset {
         return new Psr4Preset(
-            sourcePaths:     $sourcePaths,
-            maxComplexity:   $maxComplexity,
-            maxMethodLength: $maxMethodLength,
-            maxDependencies: $maxDependencies,
+            sourcePaths: $sourcePaths,
         );
     }
 

@@ -23,20 +23,15 @@ final class PresetTest extends TestCase
         $architecture = Architecture::define();
 
         Preset::PSR4(
-            sourcePaths:     ['src/', 'tests/'],
-            maxComplexity:   4,
-            maxMethodLength: 10,
-            maxDependencies: 3,
+            sourcePaths: ['src/', 'tests/'],
         )->apply($architecture);
 
-        $rules = $architecture->getRules();
         $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
-        $this->assertArrayHasKey(Psr4Preset::SOURCE_MUST_HAVE_RETURN_TYPES, $rules);
-        $this->assertArrayHasKey(Psr4Preset::SOURCE_MAX_COMPLEXITY, $rules);
-        $this->assertArrayHasKey(Psr4Preset::SOURCE_MAX_METHOD_LENGTH, $rules);
-        $this->assertArrayHasKey(Psr4Preset::SOURCE_MAX_DEPENDENCIES, $rules);
-        $this->assertArrayHasKey('psr4.safety.source_no_dd', $rules);
-        $this->assertArrayHasKey('psr4.safety.source_no_exit', $rules);
+        $this->assertSame([], $architecture->getRules());
+        $this->assertArrayHasKey(
+            Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
+            $architecture->getProjectRules()
+        );
     }
 
     public function testDddPresetRegistersAllDefaultRules(): void

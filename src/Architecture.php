@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed;
 
 use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
+use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 
 /**
@@ -38,6 +39,9 @@ final class Architecture
 
     /** @var array<string, RuleInterface> key → rule */
     private array $rules = [];
+
+    /** @var array<string, ProjectRuleInterface> key → rule */
+    private array $projectRules = [];
 
     private function __construct() {}
 
@@ -91,6 +95,13 @@ final class Architecture
     public function rule(string $key, RuleInterface $rule): self
     {
         $this->rules[$key] = $rule;
+
+        return $this;
+    }
+
+    public function projectRule(string $key, ProjectRuleInterface $rule): self
+    {
+        $this->projectRules[$key] = $rule;
 
         return $this;
     }
@@ -151,5 +162,11 @@ final class Architecture
     public function getRules(): array
     {
         return $this->rules;
+    }
+
+    /** @return array<string, ProjectRuleInterface> */
+    public function getProjectRules(): array
+    {
+        return $this->projectRules;
     }
 }

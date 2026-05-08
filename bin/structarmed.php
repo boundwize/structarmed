@@ -29,9 +29,24 @@ $options = getopt('', [
 ]);
 
 $basePath   = getcwd();
+$command    = $argv[1] ?? null;
+
+$printUsage = static function (): void {
+    echo <<<'TXT'
+Usage:
+  structarmed init
+  structarmed analyse|analyze [--config=path/to/structarmed.php] [--report=console|json]
+
+TXT;
+};
+
+if ($command === null || $command === '--help' || $command === '-h') {
+    $printUsage();
+    exit(0);
+}
 
 // Handle `init` command — generate a sample config
-if (isset($argv[1]) && $argv[1] === 'init') {
+if ($command === 'init') {
     $target = $basePath . '/structarmed.php';
 
     if (file_exists($target)) {
@@ -55,11 +70,17 @@ PHP);
     exit(0);
 }
 
-$configFile = $options['config'] ?? ConfigLoader::discover($basePath);
+if (! in_array($command, ['analyse', 'analyze'], true)) {
+    echo sprintf("Unknown command: %s\n\n", $command);
+    $printUsage();
+    exit(1);
+}
+
 $reportType = $options['report'] ?? 'console';
 
 // Load config
 try {
+    $configFile   = $options['config'] ?? ConfigLoader::discover($basePath);
     $architecture = ConfigLoader::load($configFile);
 } catch (RuntimeException $e) {
     echo 'Error: ' . $e->getMessage() . PHP_EOL;

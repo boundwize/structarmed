@@ -28,6 +28,24 @@ final class Analyser
     public function analyse(Architecture $architecture): RuleViolationCollection
     {
         $violations = new RuleViolationCollection();
+
+        foreach ($architecture->getProjectRules() as $key => $rule) {
+            $violation = $rule->evaluateProject($this->basePath, $architecture);
+
+            if ($violation === null) {
+                continue;
+            }
+
+            $violations->add(new RuleViolation(
+                ruleKey:   $key,
+                message:   $violation->message,
+                file:      $violation->file,
+                line:      $violation->line,
+                className: $violation->className,
+                layer:     $violation->layer,
+            ));
+        }
+
         $resolver   = new ChainLayerResolver(
             new NamespaceLayerResolver($architecture->getLayers(), $this->basePath)
         );
