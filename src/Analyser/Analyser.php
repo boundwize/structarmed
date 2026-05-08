@@ -35,29 +35,31 @@ final class Analyser
         $collector = new ClassCollector($resolver);
         $parser    = (new ParserFactory())->createForNewestSupportedVersion();
 
-        foreach ($architecture->getLayers() as $layerName => $layerPath) {
-            $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
+        foreach ($architecture->getLayers() as $layerPaths) {
+            foreach ((array) $layerPaths as $layerPath) {
+                $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
 
-            if (! is_dir($fullPath)) {
-                continue;
-            }
+                if (! is_dir($fullPath)) {
+                    continue;
+                }
 
-            foreach ($this->phpFiles($fullPath) as $file) {
-                try {
-                    $code = (string) file_get_contents($file);
-                    $ast  = $parser->parse($code);
+                foreach ($this->phpFiles($fullPath) as $file) {
+                    try {
+                        $code = (string) file_get_contents($file);
+                        $ast  = $parser->parse($code);
 
-                    if ($ast === []) {
-                        continue;
+                        if ($ast === []) {
+                            continue;
+                        }
+
+                        $collector->setCurrentFile($file);
+
+                        $traverser = new NodeTraverser();
+                        $traverser->addVisitor($collector);
+                        $traverser->traverse($ast);
+                    } catch (Error) {
+                        // Skip files with parse errors
                     }
-
-                    $collector->setCurrentFile($file);
-
-                    $traverser = new NodeTraverser();
-                    $traverser->addVisitor($collector);
-                    $traverser->traverse($ast);
-                } catch (Error) {
-                    // Skip files with parse errors
                 }
             }
         }

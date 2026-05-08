@@ -16,7 +16,7 @@ use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 final class NamespaceLayerResolver implements LayerResolverInterface
 {
     /**
-     * @param array<string, string> $layers  Map of layer name → path prefix
+     * @param array<string, string|list<string>> $layers  Map of layer name → path prefixes
      */
     public function __construct(
         private readonly array $layers,
@@ -27,13 +27,15 @@ final class NamespaceLayerResolver implements LayerResolverInterface
     {
         $normalised = $this->normalisePath($filePath);
 
-        foreach ($this->layers as $layerName => $layerPath) {
-            $normalisedLayer = $this->normalisePath(
-                $this->basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
-            );
+        foreach ($this->layers as $layerName => $layerPaths) {
+            foreach ((array) $layerPaths as $layerPath) {
+                $normalisedLayer = $this->normalisePath(
+                    $this->basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
+                );
 
-            if (str_starts_with($normalised, $normalisedLayer)) {
-                return $layerName;
+                if (str_starts_with($normalised, $normalisedLayer)) {
+                    return $layerName;
+                }
             }
         }
 

@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Preset;
 
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
+use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 
 /**
  * Factory for built-in presets.
@@ -13,10 +14,28 @@ use Boundwize\StructArmed\Preset\Presets\MvcPreset;
  * Usage:
  *   ->withPreset(Preset::DDD())
  *   ->withPreset(Preset::DDD(maxComplexity: 3))
+ *   ->withPreset(Preset::PSR4())
  *   ->withPresets(Preset::DDD(), Preset::MVC())
  */
 final class Preset
 {
+    /**
+     * @param list<string> $sourcePaths
+     */
+    public static function PSR4(
+        array $sourcePaths = ['src/'],
+        int $maxComplexity = 5,
+        int $maxMethodLength = 20,
+        int $maxDependencies = 5,
+    ): Psr4Preset {
+        return new Psr4Preset(
+            sourcePaths:     $sourcePaths,
+            maxComplexity:   $maxComplexity,
+            maxMethodLength: $maxMethodLength,
+            maxDependencies: $maxDependencies,
+        );
+    }
+
     public static function DDD(
         int $maxComplexity = 5,
         int $maxMethodLength = 20,

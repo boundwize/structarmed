@@ -61,6 +61,21 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertNull($layer);
     }
 
+    public function testResolvesLayerByAnyRegisteredPath(): void
+    {
+        $resolver = new NamespaceLayerResolver(
+            layers: ['Source' => ['src/', 'tests/']],
+            basePath: $this->basePath
+        );
+
+        $layer = $resolver->resolve(
+            'Boundwize\\StructArmed\\Tests\\ArchitectureTest',
+            $this->basePath . '/tests/ArchitectureTest.php'
+        );
+
+        $this->assertSame('Source', $layer);
+    }
+
     public function testPatternResolverMatchesClassName(): void
     {
         $resolver = new PatternLayerResolver([

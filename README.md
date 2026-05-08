@@ -28,33 +28,42 @@ vendor/bin/structarmed analyse
 
 ## Configuration
 
-### Minimum (3 lines)
+### Default
 
 ```php
 // structarmed.php
-return Architecture::define()
-    ->layer('Domain',         'src/Domain/')
-    ->layer('Application',    'src/Application/')
-    ->layer('Infrastructure', 'src/Infrastructure/');
-```
-
-### With preset
-
-```php
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 
 return Architecture::define()
-    ->layer('Domain',         'src/Domain/')
-    ->layer('Application',    'src/Application/')
+    ->withPreset(Preset::PSR4());
+```
+
+### Custom layers and rules
+
+```php
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
+use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
+
+return Architecture::define()
+    ->layer('Domain', 'src/Domain/')
+    ->layer('Application', 'src/Application/')
     ->layer('Infrastructure', 'src/Infrastructure/')
-    ->withPreset(Preset::DDD());
+    ->rule(
+        'domain.must_not_depend_on_infrastructure',
+        new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure', toPath: 'Infrastructure')
+    )
+    ->rule(
+        'domain.public_methods_must_have_return_types',
+        new MustHaveReturnTypeRule(layer: 'Domain')
+    );
 ```
 
 ### Multiple presets
 
 ```php
-->withPresets(Preset::DDD(), Preset::CQRS())
+->withPresets(Preset::PSR4(), Preset::DDD())
 ```
 
 ### Override preset rules
@@ -103,12 +112,19 @@ return Architecture::define()
     controllerMaxDependencies: 4,  // default: 5
     viewMaxComplexity:         2,  // default: 3
 ))
+
+->withPreset(Preset::PSR4(
+    sourcePaths:     ['src/', 'tests/'], // default: ['src/']
+    maxComplexity:   5,      // default: 5
+    maxMethodLength: 20,     // default: 20
+))
 ```
 
 ## Available presets
 
 | Preset | Rules |
 |---|---|
+| `Preset::PSR4()` | Default `src/` source paths, return types, complexity, method length, dependencies, debug-call safety |
 | `Preset::DDD()` | Layer isolation, entity/VO/repository/event/service conventions |
 | `Preset::MVC()` | Layer isolation, thin controllers, model/view/service rules |
 

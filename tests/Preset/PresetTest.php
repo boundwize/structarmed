@@ -8,14 +8,37 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
+use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Preset::class)]
 #[CoversClass(DddPreset::class)]
 #[CoversClass(MvcPreset::class)]
+#[CoversClass(Psr4Preset::class)]
 final class PresetTest extends TestCase
 {
+    public function testPsr4PresetRegistersSourceLayerAndRules(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR4(
+            sourcePaths:     ['src/', 'tests/'],
+            maxComplexity:   4,
+            maxMethodLength: 10,
+            maxDependencies: 3,
+        )->apply($architecture);
+
+        $rules = $architecture->getRules();
+        $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
+        $this->assertArrayHasKey(Psr4Preset::SOURCE_MUST_HAVE_RETURN_TYPES, $rules);
+        $this->assertArrayHasKey(Psr4Preset::SOURCE_MAX_COMPLEXITY, $rules);
+        $this->assertArrayHasKey(Psr4Preset::SOURCE_MAX_METHOD_LENGTH, $rules);
+        $this->assertArrayHasKey(Psr4Preset::SOURCE_MAX_DEPENDENCIES, $rules);
+        $this->assertArrayHasKey('psr4.safety.source_no_dd', $rules);
+        $this->assertArrayHasKey('psr4.safety.source_no_exit', $rules);
+    }
+
     public function testDddPresetRegistersAllDefaultRules(): void
     {
         $architecture = Architecture::define();

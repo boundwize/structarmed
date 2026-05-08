@@ -29,8 +29,6 @@ $options = getopt('', [
 ]);
 
 $basePath   = getcwd();
-$configFile = $options['config'] ?? ConfigLoader::discover($basePath);
-$reportType = $options['report'] ?? 'console';
 
 // Handle `init` command — generate a sample config
 if (isset($argv[1]) && $argv[1] === 'init') {
@@ -50,15 +48,15 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 
 return Architecture::define()
-    ->layer('Domain',         'src/Domain/')
-    ->layer('Application',    'src/Application/')
-    ->layer('Infrastructure', 'src/Infrastructure/')
-    ->withPreset(Preset::DDD());
+    ->withPreset(Preset::PSR4());
 PHP);
 
     echo "Created structarmed.php\n";
     exit(0);
 }
+
+$configFile = $options['config'] ?? ConfigLoader::discover($basePath);
+$reportType = $options['report'] ?? 'console';
 
 // Load config
 try {

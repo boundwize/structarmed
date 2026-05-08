@@ -32,6 +32,14 @@ final class ArchitectureTest extends TestCase
         );
     }
 
+    public function testLayerRegistrationAcceptsMultiplePaths(): void
+    {
+        $arch = Architecture::define()
+            ->layer('Source', ['src/', 'tests/']);
+
+        $this->assertSame(['Source' => ['src/', 'tests/']], $arch->getLayers());
+    }
+
     public function testRuleIsAdded(): void
     {
         $rule = new MustBeFinalRule(layer: 'Domain');

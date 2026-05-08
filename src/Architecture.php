@@ -33,7 +33,7 @@ use Boundwize\StructArmed\Rule\RuleInterface;
  */
 final class Architecture
 {
-    /** @var array<string, string> name → path */
+    /** @var array<string, string|list<string>> name → path prefixes */
     private array $layers = [];
 
     /** @var array<string, RuleInterface> key → rule */
@@ -50,7 +50,10 @@ final class Architecture
     // Layer definition
     // -------------------------------------------------------------------------
 
-    public function layer(string $name, string $path): self
+    /**
+     * @param string|list<string> $path
+     */
+    public function layer(string $name, string|array $path): self
     {
         $this->layers[$name] = $path;
 
@@ -138,7 +141,7 @@ final class Architecture
     // Accessors for the Analyser
     // -------------------------------------------------------------------------
 
-    /** @return array<string, string> */
+    /** @return array<string, string|list<string>> */
     public function getLayers(): array
     {
         return $this->layers;
