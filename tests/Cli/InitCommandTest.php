@@ -73,8 +73,8 @@ final class InitCommandTest extends TestCase
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString('Created structarmed.php', $output);
-            $this->assertStringContainsString(
-                $expectedPreset,
+            $this->assertSame(
+                $this->expectedConfig($expectedPreset),
                 (string) file_get_contents($basePath . '/structarmed.php')
             );
         } finally {
@@ -130,6 +130,22 @@ final class InitCommandTest extends TestCase
         mkdir($basePath);
 
         return $basePath;
+    }
+
+    private function expectedConfig(string $presetConfig): string
+    {
+        return <<<PHP
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+{$presetConfig}
+
+PHP;
     }
 
     private function removeTempDirectory(string $basePath): void

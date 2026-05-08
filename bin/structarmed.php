@@ -91,7 +91,7 @@ use Boundwize\StructArmed\Preset\Preset;
 
 return Architecture::define()
 PHP);
-    file_put_contents($target, $presetConfig . "\n", FILE_APPEND);
+    file_put_contents($target, "\n" . $presetConfig . "\n", FILE_APPEND);
 
     echo "Created structarmed.php\n";
     exit(0);
