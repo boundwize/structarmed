@@ -22,6 +22,7 @@ composer install
 | `composer cs-fix` | Fix coding standard violations |
 | `composer phpstan` | Run static analysis |
 | `composer rector` | Check for Rector suggestions (dry-run) |
+| `composer structarmed` | Run structarmed in this repository itself |
 
 All checks must pass before a PR will be merged. CI runs against PHP 8.2, 8.3, and 8.4 on Linux, macOS, and Windows.
 
