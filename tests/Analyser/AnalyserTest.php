@@ -16,6 +16,7 @@ use function dirname;
 use function file_put_contents;
 use function mkdir;
 use function random_bytes;
+use function str_replace;
 use function symlink;
 use function sys_get_temp_dir;
 
@@ -166,7 +167,10 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
-        $this->assertStringEndsWith('/src/Foo.php', $ruleViolationCollection->forRule('source.must_be_final')[0]->file);
+        $this->assertStringEndsWith(
+            '/src/Foo.php',
+            $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
+        );
     }
 
     public function testDefaultPsr4PresetDetectsClassesThatDoNotMatchScannedComposerPath(): void
@@ -203,7 +207,10 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
-        $this->assertStringEndsWith('/src/Foo.php', $ruleViolationCollection->forRule('source.must_be_final')[0]->file);
+        $this->assertStringEndsWith(
+            '/src/Foo.php',
+            $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
+        );
     }
 
     public function testAnalyserSkipsEntireConfiguredScanPath(): void
@@ -254,7 +261,10 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
-        $this->assertStringEndsWith('/src/Foo.php', $ruleViolationCollection->forRule('source.must_be_final')[0]->file);
+        $this->assertStringEndsWith(
+            '/src/Foo.php',
+            $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
+        );
     }
 
     public function testAnalyserKeepsFilesWhenGlobSkipDoesNotMatch(): void
@@ -290,7 +300,10 @@ final class AnalyserTest extends TestCase
 
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
         $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final_too'));
-        $this->assertStringEndsWith('/src/Foo.php', $ruleViolationCollection->forRule('source.must_be_final')[0]->file);
+        $this->assertStringEndsWith(
+            '/src/Foo.php',
+            $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
+        );
     }
 
     public function testAnalyserCanCheckRuleSkipsForRealPathOutsideBasePath(): void
@@ -324,5 +337,10 @@ final class AnalyserTest extends TestCase
         }
 
         return $basePath;
+    }
+
+    private function normalisePath(string $path): string
+    {
+        return str_replace('\\', '/', $path);
     }
 }
