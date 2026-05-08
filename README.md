@@ -2,6 +2,8 @@
 
 <img width="1600" height="420" alt="Image" src="https://github.com/user-attachments/assets/62b0baa3-d81a-44ec-bd5a-16bb4c5c97f8" />
 
+<br />
+
 [![Latest Version](https://img.shields.io/github/release/boundwize/structarmed.svg?style=flat-square)](https://github.com/boundwize/structarmed/releases)
 [![ci build](https://github.com/boundwize/structarmed/workflows/ci%20build/badge.svg)](https://github.com/boundwize/structarmed/actions)
 [![Code Coverage](https://codecov.io/gh/boundwize/structarmed/branch/main/graph/badge.svg)](https://codecov.io/gh/boundwize/structarmed)
