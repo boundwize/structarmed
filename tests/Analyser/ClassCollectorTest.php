@@ -144,6 +144,55 @@ final class ClassCollectorTest extends TestCase
         $this->assertContains('var_dump', $classNode->functionCalls);
     }
 
+    public function testCollectsImportedFunctionCalls(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App\Support;
+
+use function Vendor\debug;
+
+class Foo {
+    public function bar(): void {
+        debug("x");
+    }
+}
+PHP;
+        $classNode = $this->collect($code, resolveNames: true);
+
+        $this->assertContains('Vendor\debug', $classNode->functionCalls);
+    }
+
+    public function testKeepsNativeFunctionCallsUnqualifiedInsideNamespace(): void
+    {
+        $classNode = $this->collect(
+            '<?php namespace App\Support; class Foo { public function bar(): int { return strlen("x"); } }',
+            resolveNames: true
+        );
+
+        $this->assertContains('strlen', $classNode->functionCalls);
+        $this->assertNotContains('App\Support\strlen', $classNode->functionCalls);
+    }
+
+    public function testCollectsDeclaredNamespacedFunctionCalls(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App\Support;
+
+class Foo {
+    public function bar(): void {
+        debug("x");
+    }
+}
+
+function debug(string $value): void {}
+PHP;
+        $classNode = $this->collect($code, resolveNames: true);
+
+        $this->assertContains('App\Support\debug', $classNode->functionCalls);
+    }
+
     public function testCollectsSuperglobals(): void
     {
         $classNode = $this->collect('<?php class Foo { public function bar(): void { $x = $_GET["id"]; } }');

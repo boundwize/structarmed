@@ -17,7 +17,7 @@ final readonly class ClassNode
      * @param string[]      $dependencies   Fully-qualified class names this class depends on
      * @param string[]      $implements     Interface names this class implements
      * @param MethodNode[]  $methods        Public methods of this class
-     * @param string[]      $functionCalls  Global functions called within this class
+     * @param string[]      $functionCalls  Functions called within this class
      * @param string[]      $superglobals   Superglobals accessed ($_GET, $_POST, etc.)
      */
     public function __construct(
