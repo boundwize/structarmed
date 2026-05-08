@@ -27,6 +27,7 @@ use PhpParser\Node\Stmt\ElseIf_;
 use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\For_;
 use PhpParser\Node\Stmt\Foreach_;
+use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Interface_;
 use PhpParser\Node\Stmt\While_;
@@ -37,9 +38,11 @@ use PhpParser\NodeVisitorAbstract;
 use function array_merge;
 use function array_unique;
 use function count;
+use function get_defined_functions;
 use function implode;
 use function in_array;
 use function is_string;
+use function strtolower;
 
 final class ClassCollector extends NodeVisitorAbstract
 {
@@ -62,6 +65,12 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var string[] */
     private array $fileUses = [];
 
+    /** @var ClassLike[] */
+    private array $fileClassLikes = [];
+
+    /** @var string[] */
+    private array $fileFunctions = [];
+
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
@@ -69,8 +78,10 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function setCurrentFile(string $file): void
     {
-        $this->currentFile = $file;
-        $this->fileUses    = [];
+        $this->currentFile    = $file;
+        $this->fileUses       = [];
+        $this->fileClassLikes = [];
+        $this->fileFunctions  = [];
     }
 
     /** @return ClassNode[] */
@@ -83,9 +94,17 @@ final class ClassCollector extends NodeVisitorAbstract
     {
         if ($node instanceof UseItem) {
             $this->fileUses[] = implode('\\', $node->name->getParts());
-            return null;
         }
 
+        if ($node instanceof Function_ && isset($node->namespacedName)) {
+            $this->fileFunctions[] = implode('\\', $node->namespacedName->getParts());
+        }
+
+        return null;
+    }
+
+    public function leaveNode(Node $node): null
+    {
         if (! $node instanceof ClassLike) {
             return null;
         }
@@ -94,6 +113,25 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
+        $this->fileClassLikes[] = $node;
+
+        return null;
+    }
+
+    /** @param Node[] $nodes */
+    public function afterTraverse(array $nodes): null
+    {
+        foreach ($this->fileClassLikes as $fileClassLike) {
+            $this->collectClassLike($fileClassLike);
+        }
+
+        $this->fileClassLikes = [];
+
+        return null;
+    }
+
+    private function collectClassLike(ClassLike $node): void
+    {
         $className     = $this->resolveClassName($node);
         $layer         = $this->layerResolver->resolve($className, $this->currentFile);
         $dependencies  = $this->collectDependencies($node);
@@ -120,8 +158,6 @@ final class ClassCollector extends NodeVisitorAbstract
             functionCalls: $functionCalls,
             superglobals:  $superglobals,
         );
-
-        return null;
     }
 
     private function resolveClassName(ClassLike $node): string
@@ -258,9 +294,19 @@ final class ClassCollector extends NodeVisitorAbstract
     private function collectFunctionCalls(ClassLike $node): array
     {
         $nodeTraverser = new NodeTraverser();
-        $visitor       = new class extends NodeVisitorAbstract {
+        $visitor       = new class ($this->fileFunctions, $this->internalFunctions()) extends NodeVisitorAbstract {
             /** @var string[] */
             public array $calls = [];
+
+            /**
+             * @param string[] $fileFunctions
+             * @param string[] $internalFunctions
+             */
+            public function __construct(
+                private readonly array $fileFunctions,
+                private readonly array $internalFunctions,
+            ) {
+            }
 
             public function enterNode(Node $node): null
             {
@@ -268,10 +314,32 @@ final class ClassCollector extends NodeVisitorAbstract
                     $node instanceof FuncCall
                     && $node->name instanceof Name
                 ) {
-                    $this->calls[] = (string) $node->name;
+                    $this->calls[] = $this->resolveFunctionName($node->name);
                 }
 
                 return null;
+            }
+
+            private function resolveFunctionName(Name $name): string
+            {
+                if ($name instanceof FullyQualified) {
+                    return implode('\\', $name->getParts());
+                }
+
+                $functionName = implode('\\', $name->getParts());
+                if (in_array(strtolower($functionName), $this->internalFunctions, true)) {
+                    return $functionName;
+                }
+
+                $namespacedName = $name->getAttribute('namespacedName');
+                if (
+                    $namespacedName instanceof Name
+                    && in_array(implode('\\', $namespacedName->getParts()), $this->fileFunctions, true)
+                ) {
+                    return implode('\\', $namespacedName->getParts());
+                }
+
+                return $functionName;
             }
         };
 
@@ -279,6 +347,21 @@ final class ClassCollector extends NodeVisitorAbstract
         $nodeTraverser->traverse([$node]);
 
         return array_unique($visitor->calls);
+    }
+
+    /**
+     * @return string[]
+     */
+    private function internalFunctions(): array
+    {
+        $functions = get_defined_functions();
+        $internal  = [];
+
+        foreach ($functions['internal'] as $function) {
+            $internal[] = strtolower($function);
+        }
+
+        return $internal;
     }
 
     /**
