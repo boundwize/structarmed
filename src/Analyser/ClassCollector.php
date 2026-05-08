@@ -130,28 +130,28 @@ final class ClassCollector extends NodeVisitorAbstract
         return null;
     }
 
-    private function collectClassLike(ClassLike $node): void
+    private function collectClassLike(ClassLike $classLike): void
     {
-        $className     = $this->resolveClassName($node);
+        $className     = $this->resolveClassName($classLike);
         $layer         = $this->layerResolver->resolve($className, $this->currentFile);
-        $dependencies  = $this->collectDependencies($node);
-        $methods       = $this->collectMethods($node);
-        $functionCalls = $this->collectFunctionCalls($node);
-        $superglobals  = $this->collectSuperglobals($node);
-        $implements    = $this->collectImplements($node);
+        $dependencies  = $this->collectDependencies($classLike);
+        $methods       = $this->collectMethods($classLike);
+        $functionCalls = $this->collectFunctionCalls($classLike);
+        $superglobals  = $this->collectSuperglobals($classLike);
+        $implements    = $this->collectImplements($classLike);
 
         $this->nodes[] = new ClassNode(
             className:     $className,
             file:          $this->currentFile,
-            line:          $node->getStartLine(),
+            line:          $classLike->getStartLine(),
             layer:         $layer,
-            extends:       $node instanceof Class_ && $node->extends instanceof Name
-                               ? implode('\\', $node->extends->getParts())
+            extends:       $classLike instanceof Class_ && $classLike->extends instanceof Name
+                               ? implode('\\', $classLike->extends->getParts())
                                : null,
-            isAbstract:    $node instanceof Class_ && $node->isAbstract(),
-            isFinal:       $node instanceof Class_ && $node->isFinal(),
-            isInterface:   $node instanceof Interface_,
-            isReadonly:    $node instanceof Class_ && $node->isReadonly(),
+            isAbstract:    $classLike instanceof Class_ && $classLike->isAbstract(),
+            isFinal:       $classLike instanceof Class_ && $classLike->isFinal(),
+            isInterface:   $classLike instanceof Interface_,
+            isReadonly:    $classLike instanceof Class_ && $classLike->isReadonly(),
             dependencies:  $dependencies,
             implements:    $implements,
             methods:       $methods,
@@ -160,17 +160,17 @@ final class ClassCollector extends NodeVisitorAbstract
         );
     }
 
-    private function resolveClassName(ClassLike $node): string
+    private function resolveClassName(ClassLike $classLike): string
     {
-        return isset($node->namespacedName)
-            ? implode('\\', $node->namespacedName->getParts())
-            : (string) $node->name;
+        return isset($classLike->namespacedName)
+            ? implode('\\', $classLike->namespacedName->getParts())
+            : (string) $classLike->name;
     }
 
     /**
      * @return string[]
      */
-    private function collectDependencies(ClassLike $node): array
+    private function collectDependencies(ClassLike $classLike): array
     {
         $nodeTraverser = new NodeTraverser();
         $visitor       = new class extends NodeVisitorAbstract {
@@ -188,7 +188,7 @@ final class ClassCollector extends NodeVisitorAbstract
         };
 
         $nodeTraverser->addVisitor($visitor);
-        $nodeTraverser->traverse([$node]);
+        $nodeTraverser->traverse([$classLike]);
 
         return array_unique(array_merge($this->fileUses, $visitor->names));
     }
@@ -196,12 +196,12 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return string[]
      */
-    private function collectImplements(ClassLike $node): array
+    private function collectImplements(ClassLike $classLike): array
     {
         $interfaces = [];
 
-        if ($node instanceof Class_ || $node instanceof Enum_) {
-            foreach ($node->implements as $interface) {
+        if ($classLike instanceof Class_ || $classLike instanceof Enum_) {
+            foreach ($classLike->implements as $interface) {
                 $interfaces[] = implode('\\', $interface->getParts());
             }
         }
@@ -212,11 +212,11 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return MethodNode[]
      */
-    private function collectMethods(ClassLike $node): array
+    private function collectMethods(ClassLike $classLike): array
     {
         $methods = [];
 
-        foreach ($node->getMethods() as $classMethod) {
+        foreach ($classLike->getMethods() as $classMethod) {
             $methods[] = new MethodNode(
                 name:                 (string) $classMethod->name,
                 visibility:           $this->resolveVisibility($classMethod),
@@ -291,7 +291,7 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return string[]
      */
-    private function collectFunctionCalls(ClassLike $node): array
+    private function collectFunctionCalls(ClassLike $classLike): array
     {
         $nodeTraverser = new NodeTraverser();
         $visitor       = new class ($this->fileFunctions, $this->internalFunctions()) extends NodeVisitorAbstract {
@@ -344,7 +344,7 @@ final class ClassCollector extends NodeVisitorAbstract
         };
 
         $nodeTraverser->addVisitor($visitor);
-        $nodeTraverser->traverse([$node]);
+        $nodeTraverser->traverse([$classLike]);
 
         return array_unique($visitor->calls);
     }
@@ -367,7 +367,7 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return string[]
      */
-    private function collectSuperglobals(ClassLike $node): array
+    private function collectSuperglobals(ClassLike $classLike): array
     {
         $nodeTraverser = new NodeTraverser();
         $visitor       = new class extends NodeVisitorAbstract {
@@ -394,7 +394,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $visitor->superglobals = self::SUPERGLOBALS;
 
         $nodeTraverser->addVisitor($visitor);
-        $nodeTraverser->traverse([$node]);
+        $nodeTraverser->traverse([$classLike]);
 
         return array_unique($visitor->found);
     }
