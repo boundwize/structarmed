@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Config\ConfigLoader;
+use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 
@@ -27,7 +28,7 @@ $printUsage = static function (): void {
     echo <<<'TXT'
 Usage:
   structarmed init [--preset=ddd|mvc|psr4|all]
-  structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php] [--report=console|json]
+  structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php] [--report=console|json] [--no-progress]
 
 TXT;
 };
@@ -130,6 +131,11 @@ for ($i = 0; $i < count($arguments); $i++) {
         continue;
     }
 
+    if ($argument === '--no-progress') {
+        $options['progress'] = false;
+        continue;
+    }
+
     if (str_starts_with($argument, '--')) {
         echo sprintf("Unknown option: %s\n\n", $argument);
         $printUsage();
@@ -168,7 +174,10 @@ try {
 // Run analysis
 $start      = microtime(true);
 $analyser   = new Analyser($basePath);
-$violations = $analyser->analyse($architecture, $scanPaths);
+$progress   = $reportType === 'console' && ($options['progress'] ?? true) === true
+    ? new ConsoleProgressBar()
+    : null;
+$violations = $analyser->analyse($architecture, $scanPaths, $progress);
 $elapsed    = microtime(true) - $start;
 
 // Render report
