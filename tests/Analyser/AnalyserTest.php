@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -253,6 +254,78 @@ final class AnalyserTest extends TestCase
         $this->assertCount(2, $violations);
         $this->assertStringContainsString('first', $violations[0]->message);
         $this->assertStringContainsString('second', $violations[1]->message);
+    }
+
+    public function testAnalyserTreatsAliasedImportAsDependency(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use Vendor\ForbiddenService as Service;
+
+                final class Foo
+                {
+                    public function __construct(private Service $service)
+                    {
+                    }
+
+                    public function run(): void
+                    {
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule(
+                'source.must_not_use_forbidden_service',
+                new MayNotUseClassRule('Source', 'Vendor\ForbiddenService')
+            );
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(
+            1,
+            $ruleViolationCollection->forRule('source.must_not_use_forbidden_service')
+        );
+    }
+
+    public function testAnalyserTreatsGroupedAliasedImportAsDependency(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use FooLibrary\Bar\Baz\{ClassA, ClassB, ClassC, ClassD as Fizbo};
+
+                final class Foo
+                {
+                    public function __construct(private Fizbo $service)
+                    {
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule(
+                'source.must_not_use_grouped_alias',
+                new MayNotUseClassRule('Source', 'FooLibrary\Bar\Baz\ClassD')
+            );
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(
+            1,
+            $ruleViolationCollection->forRule('source.must_not_use_grouped_alias')
+        );
     }
 
     public function testDefaultPsr4PresetDetectsClassesThatDoNotMatchScannedComposerPath(): void
