@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
+use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
@@ -24,6 +25,7 @@ use SplFileInfo;
 
 use function array_unique;
 use function array_values;
+use function count;
 use function file_get_contents;
 use function fnmatch;
 use function getcwd;
@@ -49,8 +51,11 @@ final readonly class Analyser
     /**
      * @param list<string> $scanPaths
      */
-    public function analyse(Architecture $architecture, array $scanPaths = []): RuleViolationCollection
-    {
+    public function analyse(
+        Architecture $architecture,
+        array $scanPaths = [],
+        ?ProgressHandlerInterface $progressHandler = null
+    ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
         $layers                  = $this->resolveLayers($architecture);
         $skipPaths               = $architecture->getSkipPaths();
@@ -83,42 +88,33 @@ final readonly class Analyser
 
         $classCollector = new ClassCollector($chainLayerResolver);
         $parser         = (new ParserFactory())->createForNewestSupportedVersion();
+        $files          = $this->collectPhpFiles($layers, $scanPaths, $skipPaths);
 
-        foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
-            $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
+        $progressHandler?->start(count($files));
 
-            if (! is_dir($fullPath)) {
-                continue;
-            }
+        foreach ($files as $file) {
+            try {
+                $code = (string) file_get_contents($file);
+                $ast  = $parser->parse($code);
 
-            if ($this->isSkipped($fullPath, $skipPaths)) {
-                continue;
-            }
-
-            foreach ($this->phpFiles($fullPath) as $file) {
-                if ($this->isSkipped($file, $skipPaths)) {
+                if ($ast === null || $ast === []) {
                     continue;
                 }
 
-                try {
-                    $code = (string) file_get_contents($file);
-                    $ast  = $parser->parse($code);
+                $classCollector->setCurrentFile($file);
 
-                    if ($ast === null || $ast === []) {
-                        continue;
-                    }
-
-                    $classCollector->setCurrentFile($file);
-
-                    $traverser = new NodeTraverser();
-                    $traverser->addVisitor(new NameResolver());
-                    $traverser->addVisitor($classCollector);
-                    $traverser->traverse($ast);
-                } catch (Error) {
-                    // Skip files with parse errors
-                }
+                $traverser = new NodeTraverser();
+                $traverser->addVisitor(new NameResolver());
+                $traverser->addVisitor($classCollector);
+                $traverser->traverse($ast);
+            } catch (Error) {
+                // Skip files with parse errors
+            } finally {
+                $progressHandler?->advance($file);
             }
         }
+
+        $progressHandler?->finish();
 
         $rules = $architecture->getRules();
 
@@ -159,6 +155,39 @@ final readonly class Analyser
         }
 
         return $ruleViolationCollection;
+    }
+
+    /**
+     * @param array<string, string|list<string>> $layers
+     * @param list<string> $scanPaths
+     * @param list<string> $skipPaths
+     * @return list<string>
+     */
+    private function collectPhpFiles(array $layers, array $scanPaths, array $skipPaths): array
+    {
+        $files = [];
+
+        foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
+            $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
+
+            if (! is_dir($fullPath)) {
+                continue;
+            }
+
+            if ($this->isSkipped($fullPath, $skipPaths)) {
+                continue;
+            }
+
+            foreach ($this->phpFiles($fullPath) as $file) {
+                if ($this->isSkipped($file, $skipPaths)) {
+                    continue;
+                }
+
+                $files[] = $file;
+            }
+        }
+
+        return $files;
     }
 
     /**

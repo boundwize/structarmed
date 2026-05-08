@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 use function bin2hex;
 use function dirname;
 use function file_put_contents;
+use function is_dir;
 use function mkdir;
 use function random_bytes;
 use function str_replace;
@@ -215,6 +217,47 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testAnalyserReportsProgressForScannedPhpFiles(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+            'src/Bar.php'   => '<?php namespace App; final class Bar {}',
+            'src/readme.md' => '# ignored',
+        ]);
+        $progress = new class implements ProgressHandlerInterface {
+            public int $total = 0;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public bool $finished = false;
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+                $this->finished = true;
+            }
+        };
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        (new Analyser($basePath))->analyse($architecture, [], $progress);
+
+        $this->assertSame(2, $progress->total);
+        $this->assertCount(2, $progress->files);
+        $this->assertTrue($progress->finished);
     }
 
     public function testAnalyserReportsAllViolationsFromMultipleViolationRules(): void
@@ -487,7 +530,11 @@ final class AnalyserTest extends TestCase
 
         foreach ($files as $file => $contents) {
             $path = $basePath . '/' . $file;
-            mkdir(dirname($path), 0777, true);
+
+            if (! is_dir(dirname($path))) {
+                mkdir(dirname($path), 0777, true);
+            }
+
             file_put_contents($path, $contents);
         }
 
