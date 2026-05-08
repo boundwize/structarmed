@@ -1,0 +1,64 @@
+{
+    "name": "boundwize/structarmed",
+    "type": "library",
+    "description": "Configurable PHP architecture enforcement — define your layers and rules, enforce them forever in CI",
+    "keywords": [
+        "architecture",
+        "static-analysis",
+        "ddd",
+        "mvc",
+        "cqrs",
+        "hexagonal",
+        "layer",
+        "enforcement",
+        "fitness-functions"
+    ],
+    "homepage": "https://github.com/boundwize/structarmed",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Abdul Malik Ikhsan",
+            "email": "samsonasik@gmail.com",
+            "homepage": "http://samsonasik.wordpress.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "nikic/php-parser": "^5.0"
+    },
+    "require-dev": {
+        "laminas/laminas-coding-standard": "^3.0",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^11.0",
+        "rector/rector": "dev-main"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Boundwize\\StructArmed\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Boundwize\\StructArmed\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "cs-check": "phpcs",
+        "cs-fix": "phpcbf",
+        "phpstan": "phpstan",
+        "rector": "rector process --dry-run",
+        "test": "phpunit"
+    },
+    "bin": [
+        "bin/structarmed"
+    ]
+}
