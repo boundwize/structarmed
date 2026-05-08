@@ -170,7 +170,7 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * @return string[]
      */
-    private function collectDependencies(ClassLike $node): array
+    private function collectDependencies(ClassLike $classLike): array
     {
         $nodeTraverser = new NodeTraverser();
         $visitor       = new class extends NodeVisitorAbstract {
@@ -188,7 +188,7 @@ final class ClassCollector extends NodeVisitorAbstract
         };
 
         $nodeTraverser->addVisitor($visitor);
-        $nodeTraverser->traverse([$node]);
+        $nodeTraverser->traverse([$classLike]);
 
         return array_unique(array_merge($this->fileUses, $visitor->names));
     }
