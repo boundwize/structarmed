@@ -1,12 +1,14 @@
 # structarmed
 
+<img width="1672" height="941" alt="Image" src="https://github.com/user-attachments/assets/2f2bd8c5-cb62-4f39-803b-dde8c1a3413b" />
+
 [![Latest Version](https://img.shields.io/github/release/boundwize/structarmed.svg?style=flat-square)](https://github.com/boundwize/structarmed/releases)
 [![ci build](https://github.com/boundwize/structarmed/workflows/ci%20build/badge.svg)](https://github.com/boundwize/structarmed/actions)
 [![Code Coverage](https://codecov.io/gh/boundwize/structarmed/branch/main/graph/badge.svg)](https://codecov.io/gh/boundwize/structarmed)
 [![PHPStan](https://img.shields.io/badge/style-level%20max-brightgreen.svg?style=flat-square&label=phpstan)](https://github.com/phpstan/phpstan)
 [![Downloads](https://poser.pugx.org/boundwize/structarmed/downloads)](https://packagist.org/packages/boundwize/structarmed)
 
-Configurable PHP architecture enforcement. Define your layers once, enforce them forever in CI.
+Configurable PHP architecture guards. Define your layers once, guard them forever.
 
 ## Installation
 

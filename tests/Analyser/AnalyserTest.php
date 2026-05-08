@@ -11,6 +11,8 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function symlink;
+
 #[CoversClass(Analyser::class)]
 final class AnalyserTest extends TestCase
 {
@@ -198,6 +200,38 @@ final class AnalyserTest extends TestCase
         $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
     }
 
+    public function testAnalyserSkipsEntireConfiguredScanPath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip(['src/'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($violations->hasViolations());
+    }
+
+    public function testAnalyserCanCompareBasePathWhenCheckingSkips(): void
+    {
+        $basePath = $this->makeTempProject([
+            'Foo.php' => '<?php class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', '.')
+            ->skip(['does-not-match'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+    }
+
     public function testAnalyserSkipsConfiguredGlobPaths(): void
     {
         $basePath = $this->makeTempProject([
@@ -215,6 +249,22 @@ final class AnalyserTest extends TestCase
 
         $this->assertCount(1, $violations->forRule('source.must_be_final'));
         $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+    }
+
+    public function testAnalyserKeepsFilesWhenGlobSkipDoesNotMatch(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip(['tests/*'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertCount(1, $violations->forRule('source.must_be_final'));
     }
 
     public function testAnalyserSkipsConfiguredPathsForSpecificRuleOnly(): void
@@ -235,6 +285,25 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $violations->forRule('source.must_be_final'));
         $this->assertCount(2, $violations->forRule('source.must_be_final_too'));
         $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+    }
+
+    public function testAnalyserCanCheckRuleSkipsForRealPathOutsideBasePath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/.keep' => '',
+        ]);
+        $outsidePath = '/private/tmp/structarmed-outside-' . bin2hex(random_bytes(6)) . '.php';
+        file_put_contents($outsidePath, '<?php class Linked {}');
+        symlink($outsidePath, $basePath . '/src/Linked.php');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip(['source.must_be_final' => ['does-not-match']])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($violations->hasViolations());
     }
 
     /** @param array<string, string> $files */

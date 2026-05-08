@@ -144,6 +144,13 @@ JSON);
         $this->assertSame(['app', 'tests', 'specs'], $rule->sourcePathsFor($basePath));
     }
 
+    public function testNormalisesExplicitSourcePaths(): void
+    {
+        $rule = new Psr4SourcePathsRule([' src/ ', 'tests\\']);
+
+        $this->assertSame(['src', 'tests'], $rule->sourcePathsFor($this->makeTempDir()));
+    }
+
     private function makeTempProject(string $composerJson): string
     {
         $basePath = $this->makeTempDir();
