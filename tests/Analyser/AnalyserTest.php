@@ -154,6 +154,33 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testDddPresetResolvesConventionalLayersInsidePsr4SourceLayer(): void
+    {
+        $repositoryPath = 'src/Infrastructure/Persistence/Album/SQLAlbumRepository.php';
+        $basePath       = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"Album\\\\":"src/"}}}',
+            $repositoryPath => <<<'PHP'
+                <?php
+
+                namespace Album\Infrastructure\Persistence\Album;
+
+                final class SQLAlbumRepository
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPresets(Preset::PSR4(), Preset::DDD());
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(
+            0,
+            $ruleViolationCollection->forRule('ddd.repository.implementation_in_infrastructure')
+        );
+    }
+
     public function testAnalyserCanLimitScanToSpecificPaths(): void
     {
         $basePath = $this->makeTempProject([

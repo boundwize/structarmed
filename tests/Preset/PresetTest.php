@@ -56,6 +56,15 @@ final class PresetTest extends TestCase
 
         Preset::DDD()->apply($architecture);
 
+        $this->assertSame(
+            [
+                'Domain'         => 'src/Domain/',
+                'Application'    => 'src/Application/',
+                'Infrastructure' => 'src/Infrastructure/',
+            ],
+            $architecture->getLayers()
+        );
+
         $rules = $architecture->getRules();
         $this->assertArrayHasKey(DddPreset::DOMAIN_NOT_DEPEND_APPLICATION, $rules);
         $this->assertArrayHasKey(DddPreset::ENTITY_MUST_BE_FINAL, $rules);
@@ -81,6 +90,23 @@ final class PresetTest extends TestCase
         $this->assertArrayNotHasKey(DddPreset::EVENT_MUST_BE_FINAL, $rules);
         $this->assertArrayHasKey(DddPreset::ENTITY_MUST_HAVE_RETURN_TYPES, $rules);
         $this->assertArrayHasKey(DddPreset::EVENT_NO_DATETIME, $rules);
+    }
+
+    public function testDddPresetDoesNotReplaceConfiguredLayers(): void
+    {
+        $architecture = Architecture::define()
+            ->layer('Domain', 'packages/Domain/');
+
+        Preset::DDD()->apply($architecture);
+
+        $this->assertSame(
+            [
+                'Domain'         => 'packages/Domain/',
+                'Application'    => 'src/Application/',
+                'Infrastructure' => 'src/Infrastructure/',
+            ],
+            $architecture->getLayers()
+        );
     }
 
     public function testMvcPresetRegistersAllRules(): void
