@@ -17,6 +17,7 @@ use function file_put_contents;
 use function mkdir;
 use function random_bytes;
 use function symlink;
+use function sys_get_temp_dir;
 
 #[CoversClass(Analyser::class)]
 final class AnalyserTest extends TestCase
@@ -297,7 +298,7 @@ final class AnalyserTest extends TestCase
         $basePath    = $this->makeTempProject([
             'src/.keep' => '',
         ]);
-        $outsidePath = '/private/tmp/structarmed-outside-' . bin2hex(random_bytes(6)) . '.php';
+        $outsidePath = sys_get_temp_dir() . '/structarmed-outside-' . bin2hex(random_bytes(6)) . '.php';
         file_put_contents($outsidePath, '<?php class Linked {}');
         symlink($outsidePath, $basePath . '/src/Linked.php');
 
@@ -314,7 +315,7 @@ final class AnalyserTest extends TestCase
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {
-        $basePath = '/private/tmp/structarmed-analyser-' . bin2hex(random_bytes(6));
+        $basePath = sys_get_temp_dir() . '/structarmed-analyser-' . bin2hex(random_bytes(6));
 
         foreach ($files as $file => $contents) {
             $path = $basePath . '/' . $file;

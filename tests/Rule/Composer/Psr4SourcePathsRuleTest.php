@@ -14,6 +14,7 @@ use function bin2hex;
 use function file_put_contents;
 use function mkdir;
 use function random_bytes;
+use function sys_get_temp_dir;
 
 #[CoversClass(Psr4SourcePathsRule::class)]
 final class Psr4SourcePathsRuleTest extends TestCase
@@ -174,7 +175,7 @@ JSON);
 
     private function makeTempDir(): string
     {
-        $basePath = '/private/tmp/structarmed-psr4-rule-' . bin2hex(random_bytes(6));
+        $basePath = sys_get_temp_dir() . '/structarmed-psr4-rule-' . bin2hex(random_bytes(6));
         mkdir($basePath);
 
         return $basePath;

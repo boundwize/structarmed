@@ -21,6 +21,7 @@ use function file_put_contents;
 use function getcwd;
 use function mkdir;
 use function random_bytes;
+use function sys_get_temp_dir;
 use function tempnam;
 
 #[CoversClass(StructArmedExtension::class)]
@@ -86,7 +87,7 @@ final class StructArmedExtensionTest extends TestCase
 
     private function writeConfig(string $body): string
     {
-        $path = tempnam('/private/tmp', 'structarmed-extension-');
+        $path = tempnam(sys_get_temp_dir(), 'structarmed-extension-');
         $this->assertIsString($path);
         file_put_contents($path, "<?php\n\n" . $body . "\n");
 
@@ -95,7 +96,7 @@ final class StructArmedExtensionTest extends TestCase
 
     private function makeTempProjectConfig(string $body): string
     {
-        $basePath = '/private/tmp/structarmed-extension-' . bin2hex(random_bytes(6));
+        $basePath = sys_get_temp_dir() . '/structarmed-extension-' . bin2hex(random_bytes(6));
         mkdir($basePath);
         file_put_contents($basePath . '/structarmed.php', "<?php\n\n" . $body . "\n");
 

@@ -14,6 +14,7 @@ use function bin2hex;
 use function file_put_contents;
 use function mkdir;
 use function random_bytes;
+use function sys_get_temp_dir;
 
 #[CoversClass(Psr4NamespaceRule::class)]
 final class Psr4NamespaceRuleTest extends TestCase
@@ -57,7 +58,7 @@ final class Psr4NamespaceRuleTest extends TestCase
 
     public function testPassesWhenComposerJsonCannotBeFound(): void
     {
-        $basePath = '/private/tmp/structarmed-psr4-namespace-missing-' . bin2hex(random_bytes(6));
+        $basePath = sys_get_temp_dir() . '/structarmed-psr4-namespace-missing-' . bin2hex(random_bytes(6));
         mkdir($basePath . '/src', 0777, true);
 
         $psr4NamespaceRule = new Psr4NamespaceRule('Source');
@@ -153,7 +154,7 @@ final class Psr4NamespaceRuleTest extends TestCase
 
     private function makeTempProject(): string
     {
-        $basePath = '/private/tmp/structarmed-psr4-namespace-rule-' . bin2hex(random_bytes(6));
+        $basePath = sys_get_temp_dir() . '/structarmed-psr4-namespace-rule-' . bin2hex(random_bytes(6));
 
         mkdir($basePath . '/tests', 0777, true);
         file_put_contents(
