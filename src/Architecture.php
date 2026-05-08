@@ -43,6 +43,12 @@ final class Architecture
     /** @var array<string, ProjectRuleInterface> key → rule */
     private array $projectRules = [];
 
+    /** @var list<string> */
+    private array $skipPaths = [];
+
+    /** @var array<string, list<string>> */
+    private array $ruleSkipPaths = [];
+
     private function __construct() {}
 
     public static function define(): self
@@ -60,6 +66,41 @@ final class Architecture
     public function layer(string $name, string|array $path): self
     {
         $this->layers[$name] = $path;
+
+        return $this;
+    }
+
+    public function skipPath(string $path): self
+    {
+        return $this->skip([$path]);
+    }
+
+    /**
+     * @param string|list<string> $paths
+     */
+    public function skipPaths(string|array $paths): self
+    {
+        return $this->skip((array) $paths);
+    }
+
+    /**
+     * @param array<int|string, string|list<string>> $paths
+     */
+    public function skip(array $paths): self
+    {
+        foreach ($paths as $ruleKey => $pathConfig) {
+            if (is_int($ruleKey)) {
+                foreach ((array) $pathConfig as $path) {
+                    $this->skipPaths[] = $path;
+                }
+
+                continue;
+            }
+
+            foreach ((array) $pathConfig as $path) {
+                $this->ruleSkipPaths[$ruleKey][] = $path;
+            }
+        }
 
         return $this;
     }
@@ -168,5 +209,17 @@ final class Architecture
     public function getProjectRules(): array
     {
         return $this->projectRules;
+    }
+
+    /** @return list<string> */
+    public function getSkipPaths(): array
+    {
+        return $this->skipPaths;
+    }
+
+    /** @return array<string, list<string>> */
+    public function getRuleSkipPaths(): array
+    {
+        return $this->ruleSkipPaths;
     }
 }

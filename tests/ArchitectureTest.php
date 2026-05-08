@@ -41,6 +41,38 @@ final class ArchitectureTest extends TestCase
         $this->assertSame(['Source' => ['src/', 'tests/']], $arch->getLayers());
     }
 
+    public function testSkipPathsAreRegistered(): void
+    {
+        $arch = Architecture::define()
+            ->skip([
+                'tests/Fixtures/',
+                'var/cache/*',
+                'my.custom.rule' => ['storage/framework/'],
+            ]);
+
+        $this->assertSame(
+            ['tests/Fixtures/', 'var/cache/*'],
+            $arch->getSkipPaths()
+        );
+        $this->assertSame(
+            ['my.custom.rule' => ['storage/framework/']],
+            $arch->getRuleSkipPaths()
+        );
+    }
+
+    public function testSkipPathAliasesUseUnifiedSkipConfiguration(): void
+    {
+        $arch = Architecture::define()
+            ->skipPath('tests/Fixtures/')
+            ->skipPaths(['var/cache/', 'storage/framework/']);
+
+        $this->assertSame(
+            ['tests/Fixtures/', 'var/cache/', 'storage/framework/'],
+            $arch->getSkipPaths()
+        );
+        $this->assertSame([], $arch->getRuleSkipPaths());
+    }
+
     public function testRuleIsAdded(): void
     {
         $rule = new MustBeFinalRule(layer: 'Domain');

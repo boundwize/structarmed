@@ -78,13 +78,33 @@ if (! in_array($command, ['analyse', 'analyze'], true)) {
 
 $reportType = $options['report'] ?? 'console';
 $scanPaths = [];
+$skipNextOptionValue = false;
 
 foreach (array_slice($argv, 2) as $argument) {
+    if ($skipNextOptionValue) {
+        $skipNextOptionValue = false;
+        continue;
+    }
+
+    if (in_array($argument, ['--config', '--report'], true)) {
+        $skipNextOptionValue = true;
+        continue;
+    }
+
     if (str_starts_with($argument, '--')) {
         continue;
     }
 
     $scanPaths[] = $argument;
+}
+
+foreach ($scanPaths as $scanPath) {
+    $fullScanPath = rtrim($basePath, '/') . '/' . ltrim($scanPath, '/');
+
+    if (! is_dir($fullScanPath)) {
+        echo sprintf("Error: directory [%s] not found.\n", $scanPath);
+        exit(1);
+    }
 }
 
 // Load config

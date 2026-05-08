@@ -6,4 +6,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 
 return Architecture::define()
+    ->skip([
+        'tests/Fixtures/',
+    ])
     ->withPreset(Preset::PSR4());

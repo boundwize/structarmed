@@ -161,6 +161,82 @@ final class AnalyserTest extends TestCase
         $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
     }
 
+    public function testDefaultPsr4PresetDetectsClassesThatDoNotMatchScannedComposerPath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload-dev":{"psr-4":{"App\\\\Tests\\\\":"tests/"}}}',
+            'tests/Foo.php' => '<?php class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR4());
+
+        $violations = (new Analyser($basePath))->analyse($architecture, ['tests/']);
+
+        $this->assertCount(1, $violations->forRule('psr4.classes.must_match_composer'));
+        $this->assertStringContainsString(
+            'App\\Tests\\Foo',
+            $violations->forRule('psr4.classes.must_match_composer')[0]->message
+        );
+    }
+
+    public function testAnalyserSkipsConfiguredPathsInsideExplicitScanPath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'              => '<?php namespace App; class Foo {}',
+            'src/Fixtures/Ignored.php' => '<?php namespace App\Fixtures; class Ignored {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip(['src/Fixtures/'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+        $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+    }
+
+    public function testAnalyserSkipsConfiguredGlobPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'                  => '<?php namespace App; class Foo {}',
+            'src/Generated/Ignored.php'    => '<?php namespace App\Generated; class Ignored {}',
+            'src/Generated/Nested/Nope.php' => '<?php namespace App\Generated\Nested; class Nope {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip(['src/Generated/*'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+        $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+    }
+
+    public function testAnalyserSkipsConfiguredPathsForSpecificRuleOnly(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'       => '<?php namespace App; class Foo {}',
+            'src/Legacy/Old.php' => '<?php namespace App\Legacy; class Old {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip(['source.must_be_final' => ['src/Legacy/']])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'))
+            ->rule('source.must_be_final_too', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertCount(1, $violations->forRule('source.must_be_final'));
+        $this->assertCount(2, $violations->forRule('source.must_be_final_too'));
+        $this->assertStringEndsWith('/src/Foo.php', $violations->forRule('source.must_be_final')[0]->file);
+    }
+
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {

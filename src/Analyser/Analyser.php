@@ -13,6 +13,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use PhpParser\Error;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -34,6 +35,8 @@ final class Analyser
     {
         $violations = new RuleViolationCollection();
         $layers     = $this->resolveLayers($architecture);
+        $skipPaths  = $architecture->getSkipPaths();
+        $ruleSkipPaths = $architecture->getRuleSkipPaths();
 
         foreach ($architecture->getProjectRules() as $key => $rule) {
             $violation = $rule->evaluateProject($this->basePath, $architecture);
@@ -66,7 +69,15 @@ final class Analyser
                 continue;
             }
 
+            if ($this->isSkipped($fullPath, $skipPaths)) {
+                continue;
+            }
+
             foreach ($this->phpFiles($fullPath) as $file) {
+                if ($this->isSkipped($file, $skipPaths)) {
+                    continue;
+                }
+
                 try {
                     $code = (string) file_get_contents($file);
                     $ast  = $parser->parse($code);
@@ -78,6 +89,7 @@ final class Analyser
                     $collector->setCurrentFile($file);
 
                     $traverser = new NodeTraverser();
+                    $traverser->addVisitor(new NameResolver());
                     $traverser->addVisitor($collector);
                     $traverser->traverse($ast);
                 } catch (Error) {
@@ -90,6 +102,10 @@ final class Analyser
 
         foreach ($collector->getNodes() as $node) {
             foreach ($rules as $key => $rule) {
+                if ($this->isSkipped($node->file, $ruleSkipPaths[$key] ?? [])) {
+                    continue;
+                }
+
                 if (! $rule->appliesTo($node)) {
                     continue;
                 }
@@ -154,6 +170,73 @@ final class Analyser
         }
 
         return $paths;
+    }
+
+    /**
+     * @param list<string> $skipPaths
+     */
+    private function isSkipped(string $path, array $skipPaths): bool
+    {
+        $path = $this->normalisePath($path);
+        $relativePath = $this->relativePath($path);
+
+        foreach ($skipPaths as $skipPath) {
+            if (
+                $this->matchesSkipPath($relativePath, $skipPath)
+                || $this->matchesSkipPath($path, $skipPath)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesSkipPath(string $path, string $skipPath): bool
+    {
+        $skipPath = $this->normaliseSkipPath($skipPath);
+
+        if (fnmatch($skipPath, $path)) {
+            return true;
+        }
+
+        if (strpbrk($skipPath, '*?[') !== false) {
+            return false;
+        }
+
+        $fullSkipPath = rtrim($this->basePath, '/') . '/' . ltrim($skipPath, '/');
+        $fullSkipPath = $this->normalisePath($fullSkipPath);
+        $normalisedPath = $this->normalisePath($path);
+
+        return $normalisedPath === $fullSkipPath
+            || str_starts_with($normalisedPath, $fullSkipPath . '/')
+            || $path === $skipPath
+            || str_starts_with($path, rtrim($skipPath, '/') . '/');
+    }
+
+    private function normaliseSkipPath(string $path): string
+    {
+        return rtrim(str_replace('\\', '/', $path), '/');
+    }
+
+    private function relativePath(string $path): string
+    {
+        $basePath = $this->normalisePath($this->basePath);
+
+        if ($path === $basePath) {
+            return '';
+        }
+
+        if (str_starts_with($path, $basePath . '/')) {
+            return substr($path, strlen($basePath) + 1);
+        }
+
+        return $path;
+    }
+
+    private function normalisePath(string $path): string
+    {
+        return rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
     }
 
     /**

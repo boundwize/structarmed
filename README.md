@@ -50,6 +50,11 @@ return Architecture::define()
     ->layer('Domain', 'src/Domain/')
     ->layer('Application', 'src/Application/')
     ->layer('Infrastructure', 'src/Infrastructure/')
+    ->skip([
+        'tests/Fixtures/',
+        'var/cache/*',
+        DddPreset::ENTITY_MUST_BE_FINAL => ['src/Legacy/'],
+    ])
     ->rule(
         'domain.must_not_depend_on_infrastructure',
         new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure', toPath: 'Infrastructure')
