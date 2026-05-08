@@ -33,7 +33,7 @@ final class PresetTest extends TestCase
         );
         $this->assertArrayHasKey(
             Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
-            $architecture->getProjectRules()
+            $architecture->getRules()
         );
     }
 
@@ -46,7 +46,7 @@ final class PresetTest extends TestCase
         $this->assertSame(['Source' => []], $architecture->getLayers());
         $this->assertArrayHasKey(
             Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
-            $architecture->getProjectRules()
+            $architecture->getRules()
         );
     }
 

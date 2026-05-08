@@ -40,11 +40,8 @@ final class Architecture
     /** @var array<string, string|list<string>> name → path prefixes */
     private array $layers = [];
 
-    /** @var array<string, RuleInterface> key → rule */
+    /** @var array<string, RuleInterface|ProjectRuleInterface> key → rule */
     private array $rules = [];
-
-    /** @var array<string, ProjectRuleInterface> key → rule */
-    private array $projectRules = [];
 
     /** @var list<string> */
     private array $skipPaths = [];
@@ -137,16 +134,9 @@ final class Architecture
      * Add a new custom rule.
      * If a rule with this key already exists it will be replaced.
      */
-    public function rule(string $key, RuleInterface $rule): self
+    public function rule(string $key, RuleInterface|ProjectRuleInterface $rule): self
     {
         $this->rules[$key] = $rule;
-
-        return $this;
-    }
-
-    public function projectRule(string $key, ProjectRuleInterface $projectRule): self
-    {
-        $this->projectRules[$key] = $projectRule;
 
         return $this;
     }
@@ -158,7 +148,7 @@ final class Architecture
      *
      * @throws RuleNotFoundException
      */
-    public function replaceRule(string $key, RuleInterface $rule): self
+    public function replaceRule(string $key, RuleInterface|ProjectRuleInterface $rule): self
     {
         if (! isset($this->rules[$key])) {
             throw new RuleNotFoundException(sprintf(
@@ -203,16 +193,10 @@ final class Architecture
         return $this->layers;
     }
 
-    /** @return array<string, RuleInterface> */
+    /** @return array<string, RuleInterface|ProjectRuleInterface> */
     public function getRules(): array
     {
         return $this->rules;
-    }
-
-    /** @return array<string, ProjectRuleInterface> */
-    public function getProjectRules(): array
-    {
-        return $this->projectRules;
     }
 
     /** @return list<string> */

@@ -86,9 +86,9 @@ final class ArchitectureTest extends TestCase
     {
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/']);
         $architecture        = Architecture::define()
-            ->projectRule('my.project.rule', $psr4SourcePathsRule);
+            ->rule('my.project.rule', $psr4SourcePathsRule);
 
-        $this->assertSame(['my.project.rule' => $psr4SourcePathsRule], $architecture->getProjectRules());
+        $this->assertSame(['my.project.rule' => $psr4SourcePathsRule], $architecture->getRules());
     }
 
     public function testWithPresetAddsRules(): void

@@ -32,7 +32,7 @@ final readonly class Psr4Preset implements PresetInterface
             self::CLASSES_MUST_MATCH_COMPOSER,
             new Psr4NamespaceRule(self::SOURCE_LAYER)
         );
-        $architecture->projectRule(
+        $architecture->rule(
             self::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
             new Psr4SourcePathsRule($this->sourcePaths)
         );

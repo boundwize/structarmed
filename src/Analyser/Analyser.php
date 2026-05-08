@@ -8,6 +8,8 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
+use Boundwize\StructArmed\Rule\ProjectRuleInterface;
+use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
@@ -51,8 +53,12 @@ final readonly class Analyser
         $skipPaths               = $architecture->getSkipPaths();
         $ruleSkipPaths           = $architecture->getRuleSkipPaths();
 
-        foreach ($architecture->getProjectRules() as $key => $projectRule) {
-            $violation = $projectRule->evaluateProject($this->basePath, $architecture);
+        foreach ($architecture->getRules() as $key => $rule) {
+            if (! $rule instanceof ProjectRuleInterface) {
+                continue;
+            }
+
+            $violation = $rule->evaluateProject($this->basePath, $architecture);
 
             if ($violation === null) {
                 continue;
@@ -114,16 +120,20 @@ final readonly class Analyser
         $rules = $architecture->getRules();
 
         foreach ($classCollector->getNodes() as $classNode) {
-            foreach ($rules as $key => $projectRule) {
+            foreach ($rules as $key => $rule) {
+                if (! $rule instanceof RuleInterface) {
+                    continue;
+                }
+
                 if ($this->isSkipped($classNode->file, $ruleSkipPaths[$key] ?? [])) {
                     continue;
                 }
 
-                if (! $projectRule->appliesTo($classNode)) {
+                if (! $rule->appliesTo($classNode)) {
                     continue;
                 }
 
-                $violation = $projectRule->evaluate($classNode);
+                $violation = $rule->evaluate($classNode);
 
                 if ($violation === null) {
                     continue;
@@ -151,12 +161,12 @@ final readonly class Analyser
     {
         $layers = $architecture->getLayers();
 
-        foreach ($architecture->getProjectRules() as $projectRule) {
+        foreach ($architecture->getRules() as $rule) {
             if (
-                $projectRule instanceof Psr4SourcePathsRule
+                $rule instanceof Psr4SourcePathsRule
                 && ($layers[Psr4Preset::SOURCE_LAYER] ?? null) === []
             ) {
-                $layers[Psr4Preset::SOURCE_LAYER] = $projectRule->sourcePathsFor($this->basePath);
+                $layers[Psr4Preset::SOURCE_LAYER] = $rule->sourcePathsFor($this->basePath);
             }
         }
 
