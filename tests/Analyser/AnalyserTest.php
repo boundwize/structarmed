@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -171,6 +172,60 @@ final class AnalyserTest extends TestCase
             '/src/Foo.php',
             $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
         );
+    }
+
+    public function testAnalyserDoesNotScanDuplicateLayerPathsTwice(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', ['src/', 'src/'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testAnalyserReportsAllViolationsFromMultipleViolationRules(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                class Foo
+                {
+                    public function first(): void
+                    {
+                        $a = 1;
+                        $b = 2;
+                    }
+
+                    public function second(): void
+                    {
+                        $a = 1;
+                        $b = 2;
+                        $c = 3;
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.max_method_length', new MaxMethodLengthRule('Source', 2));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule('source.max_method_length');
+
+        $this->assertCount(2, $violations);
+        $this->assertStringContainsString('first', $violations[0]->message);
+        $this->assertStringContainsString('second', $violations[1]->message);
     }
 
     public function testDefaultPsr4PresetDetectsClassesThatDoNotMatchScannedComposerPath(): void

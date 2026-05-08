@@ -187,6 +187,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 paramCount:           count($classMethod->params),
                 cyclomaticComplexity: $this->calculateComplexity($classMethod),
                 lineCount:            ($classMethod->getEndLine() - $classMethod->getStartLine()) + 1,
+                line:                 $classMethod->getStartLine(),
             );
         }
 

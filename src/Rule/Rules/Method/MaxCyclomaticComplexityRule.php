@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Method;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MaxCyclomaticComplexityRule implements RuleInterface
+final readonly class MaxCyclomaticComplexityRule implements RuleInterface, MultipleRuleViolationInterface
 {
     public function __construct(
         private string $layer,
@@ -25,9 +26,19 @@ final readonly class MaxCyclomaticComplexityRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
+        return $this->evaluateAll($classNode)[0] ?? null;
+    }
+
+    /**
+     * @return list<RuleViolation>
+     */
+    public function evaluateAll(ClassNode $classNode): array
+    {
+        $violations = [];
+
         foreach ($classNode->methods as $method) {
             if ($method->cyclomaticComplexity > $this->maxComplexity) {
-                return new RuleViolation(
+                $violations[] = new RuleViolation(
                     ruleKey:   '',
                     message:   sprintf(
                         'Method [%s::%s()] has cyclomatic complexity of %d, maximum allowed is %d',
@@ -37,13 +48,13 @@ final readonly class MaxCyclomaticComplexityRule implements RuleInterface
                         $this->maxComplexity
                     ),
                     file:      $classNode->file,
-                    line:      $classNode->line,
+                    line:      $method->line !== 0 ? $method->line : $classNode->line,
                     className: $classNode->className,
                     layer:     $classNode->layer,
                 );
             }
         }
 
-        return null;
+        return $violations;
     }
 }
