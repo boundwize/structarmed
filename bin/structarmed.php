@@ -20,14 +20,6 @@ foreach ($autoloaderPaths as $autoloader) {
     }
 }
 
-// Parse CLI arguments
-$options = getopt('', [
-    'config:',
-    'report:',
-    'path:',
-    'baseline:',
-]);
-
 $basePath   = getcwd();
 $command    = $argv[1] ?? null;
 
@@ -76,26 +68,49 @@ if (! in_array($command, ['analyse', 'analyze'], true)) {
     exit(1);
 }
 
-$reportType = $options['report'] ?? 'console';
+$options = [];
 $scanPaths = [];
-$skipNextOptionValue = false;
+$arguments = array_slice($argv, 2);
 
-foreach (array_slice($argv, 2) as $argument) {
-    if ($skipNextOptionValue) {
-        $skipNextOptionValue = false;
+for ($i = 0; $i < count($arguments); $i++) {
+    $argument = $arguments[$i];
+
+    if (str_starts_with($argument, '--report=')) {
+        $options['report'] = substr($argument, strlen('--report='));
         continue;
     }
 
-    if (in_array($argument, ['--config', '--report'], true)) {
-        $skipNextOptionValue = true;
+    if ($argument === '--report') {
+        $options['report'] = $arguments[++$i] ?? '';
+        continue;
+    }
+
+    if (str_starts_with($argument, '--config=')) {
+        $options['config'] = substr($argument, strlen('--config='));
+        continue;
+    }
+
+    if ($argument === '--config') {
+        $options['config'] = $arguments[++$i] ?? '';
         continue;
     }
 
     if (str_starts_with($argument, '--')) {
+        echo sprintf("Unknown option: %s\n\n", $argument);
+        $printUsage();
+        exit(1);
         continue;
     }
 
     $scanPaths[] = $argument;
+}
+
+$reportType = $options['report'] ?? 'console';
+
+if (! in_array($reportType, ['console', 'json'], true)) {
+    echo sprintf("Invalid report type: %s\n\n", $reportType);
+    $printUsage();
+    exit(1);
 }
 
 foreach ($scanPaths as $scanPath) {
