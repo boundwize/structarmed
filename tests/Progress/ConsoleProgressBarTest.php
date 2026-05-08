@@ -99,6 +99,29 @@ final class ConsoleProgressBarTest extends TestCase
         );
     }
 
+    public function testProgressBarFallsBackToStreamDetectionWithoutColorEnvironment(): void
+    {
+        $this->withEnvironment(
+            noColor: null,
+            forceColor: null,
+            callback: function (): void {
+                $stream = fopen('php://temp', 'w+');
+                $this->assertIsResource($stream);
+
+                $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+                $consoleProgressBar->start(1);
+                $consoleProgressBar->advance('/tmp/Foo.php');
+                $consoleProgressBar->finish();
+
+                rewind($stream);
+                $output = (string) stream_get_contents($stream);
+
+                $this->assertStringContainsString('Analyzing [==========] 100% 1/1', $output);
+                $this->assertStringNotContainsString("\033[", $output);
+            }
+        );
+    }
+
     public function testProgressBarHandlesZeroTotalAndLongFileNames(): void
     {
         $stream = fopen('php://temp', 'w+');
