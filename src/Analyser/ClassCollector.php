@@ -29,8 +29,8 @@ use PhpParser\Node\Stmt\For_;
 use PhpParser\Node\Stmt\Foreach_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Interface_;
-use PhpParser\Node\Stmt\UseUse;
 use PhpParser\Node\Stmt\While_;
+use PhpParser\Node\UseItem;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
@@ -81,7 +81,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function enterNode(Node $node): null
     {
-        if ($node instanceof UseUse) {
+        if ($node instanceof UseItem) {
             $this->fileUses[] = implode('\\', $node->name->getParts());
             return null;
         }
