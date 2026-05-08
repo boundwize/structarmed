@@ -354,7 +354,6 @@ final class ClassCollector extends NodeVisitorAbstract
      */
     private function internalFunctions(): array
     {
-        /** @var array{internal?: string[]} $functions */
         $functions = get_defined_functions();
         $internal  = [];
 
