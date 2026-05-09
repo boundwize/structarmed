@@ -47,6 +47,8 @@ If everything passes, you get a clean summary:
 ### Default
 
 ```php
+<?php
+
 // structarmed.php
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
@@ -66,6 +68,11 @@ return Architecture::define()
 StructArmed stores analysis cache in the system temp directory by default. You can configure a project cache directory:
 
 ```php
+<?php
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
 return Architecture::define()
     ->cacheDirectory('var/cache/structarmed')
     ->withPreset(Preset::PSR4());
@@ -76,7 +83,10 @@ Relative cache directories are resolved from the project root. `--config` also c
 ### Custom layers and rules
 
 ```php
+<?php
+
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 
@@ -104,7 +114,13 @@ return Architecture::define()
 Use rule key constants — never raw strings:
 
 ```php
+<?php
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\NamingConventionRule;
 
 return Architecture::define()
     ->layer('Domain',         'src/Domain/')
