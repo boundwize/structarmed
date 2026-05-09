@@ -208,12 +208,3 @@ DddPreset::ENTITY_MUST_BE_FINAL
 // ❌ wrong — typo silently does nothing
 'ddd.entity.must_be_fnal'
 ```
-
-## Requirements
-
-- PHP 8.2 or higher
-- `nikic/php-parser` ^5.0
-
-## License
-
-[MIT](LICENSE)
