@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
@@ -258,6 +259,47 @@ final class AnalyserTest extends TestCase
         $this->assertSame(2, $progress->total);
         $this->assertCount(2, $progress->files);
         $this->assertTrue($progress->finished);
+    }
+
+    public function testAnalyserReportsProgressOnlyForFilesMissingFromClassNodeCache(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; final class Foo {}',
+            'src/Bar.php' => '<?php namespace App; final class Bar {}',
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+        $progress            = new class implements ProgressHandlerInterface {
+            public int $total = 0;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        (new Analyser($basePath, $analysisResultCache, 'config'))->analyse($architecture);
+        file_put_contents($basePath . '/src/Baz.php', '<?php namespace App; final class Baz {}');
+
+        (new Analyser($basePath, $analysisResultCache, 'config'))->analyse($architecture, [], $progress);
+
+        $this->assertSame(1, $progress->total);
+        $this->assertCount(1, $progress->files);
+        $this->assertStringEndsWith('/src/Baz.php', $this->normalisePath($progress->files[0]));
     }
 
     public function testAnalyserReportsAllViolationsFromMultipleViolationRules(): void

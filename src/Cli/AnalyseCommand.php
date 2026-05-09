@@ -115,10 +115,10 @@ final readonly class AnalyseCommand
         }
 
         $start                        = microtime(true);
-        $analyser                     = new Analyser($basePath);
         $analysisResultCache          = new AnalysisResultCache($basePath, $architecture->getCacheDirectory());
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
         $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $analyser                     = new Analyser($basePath, $analysisResultCache, $configHash);
 
         $shouldClearCache = isset($options['clear-cache'])
             || $analysisResultCache->hasDifferentConfig($configHash);

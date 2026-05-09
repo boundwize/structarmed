@@ -4,17 +4,23 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cache;
 
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
+use function array_is_list;
 use function array_keys;
 use function array_map;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function filemtime;
+use function filesize;
 use function glob;
 use function hash;
 use function is_array;
+use function is_bool;
 use function is_dir;
 use function is_int;
 use function is_string;
@@ -138,12 +144,69 @@ final readonly class AnalysisResultCache
                 continue;
             }
 
-            if (($metadata['configHash'] ?? null) !== $configHash) {
+            if (! isset($metadata['configHash'])) {
+                continue;
+            }
+
+            if ($metadata['configHash'] !== $configHash) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @return list<ClassNode>|null
+     */
+    public function loadClassNodes(string $file, string $namespace): ?array
+    {
+        $payload = $this->read($this->classNodesKey($file, $namespace));
+
+        if ($payload === null) {
+            return null;
+        }
+
+        if (($payload['metadata'] ?? null) !== $this->fileMetadata($file, $namespace)) {
+            return null;
+        }
+
+        if (! is_array($payload['nodes'] ?? null)) {
+            return null;
+        }
+
+        $nodes = [];
+
+        foreach ($payload['nodes'] as $node) {
+            if (! is_array($node)) {
+                return null;
+            }
+
+            $classNode = $this->classNodeFromArray($node);
+
+            if (! $classNode instanceof ClassNode) {
+                return null;
+            }
+
+            $nodes[] = $classNode;
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * @param list<ClassNode> $classNodes
+     */
+    public function storeClassNodes(string $file, string $namespace, array $classNodes): void
+    {
+        if (! is_dir($this->cacheDirectory)) {
+            mkdir($this->cacheDirectory, 0777, true);
+        }
+
+        file_put_contents($this->path($this->classNodesKey($file, $namespace)), json_encode([
+            'metadata' => $this->fileMetadata($file, $namespace),
+            'nodes'    => array_map($this->classNodeToArray(...), $classNodes),
+        ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -206,6 +269,157 @@ final readonly class AnalysisResultCache
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function classNodeToArray(ClassNode $classNode): array
+    {
+        return [
+            'className'     => $classNode->className,
+            'file'          => $classNode->file,
+            'line'          => $classNode->line,
+            'layer'         => $classNode->layer,
+            'extends'       => $classNode->extends,
+            'isAbstract'    => $classNode->isAbstract,
+            'isFinal'       => $classNode->isFinal,
+            'isInterface'   => $classNode->isInterface,
+            'isReadonly'    => $classNode->isReadonly,
+            'dependencies'  => $classNode->dependencies,
+            'implements'    => $classNode->implements,
+            'methods'       => array_map($this->methodNodeToArray(...), $classNode->methods),
+            'functionCalls' => $classNode->functionCalls,
+            'superglobals'  => $classNode->superglobals,
+        ];
+    }
+
+    /**
+     * @param array<mixed, mixed> $node
+     */
+    private function classNodeFromArray(array $node): ?ClassNode
+    {
+        if (! $this->hasOnlyStringKeys($node)) {
+            return null;
+        }
+
+        $className     = $node['className'] ?? null;
+        $file          = $node['file'] ?? null;
+        $line          = $node['line'] ?? null;
+        $layer         = $node['layer'] ?? null;
+        $extends       = $node['extends'] ?? null;
+        $isAbstract    = $node['isAbstract'] ?? null;
+        $isFinal       = $node['isFinal'] ?? null;
+        $isInterface   = $node['isInterface'] ?? null;
+        $isReadonly    = $node['isReadonly'] ?? null;
+        $dependencies  = $node['dependencies'] ?? null;
+        $implements    = $node['implements'] ?? null;
+        $rawMethods    = $node['methods'] ?? null;
+        $functionCalls = $node['functionCalls'] ?? null;
+        $superglobals  = $node['superglobals'] ?? null;
+
+        if (
+            ! is_string($className)
+            || ! is_string($file)
+            || ! is_int($line)
+            || $layer !== null && ! is_string($layer)
+            || $extends !== null && ! is_string($extends)
+            || ! is_bool($isAbstract)
+            || ! is_bool($isFinal)
+            || ! is_bool($isInterface)
+            || ! is_bool($isReadonly)
+            || ! $this->isStringList($dependencies)
+            || ! $this->isStringList($implements)
+            || ! is_array($rawMethods)
+            || ! $this->isStringList($functionCalls)
+            || ! $this->isStringList($superglobals)
+        ) {
+            return null;
+        }
+
+        $methods = [];
+
+        foreach ($rawMethods as $rawMethod) {
+            if (! is_array($rawMethod)) {
+                return null;
+            }
+
+            $methodNode = $this->methodNodeFromArray($rawMethod);
+
+            if (! $methodNode instanceof MethodNode) {
+                return null;
+            }
+
+            $methods[] = $methodNode;
+        }
+
+        return new ClassNode(
+            className:     $className,
+            file:          $file,
+            line:          $line,
+            layer:         $layer,
+            extends:       $extends,
+            isAbstract:    $isAbstract,
+            isFinal:       $isFinal,
+            isInterface:   $isInterface,
+            isReadonly:    $isReadonly,
+            dependencies:  $dependencies,
+            implements:    $implements,
+            methods:       $methods,
+            functionCalls: $functionCalls,
+            superglobals:  $superglobals,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function methodNodeToArray(MethodNode $methodNode): array
+    {
+        return [
+            'name'                 => $methodNode->name,
+            'visibility'           => $methodNode->visibility,
+            'hasReturnType'        => $methodNode->hasReturnType,
+            'isStatic'             => $methodNode->isStatic,
+            'paramCount'           => $methodNode->paramCount,
+            'cyclomaticComplexity' => $methodNode->cyclomaticComplexity,
+            'lineCount'            => $methodNode->lineCount,
+            'line'                 => $methodNode->line,
+        ];
+    }
+
+    /**
+     * @param array<mixed, mixed> $method
+     */
+    private function methodNodeFromArray(array $method): ?MethodNode
+    {
+        if (! $this->hasOnlyStringKeys($method)) {
+            return null;
+        }
+
+        if (
+            ! is_string($method['name'] ?? null)
+            || ! is_string($method['visibility'] ?? null)
+            || ! is_bool($method['hasReturnType'] ?? null)
+            || ! is_bool($method['isStatic'] ?? null)
+            || ! is_int($method['paramCount'] ?? null)
+            || ! is_int($method['cyclomaticComplexity'] ?? null)
+            || ! is_int($method['lineCount'] ?? null)
+            || ! is_int($method['line'] ?? null)
+        ) {
+            return null;
+        }
+
+        return new MethodNode(
+            name:                 $method['name'],
+            visibility:           $method['visibility'],
+            hasReturnType:        $method['hasReturnType'],
+            isStatic:             $method['isStatic'],
+            paramCount:           $method['paramCount'],
+            cyclomaticComplexity: $method['cyclomaticComplexity'],
+            lineCount:            $method['lineCount'],
+            line:                 $method['line'],
+        );
+    }
+
+    /**
      * @param array<mixed, mixed> $array
      * @phpstan-assert-if-true array<string, mixed> $array
      */
@@ -220,9 +434,45 @@ final readonly class AnalysisResultCache
         return true;
     }
 
+    /**
+     * @phpstan-assert-if-true list<string> $value
+     */
+    private function isStringList(mixed $value): bool
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return false;
+        }
+
+        foreach ($value as $item) {
+            if (! is_string($item)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function path(string $key): string
     {
         return sprintf('%s/%s.json', $this->cacheDirectory, $key);
+    }
+
+    private function classNodesKey(string $file, string $namespace): string
+    {
+        return 'class-nodes-' . hash('xxh128', $namespace . "\0" . $file);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fileMetadata(string $file, string $namespace): array
+    {
+        return [
+            'namespace' => $namespace,
+            'file'      => $file,
+            'mtime'     => filemtime($file) ?: 0,
+            'size'      => filesize($file) ?: 0,
+        ];
     }
 
     private function resolveCacheDirectory(string $basePath, string $cacheDirectory): string

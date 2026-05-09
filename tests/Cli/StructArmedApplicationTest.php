@@ -27,6 +27,7 @@ use function ob_get_clean;
 use function ob_start;
 use function random_bytes;
 use function rmdir;
+use function str_replace;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -345,6 +346,81 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandOnlyParsesNewFilesAfterCacheWarmup(): void
+    {
+        $basePath = $this->createProjectDirectory();
+        mkdir($basePath . '/src/Domain');
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+<?php namespace App; final class Foo { public function run(): void {} }
+PHP);
+        file_put_contents($basePath . '/src/Bar.php', '<?php namespace App; final class Bar {}');
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->layer('Source', 'src/');
+PHP);
+
+        $progress = new class implements ProgressHandlerInterface {
+            public int $total = 0;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            file_put_contents($basePath . '/src/Baz.php', '<?php namespace App; final class Baz {}');
+
+            [$secondExitCode, $secondOutput] = $this->runAnalyseCommand(
+                ['--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertSame(0, $secondExitCode, $secondOutput);
+            $this->assertSame(1, $progress->total);
+            $this->assertCount(1, $progress->files);
+            $this->assertStringEndsWith('/src/Baz.php', $this->normalisePath($progress->files[0]));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    private function normalisePath(string $path): string
+    {
+        return str_replace('\\', '/', $path);
+    }
+
     public function testAnalyseCommandStoresResultInConfiguredCacheDirectory(): void
     {
         $basePath       = $this->createProjectDirectory();
@@ -536,16 +612,24 @@ PHP;
             unlink($basePath . '/structarmed.php');
         }
 
-        if (is_dir($basePath . '/src')) {
-            rmdir($basePath . '/src');
-        }
-
         if (file_exists($basePath . '/structarmed-custom.php')) {
             unlink($basePath . '/structarmed-custom.php');
         }
 
         foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {
             unlink($cacheFile);
+        }
+
+        foreach (glob($basePath . '/src/*.php') ?: [] as $sourceFile) {
+            unlink($sourceFile);
+        }
+
+        if (is_dir($basePath . '/src/Domain')) {
+            rmdir($basePath . '/src/Domain');
+        }
+
+        if (is_dir($basePath . '/src')) {
+            rmdir($basePath . '/src');
         }
 
         if (is_dir($basePath . '/var/cache/structarmed')) {

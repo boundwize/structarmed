@@ -4,22 +4,28 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Cache;
 
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
 use function file_exists;
 use function file_put_contents;
+use function filemtime;
+use function filesize;
 use function glob;
 use function is_dir;
 use function json_encode;
 use function mkdir;
 use function random_bytes;
 use function rmdir;
+use function str_starts_with;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -275,6 +281,24 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testConfigHashSkipsClassNodeCachePayloads(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+
+            $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testStoreCreatesMissingCacheDirectory(): void
     {
         $basePath                = $this->createTempDirectory();
@@ -330,6 +354,274 @@ final class AnalysisResultCacheTest extends TestCase
         $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
     }
 
+    public function testStoresAndLoadsClassNodes(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $classNodes          = [$this->makeClassNode($sourceFile)];
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertEquals($classNodes, $loaded);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testStoreClassNodesCreatesMissingCacheDirectory(): void
+    {
+        $basePath            = $this->createTempDirectory();
+        $sourceFile          = $basePath . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache($basePath);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->clear();
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+
+            $this->assertInstanceOf(
+                ClassNode::class,
+                $analysisResultCache->loadClassNodes($sourceFile, 'config')[0] ?? null
+            );
+        } finally {
+            $analysisResultCache->clear();
+            unlink($sourceFile);
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testClassNodesMissWhenCacheFileDoesNotExist(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClassNodesMissWhenFileMetadataChanges(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            file_put_contents($sourceFile, '<?php class Foo { public function changed(): void {} }');
+
+            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function malformedClassNodePayloadProvider(): iterable
+    {
+        yield 'nodes is not an array' => [['nodes' => 'bad']];
+        yield 'node is not an array' => [['nodes' => ['bad']]];
+        yield 'node has numeric keys' => [['nodes' => [['bad']]]];
+        yield 'node has invalid scalar types' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 10,
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'node has invalid string list' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [1 => 'App\Bar'],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'node has non-string list item' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [10],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'method is not an array' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => ['bad'],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'method has numeric keys' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [['bad']],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'method has invalid types' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [
+                            [
+                                'name'                 => 'run',
+                                'visibility'           => 'public',
+                                'hasReturnType'        => true,
+                                'isStatic'             => false,
+                                'paramCount'           => 0,
+                                'cyclomaticComplexity' => 1,
+                                'lineCount'            => 1,
+                                'line'                 => 'bad',
+                            ],
+                        ],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payloadOverride
+     */
+    #[DataProvider('malformedClassNodePayloadProvider')]
+    public function testClassNodesMissWhenPayloadIsMalformed(array $payloadOverride): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+
+            $this->writeCachePayload($cacheDirectory, [
+                'metadata' => [
+                    'namespace' => 'config',
+                    'file'      => $sourceFile,
+                    'mtime'     => filemtime($sourceFile) ?: 0,
+                    'size'      => filesize($sourceFile) ?: 0,
+                ],
+                ...$payloadOverride,
+            ], $cacheFile);
+
+            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testMetadataIncludesConfigAndAnalysedFiles(): void
     {
         $directory = $this->createTempDirectory();
@@ -377,6 +669,45 @@ final class AnalysisResultCacheTest extends TestCase
         return $path;
     }
 
+    private function makeClassNode(string $file): ClassNode
+    {
+        return new ClassNode(
+            className:     'App\Foo',
+            file:          $file,
+            line:          1,
+            layer:         'Source',
+            extends:       null,
+            isAbstract:    false,
+            isFinal:       true,
+            isInterface:   false,
+            isReadonly:    false,
+            dependencies:  ['App\Bar'],
+            implements:    ['Stringable'],
+            methods:       [
+                new MethodNode(
+                    name:                 'run',
+                    visibility:           'public',
+                    hasReturnType:        true,
+                    isStatic:             false,
+                    paramCount:           0,
+                    cyclomaticComplexity: 1,
+                    lineCount:            1,
+                    line:                 1,
+                ),
+            ],
+            functionCalls: ['sprintf'],
+            superglobals:  ['_SERVER'],
+        );
+    }
+
+    private function firstJsonFile(string $cacheDirectory): string
+    {
+        $files = glob($cacheDirectory . '/*.json') ?: [];
+        $this->assertNotSame([], $files);
+
+        return $files[0];
+    }
+
     private function removeTempDirectory(string $path): void
     {
         foreach (glob($path . '/*.json') ?: [] as $file) {
@@ -397,6 +728,8 @@ final class AnalysisResultCacheTest extends TestCase
      */
     private function writeCachePayload(string $cacheDirectory, array $payload, string $filename = 'key.json'): void
     {
-        file_put_contents($cacheDirectory . '/' . $filename, json_encode($payload, JSON_THROW_ON_ERROR));
+        $path = str_starts_with($filename, '/') ? $filename : $cacheDirectory . '/' . $filename;
+
+        file_put_contents($path, json_encode($payload, JSON_THROW_ON_ERROR));
     }
 }
