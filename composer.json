@@ -8,11 +8,8 @@
         "analysis",
         "ddd",
         "mvc",
-        "cqrs",
-        "hexagonal",
         "layer",
-        "enforcement",
-        "fitness-functions"
+        "enforcement"
     ],
     "homepage": "https://github.com/boundwize/structarmed",
     "license": "MIT",
