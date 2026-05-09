@@ -95,6 +95,24 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertSame('Infrastructure', $layer);
     }
 
+    public function testLastDefinedLayerWinsWhenPathsAreIdentical(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                'Application' => 'src/Controllers/',
+                'Controller'  => 'src/Controllers/',
+            ],
+            basePath: $this->basePath
+        );
+
+        $layer = $namespaceLayerResolver->resolve(
+            'App\\Controllers\\AlbumController',
+            $this->basePath . '/src/Controllers/AlbumController.php'
+        );
+
+        $this->assertSame('Controller', $layer);
+    }
+
     public function testPatternResolverMatchesClassName(): void
     {
         $patternLayerResolver = new PatternLayerResolver([

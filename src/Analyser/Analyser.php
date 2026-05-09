@@ -252,7 +252,7 @@ final readonly class Analyser
             }
         }
 
-        return $files;
+        return array_values(array_unique($files));
     }
 
     /**
