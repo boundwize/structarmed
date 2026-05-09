@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
@@ -18,10 +19,6 @@ use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
-use PhpParser\Error;
-use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitor\NameResolver;
-use PhpParser\ParserFactory;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
@@ -29,7 +26,6 @@ use SplFileInfo;
 use function array_unique;
 use function array_values;
 use function count;
-use function file_get_contents;
 use function fnmatch;
 use function getcwd;
 use function in_array;
@@ -110,7 +106,12 @@ final readonly class Analyser
             );
 
         $files      = $this->filesForAnalysis($architecture, $scanPaths);
-        $classNodes = $this->collectClassNodes($chainLayerResolver, $files, $progressHandler);
+        $classNodes = $this->collectClassNodes(
+            $files,
+            $progressHandler,
+            $layers,
+            $layerPatterns
+        );
 
         $rules = $architecture->getRules();
 
@@ -332,12 +333,15 @@ final readonly class Analyser
 
     /**
      * @param list<string> $files
+     * @param array<string, string|list<string>> $layers
+     * @param array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns
      * @return list<ClassNode>
      */
     private function collectClassNodes(
-        ChainLayerResolver $chainLayerResolver,
         array $files,
-        ?ProgressHandlerInterface $progressHandler
+        ?ProgressHandlerInterface $progressHandler,
+        array $layers,
+        array $layerPatterns
     ): array {
         $classNodes   = [];
         $filesToParse = [];
@@ -363,42 +367,33 @@ final readonly class Analyser
             return $classNodes;
         }
 
-        $parser = (new ParserFactory())->createForNewestSupportedVersion();
+        $parsedClassNodes = (new ParallelClassNodeExtractor(
+            $this->basePath,
+            $layers,
+            $layerPatterns,
+            AnalyserOptions::parallel()->workerCount
+        ))->extract($filesToParse, $progressHandler);
+
+        $classNodesByFile = [];
 
         foreach ($filesToParse as $fileToParse) {
-            $fileClassNodes = [];
+            $classNodesByFile[$fileToParse] = [];
+        }
 
-            try {
-                $classCollector = new ClassCollector($chainLayerResolver);
-                $code           = (string) file_get_contents($fileToParse);
-                $ast            = $parser->parse($code);
+        foreach ($parsedClassNodes as $parsedClassNode) {
+            $classNodes[] = $parsedClassNode;
 
-                if ($ast === null || $ast === []) {
-                    continue;
-                }
-
-                $classCollector->setCurrentFile($fileToParse);
-
-                $traverser = new NodeTraverser();
-                $traverser->addVisitor(new NameResolver());
-                $traverser->addVisitor($classCollector);
-                $traverser->traverse($ast);
-
-                $fileClassNodes = array_values($classCollector->getNodes());
-
-                foreach ($fileClassNodes as $fileClassNode) {
-                    $classNodes[] = $fileClassNode;
-                }
-            } catch (Error) {
-                // Skip files with parse errors
-            } finally {
-                $this->analysisResultCache?->storeClassNodes(
-                    $fileToParse,
-                    $this->classNodeCacheNamespace,
-                    $fileClassNodes
-                );
-                $progressHandler?->advance($fileToParse);
+            if (isset($classNodesByFile[$parsedClassNode->file])) {
+                $classNodesByFile[$parsedClassNode->file][] = $parsedClassNode;
             }
+        }
+
+        foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
+            $this->analysisResultCache?->storeClassNodes(
+                $fileToParse,
+                $this->classNodeCacheNamespace,
+                $fileClassNodes
+            );
         }
 
         $progressHandler?->finish();

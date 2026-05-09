@@ -62,6 +62,22 @@ final class AnalyserTest extends TestCase
         $this->assertTrue($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserCollectsClassNodesWithDefaultParallelRunner(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+            'src/Bar.php' => '<?php namespace App; class Bar {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
     public function testAnalyserReturnsEmptyCollectionForEmptyLayers(): void
     {
         $architecture = Architecture::define()
