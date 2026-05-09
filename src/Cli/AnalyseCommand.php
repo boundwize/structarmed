@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Analyser\Analyser;
+use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
+use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use RuntimeException;
 
 use function count;
@@ -68,6 +71,11 @@ final readonly class AnalyseCommand
                 continue;
             }
 
+            if ($argument === '--clear-cache') {
+                $options['clear-cache'] = true;
+                continue;
+            }
+
             if (str_starts_with($argument, '--')) {
                 echo sprintf("Unknown option: %s\n\n", $argument);
                 echo Usage::render();
@@ -106,15 +114,35 @@ final readonly class AnalyseCommand
             return 1;
         }
 
-        $start           = microtime(true);
-        $analyser        = new Analyser($basePath);
+        $start                        = microtime(true);
+        $analyser                     = new Analyser($basePath);
+        $analysisResultCache          = new AnalysisResultCache($basePath);
+        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+
+        $shouldClearCache = isset($options['clear-cache'])
+            || $analysisResultCache->hasDifferentConfig($configHash);
+
+        if ($shouldClearCache) {
+            $analysisResultCache->clear();
+        }
+
+        $files           = $analyser->filesForAnalysis($architecture, $scanPaths);
+        $metadata        = $analysisCacheMetadataFactory->metadata($basePath, $configFile, $scanPaths, $files);
+        $cacheKey        = $analysisCacheMetadataFactory->key($metadata);
         $progressEnabled = $options['progress'] ?? true;
         $progress        = $reportType === 'console' && $progressEnabled
             ? $this->progressHandler ?? new ConsoleProgressBar()
             : null;
 
-        $ruleViolationCollection = $analyser->analyse($architecture, $scanPaths, $progress);
-        $elapsed                 = microtime(true) - $start;
+        $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
+
+        if (! $ruleViolationCollection instanceof RuleViolationCollection) {
+            $ruleViolationCollection = $analyser->analyse($architecture, $scanPaths, $progress);
+            $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
+        }
+
+        $elapsed = microtime(true) - $start;
 
         $report = match ($reportType) {
             'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),

@@ -58,7 +58,6 @@ final readonly class Analyser
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
         $layers                  = $this->resolveLayers($architecture);
-        $skipPaths               = $architecture->getSkipPaths();
         $ruleSkipPaths           = $architecture->getRuleSkipPaths();
 
         foreach ($architecture->getRules() as $key => $rule) {
@@ -88,7 +87,7 @@ final readonly class Analyser
 
         $classCollector = new ClassCollector($chainLayerResolver);
         $parser         = (new ParserFactory())->createForNewestSupportedVersion();
-        $files          = $this->collectPhpFiles($layers, $scanPaths, $skipPaths);
+        $files          = $this->filesForAnalysis($architecture, $scanPaths);
 
         $progressHandler?->start(count($files));
 
@@ -155,6 +154,19 @@ final readonly class Analyser
         }
 
         return $ruleViolationCollection;
+    }
+
+    /**
+     * @param list<string> $scanPaths
+     * @return list<string>
+     */
+    public function filesForAnalysis(Architecture $architecture, array $scanPaths = []): array
+    {
+        return $this->collectPhpFiles(
+            $this->resolveLayers($architecture),
+            $scanPaths,
+            $architecture->getSkipPaths()
+        );
     }
 
     /**

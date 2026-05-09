@@ -11,7 +11,9 @@ final class Usage
         return <<<'TXT'
 Usage:
   structarmed init [--preset=ddd|mvc|psr4|all]
-  structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php] [--report=console|json] [--no-progress]
+  structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php]
+    [--report=console|json] [--no-progress] [--clear-cache]
+  structarmed --clear-cache
 
 TXT;
     }

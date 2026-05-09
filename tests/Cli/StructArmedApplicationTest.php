@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Cli;
 
 use Boundwize\StructArmed\Cli\AnalyseCommand;
+use Boundwize\StructArmed\Cli\ClearCacheCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
 use Boundwize\StructArmed\Cli\StructArmedApplication;
 use Boundwize\StructArmed\Cli\Usage;
@@ -28,6 +29,7 @@ use function sys_get_temp_dir;
 use function unlink;
 
 #[CoversClass(AnalyseCommand::class)]
+#[CoversClass(ClearCacheCommand::class)]
 #[CoversClass(InitCommand::class)]
 #[CoversClass(StructArmedApplication::class)]
 #[CoversClass(Usage::class)]
@@ -48,6 +50,14 @@ final class StructArmedApplicationTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Unknown command: unknown', $output);
+    }
+
+    public function testApplicationClearsCacheWithoutAnalyseCommand(): void
+    {
+        [$exitCode, $output] = $this->runApplication(['structarmed', '--clear-cache']);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('StructArmed cache cleared.', $output);
     }
 
     /**
@@ -186,6 +196,53 @@ final class StructArmedApplicationTest extends TestCase
             $this->assertStringContainsString('No violations found', $output);
             $this->assertTrue($progress->started);
             $this->assertTrue($progress->finished);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandCanReuseCachedResult(): void
+    {
+        $basePath = $this->createProjectDirectory();
+        $progress = new class implements ProgressHandlerInterface {
+            public bool $started = false;
+
+            public function start(int $total): void
+            {
+                $this->started = true;
+            }
+
+            public function advance(string $file): void
+            {
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            [$secondExitCode, $secondOutput] = $this->runAnalyseCommand(
+                ['--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertSame(0, $secondExitCode, $secondOutput);
+            $this->assertStringContainsString('No violations found', $secondOutput);
+            $this->assertFalse($progress->started);
         } finally {
             $this->removeTempDirectory($basePath);
         }
