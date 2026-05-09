@@ -15,6 +15,7 @@ use function array_values;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function clearstatcache;
 use function filemtime;
 use function filesize;
 use function glob;
@@ -467,6 +468,8 @@ final readonly class AnalysisResultCache
      */
     private function fileMetadata(string $file, string $namespace): array
     {
+        clearstatcache(true, $file);
+
         return [
             'namespace' => $namespace,
             'file'      => $file,
