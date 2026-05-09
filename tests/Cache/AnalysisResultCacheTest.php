@@ -300,6 +300,109 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testComposerLockHashIsNotDifferentWhenHashIsNull(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        try {
+            $analysisResultCache->store('key', ['composerLockHash' => 'old'], new RuleViolationCollection());
+
+            $this->assertFalse($analysisResultCache->hasDifferentComposerLock(null));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testComposerLockHashIsNotDifferentWhenCacheDirectoryIsMissing(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        $this->removeTempDirectory($cacheDirectory);
+
+        $this->assertFalse($analysisResultCache->hasDifferentComposerLock('new'));
+    }
+
+    public function testComposerLockHashIsNotDifferentWhenNoCachedEntryHasTheField(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        try {
+            $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
+
+            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('some-hash'));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testComposerLockHashIsNotDifferentWhenStoredHashMatches(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        try {
+            $analysisResultCache->store('key', ['composerLockHash' => 'same'], new RuleViolationCollection());
+
+            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('same'));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testComposerLockHashIsDifferentWhenStoredHashDiffers(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        try {
+            $analysisResultCache->store('key', ['composerLockHash' => 'old'], new RuleViolationCollection());
+
+            $this->assertTrue($analysisResultCache->hasDifferentComposerLock('new'));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testComposerLockHashSkipsUnreadableCachePayloadsAndDirectories(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        mkdir($cacheDirectory . '/nested');
+        file_put_contents($cacheDirectory . '/key.json', '["bad"]');
+        $this->writeCachePayload($cacheDirectory, [
+            'metadata'   => 'bad',
+            'violations' => [],
+        ], 'other.json');
+
+        try {
+            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('some-hash'));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testComposerLockHashSkipsClassNodeCachePayloads(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+
+            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('some-hash'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testStoreCreatesMissingCacheDirectory(): void
     {
         $basePath                = $this->createTempDirectory();

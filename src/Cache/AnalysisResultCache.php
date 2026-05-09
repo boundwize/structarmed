@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
+use function array_key_exists;
 use function array_keys;
 use function array_map;
 use function array_values;
@@ -150,6 +151,45 @@ final readonly class AnalysisResultCache
             }
 
             if ($metadata['configHash'] !== $configHash) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function hasDifferentComposerLock(?string $composerLockHash): bool
+    {
+        if ($composerLockHash === null) {
+            return false;
+        }
+
+        if (! is_dir($this->cacheDirectory)) {
+            return false;
+        }
+
+        foreach (array_map(strval(...), glob($this->cacheDirectory . '/*') ?: []) as $path) {
+            if (is_dir($path)) {
+                continue;
+            }
+
+            $payload = $this->readPath($path);
+
+            if ($payload === null) {
+                continue;
+            }
+
+            $metadata = $payload['metadata'] ?? null;
+
+            if (! is_array($metadata)) {
+                continue;
+            }
+
+            if (! array_key_exists('composerLockHash', $metadata)) {
+                continue;
+            }
+
+            if ($metadata['composerLockHash'] !== $composerLockHash) {
                 return true;
             }
         }
