@@ -25,7 +25,7 @@ final readonly class MustBeFinalRule implements RuleInterface
             return false;
         }
 
-        if ($classNode->layer !== $this->layer) {
+        if (! $classNode->isInLayer($this->layer)) {
             return false;
         }
 

@@ -95,7 +95,7 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertSame('Infrastructure', $layer);
     }
 
-    public function testLastDefinedLayerWinsWhenPathsAreIdentical(): void
+    public function testResolveAllReturnsAllMatchingLayers(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(
             layers: [
@@ -105,12 +105,28 @@ final class NamespaceLayerResolverTest extends TestCase
             basePath: $this->basePath
         );
 
-        $layer = $namespaceLayerResolver->resolve(
+        $layers = $namespaceLayerResolver->resolveAll(
             'App\\Controllers\\AlbumController',
             $this->basePath . '/src/Controllers/AlbumController.php'
         );
 
-        $this->assertSame('Controller', $layer);
+        $this->assertContains('Application', $layers);
+        $this->assertContains('Controller', $layers);
+    }
+
+    public function testResolveAllReturnsEmptyForUnknownPath(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: ['Domain' => 'src/Domain/'],
+            basePath: $this->basePath
+        );
+
+        $layers = $namespaceLayerResolver->resolveAll(
+            'App\\ThirdParty\\SomeClass',
+            '/vendor/third-party/SomeClass.php'
+        );
+
+        $this->assertSame([], $layers);
     }
 
     public function testPatternResolverMatchesClassName(): void
@@ -148,5 +164,60 @@ final class NamespaceLayerResolverTest extends TestCase
 
         $layer = $chainLayerResolver->resolve('App\\Foo\\OrderService', '/fake.php');
         $this->assertNull($layer);
+    }
+
+    public function testPatternResolverResolveAllReturnsAllMatchingLayers(): void
+    {
+        $patternLayerResolver = new PatternLayerResolver([
+            'Domain' => '/Entity$/',
+            'Shared' => '/Entity$|ValueObject$/',
+        ]);
+
+        $layers = $patternLayerResolver->resolveAll('App\\Foo\\OrderEntity', '/fake.php');
+
+        $this->assertContains('Domain', $layers);
+        $this->assertContains('Shared', $layers);
+    }
+
+    public function testPatternResolverResolveAllReturnsEmptyWhenNoneMatch(): void
+    {
+        $patternLayerResolver = new PatternLayerResolver([
+            'Domain' => '/Entity$/',
+        ]);
+
+        $layers = $patternLayerResolver->resolveAll('App\\Foo\\OrderService', '/fake.php');
+
+        $this->assertSame([], $layers);
+    }
+
+    public function testChainResolverResolveAllMergesResultsFromAllResolvers(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: ['Source' => 'src/'],
+            basePath: $this->basePath
+        );
+        $patternLayerResolver   = new PatternLayerResolver([
+            'Entity' => '/Entity$/',
+        ]);
+        $chainLayerResolver     = new ChainLayerResolver($namespaceLayerResolver, $patternLayerResolver);
+
+        $layers = $chainLayerResolver->resolveAll(
+            'App\\Domain\\OrderEntity',
+            $this->basePath . '/src/Domain/OrderEntity.php'
+        );
+
+        $this->assertContains('Source', $layers);
+        $this->assertContains('Entity', $layers);
+    }
+
+    public function testChainResolverResolveAllReturnsEmptyWhenNoneMatch(): void
+    {
+        $chainLayerResolver = new ChainLayerResolver(
+            new PatternLayerResolver(['Domain' => '/Entity$/'])
+        );
+
+        $layers = $chainLayerResolver->resolveAll('App\\Foo\\OrderService', '/fake.php');
+
+        $this->assertSame([], $layers);
     }
 }

@@ -22,7 +22,7 @@ final readonly class MustHaveReturnTypeRule implements RuleInterface, MultipleRu
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        if ($classNode->layer !== $this->layer) {
+        if (! $classNode->isInLayer($this->layer)) {
             return false;
         }
 

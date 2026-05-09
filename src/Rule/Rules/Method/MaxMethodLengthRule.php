@@ -21,7 +21,7 @@ final readonly class MaxMethodLengthRule implements RuleInterface, MultipleRuleV
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        return $classNode->layer === $this->layer;
+        return $classNode->isInLayer($this->layer);
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation

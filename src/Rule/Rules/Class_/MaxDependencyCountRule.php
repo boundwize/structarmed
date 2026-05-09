@@ -20,7 +20,7 @@ final readonly class MaxDependencyCountRule implements RuleInterface
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        return $classNode->layer === $this->layer && ! $classNode->isInterface;
+        return $classNode->isInLayer($this->layer) && ! $classNode->isInterface;
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation

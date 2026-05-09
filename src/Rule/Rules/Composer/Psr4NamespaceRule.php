@@ -35,7 +35,7 @@ final class Psr4NamespaceRule implements RuleInterface
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        return $classNode->layer === $this->layer;
+        return $classNode->isInLayer($this->layer);
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation

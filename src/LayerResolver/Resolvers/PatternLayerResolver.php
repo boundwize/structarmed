@@ -42,6 +42,23 @@ final readonly class PatternLayerResolver implements LayerResolverInterface
         return null;
     }
 
+    /**
+     * @return int[]|string[]
+     */
+    public function resolveAll(string $className, string $filePath): array
+    {
+        $shortName = $this->shortName($className);
+        $matched   = [];
+
+        foreach ($this->patterns as $layerName => $pattern) {
+            if ((bool) preg_match($pattern, $shortName)) {
+                $matched[] = $layerName;
+            }
+        }
+
+        return $matched;
+    }
+
     private function shortName(string $className): string
     {
         $parts = explode('\\', $className);

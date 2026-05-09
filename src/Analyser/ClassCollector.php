@@ -133,6 +133,7 @@ final class ClassCollector extends NodeVisitorAbstract
     private function collectClassLike(ClassLike $classLike): void
     {
         $className     = $this->resolveClassName($classLike);
+        $layers        = $this->layerResolver->resolveAll($className, $this->currentFile);
         $layer         = $this->layerResolver->resolve($className, $this->currentFile);
         $dependencies  = $this->collectDependencies($classLike);
         $methods       = $this->collectMethods($classLike);
@@ -157,6 +158,7 @@ final class ClassCollector extends NodeVisitorAbstract
             methods:       $methods,
             functionCalls: $functionCalls,
             superglobals:  $superglobals,
+            layers:        $layers,
         );
     }
 

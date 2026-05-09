@@ -24,7 +24,7 @@ final readonly class MayNotDependOnRule implements RuleInterface
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        return $classNode->layer === $this->from;
+        return $classNode->isInLayer($this->from);
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
