@@ -49,6 +49,8 @@ final class Architecture
     /** @var array<string, list<string>> */
     private array $ruleSkipPaths = [];
 
+    private ?string $cacheDirectory = null;
+
     private function __construct()
     {
     }
@@ -103,6 +105,13 @@ final class Architecture
                 $this->ruleSkipPaths[$ruleKey][] = $path;
             }
         }
+
+        return $this;
+    }
+
+    public function cacheDirectory(string $cacheDirectory): self
+    {
+        $this->cacheDirectory = $cacheDirectory;
 
         return $this;
     }
@@ -209,5 +218,10 @@ final class Architecture
     public function getRuleSkipPaths(): array
     {
         return $this->ruleSkipPaths;
+    }
+
+    public function getCacheDirectory(): ?string
+    {
+        return $this->cacheDirectory;
     }
 }

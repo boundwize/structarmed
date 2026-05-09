@@ -295,6 +295,41 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testConfiguredRelativeCacheDirectoryIsResolvedFromBasePath(): void
+    {
+        $basePath            = $this->createTempDirectory();
+        $cacheDirectory      = $basePath . '/var/cache/structarmed';
+        $analysisResultCache = new AnalysisResultCache($basePath, 'var/cache/structarmed');
+
+        try {
+            mkdir($basePath . '/var');
+            mkdir($basePath . '/var/cache');
+
+            $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
+
+            $this->assertTrue(file_exists($cacheDirectory . '/key.json'));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+
+            if (is_dir($basePath . '/var/cache')) {
+                rmdir($basePath . '/var/cache');
+            }
+
+            if (is_dir($basePath . '/var')) {
+                rmdir($basePath . '/var');
+            }
+
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testConfiguredWindowsAbsoluteCacheDirectoryIsUsedAsIs(): void
+    {
+        $analysisResultCache = new AnalysisResultCache(__DIR__, 'C:/structarmed/cache');
+
+        $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
+    }
+
     public function testMetadataIncludesConfigAndAnalysedFiles(): void
     {
         $directory = $this->createTempDirectory();

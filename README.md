@@ -61,6 +61,18 @@ return Architecture::define()
 ->withPresets(Preset::PSR4(), Preset::DDD(), Preset::MVC())
 ```
 
+### Cache directory
+
+StructArmed stores analysis cache in the system temp directory by default. You can configure a project cache directory:
+
+```php
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed')
+    ->withPreset(Preset::PSR4());
+```
+
+Relative cache directories are resolved from the project root. `--config` also controls the cache directory used by `analyse` and `--clear-cache`.
+
 ### Custom layers and rules
 
 ```php

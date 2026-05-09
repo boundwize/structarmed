@@ -30,7 +30,7 @@ final readonly class StructArmedApplication
         }
 
         if ($command === '--clear-cache') {
-            return (new ClearCacheCommand())->run($basePath);
+            return (new ClearCacheCommand())->run(array_slice($argv, 2), $basePath);
         }
 
         if (in_array($command, ['analyse', 'analyze'], true)) {

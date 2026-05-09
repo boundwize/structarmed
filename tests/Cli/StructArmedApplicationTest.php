@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Cli;
 
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cli\AnalyseCommand;
 use Boundwize\StructArmed\Cli\ClearCacheCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
@@ -18,6 +19,7 @@ use function bin2hex;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function glob;
 use function is_dir;
 use function json_decode;
 use function mkdir;
@@ -58,6 +60,101 @@ final class StructArmedApplicationTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('StructArmed cache cleared.', $output);
+    }
+
+    public function testApplicationClearsConfiguredCacheWithoutAnalyseCommand(): void
+    {
+        $basePath       = $this->createProjectDirectory();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        try {
+            mkdir($basePath . '/var');
+            mkdir($basePath . '/var/cache');
+            mkdir($cacheDirectory);
+
+            file_put_contents($cacheDirectory . '/key.json', '{}');
+            file_put_contents($basePath . '/structarmed-custom.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed');
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', '--clear-cache', '--config=' . $basePath . '/structarmed-custom.php'],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('StructArmed cache cleared.', $output);
+            $this->assertFalse(is_dir($cacheDirectory));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationClearsConfiguredCacheWithSeparateConfigOption(): void
+    {
+        $basePath       = $this->createProjectDirectory();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        try {
+            mkdir($basePath . '/var');
+            mkdir($basePath . '/var/cache');
+            mkdir($cacheDirectory);
+
+            file_put_contents($cacheDirectory . '/key.json', '{}');
+            file_put_contents($basePath . '/structarmed-custom.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed');
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', '--clear-cache', '--config', $basePath . '/structarmed-custom.php'],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('StructArmed cache cleared.', $output);
+            $this->assertFalse(is_dir($cacheDirectory));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationReportsInvalidClearCacheConfig(): void
+    {
+        $basePath = $this->createTempDirectory();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', '--clear-cache', '--config=' . $basePath . '/missing.php'],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString('StructArmed config file not found', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationRejectsUnknownClearCacheOption(): void
+    {
+        [$exitCode, $output] = $this->runApplication(['structarmed', '--clear-cache', '--bad-option']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Unknown option: --bad-option', $output);
     }
 
     /**
@@ -248,6 +345,41 @@ final class StructArmedApplicationTest extends TestCase
         }
     }
 
+    public function testAnalyseCommandStoresResultInConfiguredCacheDirectory(): void
+    {
+        $basePath       = $this->createProjectDirectory();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed');
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertTrue(is_dir($cacheDirectory));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandRendersJsonReport(): void
     {
         $basePath = $this->createProjectDirectory();
@@ -398,12 +530,34 @@ PHP;
 
     private function removeTempDirectory(string $basePath): void
     {
+        (new AnalysisResultCache($basePath))->clear();
+
         if (file_exists($basePath . '/structarmed.php')) {
             unlink($basePath . '/structarmed.php');
         }
 
         if (is_dir($basePath . '/src')) {
             rmdir($basePath . '/src');
+        }
+
+        if (file_exists($basePath . '/structarmed-custom.php')) {
+            unlink($basePath . '/structarmed-custom.php');
+        }
+
+        foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {
+            unlink($cacheFile);
+        }
+
+        if (is_dir($basePath . '/var/cache/structarmed')) {
+            rmdir($basePath . '/var/cache/structarmed');
+        }
+
+        if (is_dir($basePath . '/var/cache')) {
+            rmdir($basePath . '/var/cache');
+        }
+
+        if (is_dir($basePath . '/var')) {
+            rmdir($basePath . '/var');
         }
 
         if (is_dir($basePath)) {

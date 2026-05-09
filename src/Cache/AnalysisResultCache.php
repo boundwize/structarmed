@@ -21,8 +21,11 @@ use function is_string;
 use function json_decode;
 use function json_encode;
 use function mkdir;
+use function preg_match;
 use function rmdir;
 use function sprintf;
+use function str_replace;
+use function str_starts_with;
 use function strval;
 use function sys_get_temp_dir;
 use function unlink;
@@ -37,7 +40,8 @@ final readonly class AnalysisResultCache
     public function __construct(string $basePath, ?string $cacheDirectory = null)
     {
         $this->cacheDirectory = $cacheDirectory
-            ?? sys_get_temp_dir() . '/structarmed/cache/' . hash('xxh128', $basePath);
+            ? $this->resolveCacheDirectory($basePath, $cacheDirectory)
+            : sys_get_temp_dir() . '/structarmed/cache/' . hash('xxh128', $basePath);
     }
 
     /**
@@ -219,5 +223,23 @@ final readonly class AnalysisResultCache
     private function path(string $key): string
     {
         return sprintf('%s/%s.json', $this->cacheDirectory, $key);
+    }
+
+    private function resolveCacheDirectory(string $basePath, string $cacheDirectory): string
+    {
+        $cacheDirectory = str_replace('\\', '/', $cacheDirectory);
+
+        if ($this->isAbsolutePath($cacheDirectory)) {
+            return $cacheDirectory;
+        }
+
+        return sprintf('%s/%s', $basePath, $cacheDirectory);
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return str_starts_with($path, '/')
+            || str_starts_with($path, '\\')
+            || preg_match('#^[A-Za-z]:/#', $path) === 1;
     }
 }
