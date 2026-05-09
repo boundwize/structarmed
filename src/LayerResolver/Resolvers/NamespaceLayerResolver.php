@@ -48,7 +48,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
                 if (str_starts_with($normalised, $normalisedLayer)) {
                     $length = strlen($normalisedLayer);
 
-                    if ($length >= $matchedLength) {
+                    if ($length > $matchedLength) {
                         $matchedLayer  = $layerName;
                         $matchedLength = $length;
                     }
@@ -57,6 +57,30 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         }
 
         return $matchedLayer;
+    }
+
+    /**
+     * @return int[]|string[]
+     */
+    public function resolveAll(string $className, string $filePath): array
+    {
+        $normalised = $this->normalisePath($filePath);
+        $matched    = [];
+
+        foreach ($this->layers as $layerName => $layerPaths) {
+            foreach ((array) $layerPaths as $layerPath) {
+                $normalisedLayer = $this->normalisePath(
+                    $this->basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
+                );
+
+                if (str_starts_with($normalised, $normalisedLayer)) {
+                    $matched[] = $layerName;
+                    break;
+                }
+            }
+        }
+
+        return $matched;
     }
 
     private function normalisePath(string $path): string

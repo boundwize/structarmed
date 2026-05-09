@@ -39,7 +39,7 @@ final readonly class NamingConventionRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ($classNode->layer === $this->mustBeInLayer) {
+        if ($classNode->isInLayer($this->mustBeInLayer)) {
             return null;
         }
 

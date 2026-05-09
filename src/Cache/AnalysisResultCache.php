@@ -289,6 +289,7 @@ final readonly class AnalysisResultCache
             'methods'       => array_map($this->methodNodeToArray(...), $classNode->methods),
             'functionCalls' => array_values($classNode->functionCalls),
             'superglobals'  => array_values($classNode->superglobals),
+            'layers'        => $classNode->layers,
         ];
     }
 
@@ -315,6 +316,7 @@ final readonly class AnalysisResultCache
         $rawMethods    = $node['methods'] ?? null;
         $functionCalls = $node['functionCalls'] ?? null;
         $superglobals  = $node['superglobals'] ?? null;
+        $layers        = $node['layers'] ?? [];
 
         if (
             ! is_string($className)
@@ -331,6 +333,7 @@ final readonly class AnalysisResultCache
             || ! is_array($rawMethods)
             || ! $this->isStringArray($functionCalls)
             || ! $this->isStringArray($superglobals)
+            || ! $this->isStringArray($layers)
         ) {
             return null;
         }
@@ -366,6 +369,7 @@ final readonly class AnalysisResultCache
             methods:       $methods,
             functionCalls: array_values($functionCalls),
             superglobals:  array_values($superglobals),
+            layers:        array_values($layers),
         );
     }
 

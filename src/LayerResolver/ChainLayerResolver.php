@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\LayerResolver;
 
+use function in_array;
+
 final readonly class ChainLayerResolver implements LayerResolverInterface
 {
     /** @var LayerResolverInterface[] */
@@ -25,5 +27,20 @@ final readonly class ChainLayerResolver implements LayerResolverInterface
         }
 
         return null;
+    }
+
+    public function resolveAll(string $className, string $filePath): array
+    {
+        $layers = [];
+
+        foreach ($this->resolvers as $resolver) {
+            foreach ($resolver->resolveAll($className, $filePath) as $layer) {
+                if (! in_array($layer, $layers, true)) {
+                    $layers[] = $layer;
+                }
+            }
+        }
+
+        return $layers;
     }
 }

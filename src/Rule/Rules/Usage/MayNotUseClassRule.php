@@ -23,7 +23,7 @@ final readonly class MayNotUseClassRule implements RuleInterface
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        if ($classNode->layer !== $this->layer) {
+        if (! $classNode->isInLayer($this->layer)) {
             return false;
         }
 

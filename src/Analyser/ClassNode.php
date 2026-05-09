@@ -13,12 +13,16 @@ use function str_starts_with;
 
 final readonly class ClassNode
 {
+    /** @var list<string> */
+    public array $layers;
+
     /**
      * @param string[]      $dependencies   Fully-qualified class names this class depends on
      * @param string[]      $implements     Interface names this class implements
      * @param MethodNode[]  $methods        Public methods of this class
      * @param string[]      $functionCalls  Functions called within this class
      * @param string[]      $superglobals   Superglobals accessed ($_GET, $_POST, etc.)
+     * @param list<string>  $layers         All layer names this class belongs to; defaults to [$layer]
      */
     public function __construct(
         public string $className,
@@ -35,7 +39,9 @@ final readonly class ClassNode
         public array $methods = [],
         public array $functionCalls = [],
         public array $superglobals = [],
+        array $layers = [],
     ) {
+        $this->layers = $layers !== [] ? $layers : ($this->layer !== null ? [$this->layer] : []);
     }
 
     public function shortName(): string
@@ -47,7 +53,7 @@ final readonly class ClassNode
 
     public function isInLayer(string $layer): bool
     {
-        return $this->layer === $layer;
+        return in_array($layer, $this->layers, true);
     }
 
     public function nameEndsWith(string $suffix): bool
