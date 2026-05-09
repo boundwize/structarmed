@@ -750,7 +750,10 @@ final class AnalysisResultCacheTest extends TestCase
      */
     private function writeCachePayload(string $cacheDirectory, array $payload, string $filename = 'key.json'): void
     {
-        $path = str_starts_with($filename, '/') ? $filename : $cacheDirectory . '/' . $filename;
+        $isAbsolute = str_starts_with($filename, '/')
+            || str_starts_with($filename, '\\')
+            || preg_match('#^[A-Za-z]:[\\\\/]#', $filename) === 1;
+        $path = $isAbsolute ? $filename : $cacheDirectory . '/' . $filename;
 
         file_put_contents($path, json_encode($payload, JSON_THROW_ON_ERROR));
     }
