@@ -366,6 +366,25 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testComposerLockHashSkipsUnreadableCachePayloadsAndDirectories(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        mkdir($cacheDirectory . '/nested');
+        file_put_contents($cacheDirectory . '/key.json', '["bad"]');
+        $this->writeCachePayload($cacheDirectory, [
+            'metadata'   => 'bad',
+            'violations' => [],
+        ], 'other.json');
+
+        try {
+            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('some-hash'));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testComposerLockHashSkipsClassNodeCachePayloads(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
