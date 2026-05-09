@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
@@ -43,8 +44,11 @@ final readonly class Analyser
 {
     private string $basePath;
 
-    public function __construct(string $basePath = '')
-    {
+    public function __construct(
+        string $basePath = '',
+        private ?AnalysisResultCache $analysisResultCache = null,
+        private string $classNodeCacheNamespace = '',
+    ) {
         $this->basePath = $basePath !== '' ? $basePath : (string) getcwd();
     }
 
@@ -58,7 +62,6 @@ final readonly class Analyser
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
         $layers                  = $this->resolveLayers($architecture);
-        $skipPaths               = $architecture->getSkipPaths();
         $ruleSkipPaths           = $architecture->getRuleSkipPaths();
 
         foreach ($architecture->getRules() as $key => $rule) {
@@ -86,39 +89,12 @@ final readonly class Analyser
             new NamespaceLayerResolver($layers, $this->basePath)
         );
 
-        $classCollector = new ClassCollector($chainLayerResolver);
-        $parser         = (new ParserFactory())->createForNewestSupportedVersion();
-        $files          = $this->collectPhpFiles($layers, $scanPaths, $skipPaths);
-
-        $progressHandler?->start(count($files));
-
-        foreach ($files as $file) {
-            try {
-                $code = (string) file_get_contents($file);
-                $ast  = $parser->parse($code);
-
-                if ($ast === null || $ast === []) {
-                    continue;
-                }
-
-                $classCollector->setCurrentFile($file);
-
-                $traverser = new NodeTraverser();
-                $traverser->addVisitor(new NameResolver());
-                $traverser->addVisitor($classCollector);
-                $traverser->traverse($ast);
-            } catch (Error) {
-                // Skip files with parse errors
-            } finally {
-                $progressHandler?->advance($file);
-            }
-        }
-
-        $progressHandler?->finish();
+        $files      = $this->filesForAnalysis($architecture, $scanPaths);
+        $classNodes = $this->collectClassNodes($chainLayerResolver, $files, $progressHandler);
 
         $rules = $architecture->getRules();
 
-        foreach ($classCollector->getNodes() as $classNode) {
+        foreach ($classNodes as $classNode) {
             foreach ($rules as $key => $rule) {
                 if (! $rule instanceof RuleInterface) {
                     continue;
@@ -155,6 +131,95 @@ final readonly class Analyser
         }
 
         return $ruleViolationCollection;
+    }
+
+    /**
+     * @param list<string> $files
+     * @return list<ClassNode>
+     */
+    private function collectClassNodes(
+        ChainLayerResolver $chainLayerResolver,
+        array $files,
+        ?ProgressHandlerInterface $progressHandler
+    ): array {
+        $classNodes   = [];
+        $filesToParse = [];
+
+        foreach ($files as $file) {
+            $cachedClassNodes = $this->analysisResultCache?->loadClassNodes($file, $this->classNodeCacheNamespace);
+
+            if ($cachedClassNodes === null) {
+                $filesToParse[] = $file;
+                continue;
+            }
+
+            foreach ($cachedClassNodes as $cachedClassNode) {
+                $classNodes[] = $cachedClassNode;
+            }
+        }
+
+        $progressHandler?->start(count($filesToParse));
+
+        if ($filesToParse === []) {
+            $progressHandler?->finish();
+
+            return $classNodes;
+        }
+
+        $parser = (new ParserFactory())->createForNewestSupportedVersion();
+
+        foreach ($filesToParse as $fileToParse) {
+            $fileClassNodes = [];
+
+            try {
+                $classCollector = new ClassCollector($chainLayerResolver);
+                $code           = (string) file_get_contents($fileToParse);
+                $ast            = $parser->parse($code);
+
+                if ($ast === null || $ast === []) {
+                    continue;
+                }
+
+                $classCollector->setCurrentFile($fileToParse);
+
+                $traverser = new NodeTraverser();
+                $traverser->addVisitor(new NameResolver());
+                $traverser->addVisitor($classCollector);
+                $traverser->traverse($ast);
+
+                $fileClassNodes = array_values($classCollector->getNodes());
+
+                foreach ($fileClassNodes as $fileClassNode) {
+                    $classNodes[] = $fileClassNode;
+                }
+            } catch (Error) {
+                // Skip files with parse errors
+            } finally {
+                $this->analysisResultCache?->storeClassNodes(
+                    $fileToParse,
+                    $this->classNodeCacheNamespace,
+                    $fileClassNodes
+                );
+                $progressHandler?->advance($fileToParse);
+            }
+        }
+
+        $progressHandler?->finish();
+
+        return $classNodes;
+    }
+
+    /**
+     * @param list<string> $scanPaths
+     * @return list<string>
+     */
+    public function filesForAnalysis(Architecture $architecture, array $scanPaths = []): array
+    {
+        return $this->collectPhpFiles(
+            $this->resolveLayers($architecture),
+            $scanPaths,
+            $architecture->getSkipPaths()
+        );
     }
 
     /**

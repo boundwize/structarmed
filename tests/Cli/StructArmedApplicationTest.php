@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Cli;
 
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cli\AnalyseCommand;
+use Boundwize\StructArmed\Cli\ClearCacheCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
 use Boundwize\StructArmed\Cli\StructArmedApplication;
 use Boundwize\StructArmed\Cli\Usage;
@@ -17,6 +19,7 @@ use function bin2hex;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function glob;
 use function is_dir;
 use function json_decode;
 use function mkdir;
@@ -24,10 +27,12 @@ use function ob_get_clean;
 use function ob_start;
 use function random_bytes;
 use function rmdir;
+use function str_replace;
 use function sys_get_temp_dir;
 use function unlink;
 
 #[CoversClass(AnalyseCommand::class)]
+#[CoversClass(ClearCacheCommand::class)]
 #[CoversClass(InitCommand::class)]
 #[CoversClass(StructArmedApplication::class)]
 #[CoversClass(Usage::class)]
@@ -48,6 +53,109 @@ final class StructArmedApplicationTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Unknown command: unknown', $output);
+    }
+
+    public function testApplicationClearsCacheWithoutAnalyseCommand(): void
+    {
+        [$exitCode, $output] = $this->runApplication(['structarmed', '--clear-cache']);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('StructArmed cache cleared.', $output);
+    }
+
+    public function testApplicationClearsConfiguredCacheWithoutAnalyseCommand(): void
+    {
+        $basePath       = $this->createProjectDirectory();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        try {
+            mkdir($basePath . '/var');
+            mkdir($basePath . '/var/cache');
+            mkdir($cacheDirectory);
+
+            file_put_contents($cacheDirectory . '/key.json', '{}');
+            file_put_contents($basePath . '/structarmed-custom.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed');
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', '--clear-cache', '--config=' . $basePath . '/structarmed-custom.php'],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('StructArmed cache cleared.', $output);
+            $this->assertFalse(is_dir($cacheDirectory));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationClearsConfiguredCacheWithSeparateConfigOption(): void
+    {
+        $basePath       = $this->createProjectDirectory();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        try {
+            mkdir($basePath . '/var');
+            mkdir($basePath . '/var/cache');
+            mkdir($cacheDirectory);
+
+            file_put_contents($cacheDirectory . '/key.json', '{}');
+            file_put_contents($basePath . '/structarmed-custom.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed');
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', '--clear-cache', '--config', $basePath . '/structarmed-custom.php'],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('StructArmed cache cleared.', $output);
+            $this->assertFalse(is_dir($cacheDirectory));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationReportsInvalidClearCacheConfig(): void
+    {
+        $basePath = $this->createTempDirectory();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', '--clear-cache', '--config=' . $basePath . '/missing.php'],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString('StructArmed config file not found', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationRejectsUnknownClearCacheOption(): void
+    {
+        [$exitCode, $output] = $this->runApplication(['structarmed', '--clear-cache', '--bad-option']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Unknown option: --bad-option', $output);
     }
 
     /**
@@ -186,6 +294,163 @@ final class StructArmedApplicationTest extends TestCase
             $this->assertStringContainsString('No violations found', $output);
             $this->assertTrue($progress->started);
             $this->assertTrue($progress->finished);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandCanReuseCachedResult(): void
+    {
+        $basePath = $this->createProjectDirectory();
+        $progress = new class implements ProgressHandlerInterface {
+            public bool $started = false;
+
+            public function start(int $total): void
+            {
+                $this->started = true;
+            }
+
+            public function advance(string $file): void
+            {
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            [$secondExitCode, $secondOutput] = $this->runAnalyseCommand(
+                ['--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertSame(0, $secondExitCode, $secondOutput);
+            $this->assertStringContainsString('No violations found', $secondOutput);
+            $this->assertFalse($progress->started);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandOnlyParsesNewFilesAfterCacheWarmup(): void
+    {
+        $basePath = $this->createProjectDirectory();
+        mkdir($basePath . '/src/Domain');
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+<?php namespace App; final class Foo { public function run(): void {} }
+PHP);
+        file_put_contents($basePath . '/src/Bar.php', '<?php namespace App; final class Bar {}');
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->layer('Source', 'src/');
+PHP);
+
+        $progress = new class implements ProgressHandlerInterface {
+            public int $total = 0;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            file_put_contents($basePath . '/src/Baz.php', '<?php namespace App; final class Baz {}');
+
+            [$secondExitCode, $secondOutput] = $this->runAnalyseCommand(
+                ['--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertSame(0, $secondExitCode, $secondOutput);
+            $this->assertSame(1, $progress->total);
+            $this->assertCount(1, $progress->files);
+            $this->assertStringEndsWith('/src/Baz.php', $this->normalisePath($progress->files[0]));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    private function normalisePath(string $path): string
+    {
+        return str_replace('\\', '/', $path);
+    }
+
+    public function testAnalyseCommandStoresResultInConfiguredCacheDirectory(): void
+    {
+        $basePath       = $this->createProjectDirectory();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed');
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertTrue(is_dir($cacheDirectory));
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -341,12 +606,42 @@ PHP;
 
     private function removeTempDirectory(string $basePath): void
     {
+        (new AnalysisResultCache($basePath))->clear();
+
         if (file_exists($basePath . '/structarmed.php')) {
             unlink($basePath . '/structarmed.php');
         }
 
+        if (file_exists($basePath . '/structarmed-custom.php')) {
+            unlink($basePath . '/structarmed-custom.php');
+        }
+
+        foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {
+            unlink($cacheFile);
+        }
+
+        foreach (glob($basePath . '/src/*.php') ?: [] as $sourceFile) {
+            unlink($sourceFile);
+        }
+
+        if (is_dir($basePath . '/src/Domain')) {
+            rmdir($basePath . '/src/Domain');
+        }
+
         if (is_dir($basePath . '/src')) {
             rmdir($basePath . '/src');
+        }
+
+        if (is_dir($basePath . '/var/cache/structarmed')) {
+            rmdir($basePath . '/var/cache/structarmed');
+        }
+
+        if (is_dir($basePath . '/var/cache')) {
+            rmdir($basePath . '/var/cache');
+        }
+
+        if (is_dir($basePath . '/var')) {
+            rmdir($basePath . '/var');
         }
 
         if (is_dir($basePath)) {
