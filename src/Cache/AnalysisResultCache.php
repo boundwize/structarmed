@@ -9,9 +9,9 @@ use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
-use function array_is_list;
 use function array_keys;
 use function array_map;
+use function array_values;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
@@ -283,11 +283,11 @@ final readonly class AnalysisResultCache
             'isFinal'       => $classNode->isFinal,
             'isInterface'   => $classNode->isInterface,
             'isReadonly'    => $classNode->isReadonly,
-            'dependencies'  => $classNode->dependencies,
-            'implements'    => $classNode->implements,
+            'dependencies'  => array_values($classNode->dependencies),
+            'implements'    => array_values($classNode->implements),
             'methods'       => array_map($this->methodNodeToArray(...), $classNode->methods),
-            'functionCalls' => $classNode->functionCalls,
-            'superglobals'  => $classNode->superglobals,
+            'functionCalls' => array_values($classNode->functionCalls),
+            'superglobals'  => array_values($classNode->superglobals),
         ];
     }
 
@@ -325,11 +325,11 @@ final readonly class AnalysisResultCache
             || ! is_bool($isFinal)
             || ! is_bool($isInterface)
             || ! is_bool($isReadonly)
-            || ! $this->isStringList($dependencies)
-            || ! $this->isStringList($implements)
+            || ! $this->isStringArray($dependencies)
+            || ! $this->isStringArray($implements)
             || ! is_array($rawMethods)
-            || ! $this->isStringList($functionCalls)
-            || ! $this->isStringList($superglobals)
+            || ! $this->isStringArray($functionCalls)
+            || ! $this->isStringArray($superglobals)
         ) {
             return null;
         }
@@ -360,11 +360,11 @@ final readonly class AnalysisResultCache
             isFinal:       $isFinal,
             isInterface:   $isInterface,
             isReadonly:    $isReadonly,
-            dependencies:  $dependencies,
-            implements:    $implements,
+            dependencies:  array_values($dependencies),
+            implements:    array_values($implements),
             methods:       $methods,
-            functionCalls: $functionCalls,
-            superglobals:  $superglobals,
+            functionCalls: array_values($functionCalls),
+            superglobals:  array_values($superglobals),
         );
     }
 
@@ -435,16 +435,16 @@ final readonly class AnalysisResultCache
     }
 
     /**
-     * @phpstan-assert-if-true list<string> $value
+     * @phpstan-assert-if-true array<int, string> $value
      */
-    private function isStringList(mixed $value): bool
+    private function isStringArray(mixed $value): bool
     {
-        if (! is_array($value) || ! array_is_list($value)) {
+        if (! is_array($value)) {
             return false;
         }
 
-        foreach ($value as $item) {
-            if (! is_string($item)) {
+        foreach ($value as $key => $item) {
+            if (! is_int($key) || ! is_string($item)) {
                 return false;
             }
         }

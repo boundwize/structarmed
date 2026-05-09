@@ -466,7 +466,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'node has invalid string list' => [
+        yield 'node has invalid string array key' => [
             [
                 'nodes' => [
                     [
@@ -479,7 +479,29 @@ final class AnalysisResultCacheTest extends TestCase
                         'isFinal'       => true,
                         'isInterface'   => false,
                         'isReadonly'    => false,
-                        'dependencies'  => [1 => 'App\Bar'],
+                        'dependencies'  => ['bad' => 'App\Bar'],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'node has non-array string array field' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => 'bad',
                         'implements'    => [],
                         'methods'       => [],
                         'functionCalls' => [],

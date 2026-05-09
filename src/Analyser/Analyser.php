@@ -195,7 +195,11 @@ final readonly class Analyser
             } catch (Error) {
                 // Skip files with parse errors
             } finally {
-                $this->analysisResultCache?->storeClassNodes($fileToParse, $this->classNodeCacheNamespace, $fileClassNodes);
+                $this->analysisResultCache?->storeClassNodes(
+                    $fileToParse,
+                    $this->classNodeCacheNamespace,
+                    $fileClassNodes
+                );
                 $progressHandler?->advance($fileToParse);
             }
         }
