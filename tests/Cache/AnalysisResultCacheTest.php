@@ -666,6 +666,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertSame($config, $metadata['configPath']);
             $this->assertSame(['src'], $metadata['scanPaths']);
             $this->assertIsString($metadata['configHash']);
+            $this->assertNull($metadata['composerLockHash']);
             $this->assertIsString($metadata['filesHash']);
             $this->assertSame(
                 (new AnalysisCacheMetadataFactory())->key($metadata),
@@ -681,6 +682,84 @@ final class AnalysisResultCacheTest extends TestCase
             }
 
             $this->removeTempDirectory($directory);
+        }
+    }
+
+    public function testMetadataIncludesComposerLockHashWhenPresent(): void
+    {
+        $directory    = $this->createTempDirectory();
+        $config       = $directory . '/structarmed.php';
+        $composerLock = $directory . '/composer.lock';
+        $source       = $directory . '/Example.php';
+
+        file_put_contents($config, '<?php return null;');
+        file_put_contents($composerLock, '{"packages":[]}');
+        file_put_contents($source, '<?php class Example {}');
+
+        try {
+            $metadata = (new AnalysisCacheMetadataFactory())->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+
+            $this->assertIsString($metadata['composerLockHash']);
+        } finally {
+            foreach ([$config, $composerLock, $source] as $file) {
+                if (file_exists($file)) {
+                    unlink($file);
+                }
+            }
+
+            $this->removeTempDirectory($directory);
+        }
+    }
+
+    public function testCacheMissesWhenComposerLockChanges(): void
+    {
+        $directory    = $this->createTempDirectory();
+        $config       = $directory . '/structarmed.php';
+        $composerLock = $directory . '/composer.lock';
+        $source       = $directory . '/Example.php';
+        $cacheDir     = $this->createTempDirectory();
+
+        file_put_contents($config, '<?php return null;');
+        file_put_contents($composerLock, '{"packages":[]}');
+        file_put_contents($source, '<?php class Example {}');
+
+        try {
+            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+            $analysisResultCache          = new AnalysisResultCache($directory, $cacheDir);
+            $metadataBefore               = $analysisCacheMetadataFactory->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+            $key                          = $analysisCacheMetadataFactory->key($metadataBefore);
+
+            $analysisResultCache->store($key, $metadataBefore, new RuleViolationCollection());
+
+            $this->assertInstanceOf(RuleViolationCollection::class, $analysisResultCache->load($key, $metadataBefore));
+
+            file_put_contents($composerLock, '{"packages":[{"name":"some/package","version":"2.0.0"}]}');
+
+            $metadataAfter = $analysisCacheMetadataFactory->metadata($directory, $config, ['src'], [$source]);
+
+            $this->assertNotInstanceOf(
+                RuleViolationCollection::class,
+                $analysisResultCache->load($key, $metadataAfter)
+            );
+        } finally {
+            foreach ([$config, $composerLock, $source] as $file) {
+                if (file_exists($file)) {
+                    unlink($file);
+                }
+            }
+
+            $this->removeTempDirectory($directory);
+            $this->removeTempDirectory($cacheDir);
         }
     }
 
