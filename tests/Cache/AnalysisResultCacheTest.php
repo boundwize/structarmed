@@ -23,6 +23,7 @@ use function glob;
 use function is_dir;
 use function json_encode;
 use function mkdir;
+use function preg_match;
 use function random_bytes;
 use function rmdir;
 use function str_starts_with;
@@ -753,7 +754,7 @@ final class AnalysisResultCacheTest extends TestCase
         $isAbsolute = str_starts_with($filename, '/')
             || str_starts_with($filename, '\\')
             || preg_match('#^[A-Za-z]:[\\\\/]#', $filename) === 1;
-        $path = $isAbsolute ? $filename : $cacheDirectory . '/' . $filename;
+        $path       = $isAbsolute ? $filename : $cacheDirectory . '/' . $filename;
 
         file_put_contents($path, json_encode($payload, JSON_THROW_ON_ERROR));
     }
