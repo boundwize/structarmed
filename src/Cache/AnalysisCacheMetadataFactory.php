@@ -8,8 +8,6 @@ use Composer\InstalledVersions;
 
 use function array_map;
 use function file_get_contents;
-use function filemtime;
-use function filesize;
 use function hash;
 use function json_encode;
 use function sort;
@@ -63,9 +61,8 @@ final readonly class AnalysisCacheMetadataFactory
     private function filesHash(array $files): string
     {
         return hash('xxh128', json_encode(array_map(static fn(string $file): array => [
-            'file'  => $file,
-            'mtime' => filemtime($file) ?: 0,
-            'size'  => filesize($file) ?: 0,
+            'file' => $file,
+            'hash' => hash('xxh128', (string) file_get_contents($file)),
         ], $files), JSON_THROW_ON_ERROR));
     }
 

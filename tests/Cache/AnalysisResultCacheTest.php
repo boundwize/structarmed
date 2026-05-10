@@ -16,10 +16,10 @@ use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
 use function file_exists;
+use function file_get_contents;
 use function file_put_contents;
-use function filemtime;
-use function filesize;
 use function glob;
+use function hash;
 use function is_dir;
 use function json_encode;
 use function mkdir;
@@ -28,6 +28,7 @@ use function random_bytes;
 use function rmdir;
 use function str_starts_with;
 use function sys_get_temp_dir;
+use function touch;
 use function unlink;
 
 use const JSON_THROW_ON_ERROR;
@@ -534,6 +535,26 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testClassNodesHitWhenOnlyFileMtimeChanges(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $classNodes          = [$this->makeClassNode($sourceFile)];
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            touch($sourceFile, 1234567890);
+
+            $this->assertEquals($classNodes, $analysisResultCache->loadClassNodes($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     /**
      * @return iterable<string, array{array<string, mixed>}>
      */
@@ -729,8 +750,7 @@ final class AnalysisResultCacheTest extends TestCase
                 'metadata' => [
                     'namespace' => 'config',
                     'file'      => $sourceFile,
-                    'mtime'     => filemtime($sourceFile) ?: 0,
-                    'size'      => filesize($sourceFile) ?: 0,
+                    'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
                 ],
                 ...$payloadOverride,
             ], $cacheFile);
@@ -800,6 +820,45 @@ final class AnalysisResultCacheTest extends TestCase
             );
 
             $this->assertIsString($metadata['composerGeneratedVersionHash']);
+        } finally {
+            foreach ([$config, $source] as $file) {
+                if (file_exists($file)) {
+                    unlink($file);
+                }
+            }
+
+            $this->removeTempDirectory($directory);
+        }
+    }
+
+    public function testMetadataFileHashDoesNotChangeWhenOnlyFileMtimeChanges(): void
+    {
+        $directory = $this->createTempDirectory();
+        $config    = $directory . '/structarmed.php';
+        $source    = $directory . '/Example.php';
+
+        file_put_contents($config, '<?php return null;');
+        file_put_contents($source, '<?php class Example {}');
+
+        try {
+            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+            $metadataBefore               = $analysisCacheMetadataFactory->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+
+            touch($source, 1234567890);
+
+            $metadataAfter = $analysisCacheMetadataFactory->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+
+            $this->assertSame($metadataBefore['filesHash'], $metadataAfter['filesHash']);
         } finally {
             foreach ([$config, $source] as $file) {
                 if (file_exists($file)) {
