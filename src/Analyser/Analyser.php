@@ -30,6 +30,7 @@ use function count;
 use function file_get_contents;
 use function fnmatch;
 use function getcwd;
+use function in_array;
 use function is_dir;
 use function ltrim;
 use function realpath;
@@ -63,8 +64,13 @@ final readonly class Analyser
         $ruleViolationCollection = new RuleViolationCollection();
         $layers                  = $this->resolveLayers($architecture);
         $ruleSkipPaths           = $architecture->getRuleSkipPaths();
+        $skippedRuleKeys         = $architecture->getSkippedRuleKeys();
 
         foreach ($architecture->getRules() as $key => $rule) {
+            if (in_array($key, $skippedRuleKeys, true)) {
+                continue;
+            }
+
             if (! $rule instanceof ProjectRuleInterface) {
                 continue;
             }
@@ -96,6 +102,10 @@ final readonly class Analyser
 
         foreach ($classNodes as $classNode) {
             foreach ($rules as $key => $rule) {
+                if (in_array($key, $skippedRuleKeys, true)) {
+                    continue;
+                }
+
                 if (! $rule instanceof RuleInterface) {
                     continue;
                 }

@@ -9,6 +9,8 @@ use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 
+use function array_filter;
+use function array_values;
 use function is_int;
 use function sprintf;
 
@@ -46,6 +48,12 @@ final class Architecture
     /** @var list<string> */
     private array $skipPaths = [];
 
+    /** @var list<string> */
+    private array $pendingSkips = [];
+
+    /** @var list<string> */
+    private array $skippedRuleKeys = [];
+
     /** @var array<string, list<string>> */
     private array $ruleSkipPaths = [];
 
@@ -76,7 +84,9 @@ final class Architecture
 
     public function skipPath(string $path): self
     {
-        return $this->skip([$path]);
+        $this->skipPaths[] = $path;
+
+        return $this;
     }
 
     /**
@@ -84,7 +94,11 @@ final class Architecture
      */
     public function skipPaths(string|array $paths): self
     {
-        return $this->skip((array) $paths);
+        foreach ((array) $paths as $path) {
+            $this->skipPaths[] = $path;
+        }
+
+        return $this;
     }
 
     /**
@@ -94,8 +108,8 @@ final class Architecture
     {
         foreach ($paths as $ruleKey => $pathConfig) {
             if (is_int($ruleKey)) {
-                foreach ((array) $pathConfig as $path) {
-                    $this->skipPaths[] = $path;
+                foreach ((array) $pathConfig as $skip) {
+                    $this->registerPendingSkip($skip);
                 }
 
                 continue;
@@ -146,6 +160,7 @@ final class Architecture
     public function rule(string $key, RuleInterface|ProjectRuleInterface $rule): self
     {
         $this->rules[$key] = $rule;
+        $this->resolvePendingRuleSkip($key);
 
         return $this;
     }
@@ -211,7 +226,13 @@ final class Architecture
     /** @return list<string> */
     public function getSkipPaths(): array
     {
-        return $this->skipPaths;
+        return [
+            ...$this->skipPaths,
+            ...array_values(array_filter(
+                $this->pendingSkips,
+                fn(string $skip): bool => ! isset($this->rules[$skip])
+            )),
+        ];
     }
 
     /** @return array<string, list<string>> */
@@ -220,8 +241,42 @@ final class Architecture
         return $this->ruleSkipPaths;
     }
 
+    /** @return list<string> */
+    public function getSkippedRuleKeys(): array
+    {
+        return $this->skippedRuleKeys;
+    }
+
     public function getCacheDirectory(): ?string
     {
         return $this->cacheDirectory;
+    }
+
+    private function registerPendingSkip(string $skip): void
+    {
+        if (isset($this->rules[$skip])) {
+            $this->skippedRuleKeys[] = $skip;
+
+            return;
+        }
+
+        $this->pendingSkips[] = $skip;
+    }
+
+    private function resolvePendingRuleSkip(string $ruleKey): void
+    {
+        $pendingSkips = [];
+
+        foreach ($this->pendingSkips as $pendingSkip) {
+            if ($pendingSkip === $ruleKey) {
+                $this->skippedRuleKeys[] = $pendingSkip;
+
+                continue;
+            }
+
+            $pendingSkips[] = $pendingSkip;
+        }
+
+        $this->pendingSkips = $pendingSkips;
     }
 }

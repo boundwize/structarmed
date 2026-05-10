@@ -98,6 +98,7 @@ return Architecture::define()
     ->skip([
         'tests/Fixtures/',
         'var/cache/*',
+        DddPreset::DOMAIN_NO_DATETIME,
         DddPreset::ENTITY_MUST_BE_FINAL => ['src/Legacy/'],
     ])
     ->rule(
@@ -109,6 +110,9 @@ return Architecture::define()
         new MustHaveReturnTypeRule(layer: 'Domain')
     );
 ```
+
+String entries skip files or directories until they match a registered rule key, keyed entries skip paths for one
+specific rule, and rule key constants skip that rule entirely.
 
 ### Override preset rules
 

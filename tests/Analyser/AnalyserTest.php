@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
@@ -544,6 +545,25 @@ final class AnalyserTest extends TestCase
             '/src/Foo.php',
             $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
         );
+    }
+
+    public function testAnalyserSkipsRuleConfiguredBeforePresetRegistersIt(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; class Foo { public function Bad_method(): void {} }',
+        ]);
+
+        $architecture = Architecture::define()
+            ->skip([
+                'tests/Fixtures/',
+                Psr1Preset::METHODS_MUST_BE_CAMEL_CASE,
+            ])
+            ->withPreset(Preset::PSR1(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE));
     }
 
     public function testAnalyserCanCheckRuleSkipsForRealPathOutsideBasePath(): void
