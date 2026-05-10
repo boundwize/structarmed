@@ -24,6 +24,8 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     private int $current = 0;
 
+    private int $lastRenderedPercent = -1;
+
     private readonly int $width;
 
     private readonly bool $useColor;
@@ -43,8 +45,9 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     public function start(int $total): void
     {
-        $this->total   = max(0, $total);
-        $this->current = 0;
+        $this->total               = max(0, $total);
+        $this->current             = 0;
+        $this->lastRenderedPercent = -1;
 
         $this->render();
     }
@@ -62,33 +65,38 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
             $this->current = $this->total;
         }
 
-        $this->render(final: true);
+        $this->render();
 
-        fprintf($this->stream, PHP_EOL);
-        fflush($this->stream);
+        if ($this->isTty) {
+            fprintf($this->stream, PHP_EOL);
+            fflush($this->stream);
+        }
     }
 
-    private function render(bool $final = false): void
+    private function render(): void
     {
-        if (! $this->isTty && ! $final) {
-            return;
-        }
-
         $percent = $this->total > 0
             ? (int) (($this->current / $this->total) * 100)
             : 100;
-        $filled  = $this->total > 0
+
+        if (! $this->isTty && $percent === $this->lastRenderedPercent) {
+            return;
+        }
+
+        $this->lastRenderedPercent = $percent;
+
+        $filled = $this->total > 0
             ? (int) (($this->current / $this->total) * $this->width)
             : $this->width;
-        $bar     = $this->color(
+        $bar    = $this->color(
             str_repeat('=', $filled),
             '32'
         ) . $this->color(str_repeat('-', $this->width - $filled), '90');
-        $status  = $this->color('Analyzing', '36');
+        $status = $this->color('Analyzing', '36');
 
         fprintf(
             $this->stream,
-            $this->isTty ? "\r%s [%s] %3d%% %d/%d" : "%s [%s] %3d%% %d/%d",
+            $this->isTty ? "\r%s [%s] %3d%% %d/%d" : "%s [%s] %3d%% %d/%d\n",
             $status,
             $bar,
             $percent,
