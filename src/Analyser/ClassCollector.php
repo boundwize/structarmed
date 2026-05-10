@@ -23,6 +23,7 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\Do_;
 use PhpParser\Node\Stmt\ElseIf_;
 use PhpParser\Node\Stmt\Enum_;
@@ -142,6 +143,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $superglobals  = $this->collectSuperglobals($classLike);
         $implements    = $this->collectImplements($classLike);
         $constants     = $this->collectConstants($classLike);
+        $properties    = $this->collectProperties($classLike);
 
         $this->nodes[] = new ClassNode(
             className:     $className,
@@ -159,6 +161,7 @@ final class ClassCollector extends NodeVisitorAbstract
             implements:    $implements,
             methods:       $methods,
             constants:     $constants,
+            properties:    $properties,
             functionCalls: $functionCalls,
             superglobals:  $superglobals,
             layers:        $layers,
@@ -177,15 +180,48 @@ final class ClassCollector extends NodeVisitorAbstract
                 continue;
             }
 
+            $visibility           = $this->resolveVisibilityFromFlags($stmt->flags);
+            $hasExplicitVisibility = $this->hasExplicitVisibilityFlag($stmt->flags);
+
             foreach ($stmt->consts as $const) {
                 $constants[] = new ConstantNode(
-                    name: (string) $const->name,
-                    line: $const->getStartLine(),
+                    name:                 (string) $const->name,
+                    visibility:           $visibility,
+                    hasExplicitVisibility: $hasExplicitVisibility,
+                    line:                 $const->getStartLine(),
                 );
             }
         }
 
         return $constants;
+    }
+
+    /**
+     * @return PropertyNode[]
+     */
+    private function collectProperties(ClassLike $classLike): array
+    {
+        $properties = [];
+
+        foreach ($classLike->stmts as $stmt) {
+            if (! $stmt instanceof Property) {
+                continue;
+            }
+
+            $visibility           = $this->resolveVisibilityFromFlags($stmt->flags);
+            $hasExplicitVisibility = $this->hasExplicitVisibilityFlag($stmt->flags);
+
+            foreach ($stmt->props as $prop) {
+                $properties[] = new PropertyNode(
+                    name:                 (string) $prop->name,
+                    visibility:           $visibility,
+                    hasExplicitVisibility: $hasExplicitVisibility,
+                    line:                 $prop->getStartLine(),
+                );
+            }
+        }
+
+        return $properties;
     }
 
     private function resolveClassName(ClassLike $classLike): string
@@ -247,12 +283,13 @@ final class ClassCollector extends NodeVisitorAbstract
         foreach ($classLike->getMethods() as $classMethod) {
             $methods[] = new MethodNode(
                 name:                 (string) $classMethod->name,
-                visibility:           $this->resolveVisibility($classMethod),
+                visibility:           $this->resolveVisibilityFromFlags($classMethod->flags),
                 hasReturnType:        $classMethod->returnType !== null,
                 isStatic:             $classMethod->isStatic(),
                 paramCount:           count($classMethod->params),
                 cyclomaticComplexity: $this->calculateComplexity($classMethod),
                 lineCount:            ($classMethod->getEndLine() - $classMethod->getStartLine()) + 1,
+                hasExplicitVisibility: $this->hasExplicitVisibilityFlag($classMethod->flags),
                 line:                 $classMethod->getStartLine(),
             );
         }
@@ -260,17 +297,22 @@ final class ClassCollector extends NodeVisitorAbstract
         return $methods;
     }
 
-    private function resolveVisibility(ClassMethod $classMethod): string
+    private function resolveVisibilityFromFlags(int $flags): string
     {
-        if ($classMethod->isPublic()) {
-            return 'public';
-        }
-
-        if ($classMethod->isProtected()) {
+        if ($flags & Class_::MODIFIER_PROTECTED) {
             return 'protected';
         }
 
-        return 'private';
+        if ($flags & Class_::MODIFIER_PRIVATE) {
+            return 'private';
+        }
+
+        return 'public';
+    }
+
+    private function hasExplicitVisibilityFlag(int $flags): bool
+    {
+        return ($flags & Class_::VISIBILITY_MODIFIER_MASK) !== 0;
     }
 
     private function calculateComplexity(ClassMethod $classMethod): int

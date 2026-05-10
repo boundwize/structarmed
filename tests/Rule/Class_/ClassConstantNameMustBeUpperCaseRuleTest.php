@@ -50,7 +50,7 @@ final class ClassConstantNameMustBeUpperCaseRuleTest extends TestCase
         $classConstantNameMustBeUpperCaseRule = new ClassConstantNameMustBeUpperCaseRule('Source');
 
         $violations = $classConstantNameMustBeUpperCaseRule->evaluateAll(
-            $this->makeNode([new ConstantNode('dateApproved', 7)])
+            $this->makeNode([new ConstantNode(name: 'dateApproved', line: 7)])
         );
 
         $this->assertCount(1, $violations);

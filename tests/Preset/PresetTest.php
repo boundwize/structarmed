@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
+use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -17,6 +18,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DddPreset::class)]
 #[CoversClass(MvcPreset::class)]
 #[CoversClass(Psr1Preset::class)]
+#[CoversClass(Psr12Preset::class)]
 #[CoversClass(Psr4Preset::class)]
 final class PresetTest extends TestCase
 {
@@ -39,6 +41,30 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
+    }
+
+    public function testPsr12PresetAppliesPsr1RulesAndAddsVisibilityRules(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR12(
+            sourcePaths: ['src/', 'tests/'],
+        )->apply($architecture);
+
+        $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
+
+        $rules = $architecture->getRules();
+        $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
+        $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_UTF8_WITHOUT_BOM, $rules);
+        $this->assertArrayHasKey(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS, $rules);
+        $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_FOLLOW_PSR4, $rules);
+        $this->assertArrayHasKey(Psr1Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER, $rules);
+        $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
+        $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
+        $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
+        $this->assertArrayHasKey(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY, $rules);
+        $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
+        $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);
     }
 
     public function testPsr4PresetRegistersSourceLayerAndRules(): void
