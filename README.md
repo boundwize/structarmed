@@ -12,12 +12,11 @@
 
 Configurable PHP architecture guards — define your layers and rules, then keep them enforced.
 
-## Why use structarmed?
+## Turn architecture rules into executable checks
 
 - Make architecture decisions executable, not just documented.
 - Catch boundary violations before they quietly become conventions.
-- Tune, override, or skip individual preset rules — all in native PHP code.
-- Works in CLI and PHPUnit out of the box.
+- Tune, override, or skip individual preset rules in native PHP code.
 
 ## Installation
 
