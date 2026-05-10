@@ -28,13 +28,16 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     private readonly bool $useColor;
 
+    private readonly bool $isTty;
+
     /**
      * @param resource|null $stream
      */
-    public function __construct(mixed $stream = null, int $width = 28, ?bool $useColor = null)
+    public function __construct(mixed $stream = null, int $width = 28, ?bool $useColor = null, ?bool $isTty = null)
     {
         $this->stream   = $stream ?? STDERR;
         $this->width    = max(10, $width);
+        $this->isTty    = $isTty ?? stream_isatty($this->stream);
         $this->useColor = $useColor ?? $this->detectColorSupport();
     }
 
@@ -55,6 +58,10 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     public function finish(): void
     {
+        if (! $this->isTty) {
+            return;
+        }
+
         if ($this->total > 0) {
             $this->current = $this->total;
             $this->render();
@@ -66,6 +73,10 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     private function render(): void
     {
+        if (! $this->isTty) {
+            return;
+        }
+
         $percent = $this->total > 0
             ? (int) (($this->current / $this->total) * 100)
             : 100;

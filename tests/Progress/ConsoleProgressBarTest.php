@@ -22,7 +22,7 @@ final class ConsoleProgressBarTest extends TestCase
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+        $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
         $consoleProgressBar->start(2);
         $consoleProgressBar->advance('/tmp/Foo.php');
         $consoleProgressBar->advance('/tmp/Bar.php');
@@ -41,7 +41,7 @@ final class ConsoleProgressBarTest extends TestCase
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        $consoleProgressBar = new ConsoleProgressBar($stream, 10, true);
+        $consoleProgressBar = new ConsoleProgressBar($stream, 10, true, true);
         $consoleProgressBar->start(1);
         $consoleProgressBar->advance('/tmp/Foo.php');
         $consoleProgressBar->finish();
@@ -63,7 +63,7 @@ final class ConsoleProgressBarTest extends TestCase
                 $stream = fopen('php://temp', 'w+');
                 $this->assertIsResource($stream);
 
-                $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+                $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
@@ -85,7 +85,7 @@ final class ConsoleProgressBarTest extends TestCase
                 $stream = fopen('php://temp', 'w+');
                 $this->assertIsResource($stream);
 
-                $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+                $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
@@ -108,7 +108,7 @@ final class ConsoleProgressBarTest extends TestCase
                 $stream = fopen('php://temp', 'w+');
                 $this->assertIsResource($stream);
 
-                $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+                $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
@@ -122,12 +122,29 @@ final class ConsoleProgressBarTest extends TestCase
         );
     }
 
+    public function testProgressBarProducesNoOutputWhenNotTty(): void
+    {
+        $stream = fopen('php://temp', 'w+');
+        $this->assertIsResource($stream);
+
+        $consoleProgressBar = new ConsoleProgressBar($stream, 10, null, false);
+        $consoleProgressBar->start(2);
+        $consoleProgressBar->advance('/tmp/Foo.php');
+        $consoleProgressBar->advance('/tmp/Bar.php');
+        $consoleProgressBar->finish();
+
+        rewind($stream);
+        $output = (string) stream_get_contents($stream);
+
+        $this->assertSame('', $output);
+    }
+
     public function testProgressBarHandlesZeroTotalWithoutRenderingFileName(): void
     {
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        $consoleProgressBar = new ConsoleProgressBar($stream, 8, true);
+        $consoleProgressBar = new ConsoleProgressBar($stream, 8, true, true);
         $consoleProgressBar->start(0);
         $consoleProgressBar->advance('/tmp/VeryLongClassNameThatNeedsTruncating.php');
         $consoleProgressBar->finish();
