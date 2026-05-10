@@ -8,11 +8,15 @@ use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_filter;
+use function count;
+use function explode;
 use function fopen;
 use function getenv;
 use function putenv;
 use function rewind;
 use function stream_get_contents;
+use function trim;
 
 #[CoversClass(ConsoleProgressBar::class)]
 final class ConsoleProgressBarTest extends TestCase
