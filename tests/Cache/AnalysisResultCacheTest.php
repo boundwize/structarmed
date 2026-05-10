@@ -218,7 +218,7 @@ final class AnalysisResultCacheTest extends TestCase
 
             $analysisResultCache->clear();
 
-            $this->assertFalse(is_dir($cacheDirectory));
+            $this->assertDirectoryDoesNotExist($cacheDirectory);
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -234,7 +234,7 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->clear();
 
-            $this->assertFalse(is_dir($cacheDirectory));
+            $this->assertDirectoryDoesNotExist($cacheDirectory);
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -430,7 +430,7 @@ final class AnalysisResultCacheTest extends TestCase
 
             $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
 
-            $this->assertTrue(file_exists($cacheDirectory . '/key.json'));
+            $this->assertFileExists($cacheDirectory . '/key.json');
         } finally {
             $this->removeTempDirectory($cacheDirectory);
 

@@ -92,7 +92,7 @@ PHP);
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString('StructArmed cache cleared.', $output);
-            $this->assertFalse(is_dir($cacheDirectory));
+            $this->assertDirectoryDoesNotExist($cacheDirectory);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -127,7 +127,7 @@ PHP);
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString('StructArmed cache cleared.', $output);
-            $this->assertFalse(is_dir($cacheDirectory));
+            $this->assertDirectoryDoesNotExist($cacheDirectory);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -455,7 +455,7 @@ PHP);
             );
 
             $this->assertSame(0, $exitCode, $output);
-            $this->assertTrue(is_dir($cacheDirectory));
+            $this->assertDirectoryExists($cacheDirectory);
         } finally {
             $this->removeTempDirectory($basePath);
         }
