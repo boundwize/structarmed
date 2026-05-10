@@ -1,4 +1,4 @@
-# structarmed
+# Structarmed
 
 <img width="1600" height="420" alt="Image" src="https://github.com/user-attachments/assets/62b0baa3-d81a-44ec-bd5a-16bb4c5c97f8" />
 
