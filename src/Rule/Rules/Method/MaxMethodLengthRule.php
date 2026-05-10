@@ -39,7 +39,6 @@ final readonly class MaxMethodLengthRule implements RuleInterface, MultipleRuleV
         foreach ($classNode->methods as $method) {
             if ($method->lineCount > $this->maxLines) {
                 $violations[] = new RuleViolation(
-                    ruleKey:   '',
                     message:   sprintf(
                         'Method [%s::%s()] is %d lines long, maximum allowed is %d',
                         $classNode->className,

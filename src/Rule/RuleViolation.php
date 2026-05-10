@@ -9,12 +9,12 @@ use function sprintf;
 final readonly class RuleViolation
 {
     public function __construct(
-        public string $ruleKey,
         public string $message,
         public string $file,
         public int $line,
         public string $className,
         public ?string $layer = null,
+        public string $ruleKey = '',
     ) {
     }
 

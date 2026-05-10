@@ -52,7 +52,6 @@ final readonly class MustHaveReturnTypeRule implements RuleInterface, MultipleRu
 
             if (! $method->hasReturnType) {
                 $violations[] = new RuleViolation(
-                    ruleKey:   '',
                     message:   sprintf(
                         'Public method [%s::%s()] must declare a return type',
                         $classNode->className,

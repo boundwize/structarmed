@@ -39,7 +39,6 @@ final readonly class MaxCyclomaticComplexityRule implements RuleInterface, Multi
         foreach ($classNode->methods as $method) {
             if ($method->cyclomaticComplexity > $this->maxComplexity) {
                 $violations[] = new RuleViolation(
-                    ruleKey:   '',
                     message:   sprintf(
                         'Method [%s::%s()] has cyclomatic complexity of %d, maximum allowed is %d',
                         $classNode->className,

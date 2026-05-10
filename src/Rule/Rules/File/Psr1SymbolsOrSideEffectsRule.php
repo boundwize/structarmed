@@ -53,7 +53,6 @@ final readonly class Psr1SymbolsOrSideEffectsRule implements ProjectRuleInterfac
 
             if ($fileState['declaresSymbols'] && $fileState['hasSideEffects']) {
                 return new RuleViolation(
-                    ruleKey: '',
                     message: sprintf(
                         'File [%s] should either declare symbols or cause side effects, not both',
                         $file

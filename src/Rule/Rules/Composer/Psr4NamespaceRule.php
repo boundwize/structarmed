@@ -47,7 +47,6 @@ final class Psr4NamespaceRule implements RuleInterface
         }
 
         return new RuleViolation(
-            ruleKey:   '',
             message:   sprintf(
                 'Class [%s] must match PSR-4 class [%s]',
                 $classNode->className,

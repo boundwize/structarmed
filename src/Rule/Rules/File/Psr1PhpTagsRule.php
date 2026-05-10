@@ -55,7 +55,6 @@ final readonly class Psr1PhpTagsRule implements ProjectRuleInterface
                 }
 
                 return new RuleViolation(
-                    ruleKey: '',
                     message: sprintf('File [%s] must use only <?php and <?= PHP tags', $file),
                     file: $file,
                     line: $token[2],

@@ -47,7 +47,6 @@ final readonly class MethodNameMustBeCamelCaseRule implements RuleInterface, Mul
             }
 
             $violations[] = new RuleViolation(
-                ruleKey:   '',
                 message:   sprintf(
                     'Method [%s::%s()] must be declared in camelCase',
                     $classNode->className,

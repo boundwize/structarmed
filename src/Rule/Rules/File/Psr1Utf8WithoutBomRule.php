@@ -33,7 +33,6 @@ final readonly class Psr1Utf8WithoutBomRule implements ProjectRuleInterface
 
             if (str_starts_with($contents, "\xEF\xBB\xBF")) {
                 return new RuleViolation(
-                    ruleKey: '',
                     message: sprintf('File [%s] must use UTF-8 without BOM', $file),
                     file: $file,
                     line: 1,
@@ -43,7 +42,6 @@ final readonly class Psr1Utf8WithoutBomRule implements ProjectRuleInterface
 
             if (preg_match('//u', $contents) !== 1) {
                 return new RuleViolation(
-                    ruleKey: '',
                     message: sprintf('File [%s] must use valid UTF-8 encoding', $file),
                     file: $file,
                     line: 1,

@@ -102,7 +102,6 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
     private function violation(string $message, string $file): RuleViolation
     {
         return new RuleViolation(
-            ruleKey:   '',
             message:   $message,
             file:      $file,
             line:      1,

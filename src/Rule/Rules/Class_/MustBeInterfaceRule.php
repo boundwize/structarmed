@@ -39,7 +39,6 @@ final readonly class MustBeInterfaceRule implements RuleInterface
         }
 
         return new RuleViolation(
-            ruleKey:   '',
             message:   sprintf(
                 'Class [%s] must be an interface',
                 $classNode->className
