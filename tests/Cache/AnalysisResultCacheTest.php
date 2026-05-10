@@ -300,31 +300,17 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testComposerLockHashIsNotDifferentWhenHashIsNull(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        try {
-            $analysisResultCache->store('key', ['composerLockHash' => 'old'], new RuleViolationCollection());
-
-            $this->assertFalse($analysisResultCache->hasDifferentComposerLock(null));
-        } finally {
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    public function testComposerLockHashIsNotDifferentWhenCacheDirectoryIsMissing(): void
+    public function testComposerGeneratedVersionHashIsNotDifferentWhenCacheDirectoryIsMissing(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
 
         $this->removeTempDirectory($cacheDirectory);
 
-        $this->assertFalse($analysisResultCache->hasDifferentComposerLock('new'));
+        $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('new'));
     }
 
-    public function testComposerLockHashIsNotDifferentWhenNoCachedEntryHasTheField(): void
+    public function testComposerGeneratedVersionHashIsNotDifferentWhenNoCachedEntryHasTheField(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
@@ -332,41 +318,49 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
 
-            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('some-hash'));
+            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testComposerLockHashIsNotDifferentWhenStoredHashMatches(): void
+    public function testComposerGeneratedVersionHashIsNotDifferentWhenStoredHashMatches(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
 
         try {
-            $analysisResultCache->store('key', ['composerLockHash' => 'same'], new RuleViolationCollection());
+            $analysisResultCache->store(
+                'key',
+                ['composerGeneratedVersionHash' => 'same'],
+                new RuleViolationCollection()
+            );
 
-            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('same'));
+            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('same'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testComposerLockHashIsDifferentWhenStoredHashDiffers(): void
+    public function testComposerGeneratedVersionHashIsDifferentWhenStoredHashDiffers(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
 
         try {
-            $analysisResultCache->store('key', ['composerLockHash' => 'old'], new RuleViolationCollection());
+            $analysisResultCache->store(
+                'key',
+                ['composerGeneratedVersionHash' => 'old'],
+                new RuleViolationCollection()
+            );
 
-            $this->assertTrue($analysisResultCache->hasDifferentComposerLock('new'));
+            $this->assertTrue($analysisResultCache->hasDifferentComposerGeneratedVersion('new'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testComposerLockHashSkipsUnreadableCachePayloadsAndDirectories(): void
+    public function testComposerGeneratedVersionHashSkipsUnreadableCachePayloadsAndDirectories(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
@@ -379,13 +373,13 @@ final class AnalysisResultCacheTest extends TestCase
         ], 'other.json');
 
         try {
-            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('some-hash'));
+            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testComposerLockHashSkipsClassNodeCachePayloads(): void
+    public function testComposerGeneratedVersionHashSkipsClassNodeCachePayloads(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -396,7 +390,7 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
-            $this->assertFalse($analysisResultCache->hasDifferentComposerLock('some-hash'));
+            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -769,7 +763,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertSame($config, $metadata['configPath']);
             $this->assertSame(['src'], $metadata['scanPaths']);
             $this->assertIsString($metadata['configHash']);
-            $this->assertNull($metadata['composerLockHash']);
+            $this->assertIsString($metadata['composerGeneratedVersionHash']);
             $this->assertIsString($metadata['filesHash']);
             $this->assertSame(
                 (new AnalysisCacheMetadataFactory())->key($metadata),
@@ -788,15 +782,13 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testMetadataIncludesComposerLockHashWhenPresent(): void
+    public function testMetadataIncludesComposerGeneratedVersionHash(): void
     {
-        $directory    = $this->createTempDirectory();
-        $config       = $directory . '/structarmed.php';
-        $composerLock = $directory . '/composer.lock';
-        $source       = $directory . '/Example.php';
+        $directory = $this->createTempDirectory();
+        $config    = $directory . '/structarmed.php';
+        $source    = $directory . '/Example.php';
 
         file_put_contents($config, '<?php return null;');
-        file_put_contents($composerLock, '{"packages":[]}');
         file_put_contents($source, '<?php class Example {}');
 
         try {
@@ -807,9 +799,9 @@ final class AnalysisResultCacheTest extends TestCase
                 [$source]
             );
 
-            $this->assertIsString($metadata['composerLockHash']);
+            $this->assertIsString($metadata['composerGeneratedVersionHash']);
         } finally {
-            foreach ([$config, $composerLock, $source] as $file) {
+            foreach ([$config, $source] as $file) {
                 if (file_exists($file)) {
                     unlink($file);
                 }
@@ -819,16 +811,14 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testCacheMissesWhenComposerLockChanges(): void
+    public function testCacheMissesWhenComposerGeneratedVersionChanges(): void
     {
-        $directory    = $this->createTempDirectory();
-        $config       = $directory . '/structarmed.php';
-        $composerLock = $directory . '/composer.lock';
-        $source       = $directory . '/Example.php';
-        $cacheDir     = $this->createTempDirectory();
+        $directory = $this->createTempDirectory();
+        $config    = $directory . '/structarmed.php';
+        $source    = $directory . '/Example.php';
+        $cacheDir  = $this->createTempDirectory();
 
         file_put_contents($config, '<?php return null;');
-        file_put_contents($composerLock, '{"packages":[]}');
         file_put_contents($source, '<?php class Example {}');
 
         try {
@@ -846,16 +836,21 @@ final class AnalysisResultCacheTest extends TestCase
 
             $this->assertInstanceOf(RuleViolationCollection::class, $analysisResultCache->load($key, $metadataBefore));
 
-            file_put_contents($composerLock, '{"packages":[{"name":"some/package","version":"2.0.0"}]}');
+            $metadataAfter                                 = $analysisCacheMetadataFactory->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+            $metadataAfter['composerGeneratedVersionHash'] = 'changed';
 
-            $metadataAfter = $analysisCacheMetadataFactory->metadata($directory, $config, ['src'], [$source]);
-
+            $this->assertNotSame($key, $analysisCacheMetadataFactory->key($metadataAfter));
             $this->assertNotInstanceOf(
                 RuleViolationCollection::class,
                 $analysisResultCache->load($key, $metadataAfter)
             );
         } finally {
-            foreach ([$config, $composerLock, $source] as $file) {
+            foreach ([$config, $source] as $file) {
                 if (file_exists($file)) {
                     unlink($file);
                 }

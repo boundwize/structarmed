@@ -158,12 +158,8 @@ final readonly class AnalysisResultCache
         return false;
     }
 
-    public function hasDifferentComposerLock(?string $composerLockHash): bool
+    public function hasDifferentComposerGeneratedVersion(string $composerGeneratedVersionHash): bool
     {
-        if ($composerLockHash === null) {
-            return false;
-        }
-
         if (! is_dir($this->cacheDirectory)) {
             return false;
         }
@@ -185,11 +181,11 @@ final readonly class AnalysisResultCache
                 continue;
             }
 
-            if (! array_key_exists('composerLockHash', $metadata)) {
+            if (! array_key_exists('composerGeneratedVersionHash', $metadata)) {
                 continue;
             }
 
-            if ($metadata['composerLockHash'] !== $composerLockHash) {
+            if ($metadata['composerGeneratedVersionHash'] !== $composerGeneratedVersionHash) {
                 return true;
             }
         }
