@@ -140,7 +140,7 @@ final class Architecture
         return $this;
     }
 
-    public function cacheDirectory(string $cacheDirectory): self
+    public function cacheDirectory(?string $cacheDirectory): self
     {
         $this->cacheDirectory = $cacheDirectory;
 
