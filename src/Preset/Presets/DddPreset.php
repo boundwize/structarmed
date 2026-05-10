@@ -24,7 +24,7 @@ use function strtolower;
 final readonly class DddPreset implements PresetInterface
 {
     // -------------------------------------------------------------------------
-    // Rule key constants — use these with replaceRule() and withoutRule()
+    // Rule key constants — use these with skipRule() and replaceRule()
     // -------------------------------------------------------------------------
 
     // Layer rules
