@@ -38,7 +38,6 @@ final readonly class MayNotDependOnRule implements RuleInterface
                 || str_starts_with($depPath . '/', $toPath . '/')
             ) {
                 return new RuleViolation(
-                    ruleKey:   '',
                     message:   sprintf(
                         'Class [%s] in layer [%s] must not depend on [%s] which belongs to layer [%s]',
                         $classNode->className,

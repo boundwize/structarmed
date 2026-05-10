@@ -30,7 +30,6 @@ final readonly class MayNotCallFunctionRule implements RuleInterface
         }
 
         return new RuleViolation(
-            ruleKey:   '',
             message:   sprintf(
                 'Class [%s] must not call function [%s()]',
                 $classNode->className,

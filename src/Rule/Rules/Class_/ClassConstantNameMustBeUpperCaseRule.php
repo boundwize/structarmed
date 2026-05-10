@@ -42,7 +42,6 @@ final readonly class ClassConstantNameMustBeUpperCaseRule implements RuleInterfa
             }
 
             $violations[] = new RuleViolation(
-                ruleKey:   '',
                 message:   sprintf(
                     'Class constant [%s::%s] must be declared in upper case with underscore separators',
                     $classNode->className,

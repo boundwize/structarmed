@@ -43,7 +43,6 @@ final readonly class MustBeFinalRule implements RuleInterface
         }
 
         return new RuleViolation(
-            ruleKey:   '',
             message:   sprintf(
                 'Class [%s] must be declared final',
                 $classNode->className

@@ -34,6 +34,18 @@ final class RuleViolationTest extends TestCase
         ], $violation->toArray());
     }
 
+    public function testRuleKeyDefaultsToEmptyString(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message: 'Broken rule',
+            file: '/src/File.php',
+            line: 7,
+            className: 'App\\Domain\\File',
+        );
+
+        $this->assertSame('', $ruleViolation->ruleKey);
+    }
+
     public function testCollectionFiltersAndSerializesViolations(): void
     {
         $collection    = new RuleViolationCollection();
@@ -58,12 +70,12 @@ final class RuleViolationTest extends TestCase
     private function violation(string $ruleKey, string $layer): RuleViolation
     {
         return new RuleViolation(
-            ruleKey: $ruleKey,
             message: 'Broken rule',
             file: '/src/File.php',
             line: 7,
             className: 'App\\Domain\\File',
             layer: $layer,
+            ruleKey: $ruleKey,
         );
     }
 }

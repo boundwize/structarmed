@@ -300,12 +300,12 @@ final readonly class AnalysisResultCache
         }
 
         return new RuleViolation(
-            ruleKey:   $ruleKey,
             message:   $message,
             file:      $file,
             line:      $line,
             className: $className,
             layer:     $layer,
+            ruleKey:   $ruleKey,
         );
     }
 
