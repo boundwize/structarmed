@@ -103,6 +103,14 @@ final class ArchitectureTest extends TestCase
         $this->assertSame('var/cache/structarmed', $architecture->getCacheDirectory());
     }
 
+    public function testCacheDirectoryCanBeNull(): void
+    {
+        $architecture = Architecture::define()
+            ->cacheDirectory(null);
+
+        $this->assertNull($architecture->getCacheDirectory());
+    }
+
     public function testRuleIsAdded(): void
     {
         $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
