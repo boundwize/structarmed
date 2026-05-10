@@ -10,9 +10,11 @@ use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Composer\InstalledVersions;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 
 use function bin2hex;
 use function file_exists;
@@ -828,6 +830,43 @@ final class AnalysisResultCacheTest extends TestCase
             }
 
             $this->removeTempDirectory($directory);
+        }
+    }
+
+    public function testComposerGeneratedVersionHashUsesRootPackageWhenStructarmedIsNotInstalled(): void
+    {
+        $canGetVendors = new ReflectionProperty(InstalledVersions::class, 'canGetVendors');
+        $installed     = new ReflectionProperty(InstalledVersions::class, 'installed');
+        $isLocalDir    = new ReflectionProperty(InstalledVersions::class, 'installedIsLocalDir');
+
+        $origCanGetVendors = $canGetVendors->getValue();
+        $origInstalled     = $installed->getValue();
+        $origIsLocalDir    = $isLocalDir->getValue();
+
+        try {
+            $canGetVendors->setValue(null, false);
+            InstalledVersions::reload([
+                'root'     => [
+                    'name'           => 'some/project',
+                    'pretty_version' => 'dev-main',
+                    'version'        => 'dev-main',
+                    'reference'      => null,
+                    'type'           => 'project',
+                    'install_path'   => __DIR__,
+                    'aliases'        => [],
+                    'dev'            => true,
+                ],
+                'versions' => [],
+            ]);
+
+            $this->assertSame(
+                hash('xxh128', json_encode(InstalledVersions::getRootPackage(), JSON_THROW_ON_ERROR)),
+                (new AnalysisCacheMetadataFactory())->composerGeneratedVersionHash()
+            );
+        } finally {
+            $installed->setValue(null, $origInstalled);
+            $isLocalDir->setValue(null, $origIsLocalDir);
+            $canGetVendors->setValue(null, $origCanGetVendors);
         }
     }
 
