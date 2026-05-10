@@ -19,7 +19,8 @@ final readonly class ClassNode
     /**
      * @param string[]      $dependencies   Fully-qualified class names this class depends on
      * @param string[]      $implements     Interface names this class implements
-     * @param MethodNode[]  $methods        Public methods of this class
+     * @param MethodNode[]  $methods        Methods of this class
+     * @param ConstantNode[] $constants     Constants of this class
      * @param string[]      $functionCalls  Functions called within this class
      * @param string[]      $superglobals   Superglobals accessed ($_GET, $_POST, etc.)
      * @param list<string>  $layers         All layer names this class belongs to; defaults to [$layer]
@@ -37,6 +38,7 @@ final readonly class ClassNode
         public array $dependencies = [],
         public array $implements = [],
         public array $methods = [],
+        public array $constants = [],
         public array $functionCalls = [],
         public array $superglobals = [],
         array $layers = [],

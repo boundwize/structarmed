@@ -20,6 +20,7 @@ use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Case_;
 use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Do_;
@@ -140,6 +141,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $functionCalls = $this->collectFunctionCalls($classLike);
         $superglobals  = $this->collectSuperglobals($classLike);
         $implements    = $this->collectImplements($classLike);
+        $constants     = $this->collectConstants($classLike);
 
         $this->nodes[] = new ClassNode(
             className:     $className,
@@ -156,10 +158,34 @@ final class ClassCollector extends NodeVisitorAbstract
             dependencies:  $dependencies,
             implements:    $implements,
             methods:       $methods,
+            constants:     $constants,
             functionCalls: $functionCalls,
             superglobals:  $superglobals,
             layers:        $layers,
         );
+    }
+
+    /**
+     * @return ConstantNode[]
+     */
+    private function collectConstants(ClassLike $classLike): array
+    {
+        $constants = [];
+
+        foreach ($classLike->stmts as $stmt) {
+            if (! $stmt instanceof ClassConst) {
+                continue;
+            }
+
+            foreach ($stmt->consts as $const) {
+                $constants[] = new ConstantNode(
+                    name: (string) $const->name,
+                    line: $const->getStartLine(),
+                );
+            }
+        }
+
+        return $constants;
     }
 
     private function resolveClassName(ClassLike $classLike): string
