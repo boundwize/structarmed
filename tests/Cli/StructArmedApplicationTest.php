@@ -426,64 +426,6 @@ PHP);
         return str_replace('\\', '/', $path);
     }
 
-    public function testAnalyseCommandClearsEntireCacheWhenComposerLockChanges(): void
-    {
-        $basePath = $this->createTempDirectory();
-        mkdir($basePath . '/src');
-        file_put_contents($basePath . '/src/Foo.php', '<?php namespace App; final class Foo {}');
-        file_put_contents($basePath . '/composer.lock', '{"packages":[]}');
-        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
-<?php
-
-declare(strict_types=1);
-
-use Boundwize\StructArmed\Architecture;
-
-return Architecture::define()
-    ->layer('Source', 'src/');
-PHP);
-
-        $progress = new class implements ProgressHandlerInterface {
-            public int $total = 0;
-
-            public function start(int $total): void
-            {
-                $this->total = $total;
-            }
-
-            public function advance(string $file): void
-            {
-            }
-
-            public function finish(): void
-            {
-            }
-        };
-
-        try {
-            $this->runApplication(
-                ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--no-progress'],
-                $basePath
-            );
-
-            file_put_contents(
-                $basePath . '/composer.lock',
-                '{"packages":[{"name":"some/package","version":"2.0.0"}]}'
-            );
-
-            [$exitCode, $output] = $this->runAnalyseCommand(
-                ['--config=' . $basePath . '/structarmed.php'],
-                $basePath,
-                $progress
-            );
-
-            $this->assertSame(0, $exitCode, $output);
-            $this->assertGreaterThan(0, $progress->total);
-        } finally {
-            $this->removeTempDirectory($basePath);
-        }
-    }
-
     public function testAnalyseCommandStoresResultInConfiguredCacheDirectory(): void
     {
         $basePath       = $this->createProjectDirectory();
@@ -677,10 +619,6 @@ PHP;
 
         if (file_exists($basePath . '/structarmed-custom.php')) {
             unlink($basePath . '/structarmed-custom.php');
-        }
-
-        if (file_exists($basePath . '/composer.lock')) {
-            unlink($basePath . '/composer.lock');
         }
 
         foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {

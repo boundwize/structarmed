@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cache;
 
+use Composer\InstalledVersions;
+
 use function array_map;
-use function file_exists;
 use function file_get_contents;
 use function filemtime;
 use function filesize;
 use function hash;
 use function json_encode;
-use function rtrim;
 use function sort;
 
 use const JSON_THROW_ON_ERROR;
@@ -27,16 +27,14 @@ final readonly class AnalysisCacheMetadataFactory
     {
         sort($files);
 
-        $composerLockPath = rtrim($basePath, '/') . '/composer.lock';
-
         return [
-            'version'          => 1,
-            'basePath'         => $basePath,
-            'configPath'       => $configPath,
-            'configHash'       => $this->fileHash($configPath),
-            'composerLockHash' => file_exists($composerLockPath) ? $this->fileHash($composerLockPath) : null,
-            'scanPaths'        => $scanPaths,
-            'filesHash'        => $this->filesHash($files),
+            'version'                      => 1,
+            'basePath'                     => $basePath,
+            'configPath'                   => $configPath,
+            'configHash'                   => $this->fileHash($configPath),
+            'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash(),
+            'scanPaths'                    => $scanPaths,
+            'filesHash'                    => $this->filesHash($files),
         ];
     }
 
@@ -46,10 +44,11 @@ final readonly class AnalysisCacheMetadataFactory
     public function key(array $metadata): string
     {
         return hash('xxh128', json_encode([
-            'version'    => $metadata['version'] ?? null,
-            'basePath'   => $metadata['basePath'] ?? null,
-            'configPath' => $metadata['configPath'] ?? null,
-            'scanPaths'  => $metadata['scanPaths'] ?? [],
+            'version'                      => $metadata['version'] ?? null,
+            'basePath'                     => $metadata['basePath'] ?? null,
+            'configPath'                   => $metadata['configPath'] ?? null,
+            'composerGeneratedVersionHash' => $metadata['composerGeneratedVersionHash'] ?? null,
+            'scanPaths'                    => $metadata['scanPaths'] ?? [],
         ], JSON_THROW_ON_ERROR));
     }
 
@@ -68,5 +67,17 @@ final readonly class AnalysisCacheMetadataFactory
             'mtime' => filemtime($file) ?: 0,
             'size'  => filesize($file) ?: 0,
         ], $files), JSON_THROW_ON_ERROR));
+    }
+
+    public function composerGeneratedVersionHash(): string
+    {
+        $version = InstalledVersions::isInstalled('boundwize/structarmed', false)
+            ? [
+                'prettyVersion' => InstalledVersions::getPrettyVersion('boundwize/structarmed'),
+                'reference'     => InstalledVersions::getReference('boundwize/structarmed'),
+            ]
+            : InstalledVersions::getRootPackage();
+
+        return hash('xxh128', json_encode($version, JSON_THROW_ON_ERROR));
     }
 }

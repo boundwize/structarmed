@@ -23,6 +23,7 @@
     ],
     "require": {
         "php": "^8.2",
+        "composer-runtime-api": "^2.0",
         "nikic/php-parser": "^5.7"
     },
     "require-dev": {

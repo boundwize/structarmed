@@ -16,7 +16,6 @@ use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use RuntimeException;
 
 use function count;
-use function file_exists;
 use function in_array;
 use function is_dir;
 use function ltrim;
@@ -120,15 +119,11 @@ final readonly class AnalyseCommand
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
         $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
         $analyser                     = new Analyser($basePath, $analysisResultCache, $configHash);
-
-        $composerLockFile = $basePath . '/composer.lock';
-        $composerLockHash = file_exists($composerLockFile)
-            ? $analysisCacheMetadataFactory->fileHash($composerLockFile)
-            : null;
+        $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
 
         $shouldClearCache = isset($options['clear-cache'])
             || $analysisResultCache->hasDifferentConfig($configHash)
-            || $analysisResultCache->hasDifferentComposerLock($composerLockHash);
+            || $analysisResultCache->hasDifferentComposerGeneratedVersion($composerGeneratedVersionHash);
 
         if ($shouldClearCache) {
             $analysisResultCache->clear();
