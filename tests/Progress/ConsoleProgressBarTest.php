@@ -122,16 +122,15 @@ final class ConsoleProgressBarTest extends TestCase
         );
     }
 
-    public function testProgressBarPrintsPercentageChangesWhenNotTty(): void
+    public function testProgressBarPrintsAtMostEvery10PercentWhenNotTty(): void
     {
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        // 10 files: each advance = 10%, so each step is a new percent
         $consoleProgressBar = new ConsoleProgressBar($stream, 10, null, false);
-        $consoleProgressBar->start(10);
+        $consoleProgressBar->start(93);
 
-        for ($i = 0; $i < 10; $i++) {
+        for ($i = 0; $i < 93; $i++) {
             $consoleProgressBar->advance('/tmp/File' . $i . '.php');
         }
 
@@ -140,13 +139,12 @@ final class ConsoleProgressBarTest extends TestCase
         rewind($stream);
         $output = (string) stream_get_contents($stream);
 
-        $this->assertStringContainsString('Analyzing [----------]   0% 0/10', $output);
-        $this->assertStringContainsString('Analyzing [==========] 100% 10/10', $output);
+        $this->assertStringContainsString('Analyzing [----------]   0% 0/93', $output);
+        $this->assertStringContainsString('Analyzing [==========] 100% 93/93', $output);
         $this->assertStringNotContainsString("\r", $output);
 
-        // Each percent line ends with a newline, so no duplicate consecutive percents
         $lines = array_filter(explode("\n", trim($output)));
-        $this->assertCount(11, $lines); // 0% start + 10% increments
+        $this->assertLessThanOrEqual(12, count($lines)); // 0% + at most 10 steps + 100%
     }
 
     public function testProgressBarHandlesZeroTotalWithoutRenderingFileName(): void
