@@ -89,7 +89,6 @@ Relative cache directories are resolved from the project root. `--config` also c
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
-use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 
@@ -100,10 +99,10 @@ return Architecture::define()
     ->skip([
         'tests/Fixtures/',
         'var/cache/*',
+        DddPreset::DOMAIN_NO_DATETIME,
         DddPreset::ENTITY_MUST_BE_FINAL => ['src/Legacy/'],
-        Psr1Preset::METHODS_MUST_BE_CAMEL_CASE,
     ])
-    ->withPresets(Preset::DDD(), Preset::PSR1())
+    ->withPreset(Preset::DDD())
     ->rule(
         'domain.must_not_depend_on_infrastructure',
         new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure', toPath: 'Infrastructure')
