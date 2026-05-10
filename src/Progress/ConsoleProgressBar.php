@@ -37,7 +37,7 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
     {
         $this->stream   = $stream ?? STDERR;
         $this->width    = max(10, $width);
-        $this->isTty    = $isTty ?? stream_isatty($this->stream);
+        $this->isTty    = $isTty ?? @stream_isatty($this->stream);
         $this->useColor = $useColor ?? $this->detectColorSupport();
     }
 
