@@ -122,7 +122,7 @@ final class ConsoleProgressBarTest extends TestCase
         );
     }
 
-    public function testProgressBarProducesNoOutputWhenNotTty(): void
+    public function testProgressBarPrintsOnlyFinalLineWhenNotTty(): void
     {
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
@@ -136,7 +136,8 @@ final class ConsoleProgressBarTest extends TestCase
         rewind($stream);
         $output = (string) stream_get_contents($stream);
 
-        $this->assertSame('', $output);
+        $this->assertStringContainsString('Analyzing [==========] 100% 2/2', $output);
+        $this->assertStringNotContainsString("\r", $output);
     }
 
     public function testProgressBarHandlesZeroTotalWithoutRenderingFileName(): void

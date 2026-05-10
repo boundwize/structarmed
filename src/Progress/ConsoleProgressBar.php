@@ -58,22 +58,19 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     public function finish(): void
     {
-        if (! $this->isTty) {
-            return;
-        }
-
         if ($this->total > 0) {
             $this->current = $this->total;
-            $this->render();
         }
+
+        $this->render(final: true);
 
         fprintf($this->stream, PHP_EOL);
         fflush($this->stream);
     }
 
-    private function render(): void
+    private function render(bool $final = false): void
     {
-        if (! $this->isTty) {
+        if (! $this->isTty && ! $final) {
             return;
         }
 
@@ -91,7 +88,7 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
         fprintf(
             $this->stream,
-            "\r%s [%s] %3d%% %d/%d",
+            $this->isTty ? "\r%s [%s] %3d%% %d/%d" : "%s [%s] %3d%% %d/%d",
             $status,
             $bar,
             $percent,
