@@ -22,10 +22,10 @@ composer require --dev boundwize/structarmed
 
 ```bash
 vendor/bin/structarmed init
-vendor/bin/structarmed init --preset=ddd
-vendor/bin/structarmed init --preset=mvc
-vendor/bin/structarmed init --preset=psr1
 vendor/bin/structarmed init --preset=psr4
+vendor/bin/structarmed init --preset=psr1
+vendor/bin/structarmed init --preset=mvc
+vendor/bin/structarmed init --preset=ddd
 vendor/bin/structarmed init --preset=all
 ```
 
