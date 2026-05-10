@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
+use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -71,6 +72,29 @@ final class ArchitectureTest extends TestCase
             $architecture->getSkipPaths()
         );
         $this->assertSame([], $architecture->getRuleSkipPaths());
+    }
+
+    public function testSkipCanRegisterRuleBeforePresetAddsIt(): void
+    {
+        $architecture = Architecture::define()
+            ->skip([
+                'tests/Fixtures/',
+                Psr1Preset::METHODS_MUST_BE_CAMEL_CASE,
+            ])
+            ->withPreset(Preset::PSR1(sourcePaths: ['src/']));
+
+        $this->assertSame(['tests/Fixtures/'], $architecture->getSkipPaths());
+        $this->assertSame([Psr1Preset::METHODS_MUST_BE_CAMEL_CASE], $architecture->getSkippedRuleKeys());
+    }
+
+    public function testSkipCanRegisterRuleAfterRuleExists(): void
+    {
+        $architecture = Architecture::define()
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'))
+            ->skip(['source.must_be_final']);
+
+        $this->assertSame([], $architecture->getSkipPaths());
+        $this->assertSame(['source.must_be_final'], $architecture->getSkippedRuleKeys());
     }
 
     public function testCacheDirectoryIsRegistered(): void
