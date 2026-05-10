@@ -60,12 +60,12 @@ final class ReportTest extends TestCase
     private function violation(): RuleViolation
     {
         return new RuleViolation(
-            ruleKey: 'rule.key',
             message: 'Something failed',
             file: '/src/Order.php',
             line: 10,
             className: 'App\\Domain\\Order',
             layer: 'Domain',
+            ruleKey: 'rule.key',
         );
     }
 }

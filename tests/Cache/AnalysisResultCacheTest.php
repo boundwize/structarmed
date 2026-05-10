@@ -43,12 +43,12 @@ final class AnalysisResultCacheTest extends TestCase
         $metadata                = ['configHash' => 'same', 'filesHash' => 'same'];
         $ruleViolationCollection = new RuleViolationCollection();
         $ruleViolationCollection->add(new RuleViolation(
-            ruleKey:   'rule',
             message:   'Nope',
             file:      __FILE__,
             line:      10,
             className: self::class,
             layer:     'Domain',
+            ruleKey:   'rule',
         ));
 
         try {

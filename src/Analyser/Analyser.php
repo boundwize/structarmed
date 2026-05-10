@@ -76,12 +76,12 @@ final readonly class Analyser
             }
 
             $ruleViolationCollection->add(new RuleViolation(
-                ruleKey:   $key,
                 message:   $violation->message,
                 file:      $violation->file,
                 line:      $violation->line,
                 className: $violation->className,
                 layer:     $violation->layer,
+                ruleKey:   $key,
             ));
         }
 
@@ -119,12 +119,12 @@ final readonly class Analyser
 
                     // Inject the rule key into the violation
                     $ruleViolationCollection->add(new RuleViolation(
-                        ruleKey:   $key,
                         message:   $violation->message,
                         file:      $violation->file,
                         line:      $violation->line,
                         className: $violation->className,
                         layer:     $violation->layer,
+                        ruleKey:   $key,
                     ));
                 }
             }
