@@ -8,11 +8,15 @@ use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_filter;
+use function count;
+use function explode;
 use function fopen;
 use function getenv;
 use function putenv;
 use function rewind;
 use function stream_get_contents;
+use function trim;
 
 #[CoversClass(ConsoleProgressBar::class)]
 final class ConsoleProgressBarTest extends TestCase
@@ -22,7 +26,7 @@ final class ConsoleProgressBarTest extends TestCase
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+        $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
         $consoleProgressBar->start(2);
         $consoleProgressBar->advance('/tmp/Foo.php');
         $consoleProgressBar->advance('/tmp/Bar.php');
@@ -41,7 +45,7 @@ final class ConsoleProgressBarTest extends TestCase
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        $consoleProgressBar = new ConsoleProgressBar($stream, 10, true);
+        $consoleProgressBar = new ConsoleProgressBar($stream, 10, true, true);
         $consoleProgressBar->start(1);
         $consoleProgressBar->advance('/tmp/Foo.php');
         $consoleProgressBar->finish();
@@ -63,7 +67,7 @@ final class ConsoleProgressBarTest extends TestCase
                 $stream = fopen('php://temp', 'w+');
                 $this->assertIsResource($stream);
 
-                $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+                $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
@@ -85,7 +89,7 @@ final class ConsoleProgressBarTest extends TestCase
                 $stream = fopen('php://temp', 'w+');
                 $this->assertIsResource($stream);
 
-                $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+                $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
@@ -108,7 +112,7 @@ final class ConsoleProgressBarTest extends TestCase
                 $stream = fopen('php://temp', 'w+');
                 $this->assertIsResource($stream);
 
-                $consoleProgressBar = new ConsoleProgressBar($stream, 10);
+                $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
@@ -122,12 +126,37 @@ final class ConsoleProgressBarTest extends TestCase
         );
     }
 
+    public function testProgressBarPrintsAtMostEvery10PercentWhenNotTty(): void
+    {
+        $stream = fopen('php://temp', 'w+');
+        $this->assertIsResource($stream);
+
+        $consoleProgressBar = new ConsoleProgressBar($stream, 10, null, false);
+        $consoleProgressBar->start(93);
+
+        for ($i = 0; $i < 93; $i++) {
+            $consoleProgressBar->advance('/tmp/File' . $i . '.php');
+        }
+
+        $consoleProgressBar->finish();
+
+        rewind($stream);
+        $output = (string) stream_get_contents($stream);
+
+        $this->assertStringContainsString('Analyzing [----------]   0% 0/93', $output);
+        $this->assertStringContainsString('Analyzing [==========] 100% 93/93', $output);
+        $this->assertStringNotContainsString("\r", $output);
+
+        $lines = array_filter(explode("\n", trim($output)));
+        $this->assertLessThanOrEqual(12, count($lines)); // 0% + at most 10 steps + 100%
+    }
+
     public function testProgressBarHandlesZeroTotalWithoutRenderingFileName(): void
     {
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        $consoleProgressBar = new ConsoleProgressBar($stream, 8, true);
+        $consoleProgressBar = new ConsoleProgressBar($stream, 8, true, true);
         $consoleProgressBar->start(0);
         $consoleProgressBar->advance('/tmp/VeryLongClassNameThatNeedsTruncating.php');
         $consoleProgressBar->finish();

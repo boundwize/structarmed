@@ -24,24 +24,30 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     private int $current = 0;
 
+    private int $lastRenderedPercent = -1;
+
     private readonly int $width;
 
     private readonly bool $useColor;
 
+    private readonly bool $isTty;
+
     /**
      * @param resource|null $stream
      */
-    public function __construct(mixed $stream = null, int $width = 28, ?bool $useColor = null)
+    public function __construct(mixed $stream = null, int $width = 28, ?bool $useColor = null, ?bool $isTty = null)
     {
         $this->stream   = $stream ?? STDERR;
         $this->width    = max(10, $width);
+        $this->isTty    = $isTty ?? @stream_isatty($this->stream);
         $this->useColor = $useColor ?? $this->detectColorSupport();
     }
 
     public function start(int $total): void
     {
-        $this->total   = max(0, $total);
-        $this->current = 0;
+        $this->total               = max(0, $total);
+        $this->current             = 0;
+        $this->lastRenderedPercent = -1;
 
         $this->render();
     }
@@ -57,30 +63,49 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
     {
         if ($this->total > 0) {
             $this->current = $this->total;
-            $this->render();
         }
 
-        fprintf($this->stream, PHP_EOL);
-        fflush($this->stream);
+        $this->render(final: true);
+
+        if ($this->isTty) {
+            fprintf($this->stream, PHP_EOL);
+            fflush($this->stream);
+        }
     }
 
-    private function render(): void
+    private function render(bool $final = false): void
     {
         $percent = $this->total > 0
             ? (int) (($this->current / $this->total) * 100)
             : 100;
-        $filled  = $this->total > 0
+
+        if (! $this->isTty) {
+            $isFirst = $this->lastRenderedPercent === -1;
+            $gap     = $percent - $this->lastRenderedPercent;
+
+            if (! $isFirst && ! $final && $gap < 10) {
+                return;
+            }
+
+            if ($percent === $this->lastRenderedPercent) {
+                return;
+            }
+        }
+
+        $this->lastRenderedPercent = $percent;
+
+        $filled = $this->total > 0
             ? (int) (($this->current / $this->total) * $this->width)
             : $this->width;
-        $bar     = $this->color(
+        $bar    = $this->color(
             str_repeat('=', $filled),
             '32'
         ) . $this->color(str_repeat('-', $this->width - $filled), '90');
-        $status  = $this->color('Analyzing', '36');
+        $status = $this->color('Analyzing', '36');
 
         fprintf(
             $this->stream,
-            "\r%s [%s] %3d%% %d/%d",
+            $this->isTty ? "\r%s [%s] %3d%% %d/%d" : "%s [%s] %3d%% %d/%d\n",
             $status,
             $bar,
             $percent,
