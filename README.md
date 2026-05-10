@@ -87,7 +87,9 @@ Relative cache directories are resolved from the project root. `--config` also c
 <?php
 
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
+use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 
@@ -98,9 +100,10 @@ return Architecture::define()
     ->skip([
         'tests/Fixtures/',
         'var/cache/*',
-        DddPreset::DOMAIN_NO_DATETIME,
         DddPreset::ENTITY_MUST_BE_FINAL => ['src/Legacy/'],
+        Psr1Preset::METHODS_MUST_BE_CAMEL_CASE,
     ])
+    ->withPresets(Preset::DDD(), Preset::PSR1())
     ->rule(
         'domain.must_not_depend_on_infrastructure',
         new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure', toPath: 'Infrastructure')
@@ -111,8 +114,9 @@ return Architecture::define()
     );
 ```
 
-String entries skip files or directories until they match a registered rule key, keyed entries skip paths for one
-specific rule, and rule key constants skip that rule entirely.
+Inside `skip()`, string entries skip files or directories unless they match a registered rule key, keyed entries
+skip paths for one specific rule, and rule key constants skip that rule entirely. You can also use
+`skipPath()` / `skipPaths()` and `skipRule()` / `skipRules()` when you prefer the explicit methods.
 
 ### Override preset rules
 
@@ -132,9 +136,6 @@ return Architecture::define()
     ->layer('Application',    'src/Application/')
     ->layer('Infrastructure', 'src/Infrastructure/')
     ->withPreset(Preset::DDD())
-
-    // Remove a rule entirely
-    ->withoutRule(DddPreset::DOMAIN_NO_BASE_EXCEPTION)
 
     // Replace a rule with a different configuration
     ->replaceRule(

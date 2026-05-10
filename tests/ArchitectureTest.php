@@ -77,10 +77,8 @@ final class ArchitectureTest extends TestCase
     public function testSkipCanRegisterRuleBeforePresetAddsIt(): void
     {
         $architecture = Architecture::define()
-            ->skip([
-                'tests/Fixtures/',
-                Psr1Preset::METHODS_MUST_BE_CAMEL_CASE,
-            ])
+            ->skip(['tests/Fixtures/'])
+            ->skipRule(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE)
             ->withPreset(Preset::PSR1(sourcePaths: ['src/']));
 
         $this->assertSame(['tests/Fixtures/'], $architecture->getSkipPaths());
@@ -91,7 +89,7 @@ final class ArchitectureTest extends TestCase
     {
         $architecture = Architecture::define()
             ->rule('source.must_be_final', new MustBeFinalRule('Source'))
-            ->skip(['source.must_be_final']);
+            ->skipRules(['source.must_be_final']);
 
         $this->assertSame([], $architecture->getSkipPaths());
         $this->assertSame(['source.must_be_final'], $architecture->getSkippedRuleKeys());
@@ -167,24 +165,5 @@ final class ArchitectureTest extends TestCase
 
         Architecture::define()
             ->replaceRule('nonexistent.key', new MustBeFinalRule(layer: 'Domain'));
-    }
-
-    public function testWithoutRuleRemovesRule(): void
-    {
-        $architecture = Architecture::define()
-            ->layer('Domain', 'src/Domain/')
-            ->layer('Application', 'src/Application/')
-            ->layer('Infrastructure', 'src/Infrastructure/')
-            ->withPreset(Preset::DDD())
-            ->withoutRule(DddPreset::DOMAIN_NO_BASE_EXCEPTION);
-
-        $this->assertArrayNotHasKey(DddPreset::DOMAIN_NO_BASE_EXCEPTION, $architecture->getRules());
-    }
-
-    public function testWithoutRuleThrowsIfKeyNotFound(): void
-    {
-        $this->expectException(RuleNotFoundException::class);
-
-        Architecture::define()->withoutRule('nonexistent.key');
     }
 }

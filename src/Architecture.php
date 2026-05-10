@@ -34,7 +34,7 @@ use function sprintf;
  *
  * Override preset rules:
  *
- *   ->withoutRule(DddPreset::DOMAIN_NO_BASE_EXCEPTION)
+ *   ->skipRule(DddPreset::DOMAIN_NO_BASE_EXCEPTION)
  *   ->replaceRule(DddPreset::ENTITY_MUST_BE_FINAL, new MustBeFinalRule(...))
  */
 final class Architecture
@@ -96,6 +96,23 @@ final class Architecture
     {
         foreach ((array) $paths as $path) {
             $this->skipPaths[] = $path;
+        }
+
+        return $this;
+    }
+
+    public function skipRule(string $ruleKey): self
+    {
+        return $this->skipRules([$ruleKey]);
+    }
+
+    /**
+     * @param string|list<string> $ruleKeys
+     */
+    public function skipRules(string|array $ruleKeys): self
+    {
+        foreach ((array) $ruleKeys as $ruleKey) {
+            $this->registerPendingSkip($ruleKey);
         }
 
         return $this;
@@ -183,26 +200,6 @@ final class Architecture
         }
 
         $this->rules[$key] = $rule;
-
-        return $this;
-    }
-
-    /**
-     * Remove an existing rule by its constant key.
-     * Throws RuleNotFoundException if the key does not exist.
-     *
-     * @throws RuleNotFoundException
-     */
-    public function withoutRule(string $key): self
-    {
-        if (! isset($this->rules[$key])) {
-            throw new RuleNotFoundException(sprintf(
-                'Cannot remove rule [%s] — rule not found.',
-                $key
-            ));
-        }
-
-        unset($this->rules[$key]);
 
         return $this;
     }
