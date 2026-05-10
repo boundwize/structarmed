@@ -9,8 +9,14 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function file_get_contents;
+use function is_array;
 use function preg_match;
 use function sprintf;
+use function token_get_all;
+
+use const T_INLINE_HTML;
+use const T_OPEN_TAG;
+use const T_OPEN_TAG_WITH_ECHO;
 
 final readonly class Psr1PhpTagsRule implements ProjectRuleInterface
 {
@@ -28,14 +34,31 @@ final readonly class Psr1PhpTagsRule implements ProjectRuleInterface
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
 
         foreach ($phpFileFinder->files($basePath) as $file) {
-            $contents = (string) file_get_contents($file);
+            foreach (token_get_all((string) file_get_contents($file)) as $token) {
+                if (! is_array($token)) {
+                    continue;
+                }
 
-            if (preg_match('/<\?(?!php(?:\s|$)|=)/', $contents) === 1) {
+                if ($token[0] === T_OPEN_TAG_WITH_ECHO) {
+                    continue;
+                }
+
+                if ($token[0] === T_OPEN_TAG && preg_match('/^<\?php(?:\s|$)/', $token[1]) === 1) {
+                    continue;
+                }
+
+                if (
+                    $token[0] !== T_OPEN_TAG
+                    && ($token[0] !== T_INLINE_HTML || preg_match('/<\?(?!php(?:\s|$)|=)/', $token[1]) !== 1)
+                ) {
+                    continue;
+                }
+
                 return new RuleViolation(
                     ruleKey: '',
                     message: sprintf('File [%s] must use only <?php and <?= PHP tags', $file),
                     file: $file,
-                    line: 1,
+                    line: $token[2],
                     className: '',
                 );
             }

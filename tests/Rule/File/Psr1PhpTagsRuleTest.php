@@ -59,6 +59,45 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testIgnoresPhpTagsInsideStrings(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                "<?php\n\$template = \"<?php\\n\\nclass Generated {}\";\n"
+            );
+
+            $violation = (new Psr1PhpTagsRule(['src/']))->evaluateProject($basePath, Architecture::define());
+
+            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testViolatesUpperCaseLongOpenTag(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<?PHP echo "x";');
+
+            $violation = (new Psr1PhpTagsRule(['src/']))->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testPassesWhenNoPhpFilesAreFound(): void
     {
         $basePath = $this->makeTempDir();
