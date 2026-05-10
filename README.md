@@ -24,6 +24,7 @@ composer require --dev boundwize/structarmed
 vendor/bin/structarmed init
 vendor/bin/structarmed init --preset=ddd
 vendor/bin/structarmed init --preset=mvc
+vendor/bin/structarmed init --preset=psr1
 vendor/bin/structarmed init --preset=psr4
 vendor/bin/structarmed init --preset=all
 ```
@@ -60,7 +61,7 @@ return Architecture::define()
 ### Multiple presets
 
 ```php
-->withPresets(Preset::PSR4(), Preset::DDD(), Preset::MVC())
+->withPresets(Preset::PSR1(), Preset::PSR4(), Preset::DDD(), Preset::MVC())
 ```
 
 ### Cache directory
@@ -162,6 +163,10 @@ return Architecture::define()
     viewMaxComplexity:         2,  // default: 3
 ))
 
+->withPreset(Preset::PSR1(
+    sourcePaths: ['src/', 'tests/'], // default: read composer.json PSR-4 paths
+))
+
 ->withPreset(Preset::PSR4(
     sourcePaths: ['src/', 'tests/'], // default: read composer.json PSR-4 paths
 ))
@@ -171,6 +176,7 @@ return Architecture::define()
 
 | Preset | Rules |
 |---|---|
+| `Preset::PSR1()` | Basic Coding Standard checks: PHP tags, UTF-8 without BOM, symbols vs side effects, PSR-4 class placement, StudlyCaps class names, upper-case class constants, camelCase methods |
 | `Preset::PSR4()` | Verifies configured source paths exist in composer.json `autoload` or `autoload-dev` PSR-4 mappings |
 | `Preset::DDD()` | Layer isolation, entity/VO/repository/event/service conventions |
 | `Preset::MVC()` | Layer isolation, thin controllers, model/view/service rules |
@@ -211,6 +217,7 @@ vendor/bin/structarmed analyze --report=json
 vendor/bin/structarmed init
 vendor/bin/structarmed init --preset=ddd
 vendor/bin/structarmed init --preset=mvc
+vendor/bin/structarmed init --preset=psr1
 vendor/bin/structarmed init --preset=psr4
 vendor/bin/structarmed init --preset=all
 ```

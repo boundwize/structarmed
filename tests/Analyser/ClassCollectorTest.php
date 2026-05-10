@@ -114,6 +114,17 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame('bar', $classNode->methods[0]->name);
     }
 
+    public function testCollectsClassConstants(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public const VERSION = "1.0"; private const dateApproved = "x"; }'
+        );
+
+        $this->assertCount(2, $classNode->constants);
+        $this->assertSame('VERSION', $classNode->constants[0]->name);
+        $this->assertSame('dateApproved', $classNode->constants[1]->name);
+    }
+
     public function testCollectsProtectedAndPrivateMethodVisibility(): void
     {
         $classNode = $this->collect(

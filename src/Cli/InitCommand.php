@@ -83,8 +83,9 @@ PHP);
         return match ($preset) {
             'ddd' => '    ->withPreset(Preset::DDD());',
             'mvc' => '    ->withPreset(Preset::MVC());',
+            'psr1' => '    ->withPreset(Preset::PSR1());',
             'psr4' => '    ->withPreset(Preset::PSR4());',
-            'all' => '    ->withPresets(Preset::PSR4(), Preset::DDD(), Preset::MVC());',
+            'all' => '    ->withPresets(Preset::PSR1(), Preset::PSR4(), Preset::DDD(), Preset::MVC());',
             default => null,
         };
     }
