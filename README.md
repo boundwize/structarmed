@@ -61,7 +61,7 @@ return Architecture::define()
 ### Multiple presets
 
 ```php
-->withPresets(Preset::PSR1(), Preset::PSR4(), Preset::DDD(), Preset::MVC())
+->withPresets(Preset::PSR4(), Preset::PSR1(), Preset::MVC(), Preset::DDD())
 ```
 
 ### Cache directory
