@@ -123,6 +123,46 @@ Inside `skip()`, string entries skip files or directories unless they match a re
 skip paths for one specific rule, and rule key constants skip that rule entirely. You can also use
 `skipPath()` / `skipPaths()` and `skipRule()` / `skipRules()` when you prefer the explicit methods.
 
+### Custom presets
+
+A custom preset is a class that implements `Boundwize\StructArmed\Preset\PresetInterface`. Inside `apply()`, add the layers and
+rules you want to reuse:
+
+```php
+<?php
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\PresetInterface;
+use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
+
+final class MyPreset implements PresetInterface
+{
+    public const METHODS_MUST_HAVE_RETURN_TYPES = 'source.methods_must_have_return_types';
+
+    public function apply(Architecture $architecture): void
+    {
+        $architecture
+            ->layer('Source', 'src/')
+            ->rule(
+                self::METHODS_MUST_HAVE_RETURN_TYPES,
+                new MustHaveReturnTypeRule(layer: 'Source')
+            );
+    }
+}
+```
+
+Register it in `structarmed.php`:
+
+```php
+<?php
+
+use App\Architecture\MyPreset;
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->withPreset(new MyPreset());
+```
+
 ### Override preset rules
 
 Use rule key constants — never raw strings:
