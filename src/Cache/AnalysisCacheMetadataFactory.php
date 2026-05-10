@@ -68,7 +68,7 @@ final readonly class AnalysisCacheMetadataFactory
 
     public function composerGeneratedVersionHash(): string
     {
-        $version = InstalledVersions::isInstalled('boundwize/structarmed', false)
+        $version = InstalledVersions::isInstalled('boundwize/structarmed')
             ? [
                 'prettyVersion' => InstalledVersions::getPrettyVersion('boundwize/structarmed'),
                 'reference'     => InstalledVersions::getReference('boundwize/structarmed'),
