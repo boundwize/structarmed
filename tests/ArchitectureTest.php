@@ -87,6 +87,16 @@ final class ArchitectureTest extends TestCase
         $this->assertSame([Psr1Preset::METHODS_MUST_BE_CAMEL_CASE], $architecture->getSkippedRuleKeys());
     }
 
+    public function testSkipCanRegisterRuleAfterRuleExists(): void
+    {
+        $architecture = Architecture::define()
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'))
+            ->skip(['source.must_be_final']);
+
+        $this->assertSame([], $architecture->getSkipPaths());
+        $this->assertSame(['source.must_be_final'], $architecture->getSkippedRuleKeys());
+    }
+
     public function testCacheDirectoryIsRegistered(): void
     {
         $architecture = Architecture::define()
