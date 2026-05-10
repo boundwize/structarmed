@@ -13,12 +13,9 @@ use function array_key_exists;
 use function array_keys;
 use function array_map;
 use function array_values;
-use function clearstatcache;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
-use function filemtime;
-use function filesize;
 use function glob;
 use function hash;
 use function is_array;
@@ -508,13 +505,10 @@ final readonly class AnalysisResultCache
      */
     private function fileMetadata(string $file, string $namespace): array
     {
-        clearstatcache(true, $file);
-
         return [
             'namespace' => $namespace,
             'file'      => $file,
-            'mtime'     => filemtime($file) ?: 0,
-            'size'      => filesize($file) ?: 0,
+            'hash'      => hash('xxh128', (string) file_get_contents($file)),
         ];
     }
 
