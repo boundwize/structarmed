@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cache;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
+use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
@@ -320,6 +322,8 @@ final readonly class AnalysisResultCache
             'dependencies'  => array_values($classNode->dependencies),
             'implements'    => array_values($classNode->implements),
             'methods'       => array_map($this->methodNodeToArray(...), $classNode->methods),
+            'constants'     => array_map($this->constantNodeToArray(...), $classNode->constants),
+            'properties'    => array_map($this->propertyNodeToArray(...), $classNode->properties),
             'functionCalls' => array_values($classNode->functionCalls),
             'superglobals'  => array_values($classNode->superglobals),
             'layers'        => $classNode->layers,
@@ -347,6 +351,8 @@ final readonly class AnalysisResultCache
         $dependencies  = $node['dependencies'] ?? null;
         $implements    = $node['implements'] ?? null;
         $rawMethods    = $node['methods'] ?? null;
+        $rawConstants  = $node['constants'] ?? null;
+        $rawProperties = $node['properties'] ?? null;
         $functionCalls = $node['functionCalls'] ?? null;
         $superglobals  = $node['superglobals'] ?? null;
         $layers        = $node['layers'] ?? [];
@@ -364,6 +370,8 @@ final readonly class AnalysisResultCache
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($implements)
             || ! is_array($rawMethods)
+            || ! is_array($rawConstants)
+            || ! is_array($rawProperties)
             || ! $this->isStringArray($functionCalls)
             || ! $this->isStringArray($superglobals)
             || ! $this->isStringArray($layers)
@@ -387,6 +395,38 @@ final readonly class AnalysisResultCache
             $methods[] = $methodNode;
         }
 
+        $constants = [];
+
+        foreach ($rawConstants as $rawConstant) {
+            if (! is_array($rawConstant)) {
+                return null;
+            }
+
+            $constantNode = $this->constantNodeFromArray($rawConstant);
+
+            if (! $constantNode instanceof ConstantNode) {
+                return null;
+            }
+
+            $constants[] = $constantNode;
+        }
+
+        $properties = [];
+
+        foreach ($rawProperties as $rawProperty) {
+            if (! is_array($rawProperty)) {
+                return null;
+            }
+
+            $propertyNode = $this->propertyNodeFromArray($rawProperty);
+
+            if (! $propertyNode instanceof PropertyNode) {
+                return null;
+            }
+
+            $properties[] = $propertyNode;
+        }
+
         return new ClassNode(
             className:     $className,
             file:          $file,
@@ -400,6 +440,8 @@ final readonly class AnalysisResultCache
             dependencies:  array_values($dependencies),
             implements:    array_values($implements),
             methods:       $methods,
+            constants:     $constants,
+            properties:    $properties,
             functionCalls: array_values($functionCalls),
             superglobals:  array_values($superglobals),
             layers:        array_values($layers),
@@ -412,14 +454,41 @@ final readonly class AnalysisResultCache
     private function methodNodeToArray(MethodNode $methodNode): array
     {
         return [
-            'name'                 => $methodNode->name,
-            'visibility'           => $methodNode->visibility,
-            'hasReturnType'        => $methodNode->hasReturnType,
-            'isStatic'             => $methodNode->isStatic,
-            'paramCount'           => $methodNode->paramCount,
-            'cyclomaticComplexity' => $methodNode->cyclomaticComplexity,
-            'lineCount'            => $methodNode->lineCount,
-            'line'                 => $methodNode->line,
+            'name'                  => $methodNode->name,
+            'visibility'            => $methodNode->visibility,
+            'hasReturnType'         => $methodNode->hasReturnType,
+            'isStatic'              => $methodNode->isStatic,
+            'paramCount'            => $methodNode->paramCount,
+            'cyclomaticComplexity'  => $methodNode->cyclomaticComplexity,
+            'lineCount'             => $methodNode->lineCount,
+            'hasExplicitVisibility' => $methodNode->hasExplicitVisibility,
+            'line'                  => $methodNode->line,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function constantNodeToArray(ConstantNode $constantNode): array
+    {
+        return [
+            'name'                  => $constantNode->name,
+            'visibility'            => $constantNode->visibility,
+            'hasExplicitVisibility' => $constantNode->hasExplicitVisibility,
+            'line'                  => $constantNode->line,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function propertyNodeToArray(PropertyNode $propertyNode): array
+    {
+        return [
+            'name'                  => $propertyNode->name,
+            'visibility'            => $propertyNode->visibility,
+            'hasExplicitVisibility' => $propertyNode->hasExplicitVisibility,
+            'line'                  => $propertyNode->line,
         ];
     }
 
@@ -440,6 +509,7 @@ final readonly class AnalysisResultCache
             || ! is_int($method['paramCount'] ?? null)
             || ! is_int($method['cyclomaticComplexity'] ?? null)
             || ! is_int($method['lineCount'] ?? null)
+            || ! is_bool($method['hasExplicitVisibility'] ?? null)
             || ! is_int($method['line'] ?? null)
         ) {
             return null;
@@ -453,7 +523,60 @@ final readonly class AnalysisResultCache
             paramCount:           $method['paramCount'],
             cyclomaticComplexity: $method['cyclomaticComplexity'],
             lineCount:            $method['lineCount'],
+            hasExplicitVisibility: $method['hasExplicitVisibility'],
             line:                 $method['line'],
+        );
+    }
+
+    /**
+     * @param array<mixed, mixed> $constant
+     */
+    private function constantNodeFromArray(array $constant): ?ConstantNode
+    {
+        if (! $this->hasOnlyStringKeys($constant)) {
+            return null;
+        }
+
+        if (
+            ! is_string($constant['name'] ?? null)
+            || ! is_string($constant['visibility'] ?? null)
+            || ! is_bool($constant['hasExplicitVisibility'] ?? null)
+            || ! is_int($constant['line'] ?? null)
+        ) {
+            return null;
+        }
+
+        return new ConstantNode(
+            name:                 $constant['name'],
+            visibility:           $constant['visibility'],
+            hasExplicitVisibility: $constant['hasExplicitVisibility'],
+            line:                 $constant['line'],
+        );
+    }
+
+    /**
+     * @param array<mixed, mixed> $property
+     */
+    private function propertyNodeFromArray(array $property): ?PropertyNode
+    {
+        if (! $this->hasOnlyStringKeys($property)) {
+            return null;
+        }
+
+        if (
+            ! is_string($property['name'] ?? null)
+            || ! is_string($property['visibility'] ?? null)
+            || ! is_bool($property['hasExplicitVisibility'] ?? null)
+            || ! is_int($property['line'] ?? null)
+        ) {
+            return null;
+        }
+
+        return new PropertyNode(
+            name:                 $property['name'],
+            visibility:           $property['visibility'],
+            hasExplicitVisibility: $property['hasExplicitVisibility'],
+            line:                 $property['line'],
         );
     }
 
