@@ -27,12 +27,25 @@ composer require --dev boundwize/structarmed
 ## Quick start
 
 ```bash
+# defaults to --preset=psr4
 vendor/bin/structarmed init
+
+# verify source paths match composer.json PSR-4 mappings
 vendor/bin/structarmed init --preset=psr4
+
+# enforce basic coding standard (tags, StudlyCaps, camelCase)
 vendor/bin/structarmed init --preset=psr1
+
+# extends PSR-1: require explicit visibility on all members
 vendor/bin/structarmed init --preset=psr12
+
+# thin controllers, model/view/service layer rules
 vendor/bin/structarmed init --preset=mvc
+
+# layer isolation, entity/VO/repository/event/service conventions
 vendor/bin/structarmed init --preset=ddd
+
+# enable all presets at once
 vendor/bin/structarmed init --preset=all
 ```
 
@@ -269,14 +282,14 @@ vendor/bin/structarmed analyze --config=path/to/structarmed.php
 vendor/bin/structarmed analyse --report=json
 vendor/bin/structarmed analyze --report=json
 
-# Generate initial config
+# Generate initial config (defaults to --preset=psr4)
 vendor/bin/structarmed init
-vendor/bin/structarmed init --preset=ddd
-vendor/bin/structarmed init --preset=mvc
-vendor/bin/structarmed init --preset=psr1
-vendor/bin/structarmed init --preset=psr12
-vendor/bin/structarmed init --preset=psr4
-vendor/bin/structarmed init --preset=all
+vendor/bin/structarmed init --preset=psr4    # verify source paths match composer.json PSR-4 mappings
+vendor/bin/structarmed init --preset=psr1    # enforce basic coding standard (tags, StudlyCaps, camelCase)
+vendor/bin/structarmed init --preset=psr12   # extends PSR-1: require explicit visibility on all members
+vendor/bin/structarmed init --preset=mvc     # thin controllers, model/view/service layer rules
+vendor/bin/structarmed init --preset=ddd     # layer isolation, entity/VO/repository/event/service conventions
+vendor/bin/structarmed init --preset=all     # enable all presets at once
 ```
 
 ## Layer resolution
