@@ -85,7 +85,7 @@ PHP);
             'mvc' => '    ->withPreset(Preset::MVC());',
             'psr1' => '    ->withPreset(Preset::PSR1());',
             'psr4' => '    ->withPreset(Preset::PSR4());',
-            'all' => '    ->withPresets(Preset::PSR1(), Preset::PSR12(), Preset::PSR4(), Preset::DDD(), Preset::MVC());',
+            'all' => "    ->withPresets(\n        Preset::PSR1(),\n        Preset::PSR12(),\n        Preset::PSR4(),\n        Preset::DDD(),\n        Preset::MVC()\n    );",
             default => null,
         };
     }
