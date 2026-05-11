@@ -61,7 +61,13 @@ final class InitCommandTest extends TestCase
 
         yield 'all' => [
             ['--preset=all'],
-            "    ->withPresets(\n        Preset::PSR1(),\n        Preset::PSR12(),\n        Preset::PSR4(),\n        Preset::DDD(),\n        Preset::MVC()\n    );",
+            "    ->withPresets(\n"
+            . "        Preset::PSR1(),\n"
+            . "        Preset::PSR12(),\n"
+            . "        Preset::PSR4(),\n"
+            . "        Preset::DDD(),\n"
+            . "        Preset::MVC()\n"
+            . "    );",
         ];
     }
 
