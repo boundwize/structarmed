@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Cache;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
+use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Rule\RuleViolation;
@@ -479,6 +481,143 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testClassNodesPreserveMethodExplicitVisibility(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        $classNodes = [
+            new ClassNode(
+                className:   'App\Foo',
+                file:        $sourceFile,
+                line:        1,
+                layer:       'Source',
+                extends:     null,
+                isAbstract:  false,
+                isFinal:     true,
+                isInterface: false,
+                isReadonly:  false,
+                methods:     [
+                    new MethodNode(
+                        name:                 'setUp',
+                        visibility:           'protected',
+                        hasReturnType:        true,
+                        isStatic:             false,
+                        paramCount:           0,
+                        cyclomaticComplexity: 1,
+                        lineCount:            3,
+                        hasExplicitVisibility: true,
+                        line:                 10,
+                    ),
+                ],
+            ),
+        ];
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertEquals($classNodes, $loaded);
+            $this->assertTrue($loaded[0]->methods[0]->hasExplicitVisibility);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClassNodesPreserveConstants(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        $classNodes = [
+            new ClassNode(
+                className:   'App\Foo',
+                file:        $sourceFile,
+                line:        1,
+                layer:       'Source',
+                extends:     null,
+                isAbstract:  false,
+                isFinal:     true,
+                isInterface: false,
+                isReadonly:  false,
+                constants:   [
+                    new ConstantNode(name: 'VERSION', visibility: 'public', hasExplicitVisibility: true, line: 5),
+                    new ConstantNode(name: 'LEGACY', visibility: 'public', hasExplicitVisibility: false, line: 6),
+                ],
+            ),
+        ];
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertEquals($classNodes, $loaded);
+            $this->assertTrue($loaded[0]->constants[0]->hasExplicitVisibility);
+            $this->assertFalse($loaded[0]->constants[1]->hasExplicitVisibility);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClassNodesPreserveProperties(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        $classNodes = [
+            new ClassNode(
+                className:   'App\Foo',
+                file:        $sourceFile,
+                line:        1,
+                layer:       'Source',
+                extends:     null,
+                isAbstract:  false,
+                isFinal:     true,
+                isInterface: false,
+                isReadonly:  false,
+                properties:  [
+                    new PropertyNode(name: 'name', visibility: 'private', hasExplicitVisibility: true, line: 8),
+                    new PropertyNode(name: 'legacy', visibility: 'public', hasExplicitVisibility: false, line: 9),
+                ],
+            ),
+        ];
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertEquals($classNodes, $loaded);
+            $this->assertTrue($loaded[0]->properties[0]->hasExplicitVisibility);
+            $this->assertFalse($loaded[0]->properties[1]->hasExplicitVisibility);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testStoreClassNodesCreatesMissingCacheDirectory(): void
     {
         $basePath            = $this->createTempDirectory();
@@ -669,6 +808,8 @@ final class AnalysisResultCacheTest extends TestCase
                         'dependencies'  => [],
                         'implements'    => [],
                         'methods'       => ['bad'],
+                        'constants'     => [],
+                        'properties'    => [],
                         'functionCalls' => [],
                         'superglobals'  => [],
                     ],
@@ -691,6 +832,8 @@ final class AnalysisResultCacheTest extends TestCase
                         'dependencies'  => [],
                         'implements'    => [],
                         'methods'       => [['bad']],
+                        'constants'     => [],
+                        'properties'    => [],
                         'functionCalls' => [],
                         'superglobals'  => [],
                     ],
@@ -714,6 +857,42 @@ final class AnalysisResultCacheTest extends TestCase
                         'implements'    => [],
                         'methods'       => [
                             [
+                                'name'                  => 'run',
+                                'visibility'            => 'public',
+                                'hasReturnType'         => true,
+                                'isStatic'              => false,
+                                'paramCount'            => 0,
+                                'cyclomaticComplexity'  => 1,
+                                'lineCount'             => 1,
+                                'hasExplicitVisibility' => true,
+                                'line'                  => 'bad',
+                            ],
+                        ],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'method has missing hasExplicitVisibility' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [
+                            [
                                 'name'                 => 'run',
                                 'visibility'           => 'public',
                                 'hasReturnType'        => true,
@@ -721,7 +900,215 @@ final class AnalysisResultCacheTest extends TestCase
                                 'paramCount'           => 0,
                                 'cyclomaticComplexity' => 1,
                                 'lineCount'            => 1,
-                                'line'                 => 'bad',
+                                'line'                 => 1,
+                            ],
+                        ],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'constants is not an array' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'constants'     => 'bad',
+                        'properties'    => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'constant is not an array' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'constants'     => ['bad'],
+                        'properties'    => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'constant has numeric keys' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'constants'     => [['bad']],
+                        'properties'    => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'constant has invalid types' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'constants'     => [
+                            [
+                                'name'                  => 'VERSION',
+                                'visibility'            => 'public',
+                                'hasExplicitVisibility' => true,
+                                'line'                  => 'bad',
+                            ],
+                        ],
+                        'properties'    => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'properties is not an array' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => 'bad',
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'property is not an array' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => ['bad'],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'property has numeric keys' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [['bad']],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'property has invalid types' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => 'App\Foo',
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [
+                            [
+                                'name'                  => 'name',
+                                'visibility'            => 'private',
+                                'hasExplicitVisibility' => true,
+                                'line'                  => 'bad',
                             ],
                         ],
                         'functionCalls' => [],
@@ -990,8 +1377,15 @@ final class AnalysisResultCacheTest extends TestCase
                     paramCount:           0,
                     cyclomaticComplexity: 1,
                     lineCount:            1,
+                    hasExplicitVisibility: true,
                     line:                 1,
                 ),
+            ],
+            constants:     [
+                new ConstantNode(name: 'VERSION', visibility: 'public', hasExplicitVisibility: true, line: 3),
+            ],
+            properties:    [
+                new PropertyNode(name: 'name', visibility: 'private', hasExplicitVisibility: true, line: 5),
             ],
             functionCalls: ['sprintf'],
             superglobals:  ['_SERVER'],
