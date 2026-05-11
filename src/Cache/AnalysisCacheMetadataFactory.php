@@ -73,7 +73,7 @@ final readonly class AnalysisCacheMetadataFactory
                 'prettyVersion' => InstalledVersions::getPrettyVersion('boundwize/structarmed'),
                 'reference'     => InstalledVersions::getReference('boundwize/structarmed'),
             ]
-            : InstalledVersions::getRootPackage(); // @codeCoverageIgnore
+            : InstalledVersions::getRootPackage();
 
         return hash('xxh128', json_encode($version, JSON_THROW_ON_ERROR));
     }
