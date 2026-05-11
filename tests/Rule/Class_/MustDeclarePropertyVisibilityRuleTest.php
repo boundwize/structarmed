@@ -17,19 +17,19 @@ final class MustDeclarePropertyVisibilityRuleTest extends TestCase
 {
     public function testAppliesOnlyToConfiguredLayer(): void
     {
-        $rule = new MustDeclarePropertyVisibilityRule('Source');
+        $mustDeclarePropertyVisibilityRule = new MustDeclarePropertyVisibilityRule('Source');
 
-        $this->assertTrue($rule->appliesTo($this->makeNode([], 'Source')));
-        $this->assertFalse($rule->appliesTo($this->makeNode([], 'Other')));
+        $this->assertTrue($mustDeclarePropertyVisibilityRule->appliesTo($this->makeNode([], 'Source')));
+        $this->assertFalse($mustDeclarePropertyVisibilityRule->appliesTo($this->makeNode([], 'Other')));
     }
 
     public function testPassesWhenVisibilityIsExplicit(): void
     {
-        $rule = new MustDeclarePropertyVisibilityRule('Source');
+        $mustDeclarePropertyVisibilityRule = new MustDeclarePropertyVisibilityRule('Source');
 
         $this->assertSame(
             [],
-            $rule->evaluateAll($this->makeNode([
+            $mustDeclarePropertyVisibilityRule->evaluateAll($this->makeNode([
                 new PropertyNode(name: 'status', visibility: 'private', hasExplicitVisibility: true),
             ]))
         );
@@ -37,9 +37,9 @@ final class MustDeclarePropertyVisibilityRuleTest extends TestCase
 
     public function testViolatesWhenVisibilityIsImplicit(): void
     {
-        $rule = new MustDeclarePropertyVisibilityRule('Source');
+        $mustDeclarePropertyVisibilityRule = new MustDeclarePropertyVisibilityRule('Source');
 
-        $violations = $rule->evaluateAll($this->makeNode([
+        $violations = $mustDeclarePropertyVisibilityRule->evaluateAll($this->makeNode([
             new PropertyNode(name: 'status', visibility: 'public', hasExplicitVisibility: false, line: 7),
         ]));
 
@@ -51,9 +51,9 @@ final class MustDeclarePropertyVisibilityRuleTest extends TestCase
 
     public function testEvaluateReturnsFirstViolation(): void
     {
-        $rule = new MustDeclarePropertyVisibilityRule('Source');
+        $mustDeclarePropertyVisibilityRule = new MustDeclarePropertyVisibilityRule('Source');
 
-        $violation = $rule->evaluate($this->makeNode([
+        $violation = $mustDeclarePropertyVisibilityRule->evaluate($this->makeNode([
             new PropertyNode(name: 'status', visibility: 'public', hasExplicitVisibility: false),
         ]));
 

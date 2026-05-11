@@ -16,19 +16,19 @@ final class MustDeclareMethodVisibilityRuleTest extends TestCase
 {
     public function testAppliesOnlyToConfiguredLayer(): void
     {
-        $rule = new MustDeclareMethodVisibilityRule('Source');
+        $mustDeclareMethodVisibilityRule = new MustDeclareMethodVisibilityRule('Source');
 
-        $this->assertTrue($rule->appliesTo($this->makeNode([], 'Source')));
-        $this->assertFalse($rule->appliesTo($this->makeNode([], 'Other')));
+        $this->assertTrue($mustDeclareMethodVisibilityRule->appliesTo($this->makeNode([], 'Source')));
+        $this->assertFalse($mustDeclareMethodVisibilityRule->appliesTo($this->makeNode([], 'Other')));
     }
 
     public function testPassesWhenVisibilityIsExplicit(): void
     {
-        $rule = new MustDeclareMethodVisibilityRule('Source');
+        $mustDeclareMethodVisibilityRule = new MustDeclareMethodVisibilityRule('Source');
 
         $this->assertSame(
             [],
-            $rule->evaluateAll($this->makeNode([
+            $mustDeclareMethodVisibilityRule->evaluateAll($this->makeNode([
                 new MethodNode('save', 'public', true, false, 0, 1, 3, hasExplicitVisibility: true),
             ]))
         );
@@ -36,9 +36,9 @@ final class MustDeclareMethodVisibilityRuleTest extends TestCase
 
     public function testViolatesWhenVisibilityIsImplicit(): void
     {
-        $rule = new MustDeclareMethodVisibilityRule('Source');
+        $mustDeclareMethodVisibilityRule = new MustDeclareMethodVisibilityRule('Source');
 
-        $violations = $rule->evaluateAll($this->makeNode([
+        $violations = $mustDeclareMethodVisibilityRule->evaluateAll($this->makeNode([
             new MethodNode('save', 'public', true, false, 0, 1, 3, hasExplicitVisibility: false, line: 5),
         ]));
 
@@ -50,9 +50,9 @@ final class MustDeclareMethodVisibilityRuleTest extends TestCase
 
     public function testEvaluateReturnsFirstViolation(): void
     {
-        $rule = new MustDeclareMethodVisibilityRule('Source');
+        $mustDeclareMethodVisibilityRule = new MustDeclareMethodVisibilityRule('Source');
 
-        $violation = $rule->evaluate($this->makeNode([
+        $violation = $mustDeclareMethodVisibilityRule->evaluate($this->makeNode([
             new MethodNode('save', 'public', true, false, 0, 1, 3, hasExplicitVisibility: false),
         ]));
 

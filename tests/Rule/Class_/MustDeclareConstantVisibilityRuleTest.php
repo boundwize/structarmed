@@ -16,19 +16,19 @@ final class MustDeclareConstantVisibilityRuleTest extends TestCase
 {
     public function testAppliesOnlyToConfiguredLayer(): void
     {
-        $rule = new MustDeclareConstantVisibilityRule('Source');
+        $mustDeclareConstantVisibilityRule = new MustDeclareConstantVisibilityRule('Source');
 
-        $this->assertTrue($rule->appliesTo($this->makeNode([], 'Source')));
-        $this->assertFalse($rule->appliesTo($this->makeNode([], 'Other')));
+        $this->assertTrue($mustDeclareConstantVisibilityRule->appliesTo($this->makeNode([], 'Source')));
+        $this->assertFalse($mustDeclareConstantVisibilityRule->appliesTo($this->makeNode([], 'Other')));
     }
 
     public function testPassesWhenVisibilityIsExplicit(): void
     {
-        $rule = new MustDeclareConstantVisibilityRule('Source');
+        $mustDeclareConstantVisibilityRule = new MustDeclareConstantVisibilityRule('Source');
 
         $this->assertSame(
             [],
-            $rule->evaluateAll($this->makeNode([
+            $mustDeclareConstantVisibilityRule->evaluateAll($this->makeNode([
                 new ConstantNode(name: 'VERSION', visibility: 'public', hasExplicitVisibility: true),
             ]))
         );
@@ -36,9 +36,9 @@ final class MustDeclareConstantVisibilityRuleTest extends TestCase
 
     public function testViolatesWhenVisibilityIsImplicit(): void
     {
-        $rule = new MustDeclareConstantVisibilityRule('Source');
+        $mustDeclareConstantVisibilityRule = new MustDeclareConstantVisibilityRule('Source');
 
-        $violations = $rule->evaluateAll($this->makeNode([
+        $violations = $mustDeclareConstantVisibilityRule->evaluateAll($this->makeNode([
             new ConstantNode(name: 'VERSION', visibility: 'public', hasExplicitVisibility: false, line: 5),
         ]));
 
@@ -50,9 +50,9 @@ final class MustDeclareConstantVisibilityRuleTest extends TestCase
 
     public function testEvaluateReturnsFirstViolation(): void
     {
-        $rule = new MustDeclareConstantVisibilityRule('Source');
+        $mustDeclareConstantVisibilityRule = new MustDeclareConstantVisibilityRule('Source');
 
-        $violation = $rule->evaluate($this->makeNode([
+        $violation = $mustDeclareConstantVisibilityRule->evaluate($this->makeNode([
             new ConstantNode(name: 'VERSION', hasExplicitVisibility: false),
         ]));
 

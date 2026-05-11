@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
+use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
@@ -23,7 +24,6 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
-use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\Do_;
 use PhpParser\Node\Stmt\ElseIf_;
 use PhpParser\Node\Stmt\Enum_;
@@ -32,6 +32,7 @@ use PhpParser\Node\Stmt\Foreach_;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Interface_;
+use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\Node\UseItem;
 use PhpParser\NodeTraverser;
@@ -180,7 +181,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 continue;
             }
 
-            $visibility           = $this->resolveVisibilityFromFlags($stmt->flags);
+            $visibility            = $this->resolveVisibilityFromFlags($stmt->flags);
             $hasExplicitVisibility = $this->hasExplicitVisibilityFlag($stmt->flags);
 
             foreach ($stmt->consts as $const) {
@@ -208,7 +209,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 continue;
             }
 
-            $visibility           = $this->resolveVisibilityFromFlags($stmt->flags);
+            $visibility            = $this->resolveVisibilityFromFlags($stmt->flags);
             $hasExplicitVisibility = $this->hasExplicitVisibilityFlag($stmt->flags);
 
             foreach ($stmt->props as $prop) {
@@ -299,11 +300,11 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function resolveVisibilityFromFlags(int $flags): string
     {
-        if ($flags & Class_::MODIFIER_PROTECTED) {
+        if (($flags & Modifiers::PROTECTED) !== 0) {
             return 'protected';
         }
 
-        if ($flags & Class_::MODIFIER_PRIVATE) {
+        if (($flags & Modifiers::PRIVATE) !== 0) {
             return 'private';
         }
 
@@ -312,7 +313,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function hasExplicitVisibilityFlag(int $flags): bool
     {
-        return ($flags & Class_::VISIBILITY_MODIFIER_MASK) !== 0;
+        return ($flags & Modifiers::VISIBILITY_MASK) !== 0;
     }
 
     private function calculateComplexity(ClassMethod $classMethod): int
