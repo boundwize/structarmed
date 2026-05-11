@@ -13,4 +13,4 @@ return Architecture::define()
             __DIR__ . '/src/Preset/Preset.php',
         ],
     ])
-    ->withPresets(Preset::PSR1(), Preset::PSR4());
+    ->withPresets(Preset::PSR1(), Preset::PSR12(), Preset::PSR4());
