@@ -228,7 +228,7 @@ final class ClassCollector extends NodeVisitorAbstract
             }
 
             foreach ($classMethod->params as $param) {
-                if ($param->flags === 0 || ! $param->var instanceof Variable) {
+                if ($param->flags === 0 || ! $param->var instanceof Variable || ! is_string($param->var->name)) {
                     continue;
                 }
 
