@@ -27,12 +27,25 @@ composer require --dev boundwize/structarmed
 ## Quick start
 
 ```bash
+# defaults to --preset=psr4
 vendor/bin/structarmed init
+
+# verify source paths match composer.json PSR-4 mappings
 vendor/bin/structarmed init --preset=psr4
+
+# enforce basic coding standard (tags, StudlyCaps, camelCase)
 vendor/bin/structarmed init --preset=psr1
+
+# extends PSR-1: require explicit visibility on all members
 vendor/bin/structarmed init --preset=psr12
+
+# thin controllers, model/view/service layer rules
 vendor/bin/structarmed init --preset=mvc
+
+# layer isolation, entity/VO/repository/event/service conventions
 vendor/bin/structarmed init --preset=ddd
+
+# enable all presets at once
 vendor/bin/structarmed init --preset=all
 ```
 
@@ -250,7 +263,7 @@ Run architecture checks as part of your test suite:
 
 Violations cause the test run to fail before any tests execute.
 
-## CLI
+## CLI analyse commands
 
 ```bash
 # Analyse with default config discovery
@@ -268,15 +281,6 @@ vendor/bin/structarmed analyze --config=path/to/structarmed.php
 # JSON output (for CI tools)
 vendor/bin/structarmed analyse --report=json
 vendor/bin/structarmed analyze --report=json
-
-# Generate initial config
-vendor/bin/structarmed init
-vendor/bin/structarmed init --preset=ddd
-vendor/bin/structarmed init --preset=mvc
-vendor/bin/structarmed init --preset=psr1
-vendor/bin/structarmed init --preset=psr12
-vendor/bin/structarmed init --preset=psr4
-vendor/bin/structarmed init --preset=all
 ```
 
 ## Layer resolution
