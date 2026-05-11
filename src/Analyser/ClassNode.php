@@ -17,13 +17,14 @@ final readonly class ClassNode
     public array $layers;
 
     /**
-     * @param string[]      $dependencies   Fully-qualified class names this class depends on
-     * @param string[]      $implements     Interface names this class implements
-     * @param MethodNode[]  $methods        Methods of this class
-     * @param ConstantNode[] $constants     Constants of this class
-     * @param string[]      $functionCalls  Functions called within this class
-     * @param string[]      $superglobals   Superglobals accessed ($_GET, $_POST, etc.)
-     * @param list<string>  $layers         All layer names this class belongs to; defaults to [$layer]
+     * @param string[]       $dependencies   Fully-qualified class names this class depends on
+     * @param string[]       $implements     Interface names this class implements
+     * @param MethodNode[]   $methods        Methods of this class
+     * @param ConstantNode[] $constants      Constants of this class
+     * @param PropertyNode[] $properties     Properties of this class
+     * @param string[]       $functionCalls  Functions called within this class
+     * @param string[]       $superglobals   Superglobals accessed ($_GET, $_POST, etc.)
+     * @param list<string>   $layers         All layer names this class belongs to; defaults to [$layer]
      */
     public function __construct(
         public string $className,
@@ -39,6 +40,7 @@ final readonly class ClassNode
         public array $implements = [],
         public array $methods = [],
         public array $constants = [],
+        public array $properties = [],
         public array $functionCalls = [],
         public array $superglobals = [],
         array $layers = [],

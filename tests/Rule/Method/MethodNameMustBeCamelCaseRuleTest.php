@@ -49,7 +49,7 @@ final class MethodNameMustBeCamelCaseRuleTest extends TestCase
         $methodNameMustBeCamelCaseRule = new MethodNameMustBeCamelCaseRule('Source');
 
         $violations = $methodNameMustBeCamelCaseRule->evaluateAll($this->makeNode([
-            new MethodNode('Ship_Order', 'public', true, false, 0, 1, 1, 9),
+            new MethodNode('Ship_Order', 'public', true, false, 0, 1, 1, line: 9),
         ]));
 
         $this->assertCount(1, $violations);

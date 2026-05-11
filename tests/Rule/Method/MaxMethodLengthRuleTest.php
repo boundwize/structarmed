@@ -88,9 +88,9 @@ final class MaxMethodLengthRuleTest extends TestCase
     {
         $maxMethodLengthRule = new MaxMethodLengthRule(layer: 'Controller', maxLines: 20);
         $classNode           = $this->makeNodeWithMethods(
-            new MethodNode('store', 'public', true, false, 1, 2, 35, 11),
-            new MethodNode('update', 'public', true, false, 1, 2, 28, 47),
-            new MethodNode('show', 'public', true, false, 1, 2, 12, 83),
+            new MethodNode('store', 'public', true, false, 1, 2, 35, line: 11),
+            new MethodNode('update', 'public', true, false, 1, 2, 28, line: 47),
+            new MethodNode('show', 'public', true, false, 1, 2, 12, line: 83),
         );
 
         $violations = $maxMethodLengthRule->evaluateAll($classNode);
