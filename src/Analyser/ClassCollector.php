@@ -222,6 +222,28 @@ final class ClassCollector extends NodeVisitorAbstract
             }
         }
 
+        foreach ($classLike->getMethods() as $classMethod) {
+            if ($classMethod->name->toLowerString() !== '__construct') {
+                continue;
+            }
+
+            foreach ($classMethod->params as $param) {
+                if ($param->flags === 0 || ! $param->var instanceof Variable) {
+                    continue;
+                }
+
+                $properties[] = new PropertyNode(
+                    name:                  (string) $param->var->name,
+                    visibility:            $this->resolveVisibilityFromFlags($param->flags),
+                    hasExplicitVisibility: $this->hasExplicitVisibilityFlag($param->flags),
+                    line:                  $param->getStartLine(),
+                );
+            }
+
+            // stop since __construct() already processed
+            break;
+        }
+
         return $properties;
     }
 

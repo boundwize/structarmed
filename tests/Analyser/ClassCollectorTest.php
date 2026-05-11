@@ -149,6 +149,42 @@ final class ClassCollectorTest extends TestCase
         $this->assertFalse($classNode->properties[0]->hasExplicitVisibility);
     }
 
+    public function testCollectsPromotedProperties(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function __construct(private string $name, public readonly int $count) {} }'
+        );
+
+        $this->assertCount(2, $classNode->properties);
+        $this->assertSame('name', $classNode->properties[0]->name);
+        $this->assertSame('private', $classNode->properties[0]->visibility);
+        $this->assertTrue($classNode->properties[0]->hasExplicitVisibility);
+        $this->assertSame('count', $classNode->properties[1]->name);
+        $this->assertSame('public', $classNode->properties[1]->visibility);
+        $this->assertTrue($classNode->properties[1]->hasExplicitVisibility);
+    }
+
+    public function testDoesNotCollectNonPromotedConstructorParams(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function __construct(string $name) {} }'
+        );
+
+        $this->assertCount(0, $classNode->properties);
+    }
+
+    public function testCollectsMixedTraditionalAndPromotedProperties(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public string $title; public function __construct(private int $id) {} }'
+        );
+
+        $this->assertCount(2, $classNode->properties);
+        $this->assertSame('title', $classNode->properties[0]->name);
+        $this->assertSame('id', $classNode->properties[1]->name);
+        $this->assertSame('private', $classNode->properties[1]->visibility);
+    }
+
     public function testCollectsProtectedAndPrivateMethodVisibility(): void
     {
         $classNode = $this->collect(
