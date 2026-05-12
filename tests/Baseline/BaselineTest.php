@@ -138,7 +138,10 @@ PHP);
             $filtered = (new Baseline())->filter($ruleViolationCollection, 'baseline.php', $basePath);
 
             $this->assertCount(1, $filtered);
-            $this->assertSame('Bar must be final', $filtered->getIterator()->current()->message);
+
+            foreach ($filtered as $violation) {
+                $this->assertSame('Bar must be final', $violation->message);
+            }
         } finally {
             $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src/Bar.php', 'src']);
         }
