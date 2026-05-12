@@ -521,6 +521,60 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandGeneratesBaselineWithSeparateOptionValue(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-progress',
+                    '--generate-baseline',
+                    'structarmed-baseline.php',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                'Generated baseline [structarmed-baseline.php] with 1 violation(s).',
+                $output
+            );
+            $this->assertFileExists($basePath . '/structarmed-baseline.php');
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsBaselineGenerationFailure(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-progress',
+                    '--generate-baseline=missing/structarmed-baseline.php',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString(
+                'Error: Baseline directory [' . $basePath . '/missing] does not exist.',
+                $output
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandFiltersConfiguredBaseline(): void
     {
         $basePath = $this->createProjectDirectoryWithViolation();
@@ -565,6 +619,43 @@ PHP);
             $this->assertSame(0, $generateExitCode, $generateOutput);
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString('No violations found', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsConfiguredBaselineFailure(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        try {
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->baseline('missing-baseline.php');
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString(
+                'Error: Baseline file [missing-baseline.php] does not exist.',
+                $output
+            );
         } finally {
             $this->removeTempDirectory($basePath);
         }
