@@ -119,6 +119,23 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
+    public function testFailsWhenTraitNameDoesNotMatchFilename(): void
+    {
+        $basePath = $this->makeTempProject();
+        $file     = $basePath . '/tests/DebugTraceableTrait.php';
+
+        file_put_contents($file, '<?php namespace App\Tests; trait DebugTraceableTraits {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $violation = $psr4NamespaceRule->evaluate(
+            $this->makeNode('App\\Tests\\DebugTraceableTraits', $file, isTrait: true)
+        );
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('App\\Tests\\DebugTraceableTrait', $violation->message);
+    }
+
     public function testCachesMappingsPerBasePath(): void
     {
         $basePath          = $this->makeTempProject();
@@ -137,7 +154,7 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
-    private function makeNode(string $className, string $file, string $layer = 'Source'): ClassNode
+    private function makeNode(string $className, string $file, string $layer = 'Source', bool $isTrait = false): ClassNode
     {
         return new ClassNode(
             className:   $className,
@@ -149,6 +166,7 @@ final class Psr4NamespaceRuleTest extends TestCase
             isFinal:     false,
             isInterface: false,
             isReadonly:  false,
+            isTrait:     $isTrait,
         );
     }
 
