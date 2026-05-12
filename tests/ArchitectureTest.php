@@ -190,4 +190,75 @@ final class ArchitectureTest extends TestCase
         Architecture::define()
             ->replaceRule('nonexistent.key', new MustBeFinalRule(layer: 'Domain'));
     }
+
+    public function testLayerPatternIsRegistered(): void
+    {
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/');
+
+        $patterns = $architecture->getLayerPatterns();
+
+        $this->assertArrayHasKey('HTTP', $patterns);
+        $this->assertSame('/^App\\\\HTTP\\\\.*$/', $patterns['HTTP']['pattern']);
+        $this->assertNull($patterns['HTTP']['excludePattern']);
+    }
+
+    public function testLayerPatternWithExcludePatternIsRegistered(): void
+    {
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/', '/(Exception|URI)/');
+
+        $patterns = $architecture->getLayerPatterns();
+
+        $this->assertSame('/^App\\\\HTTP\\\\.*$/', $patterns['HTTP']['pattern']);
+        $this->assertSame('/(Exception|URI)/', $patterns['HTTP']['excludePattern']);
+    }
+
+    public function testRulesetIsRegistered(): void
+    {
+        $ruleset = [
+            'Domain'         => ['Application'],
+            'Application'    => ['Domain', 'Infrastructure'],
+            'Infrastructure' => [],
+        ];
+
+        $architecture = Architecture::define()->ruleset($ruleset);
+
+        $this->assertSame($ruleset, $architecture->getRuleset());
+    }
+
+    public function testSkipClassViolationIsSingleDependency(): void
+    {
+        $architecture = Architecture::define()
+            ->skipClassViolation('App\\Foo', 'App\\Bar');
+
+        $this->assertSame(
+            ['App\\Foo' => ['App\\Bar']],
+            $architecture->getClassViolationSkips()
+        );
+    }
+
+    public function testSkipClassViolationIsMultipleDependencies(): void
+    {
+        $architecture = Architecture::define()
+            ->skipClassViolation('App\\Foo', ['App\\Bar', 'App\\Baz']);
+
+        $this->assertSame(
+            ['App\\Foo' => ['App\\Bar', 'App\\Baz']],
+            $architecture->getClassViolationSkips()
+        );
+    }
+
+    public function testSkipClassViolationAccumulatesAcrossCalls(): void
+    {
+        $architecture = Architecture::define()
+            ->skipClassViolation('App\\Foo', 'App\\Bar')
+            ->skipClassViolation('App\\Foo', 'App\\Baz')
+            ->skipClassViolation('App\\Qux', 'App\\Bar');
+
+        $skips = $architecture->getClassViolationSkips();
+
+        $this->assertSame(['App\\Bar', 'App\\Baz'], $skips['App\\Foo']);
+        $this->assertSame(['App\\Bar'], $skips['App\\Qux']);
+    }
 }
