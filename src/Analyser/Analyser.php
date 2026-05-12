@@ -178,7 +178,7 @@ final readonly class Analyser
                 }
 
                 $skippedDepsForClass = $classViolationSkips[$classNode->className] ?? [];
-                $dependencies         = $this->dependenciesForClass(
+                $dependencies        = $this->dependenciesForClass(
                     $classNode->className,
                     $dependencyMap,
                     $inheritanceDependencyMap
@@ -251,14 +251,17 @@ final readonly class Analyser
         array $dependencyMap,
         array $inheritanceDependencyMap
     ): array {
-        $dependencies = $dependencyMap[$className] ?? [];
+        $dependencies = [
+            ...$dependencyMap[$className] ?? [],
+            ...$this->dependenciesForInheritanceDependencies(
+                $inheritanceDependencyMap[$className] ?? [],
+                $dependencyMap,
+                $inheritanceDependencyMap,
+                [$className => true]
+            ),
+        ];
 
-        return $this->dependenciesForInheritanceDependencies(
-            $dependencies,
-            $dependencyMap,
-            $inheritanceDependencyMap,
-            [$className => true]
-        );
+        return array_values(array_unique($dependencies));
     }
 
     /**
