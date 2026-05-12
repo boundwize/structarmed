@@ -19,10 +19,12 @@ use RuntimeException;
 use function count;
 use function in_array;
 use function is_dir;
+use function is_file;
 use function ltrim;
 use function microtime;
 use function rtrim;
 use function sprintf;
+use function str_ends_with;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -109,11 +111,17 @@ final readonly class AnalyseCommand
         foreach ($scanPaths as $scanPath) {
             $fullScanPath = rtrim($basePath, '/') . '/' . ltrim($scanPath, '/');
 
-            if (! is_dir($fullScanPath)) {
-                echo sprintf("Error: directory [%s] not found.\n", $scanPath);
-
-                return 1;
+            if (is_dir($fullScanPath)) {
+                continue;
             }
+
+            if (is_file($fullScanPath) && str_ends_with($fullScanPath, '.php')) {
+                continue;
+            }
+
+            echo sprintf("Error: path [%s] not found.\n", $scanPath);
+
+            return 1;
         }
 
         try {

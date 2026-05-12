@@ -207,6 +207,26 @@ final class AnalyserTest extends TestCase
         );
     }
 
+    public function testAnalyserCanLimitScanToSpecificFile(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+            'src/Bar.php' => '<?php namespace App; class Bar {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', ['src/'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/Foo.php']);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+        $this->assertStringEndsWith(
+            '/src/Foo.php',
+            $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
+        );
+    }
+
     public function testAnalyserCanLimitScanToSpecificPaths(): void
     {
         $basePath = $this->makeTempProject([
