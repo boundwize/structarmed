@@ -32,9 +32,11 @@ use function fnmatch;
 use function getcwd;
 use function in_array;
 use function is_dir;
+use function is_file;
 use function ltrim;
 use function realpath;
 use function rtrim;
+use function str_ends_with;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
@@ -244,6 +246,18 @@ final readonly class Analyser
 
         foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
             $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
+
+            if (is_file($fullPath)) {
+                if (str_ends_with($fullPath, '.php') && ! $this->isSkipped($fullPath, $skipPaths)) {
+                    $realPath = realpath($fullPath);
+
+                    if ($realPath !== false) {
+                        $files[] = $realPath;
+                    }
+                }
+
+                continue;
+            }
 
             if (! is_dir($fullPath)) {
                 continue;

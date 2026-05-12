@@ -699,7 +699,51 @@ PHP);
         [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', 'missing']);
 
         $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Error: directory [missing] not found.', $output);
+        $this->assertStringContainsString('Error: path [missing] not found.', $output);
+    }
+
+    public function testAnalyseCommandCanAnalyseSingleFile(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    'src/Foo.php',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('violation', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandRejectsNonPhpFileScanPath(): void
+    {
+        $basePath   = $this->createTempDirectory();
+        $readmePath = $basePath . '/readme.md';
+
+        file_put_contents($readmePath, '# Readme');
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', 'analyse', 'readme.md'],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString('Error: path [readme.md] not found.', $output);
+        } finally {
+            unlink($readmePath);
+            rmdir($basePath);
+        }
     }
 
     public function testAnalyseCommandReportsMissingConfig(): void
