@@ -29,11 +29,11 @@ final readonly class Psr1PhpTagsRule implements ProjectRuleInterface
     ) {
     }
 
-    public function evaluateProject(string $basePath, Architecture $architecture): ?RuleViolation
+    public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
 
-        foreach ($phpFileFinder->files($basePath) as $file) {
+        foreach ($phpFileFinder->files($basePath, $skipPaths) as $file) {
             foreach (token_get_all((string) file_get_contents($file)) as $token) {
                 if (! is_array($token)) {
                     continue;

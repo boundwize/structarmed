@@ -41,7 +41,7 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
         return $this->normalisePaths($this->sourcePaths);
     }
 
-    public function evaluateProject(string $basePath, Architecture $architecture): ?RuleViolation
+    public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
         $composerFile = rtrim($basePath, '/') . '/composer.json';
 

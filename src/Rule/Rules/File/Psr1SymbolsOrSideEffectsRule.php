@@ -37,12 +37,12 @@ final readonly class Psr1SymbolsOrSideEffectsRule implements ProjectRuleInterfac
     ) {
     }
 
-    public function evaluateProject(string $basePath, Architecture $architecture): ?RuleViolation
+    public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
         $parser        = (new ParserFactory())->createForNewestSupportedVersion();
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
 
-        foreach ($phpFileFinder->files($basePath) as $file) {
+        foreach ($phpFileFinder->files($basePath, $skipPaths) as $file) {
             try {
                 $nodes = $parser->parse((string) file_get_contents($file)) ?? [];
             } catch (Error) {
