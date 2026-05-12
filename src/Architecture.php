@@ -81,6 +81,14 @@ final class Architecture
      */
     private array $classViolationSkips = [];
 
+    /**
+     * Path globs that are excluded from ruleset evaluation only.
+     * Files matching these globs are still scanned for all other rules (e.g. PSR4).
+     *
+     * @var list<string>
+     */
+    private array $rulesetSkipPaths = [];
+
     private ?string $cacheDirectory = null;
 
     private ?string $baseline = null;
@@ -177,6 +185,24 @@ final class Architecture
     {
         foreach ((array) $paths as $path) {
             $this->skipPaths[] = $path;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Exclude file paths from ruleset evaluation only.
+     *
+     * Files matching these glob patterns are still scanned for all other rules
+     * (e.g. PSR4 namespace checks). Only the declarative ruleset layer-dependency
+     * checks are skipped for matching files.
+     *
+     * @param string|list<string> $paths
+     */
+    public function skipPathsForRuleset(string|array $paths): self
+    {
+        foreach ((array) $paths as $path) {
+            $this->rulesetSkipPaths[] = $path;
         }
 
         return $this;
@@ -324,6 +350,14 @@ final class Architecture
     public function getClassViolationSkips(): array
     {
         return $this->classViolationSkips;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getRulesetSkipPaths(): array
+    {
+        return $this->rulesetSkipPaths;
     }
 
     /** @return array<string, RuleInterface|ProjectRuleInterface> */

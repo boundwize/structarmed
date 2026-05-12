@@ -155,10 +155,15 @@ final readonly class Analyser
         // to a different *defined* layer and is not in the allowed list is a violation.
         $ruleset             = $architecture->getRuleset();
         $classViolationSkips = $architecture->getClassViolationSkips();
+        $rulesetSkipPaths    = $architecture->getRulesetSkipPaths();
 
         if ($ruleset !== []) {
             foreach ($classNodes as $classNode) {
                 if ($classNode->layer === null) {
+                    continue;
+                }
+
+                if ($rulesetSkipPaths !== [] && $this->isSkipped($classNode->file, $rulesetSkipPaths)) {
                     continue;
                 }
 

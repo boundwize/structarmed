@@ -261,4 +261,13 @@ final class ArchitectureTest extends TestCase
         $this->assertSame(['App\\Bar', 'App\\Baz'], $skips['App\\Foo']);
         $this->assertSame(['App\\Bar'], $skips['App\\Qux']);
     }
+
+    public function testSkipPathsForRulesetAcceptsStringAndArray(): void
+    {
+        $architecture = Architecture::define()
+            ->skipPathsForRuleset('tests/')
+            ->skipPathsForRuleset(['fixtures/', 'stubs/']);
+
+        $this->assertSame(['tests/', 'fixtures/', 'stubs/'], $architecture->getRulesetSkipPaths());
+    }
 }

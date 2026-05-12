@@ -842,6 +842,67 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetSkipPathsForRulesetSuppressesViolationsForMatchingFiles(): void
+    {
+        // Files under tests/ cross layer boundaries intentionally.
+        // skipPathsForRuleset() should suppress their ruleset violations
+        // while still allowing production code to be checked.
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class Request {}
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                use App\HTTP\Request;
+
+                final class QueryBuilder
+                {
+                    public function __construct(private Request $request) {}
+                }
+                PHP,
+            'tests/HTTP/RequestTest.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class RequestTest
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP'     => [],  // Database NOT allowed
+                'Database' => [],  // HTTP NOT allowed
+            ])
+            ->skipPathsForRuleset(['*tests*']);
+
+        // Production violation (src/Database/QueryBuilder.php → HTTP layer) must still fire.
+        // Test violation (tests/HTTP/RequestTest.php → Database layer) must be suppressed.
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/', 'tests/']);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.Database');
+        $this->assertCount(1, $violations);
+        // The violation is from the production class, not the test class.
+        $this->assertStringContainsString('App\\Database\\QueryBuilder', $violations[0]->message);
+        // The test file violation must be absent.
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+    }
+
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {
