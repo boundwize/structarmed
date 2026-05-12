@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
 use function file_put_contents;
+use function json_encode;
 use function mkdir;
 use function random_bytes;
 use function sys_get_temp_dir;
@@ -178,8 +179,12 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
-    private function makeNode(string $className, string $file, string $layer = 'Source', bool $isTrait = false): ClassNode
-    {
+    private function makeNode(
+        string $className,
+        string $file,
+        string $layer = 'Source',
+        bool $isTrait = false
+    ): ClassNode {
         return new ClassNode(
             className:   $className,
             file:        $file,
