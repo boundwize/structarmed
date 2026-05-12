@@ -7,19 +7,19 @@ namespace Boundwize\StructArmed\Tests\Rule\Composer;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function bin2hex;
 use function file_put_contents;
 use function json_encode;
 use function mkdir;
-use function random_bytes;
-use function sys_get_temp_dir;
 
 #[CoversClass(Psr4NamespaceRule::class)]
 final class Psr4NamespaceRuleTest extends TestCase
 {
+    use TemporaryDirectoryCleanupTrait;
+
     public function testPassesWhenClassMatchesComposerPsr4Path(): void
     {
         $basePath = $this->makeTempProject();
@@ -59,7 +59,7 @@ final class Psr4NamespaceRuleTest extends TestCase
 
     public function testPassesWhenComposerJsonCannotBeFound(): void
     {
-        $basePath = sys_get_temp_dir() . '/structarmed-psr4-namespace-missing-' . bin2hex(random_bytes(6));
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-namespace-missing');
         mkdir($basePath . '/src', 0777, true);
 
         $psr4NamespaceRule = new Psr4NamespaceRule('Source');
@@ -139,7 +139,7 @@ final class Psr4NamespaceRuleTest extends TestCase
 
     public function testFailsWhenTraitNameDoesNotMatchFilenameWithDuplicateNamespaceAcrossAutoloadSections(): void
     {
-        $basePath = sys_get_temp_dir() . '/structarmed-psr4-ci4-' . bin2hex(random_bytes(6));
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-ci4');
         mkdir($basePath . '/system/Exceptions', 0777, true);
         mkdir($basePath . '/tests/system', 0777, true);
 
@@ -201,7 +201,7 @@ final class Psr4NamespaceRuleTest extends TestCase
 
     private function makeTempProject(): string
     {
-        $basePath = sys_get_temp_dir() . '/structarmed-psr4-namespace-rule-' . bin2hex(random_bytes(6));
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-namespace-rule');
 
         mkdir($basePath . '/tests', 0777, true);
         file_put_contents(

@@ -13,22 +13,22 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function bin2hex;
 use function dirname;
 use function file_put_contents;
 use function is_dir;
 use function mkdir;
-use function random_bytes;
 use function str_replace;
 use function symlink;
-use function sys_get_temp_dir;
 
 #[CoversClass(Analyser::class)]
 final class AnalyserTest extends TestCase
 {
+    use TemporaryDirectoryCleanupTrait;
+
     public function testAnalyserReturnsNoViolationsForValidCode(): void
     {
         $architecture = Architecture::define()
@@ -612,7 +612,7 @@ final class AnalyserTest extends TestCase
         $basePath    = $this->makeTempProject([
             'src/.keep' => '',
         ]);
-        $outsidePath = sys_get_temp_dir() . '/structarmed-outside-' . bin2hex(random_bytes(6)) . '.php';
+        $outsidePath = $this->makeTemporaryFile('structarmed-outside');
         file_put_contents($outsidePath, '<?php class Linked {}');
         symlink($outsidePath, $basePath . '/src/Linked.php');
 
@@ -629,7 +629,7 @@ final class AnalyserTest extends TestCase
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {
-        $basePath = sys_get_temp_dir() . '/structarmed-analyser-' . bin2hex(random_bytes(6));
+        $basePath = $this->makeTemporaryDirectory('structarmed-analyser');
 
         foreach ($files as $file => $contents) {
             $path = $basePath . '/' . $file;

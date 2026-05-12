@@ -6,21 +6,20 @@ namespace Boundwize\StructArmed\Tests\Config;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Config\ConfigLoader;
+use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
-use function bin2hex;
 use function file_put_contents;
-use function mkdir;
-use function random_bytes;
 use function sys_get_temp_dir;
-use function tempnam;
 use function touch;
 
 #[CoversClass(ConfigLoader::class)]
 final class ConfigLoaderTest extends TestCase
 {
+    use TemporaryDirectoryCleanupTrait;
+
     public function testLoadReturnsArchitecture(): void
     {
         $path = $this->writeTempConfig('return ' . Architecture::class . '::define();');
@@ -73,8 +72,7 @@ final class ConfigLoaderTest extends TestCase
 
     private function writeTempConfig(string $body): string
     {
-        $path = tempnam(sys_get_temp_dir(), 'structarmed-config-');
-        $this->assertIsString($path);
+        $path = $this->makeTemporaryFile('structarmed-config');
         file_put_contents($path, "<?php\n\n" . $body . "\n");
 
         return $path;
@@ -82,9 +80,6 @@ final class ConfigLoaderTest extends TestCase
 
     private function makeTempDir(): string
     {
-        $path = sys_get_temp_dir() . '/structarmed-' . bin2hex(random_bytes(6));
-        mkdir($path);
-
-        return $path;
+        return $this->makeTemporaryDirectory('structarmed');
     }
 }

@@ -5,18 +5,17 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Composer;
 
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
+use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function bin2hex;
 use function file_put_contents;
-use function mkdir;
-use function random_bytes;
-use function sys_get_temp_dir;
 
 #[CoversClass(Psr4PathResolver::class)]
 final class Psr4PathResolverTest extends TestCase
 {
+    use TemporaryDirectoryCleanupTrait;
+
     public function testReturnsEmptyPathsWhenComposerJsonIsMissing(): void
     {
         $psr4PathResolver = new Psr4PathResolver();
@@ -124,9 +123,6 @@ JSON);
 
     private function makeTempDir(): string
     {
-        $basePath = sys_get_temp_dir() . '/structarmed-psr4-resolver-' . bin2hex(random_bytes(6));
-        mkdir($basePath);
-
-        return $basePath;
+        return $this->makeTemporaryDirectory('structarmed-psr4-resolver');
     }
 }

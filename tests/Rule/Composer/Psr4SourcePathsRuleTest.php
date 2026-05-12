@@ -7,18 +7,17 @@ namespace Boundwize\StructArmed\Tests\Rule\Composer;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function bin2hex;
 use function file_put_contents;
-use function mkdir;
-use function random_bytes;
-use function sys_get_temp_dir;
 
 #[CoversClass(Psr4SourcePathsRule::class)]
 final class Psr4SourcePathsRuleTest extends TestCase
 {
+    use TemporaryDirectoryCleanupTrait;
+
     public function testPassesWhenSourcePathsExistInComposerPsr4Autoloads(): void
     {
         $basePath = $this->makeTempProject(<<<'JSON'
@@ -175,9 +174,6 @@ JSON);
 
     private function makeTempDir(): string
     {
-        $basePath = sys_get_temp_dir() . '/structarmed-psr4-rule-' . bin2hex(random_bytes(6));
-        mkdir($basePath);
-
-        return $basePath;
+        return $this->makeTemporaryDirectory('structarmed-psr4-rule');
     }
 }

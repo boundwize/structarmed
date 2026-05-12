@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\PHPUnit\StructArmedExtension;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Runner\Extension\Facade;
@@ -15,18 +16,15 @@ use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
 use ReflectionClass;
 
-use function bin2hex;
 use function chdir;
 use function file_put_contents;
 use function getcwd;
-use function mkdir;
-use function random_bytes;
-use function sys_get_temp_dir;
-use function tempnam;
 
 #[CoversClass(StructArmedExtension::class)]
 final class StructArmedExtensionTest extends TestCase
 {
+    use TemporaryDirectoryCleanupTrait;
+
     public function testBootstrapPrintsPassingReport(): void
     {
         $configPath = $this->writeConfig('return ' . Architecture::class . '::define();');
@@ -87,8 +85,7 @@ final class StructArmedExtensionTest extends TestCase
 
     private function writeConfig(string $body): string
     {
-        $path = tempnam(sys_get_temp_dir(), 'structarmed-extension-');
-        $this->assertIsString($path);
+        $path = $this->makeTemporaryFile('structarmed-extension');
         file_put_contents($path, "<?php\n\n" . $body . "\n");
 
         return $path;
@@ -96,8 +93,7 @@ final class StructArmedExtensionTest extends TestCase
 
     private function makeTempProjectConfig(string $body): string
     {
-        $basePath = sys_get_temp_dir() . '/structarmed-extension-' . bin2hex(random_bytes(6));
-        mkdir($basePath);
+        $basePath = $this->makeTemporaryDirectory('structarmed-extension');
         file_put_contents($basePath . '/structarmed.php', "<?php\n\n" . $body . "\n");
 
         return $basePath;
