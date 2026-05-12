@@ -75,9 +75,7 @@ final readonly class PhpFileFinder
         $normalisedFile = rtrim(str_replace('\\', '/', realpath($filePath) ?: $filePath), '/');
         $normalisedBase = rtrim(str_replace('\\', '/', realpath($basePath) ?: $basePath), '/');
 
-        $relativePath = str_starts_with($normalisedFile, $normalisedBase . '/')
-            ? substr($normalisedFile, strlen($normalisedBase) + 1)
-            : $normalisedFile;
+        $relativePath = substr($normalisedFile, strlen($normalisedBase) + 1);
 
         foreach ($skipPaths as $skipPath) {
             $normalisedSkip = rtrim(str_replace('\\', '/', realpath($skipPath) ?: $skipPath), '/');
