@@ -11,7 +11,6 @@ use Boundwize\StructArmed\Rule\RuleInterface;
 
 use function array_filter;
 use function array_merge;
-use function array_values;
 use function is_int;
 use function sprintf;
 
