@@ -318,6 +318,7 @@ final readonly class AnalysisResultCache
             'isAbstract'    => $classNode->isAbstract,
             'isFinal'       => $classNode->isFinal,
             'isInterface'   => $classNode->isInterface,
+            'isTrait'       => $classNode->isTrait,
             'isReadonly'    => $classNode->isReadonly,
             'dependencies'  => array_values($classNode->dependencies),
             'implements'    => array_values($classNode->implements),
@@ -347,6 +348,7 @@ final readonly class AnalysisResultCache
         $isAbstract    = $node['isAbstract'] ?? null;
         $isFinal       = $node['isFinal'] ?? null;
         $isInterface   = $node['isInterface'] ?? null;
+        $isTrait       = $node['isTrait'] ?? false;
         $isReadonly    = $node['isReadonly'] ?? null;
         $dependencies  = $node['dependencies'] ?? null;
         $implements    = $node['implements'] ?? null;
@@ -366,6 +368,7 @@ final readonly class AnalysisResultCache
             || ! is_bool($isAbstract)
             || ! is_bool($isFinal)
             || ! is_bool($isInterface)
+            || ! is_bool($isTrait)
             || ! is_bool($isReadonly)
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($implements)
@@ -437,6 +440,7 @@ final readonly class AnalysisResultCache
             isFinal:       $isFinal,
             isInterface:   $isInterface,
             isReadonly:    $isReadonly,
+            isTrait:       $isTrait,
             dependencies:  array_values($dependencies),
             implements:    array_values($implements),
             methods:       $methods,

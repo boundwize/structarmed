@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
 use function file_put_contents;
+use function json_encode;
 use function mkdir;
 use function random_bytes;
 use function sys_get_temp_dir;
@@ -119,6 +120,47 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
+    public function testFailsWhenTraitNameDoesNotMatchFilename(): void
+    {
+        $basePath = $this->makeTempProject();
+        $file     = $basePath . '/tests/DebugTraceableTrait.php';
+
+        file_put_contents($file, '<?php namespace App\Tests; trait DebugTraceableTraits {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $violation = $psr4NamespaceRule->evaluate(
+            $this->makeNode('App\\Tests\\DebugTraceableTraits', $file, isTrait: true)
+        );
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('App\\Tests\\DebugTraceableTrait', $violation->message);
+    }
+
+    public function testFailsWhenTraitNameDoesNotMatchFilenameWithDuplicateNamespaceAcrossAutoloadSections(): void
+    {
+        $basePath = sys_get_temp_dir() . '/structarmed-psr4-ci4-' . bin2hex(random_bytes(6));
+        mkdir($basePath . '/system/Exceptions', 0777, true);
+        mkdir($basePath . '/tests/system', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload'     => ['psr-4' => ['CodeIgniter\\' => 'system/']],
+            'autoload-dev' => ['psr-4' => ['CodeIgniter\\' => 'tests/system/']],
+        ]));
+
+        $file = $basePath . '/system/Exceptions/DebugTraceableTrait.php';
+        file_put_contents($file, '<?php namespace CodeIgniter\Exceptions; trait DebugTraceableTraits {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $violation = $psr4NamespaceRule->evaluate(
+            $this->makeNode('CodeIgniter\\Exceptions\\DebugTraceableTraits', $file, isTrait: true)
+        );
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('CodeIgniter\\Exceptions\\DebugTraceableTrait', $violation->message);
+    }
+
     public function testCachesMappingsPerBasePath(): void
     {
         $basePath          = $this->makeTempProject();
@@ -137,8 +179,12 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
-    private function makeNode(string $className, string $file, string $layer = 'Source'): ClassNode
-    {
+    private function makeNode(
+        string $className,
+        string $file,
+        string $layer = 'Source',
+        bool $isTrait = false
+    ): ClassNode {
         return new ClassNode(
             className:   $className,
             file:        $file,
@@ -149,6 +195,7 @@ final class Psr4NamespaceRuleTest extends TestCase
             isFinal:     false,
             isInterface: false,
             isReadonly:  false,
+            isTrait:     $isTrait,
         );
     }
 

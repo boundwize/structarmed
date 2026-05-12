@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Composer;
 
+use function array_merge;
 use function array_values;
 use function file_exists;
 use function file_get_contents;
@@ -137,7 +138,11 @@ final class Psr4PathResolver
 
             foreach ($psr4 as $namespace => $pathConfig) {
                 if (is_string($namespace)) {
-                    $mappings[$namespace] = $pathConfig;
+                    if (isset($mappings[$namespace])) {
+                        $mappings[$namespace] = array_merge((array) $mappings[$namespace], (array) $pathConfig);
+                    } else {
+                        $mappings[$namespace] = $pathConfig;
+                    }
                 }
             }
         }

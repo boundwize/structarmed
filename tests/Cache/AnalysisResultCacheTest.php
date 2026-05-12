@@ -481,6 +481,44 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testClassNodesPreserveTraitFlag(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/FooTrait.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php trait FooTrait {}');
+
+        $classNodes = [
+            new ClassNode(
+                className:   'App\FooTrait',
+                file:        $sourceFile,
+                line:        1,
+                layer:       'Source',
+                extends:     null,
+                isAbstract:  false,
+                isFinal:     false,
+                isInterface: false,
+                isReadonly:  false,
+                isTrait:     true,
+            ),
+        ];
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertTrue($loaded[0]->isTrait);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testClassNodesPreserveMethodExplicitVisibility(): void
     {
         $cacheDirectory      = $this->createTempDirectory();

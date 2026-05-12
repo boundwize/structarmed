@@ -79,6 +79,16 @@ final class ClassCollectorTest extends TestCase
 
         $this->assertSame('FooTrait', $classNode->className);
         $this->assertFalse($classNode->isInterface);
+        $this->assertTrue($classNode->isTrait);
+    }
+
+    public function testCollectsTraitWithPsr4Namespace(): void
+    {
+        $classNode = $this->collect('<?php namespace App\Domain; trait FooTrait {}', resolveNames: true);
+
+        $this->assertSame('App\Domain\FooTrait', $classNode->className);
+        $this->assertTrue($classNode->isTrait);
+        $this->assertFalse($classNode->isInterface);
     }
 
     public function testCollectsEnum(): void
