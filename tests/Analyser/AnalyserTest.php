@@ -626,6 +626,222 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserEvaluatesRulesetAndDetectsLayerViolation(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP',      '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database',  '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => ['Cookie', 'Files', 'I18n'], // Database NOT allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetAllowsListedLayerDependency(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Cookie\CookieJar;
+
+                final class Request
+                {
+                    public function __construct(private CookieJar $cookies) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP',   '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Cookie', '/^App\\\\Cookie\\\\.*$/')
+            ->ruleset([
+                'HTTP' => ['Cookie'], // Cookie IS allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetIgnoresExternalDependencies(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use Psr\Http\Message\RequestInterface;
+
+                final class Request implements RequestInterface
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->ruleset([
+                'HTTP' => [], // nothing allowed, but external deps are fine
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetSkipClassViolationSuppressesViolation(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset(['HTTP' => []])
+            ->skipClassViolation('App\\HTTP\\Request', 'App\\Database\\QueryBuilder');
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetAllowsSameLayerDependencies(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\HTTP\Headers;
+
+                final class Request
+                {
+                    public function __construct(private Headers $headers) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->ruleset(['HTTP' => []]); // nothing allowed except same-layer
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetSkipsClassNodeWithNullLayer(): void
+    {
+        // A PHP file is scanned but the class inside it does not match any
+        // layerPattern, so its ClassNode has layer=null. The ruleset evaluator
+        // must skip such nodes without producing a violation.
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class Request {}
+                PHP,
+            'src/External/Logger.php' => <<<'PHP'
+                <?php
+
+                namespace App\External;
+
+                use App\HTTP\Request;
+
+                final class Logger
+                {
+                    public function __construct(private Request $request) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            // Note: App\External\Logger does NOT match any layerPattern → layer=null
+            ->ruleset([
+                'HTTP' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        // App\External\Logger has layer=null and must be silently skipped
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetDoesNotRestrictLayerAbsentFromRulesetKeys(): void
+    {
+        // A class belongs to a layer that IS defined via layerPattern, but that
+        // layer is not listed as a key in the ruleset. The ruleset evaluator
+        // must leave it unrestricted (allowedLayers=null → continue).
+        $basePath = $this->makeTempProject([
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                use App\HTTP\Request;
+
+                final class QueryBuilder
+                {
+                    public function __construct(private Request $request) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => ['Cookie'], // Database is NOT a ruleset key → unrestricted
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        // App\Database\QueryBuilder is in the Database layer which has no ruleset
+        // entry, so the dependency on App\HTTP\Request must not produce a violation.
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {
