@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Composer;
 
+use function array_merge;
 use function array_values;
 use function file_exists;
 use function file_get_contents;

@@ -747,7 +747,7 @@ final class AnalyserTest extends TestCase
     public function testAnalyserRulesetReportsTransitiveSameLayerDependencyViolations(): void
     {
         $basePath = $this->makeTempProject([
-            'src/HTTP/ResponseTrait.php' => <<<'PHP'
+            'src/HTTP/ResponseTrait.php'    => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -759,7 +759,7 @@ final class AnalyserTest extends TestCase
                     public function setLink(PagerInterface $pager): void {}
                 }
                 PHP,
-            'src/HTTP/Response.php' => <<<'PHP'
+            'src/HTTP/Response.php'         => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -778,7 +778,7 @@ final class AnalyserTest extends TestCase
                 {
                 }
                 PHP,
-            'src/Pager/PagerInterface.php' => <<<'PHP'
+            'src/Pager/PagerInterface.php'  => <<<'PHP'
                 <?php
 
                 namespace App\Pager;
