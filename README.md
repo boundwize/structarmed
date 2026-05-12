@@ -63,8 +63,6 @@ If everything passes, you get a clean summary:
 
 <img width="460" height="93" alt="Image" src="https://github.com/user-attachments/assets/aeb81a6a-20eb-40be-b68b-889b0349ac37" />
 
-Fix the reported violations where practical, then run `analyse` again.
-
 ## Configuration
 
 ### Default
