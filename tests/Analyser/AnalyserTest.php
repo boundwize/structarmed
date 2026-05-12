@@ -128,6 +128,27 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('psr4.source_paths.must_be_in_composer'));
     }
 
+    public function testAnalyserSkipPathOnProjectRuleSuppressesViolations(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'     => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'       => "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n",
+            'tests/FooTest.php' => "<?php\nini_set('memory_limit', '1G');\nclass FooTest {}\n",
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR1(sourcePaths: ['src/', 'tests/']))
+            ->skip([
+                Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS => [$basePath . '/tests'],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS);
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($violations[0]->file));
+    }
+
     public function testAnalyserContinuesWhenProjectRulePasses(): void
     {
         $basePath = $this->makeTempProject([

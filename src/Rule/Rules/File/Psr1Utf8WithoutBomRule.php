@@ -24,11 +24,11 @@ final readonly class Psr1Utf8WithoutBomRule implements ProjectRuleInterface
     ) {
     }
 
-    public function evaluateProject(string $basePath, Architecture $architecture): ?RuleViolation
+    public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
 
-        foreach ($phpFileFinder->files($basePath) as $file) {
+        foreach ($phpFileFinder->files($basePath, $skipPaths) as $file) {
             $contents = (string) file_get_contents($file);
 
             if (str_starts_with($contents, "\xEF\xBB\xBF")) {

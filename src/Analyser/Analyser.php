@@ -75,7 +75,7 @@ final readonly class Analyser
                 continue;
             }
 
-            $violation = $rule->evaluateProject($this->basePath, $architecture);
+            $violation = $rule->evaluateProject($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
 
             if (! $violation instanceof RuleViolation) {
                 continue;

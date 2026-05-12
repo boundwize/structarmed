@@ -167,6 +167,94 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
+    public function testSkipsFileMatchingAbsoluteSkipPath(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
+
+            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+                $basePath,
+                Architecture::define(),
+                [$basePath . '/src']
+            );
+
+            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testSkipsFileMatchingGlobSkipPath(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
+
+            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+                $basePath,
+                Architecture::define(),
+                ['src/*.php']
+            );
+
+            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testDoesNotSkipFileWhenSkipPathDoesNotMatch(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
+
+            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+                $basePath,
+                Architecture::define(),
+                ['tests']
+            );
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testSkipsFileMatchingRelativeSkipPath(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
+
+            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+                $basePath,
+                Architecture::define(),
+                ['src']
+            );
+
+            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     private function makeTempDir(): string
     {
         $path = sys_get_temp_dir() . '/structarmed-psr1-' . bin2hex(random_bytes(6));
