@@ -59,6 +59,8 @@ final class Architecture
 
     private ?string $cacheDirectory = null;
 
+    private ?string $baseline = null;
+
     private function __construct()
     {
     }
@@ -143,6 +145,13 @@ final class Architecture
     public function cacheDirectory(?string $cacheDirectory): self
     {
         $this->cacheDirectory = $cacheDirectory;
+
+        return $this;
+    }
+
+    public function baseline(?string $baseline): self
+    {
+        $this->baseline = $baseline;
 
         return $this;
     }
@@ -247,6 +256,11 @@ final class Architecture
     public function getCacheDirectory(): ?string
     {
         return $this->cacheDirectory;
+    }
+
+    public function getBaseline(): ?string
+    {
+        return $this->baseline;
     }
 
     private function registerPendingSkip(string $skip): void

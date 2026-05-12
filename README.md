@@ -293,7 +293,9 @@ src/Application/ → 'Application'
 src/Infrastructure/ → 'Infrastructure'
 ```
 
-## Rule key constants
+## Tips
+
+### Rule key constants
 
 Every preset rule has a public constant. Use constants, never raw strings:
 
@@ -304,3 +306,23 @@ DddPreset::ENTITY_MUST_BE_FINAL
 // ❌ wrong — typo silently does nothing
 'ddd.entity.must_be_fnal'
 ```
+
+### Adopting existing projects
+
+Fix reported violations where practical before reaching for a baseline. If the remaining findings are too large to resolve in one pass, generate a baseline to record the known violations:
+
+```bash
+vendor/bin/structarmed analyse --generate-baseline=structarmed-baseline.php
+```
+
+Then reference it from your config:
+
+```php
+return Architecture::define()
+    ->baseline('structarmed-baseline.php')
+    ->withPreset(Preset::PSR4());
+```
+
+Baseline entries are matched against future analysis results, so existing violations stay quiet while new violations still fail the run.
+
+Do not use a baseline to hide issues you can fix now; treat it as a migration aid for legacy findings that should be reduced over time.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Analyser\Analyser;
+use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Config\ConfigLoader;
@@ -76,6 +77,16 @@ final readonly class AnalyseCommand
                 continue;
             }
 
+            if (str_starts_with($argument, '--generate-baseline=')) {
+                $options['generate-baseline'] = substr($argument, strlen('--generate-baseline='));
+                continue;
+            }
+
+            if ($argument === '--generate-baseline') {
+                $options['generate-baseline'] = $arguments[++$i] ?? '';
+                continue;
+            }
+
             if (str_starts_with($argument, '--')) {
                 echo sprintf("Unknown option: %s\n\n", $argument);
                 echo Usage::render();
@@ -144,7 +155,40 @@ final readonly class AnalyseCommand
             $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
         }
 
-        $elapsed = microtime(true) - $start;
+        $elapsed  = microtime(true) - $start;
+        $baseline = new Baseline();
+
+        if (isset($options['generate-baseline'])) {
+            try {
+                $baseline->generate($ruleViolationCollection, $options['generate-baseline'], $basePath);
+            } catch (RuntimeException $runtimeException) {
+                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+
+                return 1;
+            }
+
+            echo sprintf(
+                "Generated baseline [%s] with %d violation(s).\n",
+                $options['generate-baseline'],
+                $ruleViolationCollection->count()
+            );
+
+            return 0;
+        }
+
+        if ($architecture->getBaseline() !== null) {
+            try {
+                $ruleViolationCollection = $baseline->filter(
+                    $ruleViolationCollection,
+                    $architecture->getBaseline(),
+                    $basePath
+                );
+            } catch (RuntimeException $runtimeException) {
+                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+
+                return 1;
+            }
+        }
 
         $report = match ($reportType) {
             'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
