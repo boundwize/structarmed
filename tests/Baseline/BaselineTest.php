@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 use function bin2hex;
+use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
 use function is_dir;
@@ -237,7 +238,9 @@ PHP);
                 continue;
             }
 
-            unlink($absolutePath);
+            if (file_exists($absolutePath)) {
+                unlink($absolutePath);
+            }
         }
 
         rmdir($basePath);

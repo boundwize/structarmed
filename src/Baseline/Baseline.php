@@ -17,6 +17,7 @@ use function is_dir;
 use function is_scalar;
 use function json_encode;
 use function ltrim;
+use function preg_match;
 use function realpath;
 use function rtrim;
 use function sprintf;
@@ -157,7 +158,7 @@ final readonly class Baseline
     {
         $normalisedPath = str_replace('\\', '/', $path);
 
-        if (str_starts_with($normalisedPath, '/')) {
+        if (str_starts_with($normalisedPath, '/') || preg_match('/^[A-Za-z]:\//', $normalisedPath) === 1) {
             return $path;
         }
 
