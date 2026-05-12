@@ -16,12 +16,14 @@ use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_map;
 use function bin2hex;
 use function dirname;
 use function file_put_contents;
 use function is_dir;
 use function mkdir;
 use function random_bytes;
+use function sort;
 use function str_replace;
 use function symlink;
 use function sys_get_temp_dir;
@@ -740,6 +742,67 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
         $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetReportsTransitiveSameLayerDependencyViolations(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/ResponseTrait.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Pager\PagerInterface;
+
+                trait ResponseTrait
+                {
+                    public function setLink(PagerInterface $pager): void {}
+                }
+                PHP,
+            'src/HTTP/Response.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class Response
+                {
+                    use ResponseTrait;
+                }
+                PHP,
+            'src/HTTP/DownloadResponse.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class DownloadResponse extends Response
+                {
+                }
+                PHP,
+            'src/Pager/PagerInterface.php' => <<<'PHP'
+                <?php
+
+                namespace App\Pager;
+
+                interface PagerInterface
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Pager', '/^App\\\\Pager\\\\.*$/')
+            ->ruleset(['HTTP' => []])
+            ->skipClassViolation('App\\HTTP\\DownloadResponse', 'App\\Pager\\PagerInterface');
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $classes    = array_map(static fn($violation): string => $violation->className, $violations);
+        sort($classes);
+
+        $this->assertCount(2, $violations);
+        $this->assertSame(['App\\HTTP\\Response', 'App\\HTTP\\ResponseTrait'], $classes);
     }
 
     public function testAnalyserRulesetAllowsSameLayerDependencies(): void

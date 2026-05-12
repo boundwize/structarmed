@@ -158,6 +158,9 @@ final readonly class Analyser
         $rulesetSkipPaths    = $architecture->getRulesetSkipPaths();
 
         if ($ruleset !== []) {
+            $dependencyMap            = $this->classDependencyMap($classNodes);
+            $inheritanceDependencyMap = $this->classInheritanceDependencyMap($classNodes);
+
             foreach ($classNodes as $classNode) {
                 if ($classNode->layer === null) {
                     continue;
@@ -176,7 +179,10 @@ final readonly class Analyser
 
                 $skippedDepsForClass = $classViolationSkips[$classNode->className] ?? [];
 
-                foreach ($classNode->dependencies as $dependency) {
+                foreach (
+                    $this->dependenciesForClass($classNode->className, $dependencyMap, $inheritanceDependencyMap)
+                    as $dependency
+                ) {
                     if (in_array($dependency, $skippedDepsForClass, true)) {
                         continue;
                     }
@@ -216,6 +222,104 @@ final readonly class Analyser
         }
 
         return $ruleViolationCollection;
+    }
+
+    /**
+     * @param list<ClassNode> $classNodes
+     * @return array<string, list<string>>
+     */
+    private function classDependencyMap(array $classNodes): array
+    {
+        $dependencyMap = [];
+
+        foreach ($classNodes as $classNode) {
+            $dependencyMap[$classNode->className] = $classNode->dependencies;
+        }
+
+        return $dependencyMap;
+    }
+
+    /**
+     * @param array<string, list<string>> $dependencyMap
+     * @param array<string, list<string>> $inheritanceDependencyMap
+     * @return list<string>
+     */
+    private function dependenciesForClass(
+        string $className,
+        array $dependencyMap,
+        array $inheritanceDependencyMap
+    ): array
+    {
+        $dependencies = $dependencyMap[$className] ?? [];
+
+        return $this->dependenciesForInheritanceDependencies(
+            $dependencies,
+            $dependencyMap,
+            $inheritanceDependencyMap,
+            [$className => true]
+        );
+    }
+
+    /**
+     * @param list<ClassNode> $classNodes
+     * @return array<string, list<string>>
+     */
+    private function classInheritanceDependencyMap(array $classNodes): array
+    {
+        $dependencyMap = [];
+
+        foreach ($classNodes as $classNode) {
+            $dependencies = $classNode->implements;
+
+            if ($classNode->extends !== null) {
+                $dependencies[] = $classNode->extends;
+            }
+
+            foreach ($classNode->traits as $trait) {
+                $dependencies[] = $trait;
+            }
+
+            $dependencyMap[$classNode->className] = array_values(array_unique($dependencies));
+        }
+
+        return $dependencyMap;
+    }
+
+    /**
+     * @param list<string>                $dependencies
+     * @param array<string, list<string>> $dependencyMap
+     * @param array<string, list<string>> $inheritanceDependencyMap
+     * @param array<string, true>         $seen
+     * @return list<string>
+     */
+    private function dependenciesForInheritanceDependencies(
+        array $dependencies,
+        array $dependencyMap,
+        array $inheritanceDependencyMap,
+        array $seen
+    ): array {
+        $resolvedDependencies = [];
+
+        foreach ($dependencies as $dependency) {
+            $resolvedDependencies[] = $dependency;
+
+            if (isset($seen[$dependency])) {
+                continue;
+            }
+
+            $resolvedDependencies = [
+                ...$resolvedDependencies,
+                ...($dependencyMap[$dependency] ?? []),
+                ...$this->dependenciesForInheritanceDependencies(
+                    $inheritanceDependencyMap[$dependency] ?? [],
+                    $dependencyMap,
+                    $inheritanceDependencyMap,
+                    $seen + [$dependency => true]
+                ),
+            ];
+        }
+
+        return array_values(array_unique($resolvedDependencies));
     }
 
     /**

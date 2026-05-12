@@ -46,11 +46,13 @@ final class Psr4PathResolverTest extends TestCase
     "autoload": {
         "psr-4": {
             "App\\": ["src/", "", "src\\"],
+            "CodeIgniter\\": "system/",
             "Root\\": "."
         }
     },
     "autoload-dev": {
         "psr-4": {
+            "CodeIgniter\\": "tests/system/",
             "": "legacy/",
             "Broken\\": [false]
         }
@@ -60,12 +62,13 @@ JSON);
 
         $psr4PathResolver = new Psr4PathResolver();
 
-        $this->assertSame(['src', '.', 'legacy'], $psr4PathResolver->paths($basePath));
+        $this->assertSame(['src', 'system', 'tests/system', '.', 'legacy'], $psr4PathResolver->paths($basePath));
         $this->assertSame(
             [
-                'App\\'  => ['src'],
-                'Root\\' => ['.'],
-                ''       => ['legacy'],
+                'App\\'         => ['src'],
+                'CodeIgniter\\' => ['system', 'tests/system'],
+                'Root\\'        => ['.'],
+                ''              => ['legacy'],
             ],
             $psr4PathResolver->namespacePaths($basePath)
         );

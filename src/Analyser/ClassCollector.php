@@ -33,6 +33,7 @@ use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Interface_;
 use PhpParser\Node\Stmt\Property;
+use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\Node\UseItem;
 use PhpParser\NodeTraverser;
@@ -143,6 +144,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $functionCalls = $this->collectFunctionCalls($classLike);
         $superglobals  = $this->collectSuperglobals($classLike);
         $implements    = $this->collectImplements($classLike);
+        $traits        = $this->collectTraits($classLike);
         $constants     = $this->collectConstants($classLike);
         $properties    = $this->collectProperties($classLike);
 
@@ -160,6 +162,7 @@ final class ClassCollector extends NodeVisitorAbstract
             isReadonly:    $classLike instanceof Class_ && $classLike->isReadonly(),
             dependencies:  $dependencies,
             implements:    $implements,
+            traits:        $traits,
             methods:       $methods,
             constants:     $constants,
             properties:    $properties,
@@ -294,6 +297,30 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         return $interfaces;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function collectTraits(ClassLike $classLike): array
+    {
+        if (! $classLike instanceof Class_) {
+            return [];
+        }
+
+        $traits = [];
+
+        foreach ($classLike->stmts as $stmt) {
+            if (! $stmt instanceof TraitUse) {
+                continue;
+            }
+
+            foreach ($stmt->traits as $trait) {
+                $traits[] = implode('\\', $trait->getParts());
+            }
+        }
+
+        return $traits;
     }
 
     /**

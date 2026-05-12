@@ -105,6 +105,13 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame(['First', 'Second'], $classNode->implements);
     }
 
+    public function testCollectsUsedTraits(): void
+    {
+        $classNode = $this->collect('<?php class Foo { use FirstTrait, SecondTrait; }');
+
+        $this->assertSame(['FirstTrait', 'SecondTrait'], $classNode->traits);
+    }
+
     public function testCollectsMethodReturnType(): void
     {
         $classNode = $this->collect('<?php class Foo { public function bar(): string { return "x"; } }');
