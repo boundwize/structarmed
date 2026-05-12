@@ -71,6 +71,32 @@ JSON);
         );
     }
 
+    public function testMergesPathsWhenSameNamespaceAppearsInAutoloadAndAutoloadDev(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "CodeIgniter\\": "system/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CodeIgniter\\": "tests/system/"
+        }
+    }
+}
+JSON);
+
+        $psr4PathResolver = new Psr4PathResolver();
+
+        $this->assertSame(['system', 'tests/system'], $psr4PathResolver->paths($basePath));
+        $this->assertSame(
+            ['CodeIgniter\\' => ['system', 'tests/system']],
+            $psr4PathResolver->namespacePaths($basePath)
+        );
+    }
+
     public function testSkipsInvalidAutoloadShapes(): void
     {
         $basePath = $this->makeTempProject(<<<'JSON'
