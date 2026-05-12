@@ -644,8 +644,8 @@ final class AnalyserTest extends TestCase
         ]);
 
         $architecture = Architecture::define()
-            ->layerPattern('HTTP',      '/^App\\\\HTTP\\\\.*$/')
-            ->layerPattern('Database',  '/^App\\\\Database\\\\.*$/')
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
             ->ruleset([
                 'HTTP' => ['Cookie', 'Files', 'I18n'], // Database NOT allowed
             ]);
@@ -676,7 +676,7 @@ final class AnalyserTest extends TestCase
         ]);
 
         $architecture = Architecture::define()
-            ->layerPattern('HTTP',   '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
             ->layerPattern('Cookie', '/^App\\\\Cookie\\\\.*$/')
             ->ruleset([
                 'HTTP' => ['Cookie'], // Cookie IS allowed
@@ -732,7 +732,7 @@ final class AnalyserTest extends TestCase
         ]);
 
         $architecture = Architecture::define()
-            ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
             ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
             ->ruleset(['HTTP' => []])
             ->skipClassViolation('App\\HTTP\\Request', 'App\\Database\\QueryBuilder');
@@ -774,7 +774,7 @@ final class AnalyserTest extends TestCase
         // layerPattern, so its ClassNode has layer=null. The ruleset evaluator
         // must skip such nodes without producing a violation.
         $basePath = $this->makeTempProject([
-            'src/HTTP/Request.php' => <<<'PHP'
+            'src/HTTP/Request.php'    => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -829,7 +829,7 @@ final class AnalyserTest extends TestCase
         ]);
 
         $architecture = Architecture::define()
-            ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
             ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
             ->ruleset([
                 'HTTP' => ['Cookie'], // Database is NOT a ruleset key → unrestricted
@@ -848,7 +848,7 @@ final class AnalyserTest extends TestCase
         // skipPathsForRuleset() should suppress their ruleset violations
         // while still allowing production code to be checked.
         $basePath = $this->makeTempProject([
-            'src/HTTP/Request.php' => <<<'PHP'
+            'src/HTTP/Request.php'          => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -867,7 +867,7 @@ final class AnalyserTest extends TestCase
                     public function __construct(private Request $request) {}
                 }
                 PHP,
-            'tests/HTTP/RequestTest.php' => <<<'PHP'
+            'tests/HTTP/RequestTest.php'    => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -882,11 +882,11 @@ final class AnalyserTest extends TestCase
         ]);
 
         $architecture = Architecture::define()
-            ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
             ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
             ->ruleset([
-                'HTTP'     => [],  // Database NOT allowed
-                'Database' => [],  // HTTP NOT allowed
+                'HTTP'     => [], // Database NOT allowed
+                'Database' => [], // HTTP NOT allowed
             ])
             ->skipPathsForRuleset(['*tests*']);
 

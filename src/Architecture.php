@@ -369,13 +369,13 @@ final class Architecture
     /** @return list<string> */
     public function getSkipPaths(): array
     {
-        return array_values(array_merge(
+        return array_merge(
             $this->skipPaths,
-            array_values(array_filter(
+            array_filter(
                 $this->pendingSkips,
                 fn(string $skip): bool => ! isset($this->rules[$skip])
-            ))
-        ));
+            )
+        );
     }
 
     /** @return array<string, list<string>> */
