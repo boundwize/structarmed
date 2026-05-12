@@ -111,6 +111,22 @@ final class ArchitectureTest extends TestCase
         $this->assertNull($architecture->getCacheDirectory());
     }
 
+    public function testBaselineIsRegistered(): void
+    {
+        $architecture = Architecture::define()
+            ->baseline('structarmed-baseline.php');
+
+        $this->assertSame('structarmed-baseline.php', $architecture->getBaseline());
+    }
+
+    public function testBaselineCanBeNull(): void
+    {
+        $architecture = Architecture::define()
+            ->baseline(null);
+
+        $this->assertNull($architecture->getBaseline());
+    }
+
     public function testRuleIsAdded(): void
     {
         $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
