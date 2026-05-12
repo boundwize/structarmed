@@ -322,6 +322,7 @@ final readonly class AnalysisResultCache
             'isReadonly'    => $classNode->isReadonly,
             'dependencies'  => array_values($classNode->dependencies),
             'implements'    => array_values($classNode->implements),
+            'traits'        => array_values($classNode->traits),
             'methods'       => array_map($this->methodNodeToArray(...), $classNode->methods),
             'constants'     => array_map($this->constantNodeToArray(...), $classNode->constants),
             'properties'    => array_map($this->propertyNodeToArray(...), $classNode->properties),
@@ -352,6 +353,7 @@ final readonly class AnalysisResultCache
         $isReadonly    = $node['isReadonly'] ?? null;
         $dependencies  = $node['dependencies'] ?? null;
         $implements    = $node['implements'] ?? null;
+        $traits        = $node['traits'] ?? [];
         $rawMethods    = $node['methods'] ?? null;
         $rawConstants  = $node['constants'] ?? null;
         $rawProperties = $node['properties'] ?? null;
@@ -372,6 +374,7 @@ final readonly class AnalysisResultCache
             || ! is_bool($isReadonly)
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($implements)
+            || ! $this->isStringArray($traits)
             || ! is_array($rawMethods)
             || ! is_array($rawConstants)
             || ! is_array($rawProperties)
@@ -443,6 +446,7 @@ final readonly class AnalysisResultCache
             isTrait:       $isTrait,
             dependencies:  array_values($dependencies),
             implements:    array_values($implements),
+            traits:        array_values($traits),
             methods:       $methods,
             constants:     $constants,
             properties:    $properties,

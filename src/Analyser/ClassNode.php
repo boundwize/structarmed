@@ -19,6 +19,7 @@ final readonly class ClassNode
     /**
      * @param string[]       $dependencies   Fully-qualified class names this class depends on
      * @param string[]       $implements     Interface names this class implements
+     * @param string[]       $traits         Trait names this class uses
      * @param MethodNode[]   $methods        Methods of this class
      * @param ConstantNode[] $constants      Constants of this class
      * @param PropertyNode[] $properties     Properties of this class
@@ -39,6 +40,7 @@ final readonly class ClassNode
         public bool $isTrait = false,
         public array $dependencies = [],
         public array $implements = [],
+        public array $traits = [],
         public array $methods = [],
         public array $constants = [],
         public array $properties = [],
