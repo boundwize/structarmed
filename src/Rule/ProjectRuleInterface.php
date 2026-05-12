@@ -13,5 +13,9 @@ interface ProjectRuleInterface
      *
      * @param list<string> $skipPaths Paths to exclude from evaluation (absolute or relative to $basePath)
      */
-    public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation;
+    public function evaluateProject(
+        string $basePath,
+        Architecture $architecture,
+        array $skipPaths = []
+    ): ?RuleViolation;
 }
