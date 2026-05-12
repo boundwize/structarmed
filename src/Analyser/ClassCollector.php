@@ -32,6 +32,7 @@ use PhpParser\Node\Stmt\Foreach_;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Interface_;
+use PhpParser\Node\Stmt\Trait_;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\Node\UseItem;
@@ -158,6 +159,7 @@ final class ClassCollector extends NodeVisitorAbstract
             isFinal:       $classLike instanceof Class_ && $classLike->isFinal(),
             isInterface:   $classLike instanceof Interface_,
             isReadonly:    $classLike instanceof Class_ && $classLike->isReadonly(),
+            isTrait:       $classLike instanceof Trait_,
             dependencies:  $dependencies,
             implements:    $implements,
             methods:       $methods,

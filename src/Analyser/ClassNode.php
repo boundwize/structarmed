@@ -36,6 +36,7 @@ final readonly class ClassNode
         public bool $isFinal,
         public bool $isInterface,
         public bool $isReadonly,
+        public bool $isTrait = false,
         public array $dependencies = [],
         public array $implements = [],
         public array $methods = [],
