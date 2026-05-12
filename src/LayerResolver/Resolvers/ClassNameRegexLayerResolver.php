@@ -49,6 +49,9 @@ final readonly class ClassNameRegexLayerResolver implements LayerResolverInterfa
         return null;
     }
 
+    /**
+     * @return int[]|string[]
+     */
     public function resolveAll(string $className, string $filePath): array
     {
         $matched = [];
