@@ -42,6 +42,7 @@ use PhpParser\NodeVisitorAbstract;
 
 use function array_merge;
 use function array_unique;
+use function array_values;
 use function count;
 use function get_defined_functions;
 use function implode;
@@ -260,7 +261,7 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     private function collectDependencies(ClassLike $classLike): array
     {
@@ -282,7 +283,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $nodeTraverser->addVisitor($visitor);
         $nodeTraverser->traverse([$classLike]);
 
-        return array_unique(array_merge($this->fileUses, $visitor->names));
+        return array_values(array_unique(array_merge($this->fileUses, $visitor->names)));
     }
 
     /**

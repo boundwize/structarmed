@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser;
 
-use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
@@ -14,6 +13,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -799,7 +799,10 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
         $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
-        $classes    = array_map(static fn(RuleViolation $ruleViolation): string => $ruleViolation->className, $violations);
+        $classes    = array_map(
+            static fn(RuleViolation $ruleViolation): string => $ruleViolation->className,
+            $violations
+        );
         sort($classes);
 
         $this->assertCount(2, $violations);

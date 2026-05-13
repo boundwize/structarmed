@@ -320,7 +320,7 @@ final readonly class AnalysisResultCache
             'isInterface'   => $classNode->isInterface,
             'isTrait'       => $classNode->isTrait,
             'isReadonly'    => $classNode->isReadonly,
-            'dependencies'  => array_values($classNode->dependencies),
+            'dependencies'  => $classNode->dependencies,
             'implements'    => array_values($classNode->implements),
             'traits'        => array_values($classNode->traits),
             'methods'       => array_map($this->methodNodeToArray(...), $classNode->methods),
