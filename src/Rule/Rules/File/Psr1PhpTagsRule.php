@@ -70,7 +70,7 @@ final readonly class Psr1PhpTagsRule implements MultipleProjectRuleViolationInte
                     line: $token[2],
                     className: '',
                 );
-                break;
+                continue 2;
             }
         }
 
