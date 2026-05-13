@@ -10,7 +10,7 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 
 use function array_filter;
-use function array_values;
+use function array_merge;
 use function is_int;
 use function sprintf;
 
@@ -57,6 +57,37 @@ final class Architecture
     /** @var array<string, list<string>> */
     private array $ruleSkipPaths = [];
 
+    /**
+     * Layers resolved by class-name regex patterns rather than file-system paths.
+     *
+     * @var array<string, array{pattern: string, excludePattern: string|null}>
+     */
+    private array $layerPatterns = [];
+
+    /**
+     * Allowed layer dependencies: layer name → list of layers it may depend on.
+     * Any dependency that resolves to a layer NOT in the allowed list is a violation.
+     * Layers absent from this map are not checked.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $ruleset = [];
+
+    /**
+     * Per-class violation skips: class name → list of dependency class names to ignore.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $classViolationSkips = [];
+
+    /**
+     * Path globs that are excluded from ruleset evaluation only.
+     * Files matching these globs are still scanned for all other rules (e.g. PSR4).
+     *
+     * @var list<string>
+     */
+    private array $rulesetSkipPaths = [];
+
     private ?string $cacheDirectory = null;
 
     private ?string $baseline = null;
@@ -84,6 +115,61 @@ final class Architecture
         return $this;
     }
 
+    /**
+     * Define a layer by matching the fully-qualified class name against a regex pattern.
+     *
+     * Use this when architecture layers are expressed through namespace conventions
+     * rather than directory structure.
+     *
+     * @param string      $name           Layer name.
+     * @param string      $pattern        Regex matched against the FQN (e.g. '/^App\\HTTP\\.*$/').
+     * @param string|null $excludePattern Optional regex; classes matching this are excluded
+     *                                    from the layer even when $pattern matches.
+     */
+    public function layerPattern(string $name, string $pattern, ?string $excludePattern = null): self
+    {
+        $this->layerPatterns[$name] = [
+            'pattern'        => $pattern,
+            'excludePattern' => $excludePattern,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Declare which layers each layer is allowed to depend on.
+     *
+     * Layers not listed as keys are not restricted; layers listed as keys may only
+     * depend on the listed layers (dependencies that resolve to any other defined
+     * layer are violations).
+     *
+     * @param array<string, list<string>> $ruleset  Map of layer name → allowed layer names.
+     */
+    public function ruleset(array $ruleset): self
+    {
+        $this->ruleset = $ruleset;
+
+        return $this;
+    }
+
+    /**
+     * Skip specific class-level dependency violations.
+     *
+     * When a class in one layer depends on a specific class in another layer, the
+     * violation for that pair can be suppressed here without disabling the entire rule.
+     *
+     * @param string          $className    Fully-qualified class name of the violating class.
+     * @param string|list<string> $dependencies  One or more FQN dependency class names to ignore.
+     */
+    public function skipClassViolation(string $className, string|array $dependencies): self
+    {
+        foreach ((array) $dependencies as $dep) {
+            $this->classViolationSkips[$className][] = $dep;
+        }
+
+        return $this;
+    }
+
     public function skipPath(string $path): self
     {
         $this->skipPaths[] = $path;
@@ -98,6 +184,24 @@ final class Architecture
     {
         foreach ((array) $paths as $path) {
             $this->skipPaths[] = $path;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Exclude file paths from ruleset evaluation only.
+     *
+     * Files matching these glob patterns are still scanned for all other rules
+     * (e.g. PSR4 namespace checks). Only the declarative ruleset layer-dependency
+     * checks are skipped for matching files.
+     *
+     * @param string|list<string> $paths
+     */
+    public function skipPathsForRuleset(string|array $paths): self
+    {
+        foreach ((array) $paths as $path) {
+            $this->rulesetSkipPaths[] = $path;
         }
 
         return $this;
@@ -223,6 +327,38 @@ final class Architecture
         return $this->layers;
     }
 
+    /**
+     * @return array<string, array{pattern: string, excludePattern: string|null}>
+     */
+    public function getLayerPatterns(): array
+    {
+        return $this->layerPatterns;
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public function getRuleset(): array
+    {
+        return $this->ruleset;
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public function getClassViolationSkips(): array
+    {
+        return $this->classViolationSkips;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getRulesetSkipPaths(): array
+    {
+        return $this->rulesetSkipPaths;
+    }
+
     /** @return array<string, RuleInterface|ProjectRuleInterface> */
     public function getRules(): array
     {
@@ -232,13 +368,13 @@ final class Architecture
     /** @return list<string> */
     public function getSkipPaths(): array
     {
-        return [
-            ...$this->skipPaths,
-            ...array_values(array_filter(
+        return array_merge(
+            $this->skipPaths,
+            array_filter(
                 $this->pendingSkips,
                 fn(string $skip): bool => ! isset($this->rules[$skip])
-            )),
-        ];
+            )
+        );
     }
 
     /** @return array<string, list<string>> */

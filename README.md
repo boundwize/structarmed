@@ -293,6 +293,73 @@ src/Application/ → 'Application'
 src/Infrastructure/ → 'Infrastructure'
 ```
 
+### Layer patterns (namespace-based layers)
+
+When your architecture is expressed through namespace conventions rather than directory structure, use `layerPattern()` to resolve layers by matching the fully-qualified class name against a regex:
+
+```php
+return Architecture::define()
+    ->layerPattern('API',    '/^App\\\\API\\\\.*$/')
+    ->layerPattern('HTTP',   '/^App\\\\HTTP\\\\.*$/')
+    ->layerPattern('Router', '/^App\\\\Router\\\\.*$/');
+```
+
+An optional third argument excludes classes whose FQN matches a second regex, even when the first matches:
+
+```php
+// HTTP layer: includes everything under App\HTTP\, except App\HTTP\URI
+->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/', '/^App\\\\HTTP\\\\URI$/')
+->layerPattern('URI',  '/^App\\\\HTTP\\\\URI$/')
+```
+
+### Declarative ruleset
+
+Once layers are defined (via `layer()` or `layerPattern()`), declare which layers each layer is allowed to depend on. Any dependency that resolves to a layer not in the allowed list is a violation:
+
+```php
+return Architecture::define()
+    ->layerPattern('API',      '/^App\\\\API\\\\.*$/')
+    ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+    ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+    ->ruleset([
+        'API'      => ['HTTP'],           // API may only depend on HTTP
+        'HTTP'     => ['Database'],       // HTTP may only depend on Database
+        'Database' => [],                 // Database may not depend on any layer
+    ]);
+```
+
+Layers absent from the ruleset keys are not checked. Dependencies on external (non-registered) classes are always allowed.
+
+Same-layer dependencies are always allowed regardless of the ruleset.
+
+### Skipping class-level violations
+
+When a specific class-to-class dependency is a known exception, suppress it without disabling the whole layer rule:
+
+```php
+->skipClassViolation('App\\HTTP\\ResponseTrait', [
+    'App\\Pager\\PagerInterface',
+])
+->skipClassViolation('App\\Log\\ChromeLoggerHandler', 'App\\HTTP\\ResponseInterface')
+```
+
+The first argument is the fully-qualified violating class name; the second is one or more dependency FQNs to ignore for that class.
+
+### Excluding paths from ruleset checks only
+
+Test files often cross layer boundaries by design. Use `skipPathsForRuleset()` to exclude paths from ruleset evaluation while still scanning them for all other rules (e.g. PSR-4 namespace checks):
+
+```php
+return Architecture::define()
+    ->withPresets(Preset::PSR4())
+    ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+    ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+    ->ruleset(['HTTP' => [], 'Database' => ['HTTP']])
+    ->skipPathsForRuleset(['*tests*', '*fixtures*']);
+```
+
+This is different from `skipPaths()` / `skipPath()`, which exclude files from **all** analysis.
+
 ## Tips
 
 ### Rule key constants

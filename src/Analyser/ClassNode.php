@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use function array_filter;
 use function end;
 use function explode;
 use function in_array;
@@ -17,8 +18,9 @@ final readonly class ClassNode
     public array $layers;
 
     /**
-     * @param string[]       $dependencies   Fully-qualified class names this class depends on
+     * @param list<string>   $dependencies   Fully-qualified class names this class depends on
      * @param string[]       $implements     Interface names this class implements
+     * @param string[]       $traits         Trait names this class uses
      * @param MethodNode[]   $methods        Methods of this class
      * @param ConstantNode[] $constants      Constants of this class
      * @param PropertyNode[] $properties     Properties of this class
@@ -39,6 +41,7 @@ final readonly class ClassNode
         public bool $isTrait = false,
         public array $dependencies = [],
         public array $implements = [],
+        public array $traits = [],
         public array $methods = [],
         public array $constants = [],
         public array $properties = [],
@@ -46,7 +49,7 @@ final readonly class ClassNode
         public array $superglobals = [],
         array $layers = [],
     ) {
-        $this->layers = $layers !== [] ? $layers : ($this->layer !== null ? [$this->layer] : []);
+        $this->layers = $layers ?: array_filter([$this->layer]);
     }
 
     public function shortName(): string

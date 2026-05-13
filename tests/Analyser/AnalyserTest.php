@@ -13,14 +13,17 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_map;
 use function dirname;
 use function file_put_contents;
 use function is_dir;
 use function mkdir;
+use function sort;
 use function str_replace;
 use function symlink;
 
@@ -624,6 +627,399 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
         $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserEvaluatesRulesetAndDetectsLayerViolation(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => ['Cookie', 'Files', 'I18n'], // Database NOT allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetAllowsListedLayerDependency(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Cookie\CookieJar;
+
+                final class Request
+                {
+                    public function __construct(private CookieJar $cookies) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Cookie', '/^App\\\\Cookie\\\\.*$/')
+            ->ruleset([
+                'HTTP' => ['Cookie'], // Cookie IS allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetIgnoresExternalDependencies(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use Psr\Http\Message\RequestInterface;
+
+                final class Request implements RequestInterface
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->ruleset([
+                'HTTP' => [], // nothing allowed, but external deps are fine
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetSkipClassViolationSuppressesViolation(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset(['HTTP' => []])
+            ->skipClassViolation('App\\HTTP\\Request', 'App\\Database\\QueryBuilder');
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetReportsTransitiveSameLayerDependencyViolations(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/ResponseTrait.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Pager\PagerInterface;
+
+                trait ResponseTrait
+                {
+                    public function setLink(PagerInterface $pager): void {}
+                }
+                PHP,
+            'src/HTTP/Response.php'         => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class Response
+                {
+                    use ResponseTrait;
+                }
+                PHP,
+            'src/HTTP/DownloadResponse.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class DownloadResponse extends Response
+                {
+                }
+                PHP,
+            'src/Pager/PagerInterface.php'  => <<<'PHP'
+                <?php
+
+                namespace App\Pager;
+
+                interface PagerInterface
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Pager', '/^App\\\\Pager\\\\.*$/')
+            ->ruleset(['HTTP' => []])
+            ->skipClassViolation('App\\HTTP\\DownloadResponse', 'App\\Pager\\PagerInterface');
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $classes    = array_map(
+            static fn(RuleViolation $ruleViolation): string => $ruleViolation->className,
+            $violations
+        );
+        sort($classes);
+
+        $this->assertCount(2, $violations);
+        $this->assertSame(['App\\HTTP\\Response', 'App\\HTTP\\ResponseTrait'], $classes);
+    }
+
+    public function testAnalyserRulesetStopsResolvingCyclicInheritanceDependencies(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/First.php'            => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class First extends Second
+                {
+                }
+                PHP,
+            'src/HTTP/Second.php'           => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Second extends First
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $classes    = array_map(
+            static fn(RuleViolation $ruleViolation): string => $ruleViolation->className,
+            $violations
+        );
+        sort($classes);
+
+        $this->assertSame(['App\\HTTP\\First', 'App\\HTTP\\Second'], $classes);
+    }
+
+    public function testAnalyserRulesetAllowsSameLayerDependencies(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\HTTP\Headers;
+
+                final class Request
+                {
+                    public function __construct(private Headers $headers) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->ruleset(['HTTP' => []]); // nothing allowed except same-layer
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetSkipsClassNodeWithNullLayer(): void
+    {
+        // A PHP file is scanned but the class inside it does not match any
+        // layerPattern, so its ClassNode has layer=null. The ruleset evaluator
+        // must skip such nodes without producing a violation.
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class Request {}
+                PHP,
+            'src/External/Logger.php' => <<<'PHP'
+                <?php
+
+                namespace App\External;
+
+                use App\HTTP\Request;
+
+                final class Logger
+                {
+                    public function __construct(private Request $request) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            // Note: App\External\Logger does NOT match any layerPattern → layer=null
+            ->ruleset([
+                'HTTP' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        // App\External\Logger has layer=null and must be silently skipped
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetDoesNotRestrictLayerAbsentFromRulesetKeys(): void
+    {
+        // A class belongs to a layer that IS defined via layerPattern, but that
+        // layer is not listed as a key in the ruleset. The ruleset evaluator
+        // must leave it unrestricted (allowedLayers=null → continue).
+        $basePath = $this->makeTempProject([
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                use App\HTTP\Request;
+
+                final class QueryBuilder
+                {
+                    public function __construct(private Request $request) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => ['Cookie'], // Database is NOT a ruleset key → unrestricted
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        // App\Database\QueryBuilder is in the Database layer which has no ruleset
+        // entry, so the dependency on App\HTTP\Request must not produce a violation.
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetSkipPathsForRulesetSuppressesViolationsForMatchingFiles(): void
+    {
+        // Files under tests/ cross layer boundaries intentionally.
+        // skipPathsForRuleset() should suppress their ruleset violations
+        // while still allowing production code to be checked.
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'          => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class Request {}
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                use App\HTTP\Request;
+
+                final class QueryBuilder
+                {
+                    public function __construct(private Request $request) {}
+                }
+                PHP,
+            'tests/HTTP/RequestTest.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class RequestTest
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP'     => [], // Database NOT allowed
+                'Database' => [], // HTTP NOT allowed
+            ])
+            ->skipPathsForRuleset(['*tests*']);
+
+        // Production violation (src/Database/QueryBuilder.php → HTTP layer) must still fire.
+        // Test violation (tests/HTTP/RequestTest.php → Database layer) must be suppressed.
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/', 'tests/']);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.Database');
+        $this->assertCount(1, $violations);
+        // The violation is from the production class, not the test class.
+        $this->assertStringContainsString('App\\Database\\QueryBuilder', $violations[0]->message);
+        // The test file violation must be absent.
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
     }
 
     /** @param array<string, string> $files */

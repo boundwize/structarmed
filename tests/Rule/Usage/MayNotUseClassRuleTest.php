@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MayNotUseClassRule::class)]
 final class MayNotUseClassRuleTest extends TestCase
 {
-    /** @param array<string> $dependencies */
+    /** @param list<string> $dependencies */
     private function makeNode(array $dependencies, string $layer = 'Domain'): ClassNode
     {
         return new ClassNode(
