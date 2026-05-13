@@ -41,6 +41,18 @@ use const JSON_THROW_ON_ERROR;
 #[CoversClass(AnalysisResultCache::class)]
 final class AnalysisResultCacheTest extends TestCase
 {
+    public function testGetCacheDirectoryReturnsConfiguredDirectory(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        try {
+            $this->assertSame($cacheDirectory, $analysisResultCache->getCacheDirectory());
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testStoresAndLoadsViolationCollection(): void
     {
         $cacheDirectory          = $this->createTempDirectory();

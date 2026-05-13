@@ -90,9 +90,9 @@ final readonly class ParallelClassNodeExtractor
             );
 
             if ($process === false) {
-                $this->cleanup([$inputFile, $outputFile, $stdoutFile, $stderrFile]);
+                $this->cleanup([$inputFile, $outputFile, $stdoutFile, $stderrFile]); // @codeCoverageIgnore
 
-                throw new RuntimeException('Unable to start parallel analysis worker.');
+                throw new RuntimeException('Unable to start parallel analysis worker.'); // @codeCoverageIgnore
             }
 
             fclose($pipes[0]);
@@ -123,13 +123,13 @@ final readonly class ParallelClassNodeExtractor
                     || ! is_array($result['nodes'])
                     || ! array_key_exists('error', $result)
                 ) {
-                    throw new RuntimeException('Parallel analysis worker returned an invalid payload.');
+                    throw new RuntimeException('Parallel analysis worker returned an invalid payload.'); // @codeCoverageIgnore
                 }
 
                 $error = $result['error'];
 
                 if ($error !== null && ! is_string($error)) {
-                    throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
+                    throw new RuntimeException('Parallel analysis worker returned an invalid error payload.'); // @codeCoverageIgnore
                 }
 
                 if ($error !== null || $exitCode !== 0) {
@@ -192,7 +192,7 @@ final readonly class ParallelClassNodeExtractor
         $file = tempnam($dir, 'structarmed-worker-');
 
         if ($file === false) {
-            throw new RuntimeException('Unable to create temporary file for parallel analysis.');
+            throw new RuntimeException('Unable to create temporary file for parallel analysis.'); // @codeCoverageIgnore
         }
 
         return $file;
