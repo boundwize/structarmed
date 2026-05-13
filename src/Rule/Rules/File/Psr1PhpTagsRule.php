@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\File;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
+use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function file_get_contents;
@@ -18,7 +19,7 @@ use const T_INLINE_HTML;
 use const T_OPEN_TAG;
 use const T_OPEN_TAG_WITH_ECHO;
 
-final readonly class Psr1PhpTagsRule implements MultipleProjectRuleViolationInterface
+final readonly class Psr1PhpTagsRule implements ProjectRuleInterface, MultipleProjectRuleViolationInterface
 {
     /**
      * @param list<string>|null $sourcePaths

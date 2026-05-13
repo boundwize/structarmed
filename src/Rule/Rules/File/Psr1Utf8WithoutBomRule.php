@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\File;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
+use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function file_get_contents;
@@ -13,7 +14,7 @@ use function preg_match;
 use function sprintf;
 use function str_starts_with;
 
-final readonly class Psr1Utf8WithoutBomRule implements MultipleProjectRuleViolationInterface
+final readonly class Psr1Utf8WithoutBomRule implements ProjectRuleInterface, MultipleProjectRuleViolationInterface
 {
     /**
      * @param list<string>|null $sourcePaths
