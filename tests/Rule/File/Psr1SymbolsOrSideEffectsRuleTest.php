@@ -7,7 +7,6 @@ namespace Boundwize\StructArmed\Tests\Rule\File;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1SymbolsOrSideEffectsRule;
-use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,13 +30,13 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define()
             );
 
-            $this->assertInstanceOf(RuleViolation::class, $violation);
-            $this->assertSame(2, $violation->line);
+            $this->assertCount(1, $violations);
+            $this->assertSame(2, $violations[0]->line);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -56,12 +55,12 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
                 "<?php\nif (! function_exists('foo')) {\n    function foo(): void {}\n}\n"
             );
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define()
             );
 
-            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame([], $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -78,12 +77,12 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             file_put_contents($basePath . '/src/Broken.php', "<?php\nclass Broken {\n");
             file_put_contents($basePath . '/src/SideEffect.php', "<?php\nini_set('memory_limit', '1G');\n");
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define()
             );
 
-            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame([], $violations);
         } finally {
             unlink($basePath . '/src/Broken.php');
             unlink($basePath . '/src/SideEffect.php');
@@ -103,13 +102,13 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
                 "<?php\nnamespace App;\nuse DateTimeImmutable;\necho 'x';\nclass Foo {}\n"
             );
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define()
             );
 
-            $this->assertInstanceOf(RuleViolation::class, $violation);
-            $this->assertSame(4, $violation->line);
+            $this->assertCount(1, $violations);
+            $this->assertSame(4, $violations[0]->line);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -128,13 +127,13 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
                 "<?php\nif (true) {\n    echo 'x';\n}\nclass Foo {}\n"
             );
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define()
             );
 
-            $this->assertInstanceOf(RuleViolation::class, $violation);
-            $this->assertSame(2, $violation->line);
+            $this->assertCount(1, $violations);
+            $this->assertSame(2, $violations[0]->line);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -153,13 +152,13 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
                 "<?php\nif (true) {\n    class One {}\n} else {\n    class Two {}\n}\nclass Foo {}\n"
             );
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define()
             );
 
-            $this->assertInstanceOf(RuleViolation::class, $violation);
-            $this->assertSame(2, $violation->line);
+            $this->assertCount(1, $violations);
+            $this->assertSame(2, $violations[0]->line);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -175,13 +174,13 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define(),
                 [$basePath . '/src']
             );
 
-            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame([], $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -197,13 +196,13 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define(),
                 ['src/*.php']
             );
 
-            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame([], $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -219,13 +218,13 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define(),
                 ['tests']
             );
 
-            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertCount(1, $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -241,15 +240,38 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
 
-            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
                 $basePath,
                 Architecture::define(),
                 ['src']
             );
 
-            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame([], $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testReturnsAllViolationsWhenMultipleFilesViolate(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
+            file_put_contents($basePath . '/src/Bar.php', "<?php\nini_set('display_errors', '1');\nclass Bar {}\n");
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertCount(2, $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            unlink($basePath . '/src/Bar.php');
             rmdir($basePath . '/src');
             rmdir($basePath);
         }

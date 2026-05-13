@@ -11,6 +11,7 @@ use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
@@ -79,20 +80,23 @@ final readonly class Analyser
                 continue;
             }
 
-            $violation = $rule->evaluateProject($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
-
-            if (! $violation instanceof RuleViolation) {
-                continue;
+            if ($rule instanceof MultipleProjectRuleViolationInterface) {
+                $violations = $rule->evaluateProjectAll($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
+            } else {
+                $single     = $rule->evaluateProject($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
+                $violations = $single !== null ? [$single] : [];
             }
 
-            $ruleViolationCollection->add(new RuleViolation(
-                message:   $violation->message,
-                file:      $violation->file,
-                line:      $violation->line,
-                className: $violation->className,
-                layer:     $violation->layer,
-                ruleKey:   $key,
-            ));
+            foreach ($violations as $violation) {
+                $ruleViolationCollection->add(new RuleViolation(
+                    message:   $violation->message,
+                    file:      $violation->file,
+                    line:      $violation->line,
+                    className: $violation->className,
+                    layer:     $violation->layer,
+                    ruleKey:   $key,
+                ));
+            }
         }
 
         $layerPatterns      = $architecture->getLayerPatterns();

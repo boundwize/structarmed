@@ -6,7 +6,6 @@ namespace Boundwize\StructArmed\Tests\Rule\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
-use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -37,9 +36,9 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src', 'tests']);
 
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        $this->assertSame(
+            [],
+            $psr4SourcePathsRule->evaluateProjectAll($basePath, Architecture::define())
         );
     }
 
@@ -57,33 +56,33 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/', 'tests/']);
 
-        $violation = $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define());
+        $violations = $psr4SourcePathsRule->evaluateProjectAll($basePath, Architecture::define());
 
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('tests', $violation->message);
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('tests', $violations[0]->message);
     }
 
     public function testFailsWhenComposerJsonIsMissing(): void
     {
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/']);
 
-        $violation = $psr4SourcePathsRule->evaluateProject($this->makeTempDir(), Architecture::define());
+        $violations = $psr4SourcePathsRule->evaluateProjectAll($this->makeTempDir(), Architecture::define());
 
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('composer.json was not found', $violation->message);
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('composer.json was not found', $violations[0]->message);
     }
 
     public function testFailsWhenComposerJsonIsInvalid(): void
     {
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/']);
 
-        $violation = $psr4SourcePathsRule->evaluateProject(
+        $violations = $psr4SourcePathsRule->evaluateProjectAll(
             $this->makeTempProject('{not json'),
             Architecture::define()
         );
 
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('composer.json is not valid JSON', $violation->message);
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('composer.json is not valid JSON', $violations[0]->message);
     }
 
     public function testPassesWhenComposerPsr4MappingUsesPathList(): void
@@ -102,9 +101,9 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/', 'tests/']);
 
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        $this->assertSame(
+            [],
+            $psr4SourcePathsRule->evaluateProjectAll($basePath, Architecture::define())
         );
     }
 
@@ -125,9 +124,9 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['tests/']);
 
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        $this->assertSame(
+            [],
+            $psr4SourcePathsRule->evaluateProjectAll($basePath, Architecture::define())
         );
     }
 
@@ -150,9 +149,9 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(null);
 
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        $this->assertSame(
+            [],
+            $psr4SourcePathsRule->evaluateProjectAll($basePath, Architecture::define())
         );
         $this->assertSame(['app', 'tests', 'specs'], $psr4SourcePathsRule->sourcePathsFor($basePath));
     }

@@ -7,7 +7,6 @@ namespace Boundwize\StructArmed\Tests\Rule\File;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
-use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,9 +30,9 @@ final class Psr1PhpTagsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', '<? echo "x";');
 
-            $violation = (new Psr1PhpTagsRule(['src/']))->evaluateProject($basePath, Architecture::define());
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
 
-            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertCount(1, $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -49,9 +48,9 @@ final class Psr1PhpTagsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', "<?php\nclass Foo {}\n?>\n<?= 'x';");
 
-            $violation = (new Psr1PhpTagsRule(['src/']))->evaluateProject($basePath, Architecture::define());
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
 
-            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame([], $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -70,9 +69,9 @@ final class Psr1PhpTagsRuleTest extends TestCase
                 "<?php\n\$template = \"<?php\\n\\nclass Generated {}\";\n"
             );
 
-            $violation = (new Psr1PhpTagsRule(['src/']))->evaluateProject($basePath, Architecture::define());
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
 
-            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame([], $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -88,9 +87,9 @@ final class Psr1PhpTagsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', '<?PHP echo "x";');
 
-            $violation = (new Psr1PhpTagsRule(['src/']))->evaluateProject($basePath, Architecture::define());
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
 
-            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertCount(1, $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -103,9 +102,9 @@ final class Psr1PhpTagsRuleTest extends TestCase
         $basePath = $this->makeTempDir();
 
         try {
-            $violation = (new Psr1PhpTagsRule(['missing/']))->evaluateProject($basePath, Architecture::define());
+            $violations = (new Psr1PhpTagsRule(['missing/']))->evaluateProjectAll($basePath, Architecture::define());
 
-            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame([], $violations);
         } finally {
             rmdir($basePath);
         }

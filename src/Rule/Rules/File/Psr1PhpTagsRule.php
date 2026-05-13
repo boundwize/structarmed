@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\File;
 
 use Boundwize\StructArmed\Architecture;
-use Boundwize\StructArmed\Rule\ProjectRuleInterface;
+use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function file_get_contents;
@@ -18,7 +18,7 @@ use const T_INLINE_HTML;
 use const T_OPEN_TAG;
 use const T_OPEN_TAG_WITH_ECHO;
 
-final readonly class Psr1PhpTagsRule implements ProjectRuleInterface
+final readonly class Psr1PhpTagsRule implements MultipleProjectRuleViolationInterface
 {
     /**
      * @param list<string>|null $sourcePaths
@@ -31,7 +31,13 @@ final readonly class Psr1PhpTagsRule implements ProjectRuleInterface
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
+        return $this->evaluateProjectAll($basePath, $architecture, $skipPaths)[0] ?? null;
+    }
+
+    public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
+    {
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
+        $violations    = [];
 
         foreach ($phpFileFinder->files($basePath, $skipPaths) as $file) {
             foreach (token_get_all((string) file_get_contents($file)) as $token) {
@@ -54,15 +60,16 @@ final readonly class Psr1PhpTagsRule implements ProjectRuleInterface
                     continue;
                 }
 
-                return new RuleViolation(
+                $violations[] = new RuleViolation(
                     message: sprintf('File [%s] must use only <?php and <?= PHP tags', $file),
                     file: $file,
                     line: $token[2],
                     className: '',
                 );
+                break;
             }
         }
 
-        return null;
+        return $violations;
     }
 }
