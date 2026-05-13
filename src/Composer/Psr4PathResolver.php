@@ -139,7 +139,7 @@ final class Psr4PathResolver
             foreach ($psr4 as $namespace => $pathConfig) {
                 if (is_string($namespace)) {
                     $mappings[$namespace] = array_merge(
-                        (array) ($mappings[$namespace] ?? []),
+                        $mappings[$namespace] ?? [],
                         (array) $pathConfig
                     );
                 }

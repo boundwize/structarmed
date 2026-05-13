@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser;
 
+use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
@@ -798,7 +799,7 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
         $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
-        $classes    = array_map(static fn($violation): string => $violation->className, $violations);
+        $classes    = array_map(static fn(RuleViolation $ruleViolation): string => $ruleViolation->className, $violations);
         sort($classes);
 
         $this->assertCount(2, $violations);
