@@ -30,7 +30,7 @@ final readonly class Psr1Utf8WithoutBomRule implements MultipleProjectRuleViolat
     }
 
     /**
-     * @param string[] $skipPaths
+     * @param list<string> $skipPaths
      * @return RuleViolation[]
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array

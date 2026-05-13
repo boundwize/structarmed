@@ -110,6 +110,26 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testReturnsAllViolationsWhenMultipleFilesViolate(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<? echo "x";');
+            file_put_contents($basePath . '/src/Bar.php', '<? echo "y";');
+
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
+
+            $this->assertCount(2, $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            unlink($basePath . '/src/Bar.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     private function makeTempDir(): string
     {
         $path = sys_get_temp_dir() . '/structarmed-psr1-' . bin2hex(random_bytes(6));

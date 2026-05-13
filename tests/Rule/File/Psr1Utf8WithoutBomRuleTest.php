@@ -82,6 +82,26 @@ final class Psr1Utf8WithoutBomRuleTest extends TestCase
         }
     }
 
+    public function testReturnsAllViolationsWhenMultipleFilesViolate(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "\xEF\xBB\xBF<?php class Foo {}");
+            file_put_contents($basePath . '/src/Bar.php', "\xEF\xBB\xBF<?php class Bar {}");
+
+            $violations = (new Psr1Utf8WithoutBomRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
+
+            $this->assertCount(2, $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            unlink($basePath . '/src/Bar.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     private function makeTempDir(): string
     {
         $path = sys_get_temp_dir() . '/structarmed-psr1-' . bin2hex(random_bytes(6));

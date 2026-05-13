@@ -43,7 +43,7 @@ final readonly class Psr1SymbolsOrSideEffectsRule implements MultipleProjectRule
     }
 
     /**
-     * @param string[] $skipPaths
+     * @param list<string> $skipPaths
      * @return RuleViolation[]
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
