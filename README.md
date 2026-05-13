@@ -109,6 +109,7 @@ Relative cache directories are resolved from the project root. `--config` also c
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 
@@ -123,6 +124,14 @@ return Architecture::define()
         DddPreset::ENTITY_MUST_BE_FINAL => ['src/Legacy/'],
     ])
     ->withPreset(Preset::DDD())
+
+    // Replace a rule with a different configuration
+    ->replaceRule(
+        DddPreset::ENTITY_MUST_BE_FINAL,
+        new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$|Aggregate$/')
+    )
+
+    // Add your own custom rule
     ->rule(
         'domain.must_not_depend_on_infrastructure',
         new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure', toPath: 'Infrastructure')
@@ -136,6 +145,8 @@ return Architecture::define()
 Inside `skip()`, string entries skip files or directories unless they match a registered rule key, keyed entries
 skip paths for one specific rule, and rule key constants skip that rule entirely. You can also use
 `skipPath()` / `skipPaths()` and `skipRule()` / `skipRules()` when you prefer the explicit methods.
+
+Use `replaceRule()` to swap a preset rule's configuration — it throws `RuleNotFoundException` if the key does not exist, so a typo is caught immediately. Use `rule()` to add new custom rules; it can also overwrite an existing key, but silently, with no verification that the target exists.
 
 ## Layer resolution
 
@@ -252,41 +263,6 @@ use Boundwize\StructArmed\Architecture;
 
 return Architecture::define()
     ->withPreset(new MyPreset());
-```
-
-### Override preset rules
-
-Use rule key constants — never raw strings:
-
-```php
-<?php
-
-use Boundwize\StructArmed\Architecture;
-use Boundwize\StructArmed\Preset\Preset;
-use Boundwize\StructArmed\Preset\Presets\DddPreset;
-use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
-use Boundwize\StructArmed\Rule\Rules\Class_\NamingConventionRule;
-
-return Architecture::define()
-    ->layer('Domain',         'src/Domain/')
-    ->layer('Application',    'src/Application/')
-    ->layer('Infrastructure', 'src/Infrastructure/')
-    ->withPreset(Preset::DDD())
-
-    // Replace a rule with a different configuration
-    ->replaceRule(
-        DddPreset::ENTITY_MUST_BE_FINAL,
-        new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$|Aggregate$/')
-    )
-
-    // Add your own custom rule
-    ->rule(
-        'our.handlers.must_be_in_application',
-        new NamingConventionRule(
-            classNamePattern: '/Handler$/',
-            mustBeInLayer: 'Application'
-        )
-    );
 ```
 
 ### Preset constructor parameters
