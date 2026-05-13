@@ -9,7 +9,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 return Architecture::define()
     ->skip([
         'tests/Fixtures/',
-        Psr1Preset::METHODS_MUST_BE_CAMEL_CASE => [
+        Psr1Preset::METHODS_MUST_BE_CAMEL_CASE                   => [
             __DIR__ . '/src/Preset/Preset.php',
         ],
         Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS => [
