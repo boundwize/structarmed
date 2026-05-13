@@ -13,57 +13,57 @@ final class AnalyserOptionsTest extends TestCase
 {
     public function testSequentialReturnsWorkerCountOfOne(): void
     {
-        $options = AnalyserOptions::sequential();
+        $analyserOptions = AnalyserOptions::sequential();
 
-        $this->assertSame(1, $options->workerCount);
+        $this->assertSame(1, $analyserOptions->workerCount);
     }
 
     public function testParallelWithExplicitCountReturnsProvidedWorkerCount(): void
     {
-        $options = AnalyserOptions::parallel(4);
+        $analyserOptions = AnalyserOptions::parallel(4);
 
-        $this->assertSame(4, $options->workerCount);
+        $this->assertSame(4, $analyserOptions->workerCount);
     }
 
     public function testParallelClampsWorkerCountToMinimumOfOne(): void
     {
-        $options = AnalyserOptions::parallel(0);
+        $analyserOptions = AnalyserOptions::parallel(0);
 
-        $this->assertSame(1, $options->workerCount);
+        $this->assertSame(1, $analyserOptions->workerCount);
     }
 
     public function testParallelWithNegativeCountClampsToOne(): void
     {
-        $options = AnalyserOptions::parallel(-5);
+        $analyserOptions = AnalyserOptions::parallel(-5);
 
-        $this->assertSame(1, $options->workerCount);
+        $this->assertSame(1, $analyserOptions->workerCount);
     }
 
     public function testParallelWithNoArgumentAutoDetectsWorkerCount(): void
     {
-        $options = AnalyserOptions::parallel();
+        $analyserOptions = AnalyserOptions::parallel();
 
-        $this->assertGreaterThanOrEqual(1, $options->workerCount);
+        $this->assertGreaterThanOrEqual(1, $analyserOptions->workerCount);
     }
 
     public function testIsParallelReturnsTrueWhenWorkerCountGreaterThanOne(): void
     {
-        $options = AnalyserOptions::parallel(2);
+        $analyserOptions = AnalyserOptions::parallel(2);
 
-        $this->assertTrue($options->isParallel());
+        $this->assertTrue($analyserOptions->isParallel());
     }
 
     public function testIsParallelReturnsFalseForSequential(): void
     {
-        $options = AnalyserOptions::sequential();
+        $analyserOptions = AnalyserOptions::sequential();
 
-        $this->assertFalse($options->isParallel());
+        $this->assertFalse($analyserOptions->isParallel());
     }
 
     public function testIsParallelReturnsFalseWhenWorkerCountIsOne(): void
     {
-        $options = AnalyserOptions::parallel(1);
+        $analyserOptions = AnalyserOptions::parallel(1);
 
-        $this->assertFalse($options->isParallel());
+        $this->assertFalse($analyserOptions->isParallel());
     }
 }

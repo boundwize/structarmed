@@ -11,8 +11,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
+use function file_get_contents;
 use function file_put_contents;
-use function is_array;
 use function serialize;
 use function unserialize;
 
@@ -24,8 +24,8 @@ final class ClassNodeWorkerTest extends TestCase
 
     public function testRunWithValidPayloadReturnsZeroAndWritesNodes(): void
     {
-        $dir      = $this->makeTemporaryDirectory('structarmed-worker-test');
-        $srcFile  = $dir . '/Foo.php';
+        $dir     = $this->makeTemporaryDirectory('structarmed-worker-test');
+        $srcFile = $dir . '/Foo.php';
 
         file_put_contents($srcFile, <<<'PHP'
 <?php
@@ -51,7 +51,7 @@ PHP);
 
         $this->assertSame(0, $exitCode);
 
-        $result = unserialize((string) \file_get_contents($outputFile));
+        $result = unserialize((string) file_get_contents($outputFile));
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('nodes', $result);
@@ -71,7 +71,7 @@ PHP);
 
         $this->assertSame(1, $exitCode);
 
-        $result = unserialize((string) \file_get_contents($outputFile));
+        $result = unserialize((string) file_get_contents($outputFile));
 
         $this->assertIsArray($result);
         $this->assertSame([], $result['nodes']);
@@ -80,10 +80,10 @@ PHP);
 
     public function testWorkerFailedExceptionExtendsRuntimeException(): void
     {
-        $exception = new WorkerFailedException('test error');
+        $workerFailedException = new WorkerFailedException('test error');
 
-        $this->assertInstanceOf(RuntimeException::class, $exception);
-        $this->assertSame('test error', $exception->getMessage());
+        $this->assertInstanceOf(RuntimeException::class, $workerFailedException);
+        $this->assertSame('test error', $workerFailedException->getMessage());
     }
 
     public function testRunWithLayerPatternsUsesClassNameRegexResolver(): void
@@ -115,10 +115,11 @@ PHP);
 
         $this->assertSame(0, $exitCode);
 
-        $result = unserialize((string) \file_get_contents($outputFile));
+        $result = unserialize((string) file_get_contents($outputFile));
 
         $this->assertIsArray($result);
         $this->assertNull($result['error']);
+        $this->assertIsArray($result['nodes']);
         $this->assertCount(1, $result['nodes']);
     }
 }

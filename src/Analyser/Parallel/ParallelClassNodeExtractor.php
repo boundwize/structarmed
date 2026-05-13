@@ -70,7 +70,12 @@ final readonly class ParallelClassNodeExtractor
         $processes   = [];
 
         foreach (array_chunk($files, max(1, $chunkSize)) as $chunk) {
-            ['inputFile' => $inputFile, 'outputFile' => $outputFile, 'stdoutFile' => $stdoutFile, 'stderrFile' => $stderrFile] = $this->createWorkerFiles();
+            [
+                'inputFile'  => $inputFile,
+                'outputFile' => $outputFile,
+                'stdoutFile' => $stdoutFile,
+                'stderrFile' => $stderrFile,
+            ] = $this->createWorkerFiles();
 
             file_put_contents($inputFile, serialize([
                 'basePath'      => $this->basePath,
@@ -90,9 +95,9 @@ final readonly class ParallelClassNodeExtractor
             );
 
             if ($process === false) {
-                $this->cleanup([$inputFile, $outputFile, $stdoutFile, $stderrFile]); // @codeCoverageIgnore
+                $this->cleanup([$inputFile, $outputFile, $stdoutFile, $stderrFile]);
 
-                throw new RuntimeException('Unable to start parallel analysis worker.'); // @codeCoverageIgnore
+                throw new RuntimeException('Unable to start parallel analysis worker.');
             }
 
             fclose($pipes[0]);
@@ -111,7 +116,6 @@ final readonly class ParallelClassNodeExtractor
         $failure = null;
 
         foreach ($processes as $process) {
-            /** @var resource $resource */
             $resource = $process['process'];
             $exitCode = proc_close($resource);
             $result   = unserialize((string) file_get_contents($process['outputFile']));
@@ -123,13 +127,13 @@ final readonly class ParallelClassNodeExtractor
                     || ! is_array($result['nodes'])
                     || ! array_key_exists('error', $result)
                 ) {
-                    throw new RuntimeException('Parallel analysis worker returned an invalid payload.'); // @codeCoverageIgnore
+                    throw new RuntimeException('Parallel analysis worker returned an invalid payload.');
                 }
 
                 $error = $result['error'];
 
                 if ($error !== null && ! is_string($error)) {
-                    throw new RuntimeException('Parallel analysis worker returned an invalid error payload.'); // @codeCoverageIgnore
+                    throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
                 }
 
                 if ($error !== null || $exitCode !== 0) {
@@ -192,7 +196,7 @@ final readonly class ParallelClassNodeExtractor
         $file = tempnam($dir, 'structarmed-worker-');
 
         if ($file === false) {
-            throw new RuntimeException('Unable to create temporary file for parallel analysis.'); // @codeCoverageIgnore
+            throw new RuntimeException('Unable to create temporary file for parallel analysis.');
         }
 
         return $file;
