@@ -100,6 +100,7 @@ final readonly class ParallelClassNodeExtractor
                 throw new RuntimeException('Unable to start parallel analysis worker.');
             }
 
+            assert(isset($pipes[0]));
             fclose($pipes[0]);
 
             $processes[] = [
@@ -117,6 +118,7 @@ final readonly class ParallelClassNodeExtractor
 
         foreach ($processes as $process) {
             $resource = $process['process'];
+            assert(is_resource($resource));
             $exitCode = proc_close($resource);
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
             $result = unserialize((string) file_get_contents($process['outputFile']));
