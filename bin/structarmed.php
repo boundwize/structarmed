@@ -18,7 +18,7 @@ foreach ($autoloaderPaths as $autoloader) {
     }
 }
 
-if (($argv[1] ?? '') === '--worker') {
+if (($argv[1] ?? '') === '--internal-worker') {
     exit(ClassNodeWorker::run($argv[2] ?? '', $argv[3] ?? ''));
 }
 

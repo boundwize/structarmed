@@ -60,7 +60,8 @@ final readonly class Analyser
     public function analyse(
         Architecture $architecture,
         array $scanPaths = [],
-        ?ProgressHandlerInterface $progressHandler = null
+        ?ProgressHandlerInterface $progressHandler = null,
+        ?AnalyserOptions $analyserOptions = null
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
         $layers                  = $this->resolveLayers($architecture);
@@ -110,7 +111,8 @@ final readonly class Analyser
             $files,
             $progressHandler,
             $layers,
-            $layerPatterns
+            $layerPatterns,
+            $analyserOptions ?? AnalyserOptions::parallel()
         );
 
         $rules = $architecture->getRules();
@@ -341,7 +343,8 @@ final readonly class Analyser
         array $files,
         ?ProgressHandlerInterface $progressHandler,
         array $layers,
-        array $layerPatterns
+        array $layerPatterns,
+        ?AnalyserOptions $analyserOptions = null
     ): array {
         $classNodes   = [];
         $filesToParse = [];
@@ -371,7 +374,7 @@ final readonly class Analyser
             $this->basePath,
             $layers,
             $layerPatterns,
-            AnalyserOptions::parallel()->workerCount,
+            ($analyserOptions ?? AnalyserOptions::parallel())->workerCount,
             $this->analysisResultCache?->getCacheDirectory(),
         ))->extract($filesToParse, $progressHandler);
 

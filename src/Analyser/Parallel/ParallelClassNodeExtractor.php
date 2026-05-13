@@ -80,7 +80,7 @@ final readonly class ParallelClassNodeExtractor
             ]));
 
             $process = proc_open(
-                [PHP_BINARY, $script, '--worker', $inputFile, $outputFile],
+                [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
                 [
                     0 => ['pipe', 'r'],
                     1 => ['file', $stdoutFile, 'w'],
