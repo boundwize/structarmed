@@ -18,12 +18,10 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function array_map;
-use function bin2hex;
 use function dirname;
 use function file_put_contents;
 use function is_dir;
 use function mkdir;
-use function random_bytes;
 use function sort;
 use function str_replace;
 use function symlink;
