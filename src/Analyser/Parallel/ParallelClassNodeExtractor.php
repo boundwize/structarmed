@@ -82,6 +82,7 @@ final readonly class ParallelClassNodeExtractor
             ]));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            // to avoid error in test that mock it
             $process = proc_open(
             // phpcs:enable
                 [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
@@ -139,6 +140,7 @@ final readonly class ParallelClassNodeExtractor
 
                 if ($error !== null || $exitCode !== 0) {
                     // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+                    // to avoid error in test that mock it
                     $stderr = (string) file_get_contents($process['stderrFile']);
                     // phpcs:enable
 
@@ -197,6 +199,7 @@ final readonly class ParallelClassNodeExtractor
         }
 
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
         $file = tempnam($dir, 'structarmed-worker-');
         // phpcs:enable
 
