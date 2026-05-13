@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\Composer;
 
-use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -38,7 +38,8 @@ JSON);
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src', 'tests']);
 
         $this->assertNotInstanceOf(
-            RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
     }
 
@@ -102,7 +103,8 @@ JSON);
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/', 'tests/']);
 
         $this->assertNotInstanceOf(
-            RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
     }
 
@@ -124,7 +126,8 @@ JSON);
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['tests/']);
 
         $this->assertNotInstanceOf(
-            RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
     }
 
@@ -148,7 +151,8 @@ JSON);
         $psr4SourcePathsRule = new Psr4SourcePathsRule(null);
 
         $this->assertNotInstanceOf(
-            RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
         $this->assertSame(['app', 'tests', 'specs'], $psr4SourcePathsRule->sourcePathsFor($basePath));
     }
