@@ -809,6 +809,58 @@ final class AnalyserTest extends TestCase
         $this->assertSame(['App\\HTTP\\Response', 'App\\HTTP\\ResponseTrait'], $classes);
     }
 
+    public function testAnalyserRulesetStopsResolvingCyclicInheritanceDependencies(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/First.php'            => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class First extends Second
+                {
+                }
+                PHP,
+            'src/HTTP/Second.php'           => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Second extends First
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $classes    = array_map(
+            static fn(RuleViolation $ruleViolation): string => $ruleViolation->className,
+            $violations
+        );
+        sort($classes);
+
+        $this->assertSame(['App\\HTTP\\First', 'App\\HTTP\\Second'], $classes);
+    }
+
     public function testAnalyserRulesetAllowsSameLayerDependencies(): void
     {
         $basePath = $this->makeTempProject([
