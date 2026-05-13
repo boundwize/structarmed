@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
-use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
+use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function array_map;
@@ -18,7 +18,7 @@ use function sprintf;
 use function str_replace;
 use function trim;
 
-final readonly class Psr4SourcePathsRule implements MultipleProjectRuleViolationInterface
+final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
 {
     /**
      * @param list<string> $sourcePaths
@@ -43,31 +43,26 @@ final readonly class Psr4SourcePathsRule implements MultipleProjectRuleViolation
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
-        return $this->evaluateProjectAll($basePath, $architecture, $skipPaths)[0] ?? null;
-    }
-
-    public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
-    {
         $composerFile = rtrim($basePath, '/') . '/composer.json';
 
         if (! file_exists($composerFile)) {
-            return [$this->violation(
+            return $this->violation(
                 'composer.json was not found',
                 $composerFile
-            )];
+            );
         }
 
         $composer = $this->psr4PathResolver->composerConfig($basePath);
 
         if ($composer === null) {
-            return [$this->violation(
+            return $this->violation(
                 'composer.json is not valid JSON',
                 $composerFile
-            )];
+            );
         }
 
         if ($this->sourcePaths === null) {
-            return [];
+            return null;
         }
 
         $autoloadPaths = $this->psr4PathResolver->paths($basePath);
@@ -80,16 +75,16 @@ final readonly class Psr4SourcePathsRule implements MultipleProjectRuleViolation
         }
 
         if ($missingPaths === []) {
-            return [];
+            return null;
         }
 
-        return [$this->violation(
+        return $this->violation(
             sprintf(
                 'PSR-4 source path(s) [%s] must exist in composer.json autoload or autoload-dev',
                 implode(', ', $missingPaths)
             ),
             $composerFile
-        )];
+        );
     }
 
     /**
