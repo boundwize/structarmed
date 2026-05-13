@@ -694,6 +694,52 @@ PHP);
         $this->assertStringContainsString('Unknown option: --bad-option', $output);
     }
 
+    public function testAnalyseCommandDisablesParallel(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        // Add multiple files so parallel would normally be triggered
+        file_put_contents($basePath . '/src/Foo.php', '<?php namespace App; final class Foo {}');
+        file_put_contents($basePath . '/src/Bar.php', '<?php namespace App; final class Bar {}');
+
+        $progress = new class implements ProgressHandlerInterface {
+            public int $fileCount = 0;
+
+            public function start(int $total): void
+            {
+            }
+
+            public function advance(string $file): void
+            {
+                $this->fileCount++;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            [$exitCode, $output] = $this->runAnalyseCommand(
+                [
+                    'src',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--disable-parallel',
+                    '--clear-cache',
+                ],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('No violations found', $output);
+            // Both files were processed sequentially through the progress handler
+            $this->assertSame(2, $progress->fileCount);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandRejectsMissingScanPath(): void
     {
         [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', 'missing']);

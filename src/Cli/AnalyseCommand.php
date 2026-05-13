@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Analyser\Analyser;
+use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
@@ -76,6 +77,11 @@ final readonly class AnalyseCommand
 
             if ($argument === '--clear-cache') {
                 $options['clear-cache'] = true;
+                continue;
+            }
+
+            if ($argument === '--disable-parallel') {
+                $options['disable-parallel'] = true;
                 continue;
             }
 
@@ -159,7 +165,8 @@ final readonly class AnalyseCommand
         $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
 
         if (! $ruleViolationCollection instanceof RuleViolationCollection) {
-            $ruleViolationCollection = $analyser->analyse($architecture, $scanPaths, $progress);
+            $analyserOptions         = ($options['disable-parallel'] ?? false) ? AnalyserOptions::sequential() : null;
+            $ruleViolationCollection = $analyser->analyse($architecture, $scanPaths, $progress, $analyserOptions);
             $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
         }
 

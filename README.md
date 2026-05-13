@@ -321,7 +321,6 @@ Violations cause the test run to fail before any tests execute.
 ```bash
 # Analyse with default config discovery
 vendor/bin/structarmed analyse
-vendor/bin/structarmed analyze
 
 # Analyse only specific paths
 vendor/bin/structarmed analyse src
@@ -334,6 +333,10 @@ vendor/bin/structarmed analyze --config=path/to/structarmed.php
 # JSON output (for CI tools)
 vendor/bin/structarmed analyse --report=json
 vendor/bin/structarmed analyze --report=json
+
+# structarmed is running parallel by default
+# to disable parallel processing (e.g. when debugging worker issues), pass `--disable-parallel`:
+vendor/bin/structarmed analyse --disable-parallel
 ```
 
 ## Tips
