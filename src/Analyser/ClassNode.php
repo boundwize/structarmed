@@ -50,7 +50,7 @@ final readonly class ClassNode
         public array $superglobals = [],
         array $layers = [],
     ) {
-        $this->layers = $layers ?: array_values(array_filter([$this->layer]));
+        $this->layers = $layers ?: array_filter([$this->layer]);
     }
 
     public function shortName(): string
