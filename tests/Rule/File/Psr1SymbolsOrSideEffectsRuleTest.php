@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\File;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1SymbolsOrSideEffectsRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -247,6 +248,28 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             );
 
             $this->assertSame([], $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testEvaluateProjectReturnsFirstViolation(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
+
+            $violation = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProject(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertStringContainsString('Foo.php', $violation->message);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');

@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\File;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1Utf8WithoutBomRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -75,6 +76,25 @@ final class Psr1Utf8WithoutBomRuleTest extends TestCase
                 [],
                 (new Psr1Utf8WithoutBomRule(['missing/']))->evaluateProjectAll($basePath, Architecture::define())
             );
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testEvaluateProjectReturnsFirstViolation(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "\xEF\xBB\xBF<?php class Foo {}");
+
+            $violation = (new Psr1Utf8WithoutBomRule(['src/']))->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertStringContainsString('Foo.php', $violation->message);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
