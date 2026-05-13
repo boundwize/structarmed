@@ -23,9 +23,11 @@ use function file_get_contents;
 use function file_put_contents;
 use function function_exists;
 use function is_array;
+use function is_dir;
 use function is_string;
 use function max;
 use function min;
+use function mkdir;
 use function proc_close;
 use function proc_open;
 use function serialize;
@@ -48,6 +50,7 @@ final readonly class ParallelClassNodeExtractor
         private array $layers,
         private array $layerPatterns,
         private int $workerCount,
+        private ?string $cacheDirectory = null,
     ) {
     }
 
@@ -63,14 +66,11 @@ final readonly class ParallelClassNodeExtractor
 
         $workerCount = min($this->workerCount, count($files));
         $chunkSize   = (int) ceil(count($files) / $workerCount);
-        $script      = dirname(__DIR__, 3) . '/bin/structarmed-worker.php';
+        $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $processes   = [];
 
         foreach (array_chunk($files, max(1, $chunkSize)) as $chunk) {
-            $inputFile  = $this->temporaryFile();
-            $outputFile = $this->temporaryFile();
-            $stdoutFile = $this->temporaryFile();
-            $stderrFile = $this->temporaryFile();
+            ['inputFile' => $inputFile, 'outputFile' => $outputFile, 'stdoutFile' => $stdoutFile, 'stderrFile' => $stderrFile] = $this->createWorkerFiles();
 
             file_put_contents($inputFile, serialize([
                 'basePath'      => $this->basePath,
@@ -80,7 +80,7 @@ final readonly class ParallelClassNodeExtractor
             ]));
 
             $process = proc_open(
-                [PHP_BINARY, $script, $inputFile, $outputFile],
+                [PHP_BINARY, $script, '--worker', $inputFile, $outputFile],
                 [
                     0 => ['pipe', 'r'],
                     1 => ['file', $stdoutFile, 'w'],
@@ -168,9 +168,28 @@ final readonly class ParallelClassNodeExtractor
         return $nodes;
     }
 
+    /**
+     * @return array{inputFile: string, outputFile: string, stdoutFile: string, stderrFile: string}
+     */
+    private function createWorkerFiles(): array
+    {
+        return [
+            'inputFile'  => $this->temporaryFile(),
+            'outputFile' => $this->temporaryFile(),
+            'stdoutFile' => $this->temporaryFile(),
+            'stderrFile' => $this->temporaryFile(),
+        ];
+    }
+
     private function temporaryFile(): string
     {
-        $file = tempnam(sys_get_temp_dir(), 'structarmed-worker-');
+        $dir = $this->cacheDirectory ?? sys_get_temp_dir();
+
+        if (! is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        $file = tempnam($dir, 'structarmed-worker-');
 
         if ($file === false) {
             throw new RuntimeException('Unable to create temporary file for parallel analysis.');

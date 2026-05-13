@@ -122,6 +122,11 @@ final readonly class AnalysisResultCache
         rmdir($this->cacheDirectory);
     }
 
+    public function getCacheDirectory(): string
+    {
+        return $this->cacheDirectory;
+    }
+
     public function hasDifferentConfig(string $configHash): bool
     {
         if (! is_dir($this->cacheDirectory)) {

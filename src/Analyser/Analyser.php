@@ -371,7 +371,8 @@ final readonly class Analyser
             $this->basePath,
             $layers,
             $layerPatterns,
-            AnalyserOptions::parallel()->workerCount
+            AnalyserOptions::parallel()->workerCount,
+            $this->analysisResultCache?->getCacheDirectory(),
         ))->extract($filesToParse, $progressHandler);
 
         $classNodesByFile = [];
