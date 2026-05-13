@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\Composer;
 
+use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
@@ -36,8 +37,8 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src', 'tests']);
 
-        $this->assertNull(
-            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        $this->assertNotInstanceOf(
+            RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
     }
 
@@ -57,7 +58,7 @@ JSON);
 
         $violation = $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define());
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('tests', $violation->message);
     }
 
@@ -67,7 +68,7 @@ JSON);
 
         $violation = $psr4SourcePathsRule->evaluateProject($this->makeTempDir(), Architecture::define());
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('composer.json was not found', $violation->message);
     }
 
@@ -80,7 +81,7 @@ JSON);
             Architecture::define()
         );
 
-        $this->assertNotNull($violation);
+        $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('composer.json is not valid JSON', $violation->message);
     }
 
@@ -100,8 +101,8 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/', 'tests/']);
 
-        $this->assertNull(
-            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        $this->assertNotInstanceOf(
+            RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
     }
 
@@ -122,8 +123,8 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['tests/']);
 
-        $this->assertNull(
-            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        $this->assertNotInstanceOf(
+            RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
     }
 
@@ -146,8 +147,8 @@ JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(null);
 
-        $this->assertNull(
-            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        $this->assertNotInstanceOf(
+            RuleViolation::class, $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
         $this->assertSame(['app', 'tests', 'specs'], $psr4SourcePathsRule->sourcePathsFor($basePath));
     }

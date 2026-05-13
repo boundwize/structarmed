@@ -84,7 +84,7 @@ final readonly class Analyser
                 $violations = $rule->evaluateProjectAll($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
             } else {
                 $single     = $rule->evaluateProject($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
-                $violations = $single !== null ? [$single] : [];
+                $violations = $single instanceof RuleViolation ? [$single] : [];
             }
 
             foreach ($violations as $violation) {

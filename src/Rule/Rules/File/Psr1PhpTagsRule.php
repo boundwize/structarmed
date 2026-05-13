@@ -34,6 +34,10 @@ final readonly class Psr1PhpTagsRule implements MultipleProjectRuleViolationInte
         return $this->evaluateProjectAll($basePath, $architecture, $skipPaths)[0] ?? null;
     }
 
+    /**
+     * @param string[] $skipPaths
+     * @return RuleViolation[]
+     */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);

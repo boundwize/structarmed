@@ -29,6 +29,10 @@ final readonly class Psr1Utf8WithoutBomRule implements MultipleProjectRuleViolat
         return $this->evaluateProjectAll($basePath, $architecture, $skipPaths)[0] ?? null;
     }
 
+    /**
+     * @param string[] $skipPaths
+     * @return RuleViolation[]
+     */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);

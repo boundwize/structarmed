@@ -42,6 +42,10 @@ final readonly class Psr1SymbolsOrSideEffectsRule implements MultipleProjectRule
         return $this->evaluateProjectAll($basePath, $architecture, $skipPaths)[0] ?? null;
     }
 
+    /**
+     * @param string[] $skipPaths
+     * @return RuleViolation[]
+     */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
         $parser        = (new ParserFactory())->createForNewestSupportedVersion();
