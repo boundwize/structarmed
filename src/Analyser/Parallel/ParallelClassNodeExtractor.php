@@ -19,7 +19,6 @@ use function ceil;
 use function count;
 use function dirname;
 use function fclose;
-use function file_get_contents;
 use function file_put_contents;
 use function function_exists;
 use function is_array;
@@ -29,11 +28,9 @@ use function max;
 use function min;
 use function mkdir;
 use function proc_close;
-use function proc_open;
 use function serialize;
 use function sprintf;
 use function sys_get_temp_dir;
-use function tempnam;
 use function unlink;
 use function unserialize;
 
@@ -84,7 +81,9 @@ final readonly class ParallelClassNodeExtractor
                 'files'         => $chunk,
             ]));
 
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
             $process = proc_open(
+            // phpcs:enable
                 [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
                 [
                     0 => ['pipe', 'r'],
@@ -118,7 +117,9 @@ final readonly class ParallelClassNodeExtractor
         foreach ($processes as $process) {
             $resource = $process['process'];
             $exitCode = proc_close($resource);
-            $result   = unserialize((string) file_get_contents($process['outputFile']));
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            $result = unserialize((string) file_get_contents($process['outputFile']));
+            // phpcs:enable
 
             try {
                 if (
@@ -137,7 +138,9 @@ final readonly class ParallelClassNodeExtractor
                 }
 
                 if ($error !== null || $exitCode !== 0) {
+                    // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
                     $stderr = (string) file_get_contents($process['stderrFile']);
+                    // phpcs:enable
 
                     throw new RuntimeException(sprintf(
                         "Parallel analysis worker failed: %s%s",
@@ -193,7 +196,9 @@ final readonly class ParallelClassNodeExtractor
             mkdir($dir, 0777, true);
         }
 
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         $file = tempnam($dir, 'structarmed-worker-');
+        // phpcs:enable
 
         if ($file === false) {
             throw new RuntimeException('Unable to create temporary file for parallel analysis.');
