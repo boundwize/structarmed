@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
-use function array_values;
 use function end;
 use function explode;
 use function in_array;
