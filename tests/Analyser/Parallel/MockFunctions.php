@@ -18,7 +18,7 @@ $GLOBALS['mock_file_get_contents_payload'] = null;
  * @param array<int, list<string>|resource> $descriptorspec
  * @param array<int, resource> $pipes
  */
-function proc_open(array|string $command, array $descriptorspec, array &$pipes): mixed
+function proc_open(array|string $command, array $descriptorspec, array|null &$pipes): mixed
 {
     if ($GLOBALS['mock_proc_open'] === true) {
         return false;
