@@ -118,7 +118,7 @@ final readonly class ParallelClassNodeExtractor
             $resource = $process['process'];
             $exitCode = proc_close($resource);
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-            $result = unserialize((string) file_get_contents($process['outputFile']));
+            $result   = unserialize((string) file_get_contents($process['outputFile']));
             // phpcs:enable
 
             try {
