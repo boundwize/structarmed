@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\Analyser;
+use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Preset\Preset;
@@ -60,6 +61,37 @@ final class AnalyserTest extends TestCase
 
         // BadOrderEntity.php uses DateTime and is not final — should have violations
         $this->assertTrue($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserCollectsClassNodesWithSequentialRunner(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+            'src/Bar.php' => '<?php namespace App; class Bar {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testAnalyserCollectsClassNodesWithSequentialRunnerAndLayerPatterns(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => '<?php namespace App\HTTP; class Request {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->rule('http.must_be_final', new MustBeFinalRule('HTTP'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('http.must_be_final'));
     }
 
     public function testAnalyserCollectsClassNodesWithDefaultParallelRunner(): void
