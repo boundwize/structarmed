@@ -28,8 +28,10 @@ use function ob_get_clean;
 use function ob_start;
 use function random_bytes;
 use function rmdir;
+use function serialize;
 use function str_replace;
 use function sys_get_temp_dir;
+use function tempnam;
 use function unlink;
 
 #[CoversClass(AnalyseCommand::class)]
@@ -803,6 +805,28 @@ PHP);
             $this->assertStringContainsString('Could not find a structarmed.php config file', $output);
         } finally {
             $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testInternalWorkerRoutesDelegatestoClassNodeWorker(): void
+    {
+        $inputFile  = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-input-');
+        $outputFile = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-output-');
+
+        file_put_contents($inputFile, serialize([
+            'basePath'      => sys_get_temp_dir(),
+            'layers'        => [],
+            'layerPatterns' => [],
+            'files'         => [],
+        ]));
+
+        try {
+            [$exitCode] = $this->runApplication(['structarmed', '--internal-worker', $inputFile, $outputFile]);
+
+            $this->assertSame(0, $exitCode);
+        } finally {
+            @unlink($inputFile);
+            @unlink($outputFile);
         }
     }
 
