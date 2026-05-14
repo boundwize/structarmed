@@ -158,13 +158,13 @@ final readonly class ParallelClassNodeExtractor
                 /** @var list<ClassNode> $workerNodes */
                 $workerNodes = $result['nodes'];
                 $nodes       = array_merge($nodes, $workerNodes);
-
-                foreach ($process['files'] as $file) {
-                    $progressHandler?->advance($file);
-                }
             } catch (RuntimeException $runtimeException) {
                 $failure ??= $runtimeException->getMessage();
             } finally {
+                foreach ($process['files'] as $file) {
+                    $progressHandler?->advance($file);
+                }
+
                 $this->cleanup([
                     $process['inputFile'],
                     $process['outputFile'],
