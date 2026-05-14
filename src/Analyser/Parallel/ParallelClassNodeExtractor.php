@@ -33,7 +33,6 @@ use function max;
 use function min;
 use function mkdir;
 use function proc_close;
-use function proc_get_status;
 use function serialize;
 use function sprintf;
 use function stream_set_blocking;
@@ -149,33 +148,17 @@ final readonly class ParallelClassNodeExtractor
                     $anyActivity = true;
                 }
 
-                $procResource = $pending[$key]['process'];
-                assert(is_resource($procResource));
-
-                $status = proc_get_status($procResource);
-                if ($status['running']) {
+                if (! feof($stdoutPipe)) {
                     continue;
                 }
 
-                while (! feof($stdoutPipe)) {
-                    $data = fread($stdoutPipe, 8192);
-                    if ($data === false) {
-                        break;
-                    }
-
-                    if ($data !== '') {
-                        $count = substr_count($data, "\n");
-                        for ($i = 0; $i < $count; $i++) {
-                            $fileIdx = $pending[$key]['filesAdvanced'];
-                            if ($fileIdx < count($pending[$key]['files'])) {
-                                $progressHandler?->advance($pending[$key]['files'][$fileIdx]);
-                                $pending[$key]['filesAdvanced']++;
-                            }
-                        }
-                    }
-                }
-
+                // Pipe EOF means the worker exited and the OS closed its write end.
+                // proc_close() has not been called yet so waitpid() inside it correctly
+                // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
+
+                $procResource = $pending[$key]['process'];
+                assert(is_resource($procResource));
                 $exitCode = proc_close($procResource);
 
                 try {
