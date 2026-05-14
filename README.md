@@ -5,7 +5,7 @@
 <br />
 
 [![Latest Version](https://img.shields.io/github/release/boundwize/structarmed.svg?style=flat-square)](https://github.com/boundwize/structarmed/releases)
-[![ci build](https://github.com/boundwize/structarmed/workflows/ci%20build/badge.svg)](https://github.com/boundwize/structarmed/actions)
+[![ci build](https://github.com/boundwize/structarmed/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/boundwize/structarmed/actions/workflows/ci.yml)
 [![Code Coverage](https://codecov.io/gh/boundwize/structarmed/branch/main/graph/badge.svg)](https://codecov.io/gh/boundwize/structarmed)
 [![PHPStan](https://img.shields.io/badge/style-level%20max-brightgreen.svg?style=flat-square&label=phpstan)](https://github.com/phpstan/phpstan)
 [![Downloads](https://poser.pugx.org/boundwize/structarmed/downloads)](https://packagist.org/packages/boundwize/structarmed)
