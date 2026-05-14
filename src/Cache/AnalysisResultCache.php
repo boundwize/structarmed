@@ -354,7 +354,7 @@ final readonly class AnalysisResultCache
         $isAbstract    = $node['isAbstract'] ?? null;
         $isFinal       = $node['isFinal'] ?? null;
         $isInterface   = $node['isInterface'] ?? null;
-        $isTrait       = $node['isTrait'] ?? false;
+        $isTrait       = $node['isTrait'] ?? null;
         $isReadonly    = $node['isReadonly'] ?? null;
         $dependencies  = $node['dependencies'] ?? null;
         $implements    = $node['implements'] ?? null;

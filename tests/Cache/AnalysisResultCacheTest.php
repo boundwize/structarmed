@@ -777,6 +777,33 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
+        yield 'node has missing isTrait field' => [
+            [
+                'nodes' => [
+                    [
+                        'className'   => 'App\Foo',
+                        'file'        => __FILE__,
+                        'line'        => 1,
+                        'layer'       => null,
+                        'extends'     => null,
+                        'isAbstract'  => false,
+                        'isFinal'     => true,
+                        'isInterface' => false,
+                        'isReadonly'  => false,
+                        // 'isTrait' intentionally absent — simulates an old cache entry
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'traits'        => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                        'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
         yield 'node has invalid string array key' => [
             [
                 'nodes' => [
