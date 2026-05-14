@@ -8,14 +8,19 @@ use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Throwable;
 
+use function fflush;
 use function file_get_contents;
 use function file_put_contents;
+use function fwrite;
 use function is_array;
 use function serialize;
 use function sprintf;
 use function unserialize;
+
+use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
@@ -46,7 +51,23 @@ final readonly class ClassNodeWorker
                     new NamespaceLayerResolver($layers, $basePath)
                 );
 
-            $nodes = (new ClassNodeExtractor($layerResolver))->extract($files);
+            $progressHandler = new class implements ProgressHandlerInterface {
+                public function start(int $total): void
+                {
+                }
+
+                public function advance(string $file): void
+                {
+                    fwrite(STDOUT, "\n");
+                    fflush(STDOUT);
+                }
+
+                public function finish(): void
+                {
+                }
+            };
+
+            $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
 
             file_put_contents($outputFile, serialize([
                 'nodes' => $nodes,
