@@ -20,6 +20,6 @@ final class JsonReport implements ReportInterface
             'total'      => $ruleViolationCollection->count(),
             'passed'     => $ruleViolationCollection->isEmpty(),
             'elapsed'    => $elapsedSeconds,
-        ], JSON_PRETTY_PRINT);
+        ], JSON_PRETTY_PRINT) . "\n";
     }
 }
