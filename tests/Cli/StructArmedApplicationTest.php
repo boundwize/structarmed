@@ -813,7 +813,7 @@ PHP);
     private function runApplication(array $argv, ?string $basePath = null): array
     {
         ob_start();
-        $exitCode = StructArmedApplication::run($argv, $basePath);
+        $exitCode = (new StructArmedApplication())->run($argv, $basePath);
         $output   = ob_get_clean();
         $this->assertIsString($output);
 

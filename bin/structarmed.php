@@ -17,4 +17,4 @@ foreach ($autoloaderPaths as $autoloader) {
     }
 }
 
-exit(StructArmedApplication::run($argv));
+exit((new StructArmedApplication())->run($argv));

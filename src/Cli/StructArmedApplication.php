@@ -16,7 +16,7 @@ final readonly class StructArmedApplication
     /**
      * @param list<string> $argv
      */
-    public static function run(array $argv, ?string $basePath = null): int
+    public function run(array $argv, ?string $basePath = null): int
     {
         $basePath ??= (string) getcwd();
         $command    = $argv[1] ?? null;
