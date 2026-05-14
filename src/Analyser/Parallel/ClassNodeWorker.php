@@ -11,6 +11,7 @@ use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Throwable;
 
+use function count;
 use function fflush;
 use function file_get_contents;
 use function file_put_contents;
@@ -24,7 +25,8 @@ use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
-    public static function run(string $inputFile, string $outputFile): int
+    /** @param resource|null $outputStream */
+    public static function run(string $inputFile, string $outputFile, mixed $outputStream = null): int
     {
         try {
             $payload = unserialize((string) file_get_contents($inputFile));
@@ -51,15 +53,22 @@ final readonly class ClassNodeWorker
                     new NamespaceLayerResolver($layers, $basePath)
                 );
 
-            $progressHandler = new class implements ProgressHandlerInterface {
+            $stream = $outputStream ?? STDOUT;
+
+            $progressHandler = new class ($stream) implements ProgressHandlerInterface {
+                /** @param resource $stream */
+                public function __construct(private readonly mixed $stream)
+                {
+                }
+
                 public function start(int $total): void
                 {
                 }
 
                 public function advance(string $file): void
                 {
-                    fwrite(STDOUT, "\n");
-                    fflush(STDOUT);
+                    fwrite($this->stream, "\n");
+                    fflush($this->stream);
                 }
 
                 public function finish(): void
@@ -67,7 +76,9 @@ final readonly class ClassNodeWorker
                 }
             };
 
+            $progressHandler->start(count($files));
             $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
+            $progressHandler->finish();
 
             file_put_contents($outputFile, serialize([
                 'nodes' => $nodes,

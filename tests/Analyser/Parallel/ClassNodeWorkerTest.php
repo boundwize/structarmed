@@ -13,6 +13,7 @@ use RuntimeException;
 
 use function file_get_contents;
 use function file_put_contents;
+use function fopen;
 use function serialize;
 use function unserialize;
 
@@ -47,7 +48,7 @@ PHP);
             'files'         => [$srcFile],
         ]));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile);
+        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, fopen('php://memory', 'w'));
 
         $this->assertSame(0, $exitCode);
 
@@ -67,7 +68,7 @@ PHP);
 
         file_put_contents($inputFile, serialize('not-an-array'));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile);
+        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, fopen('php://memory', 'w'));
 
         $this->assertSame(1, $exitCode);
 
@@ -111,7 +112,7 @@ PHP);
             'files'         => [$srcFile],
         ]));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile);
+        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, fopen('php://memory', 'w'));
 
         $this->assertSame(0, $exitCode);
 
