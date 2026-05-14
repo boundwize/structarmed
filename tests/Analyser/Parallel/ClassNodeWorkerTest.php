@@ -48,7 +48,7 @@ PHP);
             'files'         => [$srcFile],
         ]));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, fopen('php://memory', 'w'));
+        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 
@@ -68,7 +68,7 @@ PHP);
 
         file_put_contents($inputFile, serialize('not-an-array'));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, fopen('php://memory', 'w'));
+        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(1, $exitCode);
 
@@ -112,7 +112,7 @@ PHP);
             'files'         => [$srcFile],
         ]));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, fopen('php://memory', 'w'));
+        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 
@@ -122,5 +122,14 @@ PHP);
         $this->assertNull($result['error']);
         $this->assertIsArray($result['nodes']);
         $this->assertCount(1, $result['nodes']);
+    }
+
+    /** @return resource */
+    private function silentStream(): mixed
+    {
+        $stream = fopen('php://memory', 'w');
+        $this->assertNotFalse($stream);
+
+        return $stream;
     }
 }
