@@ -781,15 +781,15 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isReadonly'    => false,
+                        'className'   => 'App\Foo',
+                        'file'        => __FILE__,
+                        'line'        => 1,
+                        'layer'       => null,
+                        'extends'     => null,
+                        'isAbstract'  => false,
+                        'isFinal'     => true,
+                        'isInterface' => false,
+                        'isReadonly'  => false,
                         // 'isTrait' intentionally absent — simulates an old cache entry
                         'dependencies'  => [],
                         'implements'    => [],
