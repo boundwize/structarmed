@@ -17,14 +17,12 @@ use function file_get_contents;
 
 final readonly class ClassNodeExtractor
 {
-    private ClassCollector $classCollector;
     private Parser $parser;
 
     public function __construct(
         private LayerResolverInterface $layerResolver,
     ) {
-        $this->classCollector = new ClassCollector($this->layerResolver);
-        $this->parser         = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->parser = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     /**
@@ -33,6 +31,8 @@ final readonly class ClassNodeExtractor
      */
     public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
     {
+        $classCollector = new ClassCollector($this->layerResolver);
+
         foreach ($files as $file) {
             try {
                 $code = (string) file_get_contents($file);
@@ -42,11 +42,11 @@ final readonly class ClassNodeExtractor
                     continue;
                 }
 
-                $this->classCollector->setCurrentFile($file);
+                $classCollector->setCurrentFile($file);
 
                 $traverser = new NodeTraverser();
                 $traverser->addVisitor(new NameResolver());
-                $traverser->addVisitor($this->classCollector);
+                $traverser->addVisitor($classCollector);
                 $traverser->traverse($ast);
             } catch (Error) {
                 // Skip files with parse errors
@@ -55,6 +55,6 @@ final readonly class ClassNodeExtractor
             }
         }
 
-        return array_values($this->classCollector->getNodes());
+        return array_values($classCollector->getNodes());
     }
 }
