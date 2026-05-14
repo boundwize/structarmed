@@ -27,6 +27,7 @@ use function fread;
 use function function_exists;
 use function is_array;
 use function is_dir;
+use function is_resource;
 use function is_string;
 use function max;
 use function min;
@@ -148,7 +149,10 @@ final readonly class ParallelClassNodeExtractor
                     $anyActivity = true;
                 }
 
-                $status = proc_get_status($pending[$key]['process']);
+                $procResource = $pending[$key]['process'];
+                assert(is_resource($procResource));
+
+                $status = proc_get_status($procResource);
                 if ($status['running']) {
                     continue;
                 }
@@ -172,7 +176,7 @@ final readonly class ParallelClassNodeExtractor
                 }
 
                 fclose($stdoutPipe);
-                $exitCode = proc_close($pending[$key]['process']);
+                $exitCode = proc_close($procResource);
 
                 try {
                     // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
