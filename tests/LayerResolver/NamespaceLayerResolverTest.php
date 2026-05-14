@@ -220,4 +220,33 @@ final class NamespaceLayerResolverTest extends TestCase
 
         $this->assertSame([], $layers);
     }
+
+    public function testFromLayerConfigWithoutLayerPatternsUsesNamespaceResolverOnly(): void
+    {
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
+            ['Domain' => 'src/Domain/'],
+            $this->basePath
+        );
+
+        $this->assertSame(
+            'Domain',
+            $chainLayerResolver->resolve(
+                'App\\Domain\\Order',
+                $this->basePath . '/src/Domain/Order.php'
+            )
+        );
+        $this->assertNull($chainLayerResolver->resolve('App\\Other\\Foo', '/other/Foo.php'));
+    }
+
+    public function testFromLayerConfigWithLayerPatternsIncludesRegexResolver(): void
+    {
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
+            [],
+            $this->basePath,
+            ['HTTP' => ['pattern' => '/^App\\\\HTTP\\\\.*$/', 'excludePattern' => null]]
+        );
+
+        $this->assertSame('HTTP', $chainLayerResolver->resolve('App\\HTTP\\Request', ''));
+        $this->assertNull($chainLayerResolver->resolve('App\\Other\\Foo', ''));
+    }
 }

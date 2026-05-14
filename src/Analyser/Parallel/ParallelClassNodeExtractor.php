@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
+use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
@@ -46,6 +45,8 @@ use const PHP_BINARY;
 
 final readonly class ParallelClassNodeExtractor
 {
+    private AnalyserOptions $analyserOptions;
+
     /**
      * @param array<string, string|list<string>> $layers
      * @param array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns
@@ -57,6 +58,7 @@ final readonly class ParallelClassNodeExtractor
         private int $workerCount,
         private ?string $cacheDirectory = null,
     ) {
+        $this->analyserOptions = AnalyserOptions::parallel($this->workerCount);
     }
 
     /**
@@ -65,7 +67,7 @@ final readonly class ParallelClassNodeExtractor
      */
     public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
     {
-        if ($files === [] || $this->workerCount <= 1 || ! function_exists('proc_open')) {
+        if ($files === [] || ! $this->analyserOptions->isParallel() || ! function_exists('proc_open')) {
             return (new ClassNodeExtractor($this->layerResolver()))->extract($files, $progressHandler);
         }
 
@@ -257,14 +259,7 @@ final readonly class ParallelClassNodeExtractor
 
     private function layerResolver(): ChainLayerResolver
     {
-        return $this->layerPatterns !== []
-            ? new ChainLayerResolver(
-                new ClassNameRegexLayerResolver($this->layerPatterns),
-                new NamespaceLayerResolver($this->layers, $this->basePath)
-            )
-            : new ChainLayerResolver(
-                new NamespaceLayerResolver($this->layers, $this->basePath)
-            );
+        return ChainLayerResolver::fromLayerConfig($this->layers, $this->basePath, $this->layerPatterns);
     }
 
     /**

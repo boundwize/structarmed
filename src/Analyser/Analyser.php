@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
@@ -97,14 +96,7 @@ final readonly class Analyser
         }
 
         $layerPatterns      = $architecture->getLayerPatterns();
-        $chainLayerResolver = $layerPatterns !== []
-            ? new ChainLayerResolver(
-                new ClassNameRegexLayerResolver($layerPatterns),
-                new NamespaceLayerResolver($layers, $this->basePath)
-            )
-            : new ChainLayerResolver(
-                new NamespaceLayerResolver($layers, $this->basePath)
-            );
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
 
         $files      = $this->filesForAnalysis($architecture, $scanPaths);
         $classNodes = $this->collectClassNodes(
@@ -370,13 +362,20 @@ final readonly class Analyser
             return $classNodes;
         }
 
-        $parsedClassNodes = (new ParallelClassNodeExtractor(
-            $this->basePath,
-            $layers,
-            $layerPatterns,
-            ($analyserOptions ?? AnalyserOptions::parallel())->workerCount,
-            $this->analysisResultCache?->getCacheDirectory(),
-        ))->extract($filesToParse, $progressHandler);
+        $options = $analyserOptions ?? AnalyserOptions::parallel();
+
+        if ($options->isParallel()) {
+            $parsedClassNodes = (new ParallelClassNodeExtractor(
+                $this->basePath,
+                $layers,
+                $layerPatterns,
+                $options->workerCount,
+                $this->analysisResultCache?->getCacheDirectory(),
+            ))->extract($filesToParse, $progressHandler);
+        } else {
+            $layerResolver    = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
+            $parsedClassNodes = (new ClassNodeExtractor($layerResolver))->extract($filesToParse, $progressHandler);
+        }
 
         $classNodesByFile = [];
 

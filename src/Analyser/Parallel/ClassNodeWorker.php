@@ -6,8 +6,6 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Throwable;
 
@@ -44,14 +42,7 @@ final readonly class ClassNodeWorker
             /** @var list<string> $files */
             $files = $payload['files'];
 
-            $layerResolver = $layerPatterns !== []
-                ? new ChainLayerResolver(
-                    new ClassNameRegexLayerResolver($layerPatterns),
-                    new NamespaceLayerResolver($layers, $basePath)
-                )
-                : new ChainLayerResolver(
-                    new NamespaceLayerResolver($layers, $basePath)
-                );
+            $layerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
 
             $stream = $outputStream ?? STDOUT;
 
