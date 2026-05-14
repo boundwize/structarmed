@@ -321,6 +321,7 @@ Violations cause the test run to fail before any tests execute.
 ```bash
 # Analyse with default config discovery
 vendor/bin/structarmed analyse
+vendor/bin/structarmed analyze
 
 # Analyse only specific paths
 vendor/bin/structarmed analyse src
