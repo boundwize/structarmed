@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use PhpParser\Error;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\Parser;
 use PhpParser\ParserFactory;
 
 use function array_values;
@@ -16,9 +17,14 @@ use function file_get_contents;
 
 final readonly class ClassNodeExtractor
 {
+    private ClassCollector $classCollector;
+    private Parser $parser;
+
     public function __construct(
         private LayerResolverInterface $layerResolver,
     ) {
+        $this->classCollector = new ClassCollector($this->layerResolver);
+        $this->parser         = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     /**
@@ -27,23 +33,20 @@ final readonly class ClassNodeExtractor
      */
     public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
     {
-        $classCollector = new ClassCollector($this->layerResolver);
-        $parser         = (new ParserFactory())->createForNewestSupportedVersion();
-
         foreach ($files as $file) {
             try {
                 $code = (string) file_get_contents($file);
-                $ast  = $parser->parse($code);
+                $ast  = $this->parser->parse($code);
 
                 if ($ast === null || $ast === []) {
                     continue;
                 }
 
-                $classCollector->setCurrentFile($file);
+                $this->classCollector->setCurrentFile($file);
 
                 $traverser = new NodeTraverser();
                 $traverser->addVisitor(new NameResolver());
-                $traverser->addVisitor($classCollector);
+                $traverser->addVisitor($this->classCollector);
                 $traverser->traverse($ast);
             } catch (Error) {
                 // Skip files with parse errors
@@ -52,6 +55,6 @@ final readonly class ClassNodeExtractor
             }
         }
 
-        return array_values($classCollector->getNodes());
+        return array_values($this->classCollector->getNodes());
     }
 }
