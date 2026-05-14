@@ -15,7 +15,7 @@ final class JsonReport implements ReportInterface
 {
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
-        return (string) json_encode([
+        return json_encode([
             'violations' => $ruleViolationCollection->toArray(),
             'total'      => $ruleViolationCollection->count(),
             'passed'     => $ruleViolationCollection->isEmpty(),
