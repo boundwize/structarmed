@@ -11,7 +11,7 @@
 [![Downloads](https://poser.pugx.org/boundwize/structarmed/downloads)](https://packagist.org/packages/boundwize/structarmed)
 
 ![Windows](https://img.shields.io/badge/Windows-supported-0078D6?logo=windows&logoColor=white&labelColor=555555)
-![macOS](https://img.shields.io/badge/macOS-supported-f2f2f2?logo=apple&logoColor=000000&labelColor=555555)
+![macOS](https://img.shields.io/badge/macOS-supported-C084FC?logo=apple&logoColor=white&labelColor=555555)
 ![Linux](https://img.shields.io/badge/Linux-supported-FCC624?logo=linux&logoColor=black&labelColor=555555)
 
 Configurable PHP architecture guards — define your layers and rules, then keep them enforced.
