@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
 use Boundwize\StructArmed\Cli\StructArmedApplication;
 
 // Auto-discover autoloader
@@ -18,8 +17,4 @@ foreach ($autoloaderPaths as $autoloader) {
     }
 }
 
-if (($argv[1] ?? '') === '--internal-worker') {
-    exit(ClassNodeWorker::run($argv[2] ?? '', $argv[3] ?? ''));
-}
-
-exit((new StructArmedApplication())->run($argv));
+exit(StructArmedApplication::run($argv));
