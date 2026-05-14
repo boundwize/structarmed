@@ -38,7 +38,10 @@ function tempnam(string $directory, string $prefix): string|false
     $result = \tempnam($directory, $prefix);
 
     if ($result !== false) {
-        $GLOBALS['mock_tracked_tempnam_files'][] = str_replace('\\', '/', $result);
+        /** @var list<string> $tracked */
+        $tracked                               = $GLOBALS['mock_tracked_tempnam_files'];
+        $tracked[]                             = str_replace('\\', '/', $result);
+        $GLOBALS['mock_tracked_tempnam_files'] = $tracked;
     }
 
     return $result;
@@ -48,7 +51,7 @@ function file_get_contents(string $filename): string|false
 {
     if (
         $GLOBALS['mock_file_get_contents_payload'] !== null
-        && in_array(str_replace('\\', '/', $filename), $GLOBALS['mock_tracked_tempnam_files'], true)
+        && in_array(str_replace('\\', '/', $filename), (array) $GLOBALS['mock_tracked_tempnam_files'], true)
     ) {
         $payload                                   = $GLOBALS['mock_file_get_contents_payload'];
         $GLOBALS['mock_file_get_contents_payload'] = null; // Reset after first read (outputFile)
