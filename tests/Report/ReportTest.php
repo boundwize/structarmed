@@ -40,6 +40,13 @@ final class ReportTest extends TestCase
         $this->assertStringContainsString('1 violation(s) found', $report);
     }
 
+    public function testJsonReportEndsWithNewline(): void
+    {
+        $json = (new JsonReport())->render(new RuleViolationCollection(), 0.0);
+
+        $this->assertStringEndsWith("\n", $json);
+    }
+
     public function testJsonReportRendersPayload(): void
     {
         $ruleViolationCollection = new RuleViolationCollection();
