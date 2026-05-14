@@ -312,6 +312,7 @@ PHP);
             $parallelClassNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
         }
     }
 
@@ -332,6 +333,7 @@ PHP);
             $parallelClassNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
         }
     }
 }
