@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
+use function rtrim;
 use function serialize;
 use function str_contains;
+use function str_replace;
+use function str_starts_with;
+use function sys_get_temp_dir;
 
 // phpcs:disable
 $GLOBALS['mock_proc_open']                 = false;
@@ -38,10 +42,14 @@ function tempnam(string $directory, string $prefix): string|false
 
 function file_get_contents(string $filename): string|false
 {
-    if ($GLOBALS['mock_file_get_contents_payload'] !== null && str_contains($filename, 'worker-')) {
-        $payload                                   = $GLOBALS['mock_file_get_contents_payload'];
-        $GLOBALS['mock_file_get_contents_payload'] = null; // Reset after first read (outputFile)
-        return serialize($payload);
+    if ($GLOBALS['mock_file_get_contents_payload'] !== null) {
+        $normalizedFilename = str_replace('\\', '/', $filename);
+        $normalizedTempDir  = rtrim(str_replace('\\', '/', sys_get_temp_dir()), '/') . '/';
+        if (str_contains($normalizedFilename, 'worker-') || str_starts_with($normalizedFilename, $normalizedTempDir)) {
+            $payload                                   = $GLOBALS['mock_file_get_contents_payload'];
+            $GLOBALS['mock_file_get_contents_payload'] = null; // Reset after first read (outputFile)
+            return serialize($payload);
+        }
     }
 
     return \file_get_contents($filename);
