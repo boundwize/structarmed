@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cli;
 
+use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
+
 use function array_slice;
 use function getcwd;
 use function in_array;
@@ -18,6 +20,10 @@ final readonly class StructArmedApplication
     {
         $basePath ??= (string) getcwd();
         $command    = $argv[1] ?? null;
+
+        if ($command === '--internal-worker') {
+            return ClassNodeWorker::run($argv[2] ?? '', $argv[3] ?? '');
+        }
 
         if (in_array($command, [null, '--help', '-h'], true)) {
             echo Usage::render();

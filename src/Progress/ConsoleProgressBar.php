@@ -8,6 +8,7 @@ use function fflush;
 use function fprintf;
 use function getenv;
 use function max;
+use function microtime;
 use function min;
 use function str_repeat;
 use function stream_isatty;
@@ -25,6 +26,8 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
     private int $current = 0;
 
     private int $lastRenderedPercent = -1;
+
+    private float $lastRenderTime = 0.0;
 
     private readonly int $width;
 
@@ -48,6 +51,7 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
         $this->total               = max(0, $total);
         $this->current             = 0;
         $this->lastRenderedPercent = -1;
+        $this->lastRenderTime      = 0.0;
 
         $this->render();
     }
@@ -79,7 +83,16 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
             ? (int) (($this->current / $this->total) * 100)
             : 100;
 
-        if (! $this->isTty) {
+        if ($this->isTty) {
+            if (! $final) {
+                $now = microtime(true);
+                if ($now - $this->lastRenderTime < 0.016) {
+                    return;
+                }
+
+                $this->lastRenderTime = $now;
+            }
+        } else {
             $isFirst = $this->lastRenderedPercent === -1;
             $gap     = $percent - $this->lastRenderedPercent;
 
@@ -97,10 +110,12 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
         $filled = $this->total > 0
             ? (int) (($this->current / $this->total) * $this->width)
             : $this->width;
-        $bar    = $this->color(
-            str_repeat('=', $filled),
-            '32'
-        ) . $this->color(str_repeat('-', $this->width - $filled), '90');
+        $empty  = $this->width - $filled;
+        $bar    = $this->useColor
+            ? ($filled > 0 ? "\033[32m" . str_repeat('=', $filled) : '')
+              . ($empty > 0 ? "\033[90m" . str_repeat('-', $empty) : '')
+              . "\033[0m"
+            : str_repeat('=', $filled) . str_repeat('-', $empty);
         $status = $this->color('Analyzing', '36');
 
         fprintf(

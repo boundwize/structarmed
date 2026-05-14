@@ -334,6 +334,10 @@ vendor/bin/structarmed analyze --config=path/to/structarmed.php
 # JSON output (for CI tools)
 vendor/bin/structarmed analyse --report=json
 vendor/bin/structarmed analyze --report=json
+
+# structarmed is running parallel by default
+# to disable parallel processing (e.g. when debugging worker issues), pass `--disable-parallel`:
+vendor/bin/structarmed analyse --disable-parallel
 ```
 
 ## Tips

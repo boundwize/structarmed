@@ -30,6 +30,7 @@ use function mkdir;
 use function preg_match;
 use function random_bytes;
 use function rmdir;
+use function str_replace;
 use function str_starts_with;
 use function sys_get_temp_dir;
 use function touch;
@@ -41,6 +42,18 @@ use const JSON_THROW_ON_ERROR;
 #[CoversClass(AnalysisResultCache::class)]
 final class AnalysisResultCacheTest extends TestCase
 {
+    public function testGetCacheDirectoryReturnsConfiguredDirectory(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        try {
+            $this->assertSame($cacheDirectory, $analysisResultCache->getCacheDirectory());
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testStoresAndLoadsViolationCollection(): void
     {
         $cacheDirectory          = $this->createTempDirectory();
@@ -1386,7 +1399,7 @@ final class AnalysisResultCacheTest extends TestCase
 
     private function createTempDirectory(): string
     {
-        $path = sys_get_temp_dir() . '/structarmed-cache-test-' . bin2hex(random_bytes(6));
+        $path = str_replace('\\', '/', sys_get_temp_dir()) . '/structarmed-cache-test-' . bin2hex(random_bytes(6));
         mkdir($path);
 
         return $path;

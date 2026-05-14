@@ -28,8 +28,10 @@ use function ob_get_clean;
 use function ob_start;
 use function random_bytes;
 use function rmdir;
+use function serialize;
 use function str_replace;
 use function sys_get_temp_dir;
+use function tempnam;
 use function unlink;
 
 #[CoversClass(AnalyseCommand::class)]
@@ -694,6 +696,52 @@ PHP);
         $this->assertStringContainsString('Unknown option: --bad-option', $output);
     }
 
+    public function testAnalyseCommandDisablesParallel(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        // Add multiple files so parallel would normally be triggered
+        file_put_contents($basePath . '/src/Foo.php', '<?php namespace App; final class Foo {}');
+        file_put_contents($basePath . '/src/Bar.php', '<?php namespace App; final class Bar {}');
+
+        $progress = new class implements ProgressHandlerInterface {
+            public int $fileCount = 0;
+
+            public function start(int $total): void
+            {
+            }
+
+            public function advance(string $file): void
+            {
+                $this->fileCount++;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            [$exitCode, $output] = $this->runAnalyseCommand(
+                [
+                    'src',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--disable-parallel',
+                    '--clear-cache',
+                ],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('No violations found', $output);
+            // Both files were processed sequentially through the progress handler
+            $this->assertSame(2, $progress->fileCount);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandRejectsMissingScanPath(): void
     {
         [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', 'missing']);
@@ -757,6 +805,28 @@ PHP);
             $this->assertStringContainsString('Could not find a structarmed.php config file', $output);
         } finally {
             $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testInternalWorkerRoutesDelegatestoClassNodeWorker(): void
+    {
+        $inputFile  = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-input-');
+        $outputFile = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-output-');
+
+        file_put_contents($inputFile, serialize([
+            'basePath'      => sys_get_temp_dir(),
+            'layers'        => [],
+            'layerPatterns' => [],
+            'files'         => [],
+        ]));
+
+        try {
+            [$exitCode] = $this->runApplication(['structarmed', '--internal-worker', $inputFile, $outputFile]);
+
+            $this->assertSame(0, $exitCode);
+        } finally {
+            @unlink($inputFile);
+            @unlink($outputFile);
         }
     }
 

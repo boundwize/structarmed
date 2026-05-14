@@ -48,7 +48,7 @@ final readonly class AnalysisResultCache
     {
         $this->cacheDirectory = $cacheDirectory
             ? $this->resolveCacheDirectory($basePath, $cacheDirectory)
-            : sys_get_temp_dir() . '/structarmed/cache/' . hash('xxh128', $basePath);
+            : str_replace('\\', '/', sys_get_temp_dir()) . '/structarmed/cache/' . hash('xxh128', $basePath);
     }
 
     /**
@@ -120,6 +120,11 @@ final readonly class AnalysisResultCache
         }
 
         rmdir($this->cacheDirectory);
+    }
+
+    public function getCacheDirectory(): string
+    {
+        return $this->cacheDirectory;
     }
 
     public function hasDifferentConfig(string $configHash): bool
