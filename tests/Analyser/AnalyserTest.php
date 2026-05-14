@@ -74,7 +74,8 @@ final class AnalyserTest extends TestCase
             ->layer('Source', 'src/')
             ->rule('source.must_be_final', new MustBeFinalRule('Source'));
 
-        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, [], null, AnalyserOptions::sequential());
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
 
         $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final'));
     }
@@ -89,7 +90,8 @@ final class AnalyserTest extends TestCase
             ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
             ->rule('http.must_be_final', new MustBeFinalRule('HTTP'));
 
-        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
 
         $this->assertCount(1, $ruleViolationCollection->forRule('http.must_be_final'));
     }

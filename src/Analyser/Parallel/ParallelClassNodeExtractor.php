@@ -7,8 +7,6 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
@@ -257,14 +255,7 @@ final readonly class ParallelClassNodeExtractor
 
     private function layerResolver(): ChainLayerResolver
     {
-        return $this->layerPatterns !== []
-            ? new ChainLayerResolver(
-                new ClassNameRegexLayerResolver($this->layerPatterns),
-                new NamespaceLayerResolver($this->layers, $this->basePath)
-            )
-            : new ChainLayerResolver(
-                new NamespaceLayerResolver($this->layers, $this->basePath)
-            );
+        return ChainLayerResolver::fromLayerConfig($this->layers, $this->basePath, $this->layerPatterns);
     }
 
     /**
