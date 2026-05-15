@@ -1,8 +1,12 @@
 # Structarmed
 
-<img width="1600" height="420" alt="Image" src="https://github.com/user-attachments/assets/62b0baa3-d81a-44ec-bd5a-16bb4c5c97f8" />
+<p align="center">
+    <img src="https://github.com/user-attachments/assets/81261972-16c5-42cd-8924-fd045e84d068" alt="StructArmed" width="180">
+</p>
 
-<br />
+<p align="center">
+    Configurable PHP architecture guards — define your layers and rules, then keep them enforced.
+</p>
 
 [![Latest Version](https://img.shields.io/github/release/boundwize/structarmed.svg?style=flat-square)](https://github.com/boundwize/structarmed/releases)
 [![ci build](https://github.com/boundwize/structarmed/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/boundwize/structarmed/actions/workflows/ci.yml)
@@ -13,8 +17,6 @@
 ![Windows](https://img.shields.io/badge/Windows-supported-0078D6?logo=windows&logoColor=white&labelColor=555555)
 ![macOS](https://img.shields.io/badge/macOS-supported-C084FC?logo=apple&logoColor=white&labelColor=555555)
 ![Linux](https://img.shields.io/badge/Linux-supported-FCC624?logo=linux&logoColor=black&labelColor=555555)
-
-Configurable PHP architecture guards — define your layers and rules, then keep them enforced.
 
 ## Turn architecture rules into executable checks
 
