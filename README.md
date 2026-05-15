@@ -1,7 +1,7 @@
 # StructArmed
 
 <p align="center">
-    <img src="https://github.com/user-attachments/assets/81261972-16c5-42cd-8924-fd045e84d068" alt="StructArmed" width="300">
+    <img src="https://github.com/user-attachments/assets/cffb588a-467d-4597-b6aa-6d849954bdf3" alt="StructArmed" width="300">
 </p>
 
 <p align="center">
