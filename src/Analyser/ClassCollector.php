@@ -176,6 +176,7 @@ final class ClassCollector extends NodeVisitorAbstract
             functionCalls: $functionCalls,
             superglobals:  $superglobals,
             layers:        $layers,
+            isEnum:        $classLike instanceof Enum_,
         );
     }
 

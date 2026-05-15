@@ -20,6 +20,7 @@ final class MustBeFinalRuleTest extends TestCase
         bool $isFinal = false,
         bool $isInterface = false,
         bool $isTrait = false,
+        bool $isEnum = false,
     ): ClassNode {
         return new ClassNode(
             className:  $className,
@@ -32,6 +33,7 @@ final class MustBeFinalRuleTest extends TestCase
             isInterface: $isInterface,
             isReadonly: false,
             isTrait:    $isTrait,
+            isEnum:     $isEnum,
         );
     }
 
@@ -74,6 +76,14 @@ final class MustBeFinalRuleTest extends TestCase
     {
         $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
         $classNode       = $this->makeNode(isTrait: true);
+
+        $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
+    }
+
+    public function testDoesNotApplyToEnums(): void
+    {
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode(isEnum: true);
 
         $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
     }
