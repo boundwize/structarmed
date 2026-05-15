@@ -273,7 +273,10 @@ final class ClassCollector extends NodeVisitorAbstract
             public function enterNode(Node $node): null
             {
                 if ($node instanceof FullyQualified) {
-                    $this->names[] = implode('\\', $node->getParts());
+                    $name = implode('\\', $node->getParts());
+                    if (! in_array(strtolower($name), ['true', 'false', 'null'], true)) {
+                        $this->names[] = $name;
+                    }
                 }
 
                 return null;
