@@ -350,4 +350,26 @@ PHP;
         $this->assertSame('App\Domain\OrderEntity', $classNode->className);
         $this->assertSame('OrderEntity', $classNode->shortName());
     }
+
+    public function testDoesNotCollectSpecialNamesAsDependencies(): void
+    {
+        $classNode = $this->collect(
+            <<<'PHP'
+            <?php
+            class Foo {
+                public function bar(): void {
+                    $a = \true;
+                    $b = \false;
+                    $c = \null;
+                    new \DateTimeImmutable();
+                }
+            }
+            PHP
+        );
+
+        $this->assertNotContains('true', $classNode->dependencies);
+        $this->assertNotContains('false', $classNode->dependencies);
+        $this->assertNotContains('null', $classNode->dependencies);
+        $this->assertContains('DateTimeImmutable', $classNode->dependencies);
+    }
 }
