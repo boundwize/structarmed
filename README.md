@@ -1,14 +1,13 @@
 # Structarmed
 
-<div align="center">
+<p align="center">
     <img src="https://github.com/user-attachments/assets/a5881cb6-d9c4-445d-a169-e0c59dac339c" alt="StructArmed" width="180">
+</p>
 
-    <br>
-
+<p align="center">
     Configurable PHP architecture guards — define your layers and rules, then keep them enforced.
-</div>
+</p>
 
-<br />
 
 [![Latest Version](https://img.shields.io/github/release/boundwize/structarmed.svg?style=flat-square)](https://github.com/boundwize/structarmed/releases)
 [![ci build](https://github.com/boundwize/structarmed/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/boundwize/structarmed/actions/workflows/ci.yml)
