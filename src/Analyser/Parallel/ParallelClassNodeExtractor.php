@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
-use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
@@ -63,7 +61,7 @@ final readonly class ParallelClassNodeExtractor
     public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
     {
         if ($files === []) {
-            return (new ClassNodeExtractor($this->layerResolver()))->extract($files, $progressHandler);
+            return [];
         }
 
         $workerCount = min($this->workerCount, count($files));
@@ -250,11 +248,6 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return $file;
-    }
-
-    private function layerResolver(): ChainLayerResolver
-    {
-        return ChainLayerResolver::fromLayerConfig($this->layers, $this->basePath, $this->layerPatterns);
     }
 
     /**
