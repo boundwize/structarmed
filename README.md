@@ -1,6 +1,12 @@
 # Structarmed
 
-<img width="1600" height="420" alt="Image" src="https://github.com/user-attachments/assets/62b0baa3-d81a-44ec-bd5a-16bb4c5c97f8" />
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/a5881cb6-d9c4-445d-a169-e0c59dac339c" alt="StructArmed" width="180">
+
+    <br>
+
+    Configurable PHP architecture guards — define your layers and rules, then keep them enforced.
+</div>
 
 <br />
 
