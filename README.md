@@ -1,4 +1,4 @@
-# Structarmed
+# StructArmed
 
 <p align="center">
     <img src="https://github.com/user-attachments/assets/81261972-16c5-42cd-8924-fd045e84d068" alt="StructArmed" width="180">
