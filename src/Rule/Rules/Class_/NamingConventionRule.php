@@ -29,12 +29,12 @@ final readonly class NamingConventionRule implements RuleInterface
 
         if (
             $this->excludePattern !== null
-            && (bool) preg_match($this->excludePattern, $classNode->shortName())
+            && (bool) preg_match($this->excludePattern, $classNode->className)
         ) {
             return false;
         }
 
-        return (bool) preg_match($this->classNamePattern, $classNode->shortName());
+        return (bool) preg_match($this->classNamePattern, $classNode->className);
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation

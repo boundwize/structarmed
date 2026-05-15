@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,6 +19,7 @@ final class MustBeFinalRuleTest extends TestCase
         string $layer = 'Domain',
         bool $isFinal = false,
         bool $isInterface = false,
+        bool $isTrait = false,
     ): ClassNode {
         return new ClassNode(
             className:  $className,
@@ -29,6 +31,7 @@ final class MustBeFinalRuleTest extends TestCase
             isFinal:    $isFinal,
             isInterface: $isInterface,
             isReadonly: false,
+            isTrait:    $isTrait,
         );
     }
 
@@ -67,10 +70,26 @@ final class MustBeFinalRuleTest extends TestCase
         $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
     }
 
+    public function testDoesNotApplyToTraits(): void
+    {
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode(isTrait: true);
+
+        $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
+    }
+
     public function testAppliesToMatchingPattern(): void
     {
         $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/');
         $classNode       = $this->makeNode(className: 'App\\Domain\\OrderEntity');
+
+        $this->assertTrue($mustBeFinalRule->appliesTo($classNode));
+    }
+
+    public function testAppliesToMatchingFullyQualifiedClassNamePattern(): void
+    {
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/^Boundwize\\\\StructArmed\\\\/');
+        $classNode       = $this->makeNode(className: Preset::class);
 
         $this->assertTrue($mustBeFinalRule->appliesTo($classNode));
     }

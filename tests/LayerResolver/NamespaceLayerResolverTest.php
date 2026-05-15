@@ -6,8 +6,8 @@ namespace Boundwize\StructArmed\Tests\LayerResolver;
 
 use App\Domain\Entities\Order;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
+use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\PatternLayerResolver;
 use Boundwize\StructArmed\Tests\ArchitectureTest;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -15,7 +15,6 @@ use PHPUnit\Framework\TestCase;
 use function dirname;
 
 #[CoversClass(NamespaceLayerResolver::class)]
-#[CoversClass(PatternLayerResolver::class)]
 #[CoversClass(ChainLayerResolver::class)]
 final class NamespaceLayerResolverTest extends TestCase
 {
@@ -129,29 +128,17 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertSame([], $layers);
     }
 
-    public function testPatternResolverMatchesClassName(): void
-    {
-        $patternLayerResolver = new PatternLayerResolver([
-            'Domain' => '/Entity$|ValueObject$|AggregateRoot$/',
-        ]);
-
-        $this->assertSame('Domain', $patternLayerResolver->resolve('App\\Foo\\OrderEntity', '/fake.php'));
-        $this->assertSame('Domain', $patternLayerResolver->resolve('App\\Foo\\MoneyValueObject', '/fake.php'));
-        $this->assertNull($patternLayerResolver->resolve('App\\Foo\\OrderService', '/fake.php'));
-    }
-
     public function testChainResolverTriesResolversInOrder(): void
     {
-        $namespaceLayerResolver = new NamespaceLayerResolver(
+        $namespaceLayerResolver      = new NamespaceLayerResolver(
             layers: ['Domain' => 'src/Domain/'],
             basePath: $this->basePath
         );
-        $patternLayerResolver   = new PatternLayerResolver([
-            'FallbackLayer' => '/SpecialClass$/',
+        $classNameRegexLayerResolver = new ClassNameRegexLayerResolver([
+            'FallbackLayer' => ['pattern' => '/SpecialClass$/', 'excludePattern' => null],
         ]);
-        $chainLayerResolver     = new ChainLayerResolver($namespaceLayerResolver, $patternLayerResolver);
+        $chainLayerResolver          = new ChainLayerResolver($namespaceLayerResolver, $classNameRegexLayerResolver);
 
-        // Pattern resolver kicks in for this one
         $layer = $chainLayerResolver->resolve('App\\Anywhere\\SpecialClass', '/anywhere/SpecialClass.php');
         $this->assertSame('FallbackLayer', $layer);
     }
@@ -159,47 +146,23 @@ final class NamespaceLayerResolverTest extends TestCase
     public function testChainResolverReturnsNullWhenNoneMatch(): void
     {
         $chainLayerResolver = new ChainLayerResolver(
-            new PatternLayerResolver(['Domain' => '/Entity$/'])
+            new ClassNameRegexLayerResolver(['Domain' => ['pattern' => '/Entity$/', 'excludePattern' => null]])
         );
 
         $layer = $chainLayerResolver->resolve('App\\Foo\\OrderService', '/fake.php');
         $this->assertNull($layer);
     }
 
-    public function testPatternResolverResolveAllReturnsAllMatchingLayers(): void
-    {
-        $patternLayerResolver = new PatternLayerResolver([
-            'Domain' => '/Entity$/',
-            'Shared' => '/Entity$|ValueObject$/',
-        ]);
-
-        $layers = $patternLayerResolver->resolveAll('App\\Foo\\OrderEntity', '/fake.php');
-
-        $this->assertContains('Domain', $layers);
-        $this->assertContains('Shared', $layers);
-    }
-
-    public function testPatternResolverResolveAllReturnsEmptyWhenNoneMatch(): void
-    {
-        $patternLayerResolver = new PatternLayerResolver([
-            'Domain' => '/Entity$/',
-        ]);
-
-        $layers = $patternLayerResolver->resolveAll('App\\Foo\\OrderService', '/fake.php');
-
-        $this->assertSame([], $layers);
-    }
-
     public function testChainResolverResolveAllMergesResultsFromAllResolvers(): void
     {
-        $namespaceLayerResolver = new NamespaceLayerResolver(
+        $namespaceLayerResolver      = new NamespaceLayerResolver(
             layers: ['Source' => 'src/'],
             basePath: $this->basePath
         );
-        $patternLayerResolver   = new PatternLayerResolver([
-            'Entity' => '/Entity$/',
+        $classNameRegexLayerResolver = new ClassNameRegexLayerResolver([
+            'Entity' => ['pattern' => '/Entity$/', 'excludePattern' => null],
         ]);
-        $chainLayerResolver     = new ChainLayerResolver($namespaceLayerResolver, $patternLayerResolver);
+        $chainLayerResolver          = new ChainLayerResolver($namespaceLayerResolver, $classNameRegexLayerResolver);
 
         $layers = $chainLayerResolver->resolveAll(
             'App\\Domain\\OrderEntity',
@@ -213,7 +176,7 @@ final class NamespaceLayerResolverTest extends TestCase
     public function testChainResolverResolveAllReturnsEmptyWhenNoneMatch(): void
     {
         $chainLayerResolver = new ChainLayerResolver(
-            new PatternLayerResolver(['Domain' => '/Entity$/'])
+            new ClassNameRegexLayerResolver(['Domain' => ['pattern' => '/Entity$/', 'excludePattern' => null]])
         );
 
         $layers = $chainLayerResolver->resolveAll('App\\Foo\\OrderService', '/fake.php');
