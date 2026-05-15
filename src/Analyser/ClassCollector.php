@@ -40,6 +40,7 @@ use PhpParser\Node\UseItem;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
+use function array_map;
 use function array_merge;
 use function array_unique;
 use function array_values;
@@ -65,6 +66,9 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /** @var ClassNode[] */
     private array $nodes = [];
+
+    /** @var string[]|null */
+    private ?array $internalFunctions = null;
 
     private string $currentFile = '';
 
@@ -419,8 +423,10 @@ final class ClassCollector extends NodeVisitorAbstract
      */
     private function collectFunctionCalls(ClassLike $classLike): array
     {
+        $this->internalFunctions ??= array_map(strtolower(...), get_defined_functions()['internal']);
+
         $nodeTraverser = new NodeTraverser();
-        $visitor       = new class ($this->fileFunctions, $this->internalFunctions()) extends NodeVisitorAbstract {
+        $visitor       = new class ($this->fileFunctions, $this->internalFunctions) extends NodeVisitorAbstract {
             /** @var string[] */
             public array $calls = [];
 
@@ -473,21 +479,6 @@ final class ClassCollector extends NodeVisitorAbstract
         $nodeTraverser->traverse([$classLike]);
 
         return array_unique($visitor->calls);
-    }
-
-    /**
-     * @return string[]
-     */
-    private function internalFunctions(): array
-    {
-        $functions = get_defined_functions();
-        $internal  = [];
-
-        foreach ($functions['internal'] as $function) {
-            $internal[] = strtolower($function);
-        }
-
-        return $internal;
     }
 
     /**
