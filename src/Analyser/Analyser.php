@@ -49,12 +49,15 @@ final readonly class Analyser
 {
     private string $basePath;
 
+    private string $normalisedBasePath;
+
     public function __construct(
         string $basePath = '',
         private ?AnalysisResultCache $analysisResultCache = null,
         private string $classNodeCacheNamespace = '',
     ) {
-        $this->basePath = $basePath !== '' ? $basePath : (string) getcwd();
+        $this->basePath           = $basePath !== '' ? $basePath : (string) getcwd();
+        $this->normalisedBasePath = $this->normalisePath($this->basePath);
     }
 
     /**
@@ -579,7 +582,7 @@ final readonly class Analyser
 
     private function relativePath(string $path): string
     {
-        $basePath = $this->normalisePath($this->basePath);
+        $basePath = $this->normalisedBasePath;
 
         if ($path === $basePath) {
             return '';
