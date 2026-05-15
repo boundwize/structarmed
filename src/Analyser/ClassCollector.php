@@ -496,12 +496,16 @@ final class ClassCollector extends NodeVisitorAbstract
     private function collectSuperglobals(ClassLike $classLike): array
     {
         $nodeTraverser = new NodeTraverser();
-        $visitor       = new class extends NodeVisitorAbstract {
+        $visitor       = new class (self::SUPERGLOBALS) extends NodeVisitorAbstract {
             /** @var string[] */
             public array $found = [];
 
-            /** @var string[] */
-            public array $superglobals = [];
+            /**
+             * @param string[] $superglobals
+             */
+            public function __construct(public array $superglobals)
+            {
+            }
 
             public function enterNode(Node $node): null
             {
@@ -516,8 +520,6 @@ final class ClassCollector extends NodeVisitorAbstract
                 return null;
             }
         };
-
-        $visitor->superglobals = self::SUPERGLOBALS;
 
         $nodeTraverser->addVisitor($visitor);
         $nodeTraverser->traverse([$classLike]);
