@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Fidry\CpuCoreCounter\CpuCoreCounter;
 
+use function function_exists;
 use function max;
 
 final readonly class AnalyserOptions
@@ -31,6 +32,10 @@ final readonly class AnalyserOptions
 
     public function isParallel(): bool
     {
-        return $this->workerCount > 1;
+        if ($this->workerCount <= 1) {
+            return false;
+        }
+
+        return function_exists('proc_open');
     }
 }
