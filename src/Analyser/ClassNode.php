@@ -48,6 +48,7 @@ final readonly class ClassNode
         public array $functionCalls = [],
         public array $superglobals = [],
         array $layers = [],
+        public bool $isEnum = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
@@ -62,6 +63,11 @@ final readonly class ClassNode
     public function isInLayer(string $layer): bool
     {
         return in_array($layer, $this->layers, true);
+    }
+
+    public function isClass(): bool
+    {
+        return ! $this->isInterface && ! $this->isTrait && ! $this->isEnum;
     }
 
     public function nameEndsWith(string $suffix): bool

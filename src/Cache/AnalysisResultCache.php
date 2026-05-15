@@ -324,6 +324,7 @@ final readonly class AnalysisResultCache
             'isFinal'       => $classNode->isFinal,
             'isInterface'   => $classNode->isInterface,
             'isTrait'       => $classNode->isTrait,
+            'isEnum'        => $classNode->isEnum,
             'isReadonly'    => $classNode->isReadonly,
             'dependencies'  => $classNode->dependencies,
             'implements'    => array_values($classNode->implements),
@@ -355,6 +356,7 @@ final readonly class AnalysisResultCache
         $isFinal       = $node['isFinal'] ?? null;
         $isInterface   = $node['isInterface'] ?? null;
         $isTrait       = $node['isTrait'] ?? null;
+        $isEnum        = $node['isEnum'] ?? null;
         $isReadonly    = $node['isReadonly'] ?? null;
         $dependencies  = $node['dependencies'] ?? null;
         $implements    = $node['implements'] ?? null;
@@ -376,6 +378,7 @@ final readonly class AnalysisResultCache
             || ! is_bool($isFinal)
             || ! is_bool($isInterface)
             || ! is_bool($isTrait)
+            || ! is_bool($isEnum)
             || ! is_bool($isReadonly)
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($implements)
@@ -458,6 +461,7 @@ final readonly class AnalysisResultCache
             functionCalls: array_values($functionCalls),
             superglobals:  array_values($superglobals),
             layers:        array_values($layers),
+            isEnum:        $isEnum,
         );
     }
 

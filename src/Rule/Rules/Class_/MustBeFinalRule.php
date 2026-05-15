@@ -21,7 +21,7 @@ final readonly class MustBeFinalRule implements RuleInterface
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        if ($classNode->isInterface || $classNode->isTrait) {
+        if (! $classNode->isClass()) {
             return false;
         }
 

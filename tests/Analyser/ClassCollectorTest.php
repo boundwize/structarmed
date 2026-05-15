@@ -93,6 +93,7 @@ final class ClassCollectorTest extends TestCase
 
         $this->assertSame('Status', $classNode->className);
         $this->assertSame(['Stringable'], $classNode->implements);
+        $this->assertTrue($classNode->isEnum);
         $this->assertFalse($classNode->isInterface);
     }
 

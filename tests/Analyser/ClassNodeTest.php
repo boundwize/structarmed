@@ -27,11 +27,57 @@ final class ClassNodeTest extends TestCase
         );
 
         $this->assertSame('CreateOrderHandler', $classNode->shortName());
+        $this->assertTrue($classNode->isClass());
         $this->assertTrue($classNode->isInLayer('Application'));
         $this->assertFalse($classNode->isInLayer('Domain'));
         $this->assertTrue($classNode->nameStartsWith('Create'));
         $this->assertTrue($classNode->nameEndsWith('Handler'));
         $this->assertTrue($classNode->nameMatches('/Order/'));
+    }
+
+    public function testIsClassReturnsFalseForInterfacesAndTraits(): void
+    {
+        $interfaceNode = new ClassNode(
+            className: 'App\\Contracts\\OrderService',
+            file: '/src/OrderService.php',
+            line: 1,
+            layer: 'Contracts',
+            extends: null,
+            isAbstract: false,
+            isFinal: false,
+            isInterface: true,
+            isReadonly: false,
+        );
+
+        $traitNode = new ClassNode(
+            className: 'App\\Shared\\LogsMessages',
+            file: '/src/LogsMessages.php',
+            line: 1,
+            layer: 'Shared',
+            extends: null,
+            isAbstract: false,
+            isFinal: false,
+            isInterface: false,
+            isReadonly: false,
+            isTrait: true,
+        );
+
+        $enumNode = new ClassNode(
+            className: 'App\\Domain\\Status',
+            file: '/src/Status.php',
+            line: 1,
+            layer: 'Domain',
+            extends: null,
+            isAbstract: false,
+            isFinal: false,
+            isInterface: false,
+            isReadonly: false,
+            isEnum: true,
+        );
+
+        $this->assertFalse($interfaceNode->isClass());
+        $this->assertFalse($traitNode->isClass());
+        $this->assertFalse($enumNode->isClass());
     }
 
     public function testDependencyInterfaceCallAndSuperglobalHelpers(): void
