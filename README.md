@@ -21,8 +21,9 @@
 ## Turn architecture rules into executable checks
 
 - Make architecture decisions executable, not just documented.
-- Catch boundary violations before they quietly become conventions.
+- Start with ready-made presets for common architecture styles.
 - Tune, override, or skip individual preset rules in native PHP code.
+- Catch boundary violations before they quietly become conventions.
 
 ## Installation
 
