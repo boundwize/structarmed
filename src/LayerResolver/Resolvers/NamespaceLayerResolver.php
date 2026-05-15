@@ -22,15 +22,35 @@ use const DIRECTORY_SEPARATOR;
  *   'Domain' → 'src/Domain/'
  *   A file at 'src/Domain/Entities/Order.php' resolves to 'Domain'
  */
-final readonly class NamespaceLayerResolver implements LayerResolverInterface
+final class NamespaceLayerResolver implements LayerResolverInterface
 {
+    /**
+     * Normalised layer paths keyed by layer name, with their string lengths pre-computed.
+     * Shape: array<string, list<array{path: string, length: int}>>
+     *
+     * @var array<string, list<array{path: string, length: int}>>
+     */
+    private array $normalisedLayerPaths = [];
+
     /**
      * @param array<string, string|list<string>> $layers  Map of layer name → path prefixes
      */
     public function __construct(
-        private array $layers,
-        private string $basePath,
+        array $layers,
+        string $basePath,
     ) {
+        foreach ($layers as $layerName => $layerPaths) {
+            foreach ((array) $layerPaths as $layerPath) {
+                $path = $this->normalisePath(
+                    $basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
+                );
+
+                $this->normalisedLayerPaths[$layerName][] = [
+                    'path'   => $path,
+                    'length' => strlen($path),
+                ];
+            }
+        }
     }
 
     public function resolve(string $className, string $filePath): ?string
@@ -39,19 +59,11 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         $matchedLayer  = null;
         $matchedLength = -1;
 
-        foreach ($this->layers as $layerName => $layerPaths) {
-            foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayer = $this->normalisePath(
-                    $this->basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
-                );
-
-                if (str_starts_with($normalised, $normalisedLayer)) {
-                    $length = strlen($normalisedLayer);
-
-                    if ($length > $matchedLength) {
-                        $matchedLayer  = $layerName;
-                        $matchedLength = $length;
-                    }
+        foreach ($this->normalisedLayerPaths as $layerName => $paths) {
+            foreach ($paths as ['path' => $normalisedLayer, 'length' => $length]) {
+                if ($length > $matchedLength && str_starts_with($normalised, $normalisedLayer)) {
+                    $matchedLayer  = $layerName;
+                    $matchedLength = $length;
                 }
             }
         }
@@ -67,12 +79,8 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         $normalised = $this->normalisePath($filePath);
         $matched    = [];
 
-        foreach ($this->layers as $layerName => $layerPaths) {
-            foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayer = $this->normalisePath(
-                    $this->basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
-                );
-
+        foreach ($this->normalisedLayerPaths as $layerName => $paths) {
+            foreach ($paths as ['path' => $normalisedLayer]) {
                 if (str_starts_with($normalised, $normalisedLayer)) {
                     $matched[] = $layerName;
                     break;
