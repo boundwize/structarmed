@@ -21,7 +21,7 @@ final readonly class MustBeFinalRule implements RuleInterface
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        if ($classNode->isInterface) {
+        if ($classNode->isInterface || $classNode->isTrait) {
             return false;
         }
 
@@ -30,7 +30,7 @@ final readonly class MustBeFinalRule implements RuleInterface
         }
 
         if ($this->classNamePattern !== null) {
-            return (bool) preg_match($this->classNamePattern, $classNode->shortName());
+            return (bool) preg_match($this->classNamePattern, $classNode->className);
         }
 
         return true;

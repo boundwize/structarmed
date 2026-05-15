@@ -80,6 +80,29 @@ final class NamingConventionRuleTest extends TestCase
         $this->assertFalse($namingConventionRule->appliesTo($classNode));
     }
 
+    public function testExcludePatternMatchesFullyQualifiedClassName(): void
+    {
+        $namingConventionRule = new NamingConventionRule(
+            classNamePattern: '/Service$/',
+            mustBeInLayer: 'Application',
+            excludePattern: '/^App\\\\Domain\\\\/'
+        );
+        $classNode            = $this->makeNode('App\\Domain\\OrderDomainService', 'Domain');
+
+        $this->assertFalse($namingConventionRule->appliesTo($classNode));
+    }
+
+    public function testAppliesToMatchingFullyQualifiedClassNamePattern(): void
+    {
+        $namingConventionRule = new NamingConventionRule(
+            classNamePattern: '/^App\\\\Application\\\\/',
+            mustBeInLayer: 'Application'
+        );
+        $classNode            = $this->makeNode('App\\Application\\OrderService', 'Application');
+
+        $this->assertTrue($namingConventionRule->appliesTo($classNode));
+    }
+
     public function testDoesNotApplyWhenPatternDoesNotMatch(): void
     {
         $namingConventionRule = new NamingConventionRule(

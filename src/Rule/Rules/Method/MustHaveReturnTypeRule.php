@@ -27,7 +27,7 @@ final readonly class MustHaveReturnTypeRule implements RuleInterface, MultipleRu
         }
 
         if ($this->classNamePattern !== null) {
-            return (bool) preg_match($this->classNamePattern, $classNode->shortName());
+            return (bool) preg_match($this->classNamePattern, $classNode->className);
         }
 
         return true;
