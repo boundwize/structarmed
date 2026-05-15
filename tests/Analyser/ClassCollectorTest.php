@@ -351,7 +351,7 @@ PHP;
         $this->assertSame('OrderEntity', $classNode->shortName());
     }
 
-    public function testDoesNotCollectSpecialNamesAsDependencies(): void
+    public function testDoesNotCollectFullyQualifiedTrueFalseNullAsDependencies(): void
     {
         $classNode = $this->collect(
             <<<'PHP'
