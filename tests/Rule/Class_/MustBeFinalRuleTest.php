@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -88,7 +89,7 @@ final class MustBeFinalRuleTest extends TestCase
     public function testAppliesToMatchingFullyQualifiedClassNamePattern(): void
     {
         $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain', classNamePattern: '/^Boundwize\\\\StructArmed\\\\/');
-        $classNode       = $this->makeNode(className: 'Boundwize\\StructArmed\\Preset\\Preset');
+        $classNode       = $this->makeNode(className: Preset::class);
 
         $this->assertTrue($mustBeFinalRule->appliesTo($classNode));
     }
