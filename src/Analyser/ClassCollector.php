@@ -503,7 +503,7 @@ final class ClassCollector extends NodeVisitorAbstract
             /**
              * @param string[] $superglobals
              */
-            public function __construct(private array $superglobals)
+            public function __construct(private readonly array $superglobals)
             {
             }
 
