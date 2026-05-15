@@ -18,16 +18,16 @@ use function getcwd;
 #[CoversClass(ClassCollector::class)]
 final class ClassCollectorTest extends TestCase
 {
-    private function collect(string $code, bool $resolveNames = false): ClassNode
+    private function collect(string $code): ClassNode
     {
-        $nodes = $this->collectNodes($code, $resolveNames);
+        $nodes = $this->collectNodes($code);
         $this->assertNotEmpty($nodes, 'No class nodes collected');
 
         return $nodes[0];
     }
 
     /** @return ClassNode[] */
-    private function collectNodes(string $code, bool $resolveNames = false): array
+    private function collectNodes(string $code): array
     {
         $cwd                    = getcwd();
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], $cwd !== false ? $cwd : '');
@@ -38,11 +38,7 @@ final class ClassCollectorTest extends TestCase
         $classCollector->setCurrentFile('/fake/path/Foo.php');
 
         $nodeTraverser = new NodeTraverser();
-
-        if ($resolveNames) {
-            $nodeTraverser->addVisitor(new NameResolver());
-        }
-
+        $nodeTraverser->addVisitor(new NameResolver());
         $nodeTraverser->addVisitor($classCollector);
         $nodeTraverser->traverse($ast ?? []);
 
@@ -84,7 +80,7 @@ final class ClassCollectorTest extends TestCase
 
     public function testCollectsTraitWithPsr4Namespace(): void
     {
-        $classNode = $this->collect('<?php namespace App\Domain; trait FooTrait {}', resolveNames: true);
+        $classNode = $this->collect('<?php namespace App\Domain; trait FooTrait {}');
 
         $this->assertSame('App\Domain\FooTrait', $classNode->className);
         $this->assertTrue($classNode->isTrait);
@@ -246,7 +242,7 @@ class Foo {
     }
 }
 PHP;
-        $classNode = $this->collect($code, resolveNames: true);
+        $classNode = $this->collect($code);
 
         $this->assertContains('Vendor\debug', $classNode->functionCalls);
     }
@@ -254,8 +250,7 @@ PHP;
     public function testKeepsNativeFunctionCallsUnqualifiedInsideNamespace(): void
     {
         $classNode = $this->collect(
-            '<?php namespace App\Support; class Foo { public function bar(): int { return strlen("x"); } }',
-            resolveNames: true
+            '<?php namespace App\Support; class Foo { public function bar(): int { return strlen("x"); } }'
         );
 
         $this->assertContains('strlen', $classNode->functionCalls);
@@ -276,7 +271,7 @@ class Foo {
 
 function debug(string $value): void {}
 PHP;
-        $classNode = $this->collect($code, resolveNames: true);
+        $classNode = $this->collect($code);
 
         $this->assertContains('App\Support\debug', $classNode->functionCalls);
     }
@@ -284,8 +279,7 @@ PHP;
     public function testKeepsUnresolvedFunctionCallsAsWrittenInsideNamespace(): void
     {
         $classNode = $this->collect(
-            '<?php namespace App\Support; class Foo { public function bar(): void { missing_function("x"); } }',
-            resolveNames: true
+            '<?php namespace App\Support; class Foo { public function bar(): void { missing_function("x"); } }'
         );
 
         $this->assertContains('missing_function', $classNode->functionCalls);
@@ -345,10 +339,30 @@ PHP;
 
     public function testShortNameExtraction(): void
     {
-        $classNode = $this->collect('<?php namespace App\Domain; final class OrderEntity {}', resolveNames: true);
+        $classNode = $this->collect('<?php namespace App\Domain; final class OrderEntity {}');
 
         $this->assertSame('App\Domain\OrderEntity', $classNode->className);
         $this->assertSame('OrderEntity', $classNode->shortName());
+    }
+
+    public function testCollectsDependencyForCurrentNamespace(): void
+    {
+        $code      = <<<'PHP'
+<?php
+
+namespace App\SomeSub;
+
+class Foo
+{
+    public function bar(): void
+    {
+        echo Bar::class;
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertContains('App\SomeSub\Bar', $classNode->dependencies);
     }
 
     public function testDoesNotCollectFullyQualifiedTrueFalseNullAsDependencies(): void
