@@ -20,4 +20,4 @@ return RectorConfig::configure()
     ->withParallel()
     ->withRootFiles()
     ->withPaths([__DIR__ . '/src', __DIR__ . '/tests'])
-    ->withImportNames();
+    ->withImportNames(removeUnusedImports: true);

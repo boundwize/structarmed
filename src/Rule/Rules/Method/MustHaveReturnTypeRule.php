@@ -6,13 +6,12 @@ namespace Boundwize\StructArmed\Rule\Rules\Method;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
-use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function preg_match;
 use function sprintf;
 
-final readonly class MustHaveReturnTypeRule implements RuleInterface, MultipleRuleViolationInterface
+final readonly class MustHaveReturnTypeRule implements MultipleRuleViolationInterface
 {
     public function __construct(
         private string $layer,
