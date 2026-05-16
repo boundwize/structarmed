@@ -16,6 +16,9 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 use function file_put_contents;
+use function fwrite;
+use function rewind;
+use function tmpfile;
 
 #[CoversClass(ParallelClassNodeExtractor::class)]
 final class ParallelClassNodeExtractorTest extends TestCase
@@ -198,5 +201,77 @@ PHP);
         } finally {
             $GLOBALS['mock_proc_open'] = false;
         }
+    }
+
+    public function testExtractThrowsWhenWorkerReturnsInvalidPayload(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $GLOBALS['mock_proc_open'] = [
+            'pipes' => $this->createMockWorkerPipes(serialize([
+                'error' => null,
+            ])),
+        ];
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned an invalid payload.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_proc_open'] = false;
+        }
+    }
+
+    public function testExtractThrowsWhenWorkerReturnsInvalidErrorPayload(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $GLOBALS['mock_proc_open'] = [
+            'pipes' => $this->createMockWorkerPipes(serialize([
+                'nodes' => [],
+                'error' => ['invalid'],
+            ])),
+        ];
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned an invalid error payload.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_proc_open'] = false;
+        }
+    }
+
+    /**
+     * @return array<int, resource>
+     */
+    private function createMockWorkerPipes(string $resultPayload): array
+    {
+        $inputPipe = tmpfile();
+        $this->assertIsResource($inputPipe);
+
+        $stdoutPipe = tmpfile();
+        $this->assertIsResource($stdoutPipe);
+
+        $stderrPipe = tmpfile();
+        $this->assertIsResource($stderrPipe);
+
+        $resultPipe = tmpfile();
+        $this->assertIsResource($resultPipe);
+
+        fwrite($resultPipe, $resultPayload);
+        rewind($resultPipe);
+
+        return [$inputPipe, $stdoutPipe, $stderrPipe, $resultPipe];
     }
 }

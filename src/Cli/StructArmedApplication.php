@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
+use Closure;
 
 use function array_slice;
 use function assert;
@@ -18,6 +19,16 @@ use const STDIN;
 final readonly class StructArmedApplication
 {
     /**
+     * @param resource $workerInput
+     * @param null|Closure(): resource|false $resultStreamOpener
+     */
+    public function __construct(
+        private mixed $workerInput = STDIN,
+        private ?Closure $resultStreamOpener = null,
+    ) {
+    }
+
+    /**
      * @param list<string> $argv
      */
     public function run(array $argv, ?string $basePath = null): int
@@ -26,12 +37,14 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
+            $resultStreamOpener = $this->resultStreamOpener ?? static fn (): mixed => fopen('php://fd/3', 'w');
+
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-            $resultFd = fopen('php://fd/3', 'w');
+            $resultFd = $resultStreamOpener();
             // phpcs:enable
             assert($resultFd !== false);
 
-            return ClassNodeWorker::run(STDIN, $resultFd);
+            return ClassNodeWorker::run($this->workerInput, $resultFd);
         }
 
         if (in_array($command, [null, '--help', '-h'], true)) {

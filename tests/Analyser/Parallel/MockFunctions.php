@@ -19,5 +19,25 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
         return false;
     }
 
+    if (\is_array($GLOBALS['mock_proc_open'])) {
+        $process = \proc_open([\PHP_BINARY, '-r', ''], [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $realPipes);
+
+        if ($process === false) {
+            return false;
+        }
+
+        foreach ($realPipes as $realPipe) {
+            \fclose($realPipe);
+        }
+
+        $pipes = $GLOBALS['mock_proc_open']['pipes'];
+
+        return $process;
+    }
+
     return \proc_open($command, $descriptorspec, $pipes);
 }
