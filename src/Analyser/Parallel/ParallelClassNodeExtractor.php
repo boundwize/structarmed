@@ -108,7 +108,9 @@ final readonly class ParallelClassNodeExtractor
                     $anyActivity = true;
                 }
 
-                if (! feof($resultPipe) || ! feof($stderrPipe)) {
+                $decodedResult = $this->tryDecodeWorkerResult($active[$key]['resultBuffer']);
+
+                if ($decodedResult === null && (! feof($resultPipe) || ! feof($stderrPipe))) {
                     continue;
                 }
 
@@ -127,7 +129,7 @@ final readonly class ParallelClassNodeExtractor
                 $exitCode = proc_close($active[$key]['process']);
 
                 try {
-                    $result = @unserialize($resultBuffer);
+                    $result = $decodedResult ?? @unserialize($resultBuffer);
 
                     if (
                         ! is_array($result)
@@ -176,6 +178,20 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return $nodes;
+    }
+
+    /**
+     * @return array<mixed>|null
+     */
+    private function tryDecodeWorkerResult(string $resultBuffer): ?array
+    {
+        if ($resultBuffer === '') {
+            return null;
+        }
+
+        $result = @unserialize($resultBuffer);
+
+        return is_array($result) ? $result : null;
     }
 
     /**
