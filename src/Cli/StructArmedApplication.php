@@ -9,23 +9,26 @@ use Closure;
 
 use function array_slice;
 use function assert;
-use function fopen;
 use function getcwd;
 use function in_array;
 use function is_resource;
 use function sprintf;
 
+use const STDERR;
 use const STDIN;
+use const STDOUT;
 
 final readonly class StructArmedApplication
 {
     /**
      * @param resource $workerInput
      * @param Closure(): mixed|null $resultStreamOpener
+     * @param Closure(): mixed|null $progressStreamOpener
      */
     public function __construct(
         private mixed $workerInput = STDIN,
         private ?Closure $resultStreamOpener = null,
+        private ?Closure $progressStreamOpener = null,
     ) {
     }
 
@@ -38,15 +41,14 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
-            $resultStreamOpener = $this->resultStreamOpener ?? static fn (): mixed => fopen('php://fd/3', 'w');
+            $resultFd   = $this->resultStreamOpener instanceof Closure ? ($this->resultStreamOpener)() : STDOUT;
+            $progressFd = $this->progressStreamOpener instanceof Closure ? ($this->progressStreamOpener)() : STDERR;
 
-            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-            $resultFd = $resultStreamOpener();
-            // phpcs:enable
             assert(is_resource($resultFd));
+            assert(is_resource($progressFd));
             assert(is_resource($this->workerInput));
 
-            return ClassNodeWorker::run($this->workerInput, $resultFd);
+            return ClassNodeWorker::run($this->workerInput, $resultFd, $progressFd);
         }
 
         if (in_array($command, [null, '--help', '-h'], true)) {

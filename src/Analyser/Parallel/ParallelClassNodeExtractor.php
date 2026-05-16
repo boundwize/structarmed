@@ -30,7 +30,7 @@ use function min;
 use function proc_close;
 use function serialize;
 use function sprintf;
-use function stream_get_contents;
+use function str_replace;
 use function stream_set_blocking;
 use function substr_count;
 use function unserialize;
@@ -91,11 +91,12 @@ final readonly class ParallelClassNodeExtractor
                     $anyActivity                   = true;
                 }
 
-                $stdoutPipe = $active[$key]['stdoutPipe'];
+                $stderrPipe = $active[$key]['stderrPipe'];
 
-                $data = fread($stdoutPipe, 8192);
+                $data = fread($stderrPipe, 8192);
                 if ($data !== false && $data !== '') {
-                    $count = substr_count($data, "\n");
+                    $active[$key]['stderrBuffer'] .= $data;
+                    $count                         = substr_count($data, ClassNodeWorker::PROGRESS_MARKER);
                     for ($i = 0; $i < $count; $i++) {
                         $fileIdx = $active[$key]['filesAdvanced'];
                         if ($fileIdx < count($active[$key]['files'])) {
@@ -107,24 +108,26 @@ final readonly class ParallelClassNodeExtractor
                     $anyActivity = true;
                 }
 
-                if (! feof($stdoutPipe)) {
+                if (! feof($resultPipe) || ! feof($stderrPipe)) {
                     continue;
                 }
 
-                fclose($stdoutPipe);
-
-                $resultBuffer = $active[$key]['resultBuffer'] . stream_get_contents($resultPipe);
+                $resultBuffer = $active[$key]['resultBuffer'];
                 fclose($resultPipe);
 
-                $stderrContent = (string) stream_get_contents($active[$key]['stderrPipe']);
-                fclose($active[$key]['stderrPipe']);
+                $stderrContent = str_replace(
+                    ClassNodeWorker::PROGRESS_MARKER,
+                    '',
+                    $active[$key]['stderrBuffer'],
+                );
+                fclose($stderrPipe);
 
                 // proc_close() has not been called yet so waitpid() inside it correctly
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 $exitCode = proc_close($active[$key]['process']);
 
                 try {
-                    $result = unserialize($resultBuffer);
+                    $result = @unserialize($resultBuffer);
 
                     if (
                         ! is_array($result)
@@ -132,7 +135,10 @@ final readonly class ParallelClassNodeExtractor
                         || ! is_array($result['nodes'])
                         || ! array_key_exists('error', $result)
                     ) {
-                        throw new RuntimeException('Parallel analysis worker returned an invalid payload.');
+                        throw new RuntimeException(sprintf(
+                            "Parallel analysis worker returned an invalid payload.%s",
+                            $stderrContent !== '' ? "\n" . $stderrContent : '',
+                        ));
                     }
 
                     $error = $result['error'];
@@ -220,10 +226,10 @@ final readonly class ParallelClassNodeExtractor
      *      process: resource,
      *      files: list<string>,
      *      filesAdvanced: int,
-     *      stdoutPipe: resource,
      *      stderrPipe: resource,
      *      resultPipe: resource,
-     *      resultBuffer: string
+     *      resultBuffer: string,
+     *      stderrBuffer: string
      * }
      */
     private function spawnWorker(array $chunk, string $script): array
@@ -237,7 +243,6 @@ final readonly class ParallelClassNodeExtractor
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
                 2 => ['pipe', 'w'],
-                3 => ['pipe', 'w'],
             ],
             $pipes,
         );
@@ -246,7 +251,7 @@ final readonly class ParallelClassNodeExtractor
             throw new RuntimeException('Unable to start parallel analysis worker.');
         }
 
-        assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]) && isset($pipes[3]));
+        assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]));
 
         fwrite($pipes[0], serialize([
             'basePath'      => $this->basePath,
@@ -256,16 +261,13 @@ final readonly class ParallelClassNodeExtractor
         ]));
         fclose($pipes[0]);
 
-        $stdoutPipe = $pipes[1];
+        $resultPipe = $pipes[1];
         $stderrPipe = $pipes[2];
-        $resultPipe = $pipes[3];
 
         assert(is_resource($process));
-        assert(is_resource($stdoutPipe));
-        assert(is_resource($stderrPipe));
         assert(is_resource($resultPipe));
+        assert(is_resource($stderrPipe));
 
-        stream_set_blocking($stdoutPipe, false);
         stream_set_blocking($resultPipe, false);
         stream_set_blocking($stderrPipe, false);
 
@@ -273,10 +275,10 @@ final readonly class ParallelClassNodeExtractor
             'process'       => $process,
             'files'         => $chunk,
             'filesAdvanced' => 0,
-            'stdoutPipe'    => $stdoutPipe,
-            'stderrPipe'    => $stderrPipe,
             'resultPipe'    => $resultPipe,
+            'stderrPipe'    => $stderrPipe,
             'resultBuffer'  => '',
+            'stderrBuffer'  => '',
         ];
     }
 }

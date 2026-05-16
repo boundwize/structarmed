@@ -252,26 +252,48 @@ PHP);
         }
     }
 
+    public function testExtractIncludesWorkerStderrWhenWorkerReturnsInvalidPayload(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $GLOBALS['mock_proc_open'] = [
+            'pipes' => $this->createMockWorkerPipes('', 'worker failed before writing a result'),
+        ];
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('worker failed before writing a result');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_proc_open'] = false;
+        }
+    }
+
     /**
      * @return array<int, resource>
      */
-    private function createMockWorkerPipes(string $resultPayload): array
+    private function createMockWorkerPipes(string $resultPayload, string $stderrPayload = ''): array
     {
         $inputPipe = tmpfile();
         $this->assertIsResource($inputPipe);
 
-        $stdoutPipe = tmpfile();
-        $this->assertIsResource($stdoutPipe);
+        $resultPipe = tmpfile();
+        $this->assertIsResource($resultPipe);
 
         $stderrPipe = tmpfile();
         $this->assertIsResource($stderrPipe);
 
-        $resultPipe = tmpfile();
-        $this->assertIsResource($resultPipe);
-
         fwrite($resultPipe, $resultPayload);
         rewind($resultPipe);
 
-        return [$inputPipe, $stdoutPipe, $stderrPipe, $resultPipe];
+        fwrite($stderrPipe, $stderrPayload);
+        rewind($stderrPipe);
+
+        return [$inputPipe, $resultPipe, $stderrPipe];
     }
 }
