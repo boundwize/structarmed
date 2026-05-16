@@ -11,23 +11,26 @@ use Throwable;
 
 use function count;
 use function fflush;
-use function file_get_contents;
-use function file_put_contents;
 use function fwrite;
 use function is_array;
 use function serialize;
 use function sprintf;
+use function stream_get_contents;
 use function unserialize;
 
 use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
-    /** @param resource|null $outputStream */
-    public static function run(string $inputFile, string $outputFile, mixed $outputStream = null): int
+    /**
+     * @param resource      $input        Readable stream carrying the serialised payload.
+     * @param resource      $output       Writable stream for the serialised result.
+     * @param resource|null $outputStream Progress stream (defaults to STDOUT).
+     */
+    public static function run(mixed $input, mixed $output, mixed $outputStream = null): int
     {
         try {
-            $payload = unserialize((string) file_get_contents($inputFile));
+            $payload = unserialize((string) stream_get_contents($input));
 
             if (! is_array($payload)) {
                 throw new WorkerFailedException('Invalid worker payload.');
@@ -71,14 +74,14 @@ final readonly class ClassNodeWorker
             $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
             $progressHandler->finish();
 
-            file_put_contents($outputFile, serialize([
+            fwrite($output, serialize([
                 'nodes' => $nodes,
                 'error' => null,
             ]));
 
             return 0;
         } catch (Throwable $throwable) {
-            file_put_contents($outputFile, serialize([
+            fwrite($output, serialize([
                 'nodes' => [],
                 'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
             ]));
