@@ -82,12 +82,12 @@ final class StructArmedApplicationTest extends TestCase
         $resultStream = tmpfile();
         $this->assertIsResource($resultStream);
 
-        $application = new StructArmedApplication(
+        $structArmedApplication = new StructArmedApplication(
             workerInput: $workerInput,
             resultStreamOpener: static fn () => $resultStream,
         );
 
-        $exitCode = $application->run(['structarmed', '--internal-worker']);
+        $exitCode = $structArmedApplication->run(['structarmed', '--internal-worker']);
 
         rewind($resultStream);
         $payload = unserialize((string) stream_get_contents($resultStream));

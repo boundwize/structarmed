@@ -113,7 +113,7 @@ final readonly class ParallelClassNodeExtractor
 
                 fclose($stdoutPipe);
 
-                $resultBuffer = $active[$key]['resultBuffer'] . (string) stream_get_contents($resultPipe);
+                $resultBuffer = $active[$key]['resultBuffer'] . stream_get_contents($resultPipe);
                 fclose($resultPipe);
 
                 $stderrContent = (string) stream_get_contents($active[$key]['stderrPipe']);

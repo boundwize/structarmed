@@ -12,6 +12,7 @@ use function assert;
 use function fopen;
 use function getcwd;
 use function in_array;
+use function is_resource;
 use function sprintf;
 
 use const STDIN;
@@ -20,7 +21,7 @@ final readonly class StructArmedApplication
 {
     /**
      * @param resource $workerInput
-     * @param null|Closure(): resource|false $resultStreamOpener
+     * @param Closure(): mixed|null $resultStreamOpener
      */
     public function __construct(
         private mixed $workerInput = STDIN,
@@ -42,7 +43,8 @@ final readonly class StructArmedApplication
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
             $resultFd = $resultStreamOpener();
             // phpcs:enable
-            assert($resultFd !== false);
+            assert(is_resource($resultFd));
+            assert(is_resource($this->workerInput));
 
             return ClassNodeWorker::run($this->workerInput, $resultFd);
         }
