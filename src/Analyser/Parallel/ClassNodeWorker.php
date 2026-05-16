@@ -22,6 +22,8 @@ use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
+    public const PROGRESS_MARKER = "\0";
+
     /**
      * @param resource      $input        Readable stream carrying the serialised payload.
      * @param resource      $output       Writable stream for the serialised result.
@@ -61,7 +63,7 @@ final readonly class ClassNodeWorker
 
                 public function advance(string $file): void
                 {
-                    fwrite($this->stream, "\n");
+                    fwrite($this->stream, ClassNodeWorker::PROGRESS_MARKER);
                     fflush($this->stream);
                 }
 
