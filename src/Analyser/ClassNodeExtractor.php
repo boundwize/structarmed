@@ -44,9 +44,7 @@ final readonly class ClassNodeExtractor
 
                 $classCollector->setCurrentFile($file);
 
-                $traverser = new NodeTraverser();
-                $traverser->addVisitor(new NameResolver());
-                $traverser->addVisitor($classCollector);
+                $traverser = new NodeTraverser(new NameResolver(), $classCollector);
                 $traverser->traverse($ast);
             } catch (Error) {
                 // Skip files with parse errors

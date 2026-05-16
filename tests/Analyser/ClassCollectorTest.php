@@ -37,9 +37,7 @@ final class ClassCollectorTest extends TestCase
 
         $classCollector->setCurrentFile('/fake/path/Foo.php');
 
-        $nodeTraverser = new NodeTraverser();
-        $nodeTraverser->addVisitor(new NameResolver());
-        $nodeTraverser->addVisitor($classCollector);
+        $nodeTraverser = new NodeTraverser(new NameResolver(), $classCollector);
         $nodeTraverser->traverse($ast ?? []);
 
         return $classCollector->getNodes();
