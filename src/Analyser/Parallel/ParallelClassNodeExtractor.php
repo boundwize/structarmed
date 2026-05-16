@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
 use function array_chunk;
+use function array_column;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
@@ -19,6 +20,7 @@ use function dirname;
 use function fclose;
 use function feof;
 use function file_put_contents;
+use function filesize;
 use function fread;
 use function is_array;
 use function is_dir;
@@ -36,6 +38,7 @@ use function sys_get_temp_dir;
 use function unlink;
 use function unserialize;
 use function usleep;
+use function usort;
 
 use const PHP_BINARY;
 
@@ -65,78 +68,33 @@ final readonly class ParallelClassNodeExtractor
         }
 
         $workerCount = min($this->workerCount, count($files));
-        $chunkSize   = (int) ceil(count($files) / $workerCount);
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
-        $processes   = [];
 
-        foreach (array_chunk($files, max(1, $chunkSize)) as $chunk) {
-            [
-                'inputFile'  => $inputFile,
-                'outputFile' => $outputFile,
-                'stderrFile' => $stderrFile,
-            ] = $this->createWorkerFiles();
+        $queue      = $this->buildQueue($files);
+        $queueCount = count($queue);
+        $queueIdx   = 0;
+        $active     = [];
+        $nodes      = [];
+        $failure    = null;
 
-            file_put_contents($inputFile, serialize([
-                'basePath'      => $this->basePath,
-                'layers'        => $this->layers,
-                'layerPatterns' => $this->layerPatterns,
-                'files'         => $chunk,
-            ]));
-
-            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-            // to avoid error in test that mock it
-            $process = proc_open(
-            // phpcs:enable
-                [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
-                [
-                    0 => ['pipe', 'r'],
-                    1 => ['pipe', 'w'],
-                    2 => ['file', $stderrFile, 'w'],
-                ],
-                $pipes,
-            );
-
-            if ($process === false) {
-                $this->cleanup([$inputFile, $outputFile, $stderrFile]);
-
-                throw new RuntimeException('Unable to start parallel analysis worker.');
-            }
-
-            assert(isset($pipes[0]) && isset($pipes[1]));
-            fclose($pipes[0]);
-
-            $stdoutPipe = $pipes[1];
-            stream_set_blocking($stdoutPipe, false);
-
-            $processes[] = [
-                'process'       => $process,
-                'files'         => $chunk,
-                'filesAdvanced' => 0,
-                'inputFile'     => $inputFile,
-                'outputFile'    => $outputFile,
-                'stderrFile'    => $stderrFile,
-                'stdoutPipe'    => $stdoutPipe,
-            ];
+        while (count($active) < $workerCount && $queueIdx < $queueCount) {
+            $active[] = $this->spawnWorker($queue[$queueIdx++], $script);
         }
 
-        $nodes   = [];
-        $failure = null;
-        $pending = $processes;
-
-        while ($pending !== []) {
+        while ($active !== []) {
             $anyActivity = false;
 
-            foreach (array_keys($pending) as $key) {
-                $stdoutPipe = $pending[$key]['stdoutPipe'];
+            foreach (array_keys($active) as $key) {
+                $stdoutPipe = $active[$key]['stdoutPipe'];
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
                     $count = substr_count($data, "\n");
                     for ($i = 0; $i < $count; $i++) {
-                        $fileIdx = $pending[$key]['filesAdvanced'];
-                        if ($fileIdx < count($pending[$key]['files'])) {
-                            $progressHandler?->advance($pending[$key]['files'][$fileIdx]);
-                            $pending[$key]['filesAdvanced']++;
+                        $fileIdx = $active[$key]['filesAdvanced'];
+                        if ($fileIdx < count($active[$key]['files'])) {
+                            $progressHandler?->advance($active[$key]['files'][$fileIdx]);
+                            $active[$key]['filesAdvanced']++;
                         }
                     }
 
@@ -152,13 +110,11 @@ final readonly class ParallelClassNodeExtractor
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
 
-                $procResource = $pending[$key]['process'];
-                assert(is_resource($procResource));
-                $exitCode = proc_close($procResource);
+                $exitCode = proc_close($active[$key]['process']);
 
                 try {
                     // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                    $result = unserialize((string) file_get_contents($pending[$key]['outputFile']));
+                    $result = unserialize((string) file_get_contents($active[$key]['outputFile']));
                     // phpcs:enable
 
                     if (
@@ -179,7 +135,7 @@ final readonly class ParallelClassNodeExtractor
                     if ($error !== null || $exitCode !== 0) {
                         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
                         // to avoid error in test that mock it
-                        $stderr = (string) file_get_contents($pending[$key]['stderrFile']);
+                        $stderr = (string) file_get_contents($active[$key]['stderrFile']);
                         // phpcs:enable
 
                         throw new RuntimeException(sprintf(
@@ -196,14 +152,18 @@ final readonly class ParallelClassNodeExtractor
                     $failure ??= $runtimeException->getMessage();
                 } finally {
                     $this->cleanup([
-                        $pending[$key]['inputFile'],
-                        $pending[$key]['outputFile'],
-                        $pending[$key]['stderrFile'],
+                        $active[$key]['inputFile'],
+                        $active[$key]['outputFile'],
+                        $active[$key]['stderrFile'],
                     ]);
                 }
 
-                unset($pending[$key]);
+                unset($active[$key]);
                 $anyActivity = true;
+
+                if ($queueIdx < $queueCount) {
+                    $active[] = $this->spawnWorker($queue[$queueIdx++], $script);
+                }
             }
 
             if (! $anyActivity) {
@@ -216,6 +176,88 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return $nodes;
+    }
+
+    /**
+     * Sorts files by size descending then chunks into batches of $batchSize.
+     * Large files go first so the slowest work starts immediately; the streaming
+     * pool refills itself as workers finish, so fast workers naturally absorb
+     * more batches without any pre-assignment.
+     *
+     * @param list<string> $files
+     * @return list<list<string>>
+     */
+    private function buildQueue(array $files): array
+    {
+        $sized = [];
+        foreach ($files as $file) {
+            $sized[] = ['file' => $file, 'size' => @filesize($file) ?: 1];
+        }
+
+        usort($sized, static fn (array $a, array $b): int => $b['size'] <=> $a['size']);
+
+        $batchSize = max(1, (int) ceil(count($sized) / ($this->workerCount * 2)));
+
+        return array_chunk(array_column($sized, 'file'), $batchSize);
+    }
+
+    /**
+     * @param list<string> $chunk
+     * @return array{process: resource, files: list<string>, filesAdvanced: int, inputFile: string, outputFile: string, stderrFile: string, stdoutPipe: resource}
+     */
+    private function spawnWorker(array $chunk, string $script): array
+    {
+        [
+            'inputFile'  => $inputFile,
+            'outputFile' => $outputFile,
+            'stderrFile' => $stderrFile,
+        ] = $this->createWorkerFiles();
+
+        file_put_contents($inputFile, serialize([
+            'basePath'      => $this->basePath,
+            'layers'        => $this->layers,
+            'layerPatterns' => $this->layerPatterns,
+            'files'         => $chunk,
+        ]));
+
+        echo ' hit ! ' . PHP_EOL;
+
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
+        $process = proc_open(
+        // phpcs:enable
+            [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['file', $stderrFile, 'w'],
+            ],
+            $pipes,
+        );
+
+        if ($process === false) {
+            $this->cleanup([$inputFile, $outputFile, $stderrFile]);
+
+            throw new RuntimeException('Unable to start parallel analysis worker.');
+        }
+
+        assert(isset($pipes[0]) && isset($pipes[1]));
+        fclose($pipes[0]);
+
+        $stdoutPipe = $pipes[1];
+        assert(is_resource($process));
+        assert(is_resource($stdoutPipe));
+        stream_set_blocking($stdoutPipe, false);
+
+        return [
+            'process'       => $process,
+            'files'         => $chunk,
+            'filesAdvanced' => 0,
+            'inputFile'     => $inputFile,
+            'outputFile'    => $outputFile,
+            'stderrFile'    => $stderrFile,
+            'stdoutPipe'    => $stdoutPipe,
+        ];
     }
 
     /**
