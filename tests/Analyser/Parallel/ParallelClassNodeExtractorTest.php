@@ -14,10 +14,10 @@ use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-
 use function file_put_contents;
 use function fwrite;
 use function rewind;
+use function serialize;
 use function tmpfile;
 
 #[CoversClass(ParallelClassNodeExtractor::class)]
