@@ -94,6 +94,21 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertSame('Infrastructure', $layer);
     }
 
+    public function testDoesNotResolveSiblingPathWithSamePrefix(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: ['App' => 'src/App/'],
+            basePath: $this->basePath
+        );
+
+        $layer = $namespaceLayerResolver->resolve(
+            'Project\\Application\\Service',
+            $this->basePath . '/src/Application/Service.php'
+        );
+
+        $this->assertNull($layer);
+    }
+
     public function testResolveAllReturnsAllMatchingLayers(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(
@@ -111,6 +126,21 @@ final class NamespaceLayerResolverTest extends TestCase
 
         $this->assertContains('Application', $layers);
         $this->assertContains('Controller', $layers);
+    }
+
+    public function testResolveAllDoesNotReturnSiblingPathWithSamePrefix(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: ['App' => 'src/App/'],
+            basePath: $this->basePath
+        );
+
+        $layers = $namespaceLayerResolver->resolveAll(
+            'Project\\Application\\Service',
+            $this->basePath . '/src/Application/Service.php'
+        );
+
+        $this->assertSame([], $layers);
     }
 
     public function testResolveAllReturnsEmptyForUnknownPath(): void
