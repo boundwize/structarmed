@@ -24,13 +24,27 @@ use const DIRECTORY_SEPARATOR;
  */
 final readonly class NamespaceLayerResolver implements LayerResolverInterface
 {
+    /** @var array<string, list<string>> */
+    private array $normalisedLayers;
+
     /**
      * @param array<string, string|list<string>> $layers  Map of layer name → path prefixes
      */
     public function __construct(
-        private array $layers,
-        private string $basePath,
+        array $layers,
+        string $basePath,
     ) {
+        $normalisedLayers = [];
+
+        foreach ($layers as $layerName => $layerPaths) {
+            foreach ((array) $layerPaths as $layerPath) {
+                $normalisedLayers[$layerName][] = $this->normalisePath(
+                    $basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
+                );
+            }
+        }
+
+        $this->normalisedLayers = $normalisedLayers;
     }
 
     public function resolve(string $className, string $filePath): ?string
@@ -39,14 +53,10 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         $matchedLayer  = null;
         $matchedLength = -1;
 
-        foreach ($this->layers as $layerName => $layerPaths) {
-            foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayer = $this->normalisePath(
-                    $this->basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
-                );
-
-                if (str_starts_with($normalised, $normalisedLayer)) {
-                    $length = strlen($normalisedLayer);
+        foreach ($this->normalisedLayers as $layerName => $layerPaths) {
+            foreach ($layerPaths as $layerPath) {
+                if (str_starts_with($normalised, $layerPath)) {
+                    $length = strlen($layerPath);
 
                     if ($length > $matchedLength) {
                         $matchedLayer  = $layerName;
@@ -67,13 +77,9 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         $normalised = $this->normalisePath($filePath);
         $matched    = [];
 
-        foreach ($this->layers as $layerName => $layerPaths) {
-            foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayer = $this->normalisePath(
-                    $this->basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
-                );
-
-                if (str_starts_with($normalised, $normalisedLayer)) {
+        foreach ($this->normalisedLayers as $layerName => $layerPaths) {
+            foreach ($layerPaths as $layerPath) {
+                if (str_starts_with($normalised, $layerPath)) {
                     $matched[] = $layerName;
                     break;
                 }
