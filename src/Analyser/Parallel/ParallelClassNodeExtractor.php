@@ -20,22 +20,19 @@ use function count;
 use function dirname;
 use function fclose;
 use function feof;
-use function file_put_contents;
 use function filesize;
 use function fread;
+use function fwrite;
 use function is_array;
-use function is_dir;
 use function is_resource;
 use function is_string;
 use function min;
-use function mkdir;
 use function proc_close;
 use function serialize;
 use function sprintf;
+use function stream_get_contents;
 use function stream_set_blocking;
 use function substr_count;
-use function sys_get_temp_dir;
-use function unlink;
 use function unserialize;
 use function usleep;
 use function usort;
@@ -53,7 +50,6 @@ final readonly class ParallelClassNodeExtractor
         private array $layers,
         private array $layerPatterns,
         private int $workerCount,
-        private ?string $cacheDirectory = null,
     ) {
     }
 
@@ -85,6 +81,16 @@ final readonly class ParallelClassNodeExtractor
             $anyActivity = false;
 
             foreach (array_keys($active) as $key) {
+                $resultPipe = $active[$key]['resultPipe'];
+
+                // Non-blocking drain of result pipe to prevent deadlock when
+                // the OS pipe buffer fills before stdout reaches EOF.
+                $chunk = fread($resultPipe, 65536);
+                if ($chunk !== false && $chunk !== '') {
+                    $active[$key]['resultBuffer'] .= $chunk;
+                    $anyActivity                   = true;
+                }
+
                 $stdoutPipe = $active[$key]['stdoutPipe'];
 
                 $data = fread($stdoutPipe, 8192);
@@ -105,17 +111,20 @@ final readonly class ParallelClassNodeExtractor
                     continue;
                 }
 
-                // Pipe EOF means the worker exited and the OS closed its write end.
-                // proc_close() has not been called yet so waitpid() inside it correctly
-                // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
 
+                $resultBuffer = $active[$key]['resultBuffer'] . (string) stream_get_contents($resultPipe);
+                fclose($resultPipe);
+
+                $stderrContent = (string) stream_get_contents($active[$key]['stderrPipe']);
+                fclose($active[$key]['stderrPipe']);
+
+                // proc_close() has not been called yet so waitpid() inside it correctly
+                // returns the real exit code (no double-waitpid race with proc_get_status).
                 $exitCode = proc_close($active[$key]['process']);
 
                 try {
-                    // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                    $result = unserialize((string) file_get_contents($active[$key]['outputFile']));
-                    // phpcs:enable
+                    $result = unserialize($resultBuffer);
 
                     if (
                         ! is_array($result)
@@ -133,15 +142,10 @@ final readonly class ParallelClassNodeExtractor
                     }
 
                     if ($error !== null || $exitCode !== 0) {
-                        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                        // to avoid error in test that mock it
-                        $stderr = (string) file_get_contents($active[$key]['stderrFile']);
-                        // phpcs:enable
-
                         throw new RuntimeException(sprintf(
                             "Parallel analysis worker failed: %s%s",
                             $error ?? 'unknown error',
-                            $stderr !== '' ? "\n" . $stderr : ''
+                            $stderrContent !== '' ? "\n" . $stderrContent : ''
                         ));
                     }
 
@@ -150,12 +154,6 @@ final readonly class ParallelClassNodeExtractor
                     $nodes       = array_merge($nodes, $workerNodes);
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
-                } finally {
-                    $this->cleanup([
-                        $active[$key]['inputFile'],
-                        $active[$key]['outputFile'],
-                        $active[$key]['stderrFile'],
-                    ]);
                 }
 
                 unset($active[$key]);
@@ -222,100 +220,59 @@ final readonly class ParallelClassNodeExtractor
 
     /**
      * @param list<string> $chunk
-     * @return array{process: resource, files: list<string>, filesAdvanced: int, inputFile: string, outputFile: string, stderrFile: string, stdoutPipe: resource}
+     * @return array{process: resource, files: list<string>, filesAdvanced: int, stdoutPipe: resource, stderrPipe: resource, resultPipe: resource, resultBuffer: string}
      */
     private function spawnWorker(array $chunk, string $script): array
     {
-        [
-            'inputFile'  => $inputFile,
-            'outputFile' => $outputFile,
-            'stderrFile' => $stderrFile,
-        ] = $this->createWorkerFiles();
-
-        file_put_contents($inputFile, serialize([
-            'basePath'      => $this->basePath,
-            'layers'        => $this->layers,
-            'layerPatterns' => $this->layerPatterns,
-            'files'         => $chunk,
-        ]));
-
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
         $process = proc_open(
         // phpcs:enable
-            [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
+            [PHP_BINARY, $script, '--internal-worker'],
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
-                2 => ['file', $stderrFile, 'w'],
+                2 => ['pipe', 'w'],
+                3 => ['pipe', 'w'],
             ],
             $pipes,
         );
 
         if ($process === false) {
-            $this->cleanup([$inputFile, $outputFile, $stderrFile]);
-
             throw new RuntimeException('Unable to start parallel analysis worker.');
         }
 
-        assert(isset($pipes[0]) && isset($pipes[1]));
+        assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]) && isset($pipes[3]));
+
+        fwrite($pipes[0], serialize([
+            'basePath'      => $this->basePath,
+            'layers'        => $this->layers,
+            'layerPatterns' => $this->layerPatterns,
+            'files'         => $chunk,
+        ]));
         fclose($pipes[0]);
 
         $stdoutPipe = $pipes[1];
+        $stderrPipe = $pipes[2];
+        $resultPipe = $pipes[3];
+
         assert(is_resource($process));
         assert(is_resource($stdoutPipe));
+        assert(is_resource($stderrPipe));
+        assert(is_resource($resultPipe));
+
         stream_set_blocking($stdoutPipe, false);
+        stream_set_blocking($resultPipe, false);
+        stream_set_blocking($stderrPipe, false);
 
         return [
             'process'       => $process,
             'files'         => $chunk,
             'filesAdvanced' => 0,
-            'inputFile'     => $inputFile,
-            'outputFile'    => $outputFile,
-            'stderrFile'    => $stderrFile,
             'stdoutPipe'    => $stdoutPipe,
+            'stderrPipe'    => $stderrPipe,
+            'resultPipe'    => $resultPipe,
+            'resultBuffer'  => '',
         ];
-    }
-
-    /**
-     * @return array{inputFile: string, outputFile: string, stderrFile: string}
-     */
-    private function createWorkerFiles(): array
-    {
-        return [
-            'inputFile'  => $this->temporaryFile(),
-            'outputFile' => $this->temporaryFile(),
-            'stderrFile' => $this->temporaryFile(),
-        ];
-    }
-
-    private function temporaryFile(): string
-    {
-        $dir = $this->cacheDirectory ?? sys_get_temp_dir();
-
-        if (! is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
-
-        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-        // to avoid error in test that mock it
-        $file = tempnam($dir, 'structarmed-worker-');
-        // phpcs:enable
-
-        if ($file === false) {
-            throw new RuntimeException('Unable to create temporary file for parallel analysis.');
-        }
-
-        return $file;
-    }
-
-    /**
-     * @param list<string> $files
-     */
-    private function cleanup(array $files): void
-    {
-        foreach ($files as $file) {
-            @unlink($file);
-        }
     }
 }

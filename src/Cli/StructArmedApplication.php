@@ -7,9 +7,13 @@ namespace Boundwize\StructArmed\Cli;
 use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
 
 use function array_slice;
+use function assert;
+use function fopen;
 use function getcwd;
 use function in_array;
 use function sprintf;
+
+use const STDIN;
 
 final readonly class StructArmedApplication
 {
@@ -22,7 +26,12 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
-            return ClassNodeWorker::run($argv[2] ?? '', $argv[3] ?? '');
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            $resultFd = fopen('php://fd/3', 'w');
+            // phpcs:enable
+            assert($resultFd !== false);
+
+            return ClassNodeWorker::run(STDIN, $resultFd);
         }
 
         if (in_array($command, [null, '--help', '-h'], true)) {

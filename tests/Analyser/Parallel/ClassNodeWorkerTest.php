@@ -11,10 +11,12 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
-use function file_get_contents;
 use function file_put_contents;
 use function fopen;
+use function fwrite;
+use function rewind;
 use function serialize;
+use function stream_get_contents;
 use function unserialize;
 
 #[CoversClass(ClassNodeWorker::class)]
@@ -38,21 +40,20 @@ final class Foo
 }
 PHP);
 
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
-        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
-
-        file_put_contents($inputFile, serialize([
+        $input  = $this->makeInputStream(serialize([
             'basePath'      => $dir,
             'layers'        => ['Domain' => 'App\\Domain'],
             'layerPatterns' => [],
             'files'         => [$srcFile],
         ]));
+        $output = $this->makeOutputStream();
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = ClassNodeWorker::run($input, $output, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 
-        $result = unserialize((string) file_get_contents($outputFile));
+        rewind($output);
+        $result = unserialize((string) stream_get_contents($output));
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('nodes', $result);
@@ -63,16 +64,15 @@ PHP);
 
     public function testRunWithInvalidPayloadReturnsOneAndWritesError(): void
     {
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
-        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
+        $input  = $this->makeInputStream(serialize('not-an-array'));
+        $output = $this->makeOutputStream();
 
-        file_put_contents($inputFile, serialize('not-an-array'));
-
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = ClassNodeWorker::run($input, $output, $this->silentStream());
 
         $this->assertSame(1, $exitCode);
 
-        $result = unserialize((string) file_get_contents($outputFile));
+        rewind($output);
+        $result = unserialize((string) stream_get_contents($output));
 
         $this->assertIsArray($result);
         $this->assertSame([], $result['nodes']);
@@ -102,26 +102,45 @@ final class FooService
 }
 PHP);
 
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
-        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
-
-        file_put_contents($inputFile, serialize([
+        $input  = $this->makeInputStream(serialize([
             'basePath'      => $dir,
             'layers'        => ['Domain' => 'App\\Domain'],
             'layerPatterns' => ['Domain' => ['pattern' => '/Service$/', 'excludePattern' => null]],
             'files'         => [$srcFile],
         ]));
+        $output = $this->makeOutputStream();
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = ClassNodeWorker::run($input, $output, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 
-        $result = unserialize((string) file_get_contents($outputFile));
+        rewind($output);
+        $result = unserialize((string) stream_get_contents($output));
 
         $this->assertIsArray($result);
         $this->assertNull($result['error']);
         $this->assertIsArray($result['nodes']);
         $this->assertCount(1, $result['nodes']);
+    }
+
+    /** @return resource */
+    private function makeInputStream(string $payload): mixed
+    {
+        $stream = fopen('php://memory', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, $payload);
+        rewind($stream);
+
+        return $stream;
+    }
+
+    /** @return resource */
+    private function makeOutputStream(): mixed
+    {
+        $stream = fopen('php://memory', 'w+');
+        $this->assertNotFalse($stream);
+
+        return $stream;
     }
 
     /** @return resource */
