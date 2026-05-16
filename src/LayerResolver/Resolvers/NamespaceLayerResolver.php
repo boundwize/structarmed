@@ -55,7 +55,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
             foreach ($layerPaths as $layerPath) {
-                if (str_starts_with($normalised, $layerPath)) {
+                if ($this->matchesLayerPath($normalised, $layerPath)) {
                     $length = strlen($layerPath);
 
                     if ($length > $matchedLength) {
@@ -79,7 +79,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
             foreach ($layerPaths as $layerPath) {
-                if (str_starts_with($normalised, $layerPath)) {
+                if ($this->matchesLayerPath($normalised, $layerPath)) {
                     $matched[] = $layerName;
                     break;
                 }
@@ -92,5 +92,10 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
     private function normalisePath(string $path): string
     {
         return rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
+    }
+
+    private function matchesLayerPath(string $path, string $layerPath): bool
+    {
+        return $path === $layerPath || str_starts_with($path, $layerPath . '/');
     }
 }

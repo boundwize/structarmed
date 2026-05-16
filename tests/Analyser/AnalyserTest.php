@@ -112,6 +112,47 @@ final class AnalyserTest extends TestCase
         $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testArchitectureLayerPathDoesNotMatchSiblingDirectoryWithSamePrefix(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/App/Controller.php'      => '<?php namespace Project\App; class Controller {}',
+            'src/Application/UseCase.php' => '<?php namespace Project\Application; class UseCase {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('App', 'src/App/')
+            ->layer('Application', 'src/Application/')
+            ->rule('app.must_be_final', new MustBeFinalRule('App'));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $violations = $ruleViolationCollection->forRule('app.must_be_final');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/App/Controller.php', $this->normalisePath($violations[0]->file));
+    }
+
+    public function testArchitectureLayerCanBeConfiguredForSingleFilePath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+            'src/Bar.php' => '<?php namespace App; class Bar {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/Foo.php')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $violations = $ruleViolationCollection->forRule('source.must_be_final');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($violations[0]->file));
+    }
+
     public function testAnalyserReturnsEmptyCollectionForEmptyLayers(): void
     {
         $architecture = Architecture::define()
