@@ -216,7 +216,15 @@ final readonly class ParallelClassNodeExtractor
 
     /**
      * @param list<string> $chunk
-     * @return array{process: resource, files: list<string>, filesAdvanced: int, stdoutPipe: resource, stderrPipe: resource, resultPipe: resource, resultBuffer: string}
+     * @return array{
+     *      process: resource,
+     *      files: list<string>,
+     *      filesAdvanced: int,
+     *      stdoutPipe: resource,
+     *      stderrPipe: resource,
+     *      resultPipe: resource,
+     *      resultBuffer: string
+     * }
      */
     private function spawnWorker(array $chunk, string $script): array
     {
