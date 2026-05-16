@@ -116,6 +116,22 @@ final readonly class Analyser
             $analyserOptions ?? AnalyserOptions::parallel()
         );
 
+        // Evaluate declarative ruleset alongside class rules, but buffer its
+        // violations so report ordering remains class rules before ruleset.
+        $ruleset                    = $architecture->getRuleset();
+        $classViolationSkips        = $architecture->getClassViolationSkips();
+        $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
+        $rulesetViolationCollection = new RuleViolationCollection();
+        $hasRuleset                 = $ruleset !== [];
+        $classDependencyMaps        = $hasRuleset
+            ? $this->classDependencyMaps($classNodes)
+            : [
+                'dependencies'            => [],
+                'inheritanceDependencies' => [],
+            ];
+        $dependencyMap              = $classDependencyMaps['dependencies'];
+        $inheritanceDependencyMap   = $classDependencyMaps['inheritanceDependencies'];
+
         foreach ($classNodes as $classNode) {
             foreach ($classRules as $key => $rule) {
                 if ($this->isSkipped($classNode->file, $ruleSkipPaths[$key] ?? [])) {
@@ -146,80 +162,72 @@ final readonly class Analyser
                     ));
                 }
             }
-        }
 
-        // Evaluate declarative ruleset.
-        // For each layer listed as a key in the ruleset, any dependency that resolves
-        // to a different *defined* layer and is not in the allowed list is a violation.
-        $ruleset             = $architecture->getRuleset();
-        $classViolationSkips = $architecture->getClassViolationSkips();
-        $rulesetSkipPaths    = $architecture->getRulesetSkipPaths();
+            if (! $hasRuleset) {
+                continue;
+            }
 
-        if ($ruleset !== []) {
-            $dependencyMap            = $this->classDependencyMap($classNodes);
-            $inheritanceDependencyMap = $this->classInheritanceDependencyMap($classNodes);
+            if ($classNode->layer === null) {
+                continue;
+            }
 
-            foreach ($classNodes as $classNode) {
-                if ($classNode->layer === null) {
+            if ($rulesetSkipPaths !== [] && $this->isSkipped($classNode->file, $rulesetSkipPaths)) {
+                continue;
+            }
+
+            $allowedLayers = $ruleset[$classNode->layer] ?? null;
+
+            if ($allowedLayers === null) {
+                // Layer not listed in ruleset — no restriction.
+                continue;
+            }
+
+            $skippedDepsForClass = $classViolationSkips[$classNode->className] ?? [];
+            $dependencies        = $this->dependenciesForClass(
+                $classNode->className,
+                $dependencyMap,
+                $inheritanceDependencyMap
+            );
+
+            foreach ($dependencies as $dependency) {
+                if (in_array($dependency, $skippedDepsForClass, true)) {
                     continue;
                 }
 
-                if ($rulesetSkipPaths !== [] && $this->isSkipped($classNode->file, $rulesetSkipPaths)) {
+                $depLayer = $chainLayerResolver->resolve($dependency, '');
+
+                if ($depLayer === null) {
+                    // External / unregistered dependency — not restricted.
                     continue;
                 }
 
-                $allowedLayers = $ruleset[$classNode->layer] ?? null;
-
-                if ($allowedLayers === null) {
-                    // Layer not listed in ruleset — no restriction.
+                if ($depLayer === $classNode->layer) {
+                    // Same-layer dependency — always allowed.
                     continue;
                 }
 
-                $skippedDepsForClass = $classViolationSkips[$classNode->className] ?? [];
-                $dependencies        = $this->dependenciesForClass(
-                    $classNode->className,
-                    $dependencyMap,
-                    $inheritanceDependencyMap
-                );
-
-                foreach ($dependencies as $dependency) {
-                    if (in_array($dependency, $skippedDepsForClass, true)) {
-                        continue;
-                    }
-
-                    $depLayer = $chainLayerResolver->resolve($dependency, '');
-
-                    if ($depLayer === null) {
-                        // External / unregistered dependency — not restricted.
-                        continue;
-                    }
-
-                    if ($depLayer === $classNode->layer) {
-                        // Same-layer dependency — always allowed.
-                        continue;
-                    }
-
-                    if (in_array($depLayer, $allowedLayers, true)) {
-                        continue;
-                    }
-
-                    $ruleViolationCollection->add(new RuleViolation(
-                        message:   sprintf(
-                            'Class [%s] in layer [%s] must not depend on [%s] which belongs to layer [%s]',
-                            $classNode->className,
-                            $classNode->layer,
-                            $dependency,
-                            $depLayer
-                        ),
-                        file:      $classNode->file,
-                        line:      $classNode->line,
-                        className: $classNode->className,
-                        layer:     $classNode->layer,
-                        ruleKey:   'ruleset.' . $classNode->layer,
-                    ));
+                if (in_array($depLayer, $allowedLayers, true)) {
+                    continue;
                 }
+
+                $rulesetViolationCollection->add(new RuleViolation(
+                    message:   sprintf(
+                        'Class [%s] in layer [%s] must not depend on [%s] which belongs to layer [%s]',
+                        $classNode->className,
+                        $classNode->layer,
+                        $dependency,
+                        $depLayer
+                    ),
+                    file:      $classNode->file,
+                    line:      $classNode->line,
+                    className: $classNode->className,
+                    layer:     $classNode->layer,
+                    ruleKey:   'ruleset.' . $classNode->layer,
+                ));
             }
         }
+
+        $ruleViolationCollection->merge($rulesetViolationCollection);
 
         return $ruleViolationCollection;
     }
@@ -256,17 +264,35 @@ final readonly class Analyser
 
     /**
      * @param list<ClassNode> $classNodes
-     * @return array<string, list<string>>
+     * @return array{
+     *     dependencies: array<string, list<string>>,
+     *     inheritanceDependencies: array<string, list<string>>
+     * }
      */
-    private function classDependencyMap(array $classNodes): array
+    private function classDependencyMaps(array $classNodes): array
     {
-        $dependencyMap = [];
+        $dependencyMap            = [];
+        $inheritanceDependencyMap = [];
 
         foreach ($classNodes as $classNode) {
             $dependencyMap[$classNode->className] = $classNode->dependencies;
+            $dependencies                         = $classNode->implements;
+
+            if ($classNode->extends !== null) {
+                $dependencies[] = $classNode->extends;
+            }
+
+            foreach ($classNode->traits as $trait) {
+                $dependencies[] = $trait;
+            }
+
+            $inheritanceDependencyMap[$classNode->className] = array_values(array_unique($dependencies));
         }
 
-        return $dependencyMap;
+        return [
+            'dependencies'            => $dependencyMap,
+            'inheritanceDependencies' => $inheritanceDependencyMap,
+        ];
     }
 
     /**
@@ -290,31 +316,6 @@ final readonly class Analyser
         ];
 
         return array_values(array_unique($dependencies));
-    }
-
-    /**
-     * @param list<ClassNode> $classNodes
-     * @return array<string, list<string>>
-     */
-    private function classInheritanceDependencyMap(array $classNodes): array
-    {
-        $dependencyMap = [];
-
-        foreach ($classNodes as $classNode) {
-            $dependencies = $classNode->implements;
-
-            if ($classNode->extends !== null) {
-                $dependencies[] = $classNode->extends;
-            }
-
-            foreach ($classNode->traits as $trait) {
-                $dependencies[] = $trait;
-            }
-
-            $dependencyMap[$classNode->className] = array_values(array_unique($dependencies));
-        }
-
-        return $dependencyMap;
     }
 
     /**
