@@ -220,8 +220,6 @@ final readonly class ParallelClassNodeExtractor
             'files'         => $chunk,
         ]));
 
-        echo ' hit ! ' . PHP_EOL;
-
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
         $process = proc_open(
