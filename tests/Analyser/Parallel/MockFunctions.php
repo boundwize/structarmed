@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
+use function fclose;
+use function is_array;
+
+use const PHP_BINARY;
+
 // phpcs:disable
 $GLOBALS['mock_proc_open'] = false;
 // phpcs:enable
@@ -19,8 +24,8 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
         return false;
     }
 
-    if (\is_array($GLOBALS['mock_proc_open'])) {
-        $process = \proc_open([\PHP_BINARY, '-r', ''], [
+    if (is_array($GLOBALS['mock_proc_open'])) {
+        $process = \proc_open([PHP_BINARY, '-r', ''], [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
@@ -31,7 +36,7 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
         }
 
         foreach ($realPipes as $realPipe) {
-            \fclose($realPipe);
+            fclose($realPipe);
         }
 
         $pipes = $GLOBALS['mock_proc_open']['pipes'];
