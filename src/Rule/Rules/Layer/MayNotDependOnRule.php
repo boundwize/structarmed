@@ -15,11 +15,14 @@ use function str_starts_with;
 
 final readonly class MayNotDependOnRule implements RuleInterface
 {
+    private string $normalisedToPath;
+
     public function __construct(
         private string $from,
         private string $to,
-        private string $toPath,
+        string $toPath,
     ) {
+        $this->normalisedToPath = str_replace('\\', '/', $toPath);
     }
 
     public function appliesTo(ClassNode $classNode): bool
@@ -31,11 +34,10 @@ final readonly class MayNotDependOnRule implements RuleInterface
     {
         foreach ($classNode->dependencies as $dependency) {
             $depPath = str_replace('\\', '/', $dependency);
-            $toPath  = str_replace('\\', '/', $this->toPath);
 
             if (
-                str_contains($depPath . '/', '/' . $toPath . '/')
-                || str_starts_with($depPath . '/', $toPath . '/')
+                str_contains($depPath . '/', '/' . $this->normalisedToPath . '/')
+                || str_starts_with($depPath . '/', $this->normalisedToPath . '/')
             ) {
                 return new RuleViolation(
                     message:   sprintf(
