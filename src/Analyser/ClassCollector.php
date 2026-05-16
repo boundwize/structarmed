@@ -434,7 +434,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
             /**
              * @param string[] $fileFunctions
-             * @param string[] $internalFunctions
+             * @param array<string, int> $internalFunctions
              */
             public function __construct(
                 private readonly array $fileFunctions,
