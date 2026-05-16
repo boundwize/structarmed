@@ -40,6 +40,7 @@ use PhpParser\Node\UseItem;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
+use function array_flip;
 use function array_map;
 use function array_merge;
 use function array_unique;
