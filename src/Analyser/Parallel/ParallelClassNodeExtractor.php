@@ -8,13 +8,14 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
-use function array_chunk;
 use function array_column;
+use function array_fill;
+use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
+use function array_values;
 use function assert;
-use function ceil;
 use function count;
 use function dirname;
 use function fclose;
@@ -26,7 +27,6 @@ use function is_array;
 use function is_dir;
 use function is_resource;
 use function is_string;
-use function max;
 use function min;
 use function mkdir;
 use function proc_close;
@@ -70,7 +70,7 @@ final readonly class ParallelClassNodeExtractor
         $workerCount = min($this->workerCount, count($files));
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
 
-        $queue      = $this->buildQueue($files);
+        $queue      = $this->buildQueue($files, $workerCount);
         $queueCount = count($queue);
         $queueIdx   = 0;
         $active     = [];
@@ -179,15 +179,16 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * Sorts files by size descending then chunks into batches of $batchSize.
-     * Large files go first so the slowest work starts immediately; the streaming
-     * pool refills itself as workers finish, so fast workers naturally absorb
-     * more batches without any pre-assignment.
+     * Distributes files across exactly $workerCount batches using the Longest
+     * Processing Time (LPT) algorithm: sort by size descending, then assign each
+     * file to the least-loaded bucket. This produces one balanced wave — each
+     * worker gets roughly equal total byte weight — so no sequential second wave
+     * is needed and wall time matches a single parallel sweep.
      *
      * @param list<string> $files
      * @return list<list<string>>
      */
-    private function buildQueue(array $files): array
+    private function buildQueue(array $files, int $workerCount): array
     {
         $sized = [];
         foreach ($files as $file) {
@@ -196,9 +197,27 @@ final readonly class ParallelClassNodeExtractor
 
         usort($sized, static fn (array $a, array $b): int => $b['size'] <=> $a['size']);
 
-        $batchSize = max(1, (int) ceil(count($sized) / ($this->workerCount * 2)));
+        /** @var array<int, array{files: list<string>, load: int}> $buckets */
+        $buckets = array_fill(0, $workerCount, ['files' => [], 'load' => 0]);
 
-        return array_chunk(array_column($sized, 'file'), $batchSize);
+        foreach ($sized as ['file' => $file, 'size' => $size]) {
+            $minIdx = 0;
+            for ($i = 1; $i < $workerCount; $i++) {
+                if ($buckets[$i]['load'] < $buckets[$minIdx]['load']) {
+                    $minIdx = $i;
+                }
+            }
+
+            $buckets[$minIdx] = [
+                'files' => [...$buckets[$minIdx]['files'], $file],
+                'load'  => $buckets[$minIdx]['load'] + $size,
+            ];
+        }
+
+        return array_values(array_filter(
+            array_column($buckets, 'files'),
+            static fn (array $chunk): bool => $chunk !== [],
+        ));
     }
 
     /**
