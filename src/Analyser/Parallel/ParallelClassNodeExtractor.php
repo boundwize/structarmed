@@ -158,10 +158,6 @@ final readonly class ParallelClassNodeExtractor
 
                 unset($active[$key]);
                 $anyActivity = true;
-
-                if ($queueIdx < $queueCount) {
-                    $active[] = $this->spawnWorker($queue[$queueIdx++], $script);
-                }
             }
 
             if (! $anyActivity) {

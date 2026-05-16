@@ -27,10 +27,14 @@ use function mkdir;
 use function ob_get_clean;
 use function ob_start;
 use function random_bytes;
+use function rewind;
 use function rmdir;
 use function str_replace;
+use function stream_get_contents;
 use function sys_get_temp_dir;
+use function tmpfile;
 use function unlink;
+use function unserialize;
 
 #[CoversClass(AnalyseCommand::class)]
 #[CoversClass(ClearCacheCommand::class)]
@@ -63,6 +67,36 @@ final class StructArmedApplicationTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('StructArmed cache cleared.', $output);
+    }
+
+    public function testApplicationRunsInternalWorker(): void
+    {
+        $workerInput = tmpfile();
+        $this->assertIsResource($workerInput);
+        file_put_contents('php://temp', '');
+        fwrite($workerInput, serialize('invalid payload'));
+        rewind($workerInput);
+
+        $resultStream = tmpfile();
+        $this->assertIsResource($resultStream);
+
+        $application = new StructArmedApplication(
+            workerInput: $workerInput,
+            resultStreamOpener: static fn () => $resultStream,
+        );
+
+        $exitCode = $application->run(['structarmed', '--internal-worker']);
+
+        rewind($resultStream);
+        $payload = unserialize((string) stream_get_contents($resultStream));
+
+        $this->assertSame(1, $exitCode);
+        $this->assertIsArray($payload);
+        $this->assertSame([], $payload['nodes']);
+        $this->assertSame(
+            'Boundwize\\StructArmed\\Analyser\\Parallel\\WorkerFailedException: Invalid worker payload.',
+            $payload['error']
+        );
     }
 
     public function testApplicationClearsConfiguredCacheWithoutAnalyseCommand(): void
