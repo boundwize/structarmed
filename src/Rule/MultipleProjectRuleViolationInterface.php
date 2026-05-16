@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Rule;
 
 use Boundwize\StructArmed\Architecture;
 
-interface MultipleProjectRuleViolationInterface
+interface MultipleProjectRuleViolationInterface extends ProjectRuleInterface
 {
     /**
      * @param list<string> $skipPaths

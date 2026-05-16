@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Rule;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 
-interface MultipleRuleViolationInterface
+interface MultipleRuleViolationInterface extends RuleInterface
 {
     /**
      * @return list<RuleViolation>

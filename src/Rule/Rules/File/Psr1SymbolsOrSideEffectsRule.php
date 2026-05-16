@@ -6,7 +6,6 @@ namespace Boundwize\StructArmed\Rule\Rules\File;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
-use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PhpParser\Error;
 use PhpParser\Node;
@@ -27,7 +26,7 @@ use function file_get_contents;
 use function sprintf;
 use function trim;
 
-final readonly class Psr1SymbolsOrSideEffectsRule implements ProjectRuleInterface, MultipleProjectRuleViolationInterface
+final readonly class Psr1SymbolsOrSideEffectsRule implements MultipleProjectRuleViolationInterface
 {
     /**
      * @param list<string>|null $sourcePaths

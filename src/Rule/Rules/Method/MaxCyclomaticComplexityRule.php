@@ -6,12 +6,11 @@ namespace Boundwize\StructArmed\Rule\Rules\Method;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
-use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MaxCyclomaticComplexityRule implements RuleInterface, MultipleRuleViolationInterface
+final readonly class MaxCyclomaticComplexityRule implements MultipleRuleViolationInterface
 {
     public function __construct(
         private string $layer,
