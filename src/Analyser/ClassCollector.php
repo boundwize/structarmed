@@ -137,7 +137,8 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $dependencyCollectorVisitor   = new DependencyCollectorVisitor();
         $functionCallCollectorVisitor = new FunctionCallCollectorVisitor(
-            $this->fileFunctions, $this->internalFunctions ?? []
+            $this->fileFunctions,
+            $this->internalFunctions ?? []
         );
         $superglobalCollectorVisitor  = new SuperglobalCollectorVisitor(self::SUPERGLOBALS);
         $complexityCollectorVisitor   = new ComplexityCollectorVisitor();
