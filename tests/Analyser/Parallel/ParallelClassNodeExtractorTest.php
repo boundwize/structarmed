@@ -15,10 +15,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use function file_put_contents;
-use function fwrite;
-use function rewind;
 use function serialize;
-use function tmpfile;
 
 #[CoversClass(ParallelClassNodeExtractor::class)]
 final class ParallelClassNodeExtractorTest extends TestCase
@@ -210,9 +207,9 @@ PHP);
         file_put_contents($file, '<?php class Foo {}');
 
         $GLOBALS['mock_proc_open'] = [
-            'pipes' => $this->createMockWorkerPipes(serialize([
+            'resultPayload' => serialize([
                 'error' => null,
-            ])),
+            ]),
         ];
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
@@ -234,10 +231,10 @@ PHP);
         file_put_contents($file, '<?php class Foo {}');
 
         $GLOBALS['mock_proc_open'] = [
-            'pipes' => $this->createMockWorkerPipes(serialize([
+            'resultPayload' => serialize([
                 'nodes' => [],
                 'error' => ['invalid'],
-            ])),
+            ]),
         ];
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
@@ -259,7 +256,8 @@ PHP);
         file_put_contents($file, '<?php class Foo {}');
 
         $GLOBALS['mock_proc_open'] = [
-            'pipes' => $this->createMockWorkerPipes('', 'worker failed before writing a result'),
+            'resultPayload' => '',
+            'stderrPayload' => 'worker failed before writing a result',
         ];
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
@@ -272,28 +270,5 @@ PHP);
         } finally {
             $GLOBALS['mock_proc_open'] = false;
         }
-    }
-
-    /**
-     * @return array<int, resource>
-     */
-    private function createMockWorkerPipes(string $resultPayload, string $stderrPayload = ''): array
-    {
-        $inputPipe = tmpfile();
-        $this->assertIsResource($inputPipe);
-
-        $resultPipe = tmpfile();
-        $this->assertIsResource($resultPipe);
-
-        $stderrPipe = tmpfile();
-        $this->assertIsResource($stderrPipe);
-
-        fwrite($resultPipe, $resultPayload);
-        rewind($resultPipe);
-
-        fwrite($stderrPipe, $stderrPayload);
-        rewind($stderrPipe);
-
-        return [$inputPipe, $resultPipe, $stderrPipe];
     }
 }

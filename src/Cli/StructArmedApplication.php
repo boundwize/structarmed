@@ -9,6 +9,9 @@ use Closure;
 
 use function array_slice;
 use function assert;
+use function fclose;
+use function fopen;
+use function fwrite;
 use function getcwd;
 use function in_array;
 use function is_resource;
@@ -41,6 +44,32 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
+            if (isset($argv[2], $argv[3])) {
+                $workerInput = fopen($argv[2], 'r');
+                $resultFd    = fopen($argv[3], 'w');
+
+                if (! is_resource($workerInput) || ! is_resource($resultFd)) {
+                    if (is_resource($workerInput)) {
+                        fclose($workerInput);
+                    }
+
+                    if (is_resource($resultFd)) {
+                        fclose($resultFd);
+                    }
+
+                    fwrite(STDERR, "Unable to open parallel analysis worker files.\n");
+
+                    return 1;
+                }
+
+                try {
+                    return ClassNodeWorker::run($workerInput, $resultFd);
+                } finally {
+                    fclose($workerInput);
+                    fclose($resultFd);
+                }
+            }
+
             $resultFd   = $this->resultStreamOpener instanceof Closure ? ($this->resultStreamOpener)() : STDOUT;
             $progressFd = $this->progressStreamOpener instanceof Closure ? ($this->progressStreamOpener)() : STDERR;
 

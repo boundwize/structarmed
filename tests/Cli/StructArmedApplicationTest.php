@@ -101,6 +101,44 @@ final class StructArmedApplicationTest extends TestCase
         );
     }
 
+    public function testApplicationRunsInternalWorkerWithFileArguments(): void
+    {
+        $basePath   = $this->createTempDirectory();
+        $inputFile  = $basePath . '/worker-input';
+        $outputFile = $basePath . '/worker-output';
+
+        try {
+            file_put_contents($inputFile, serialize('invalid payload'));
+
+            $exitCode = (new StructArmedApplication())->run([
+                'structarmed',
+                '--internal-worker',
+                $inputFile,
+                $outputFile,
+            ]);
+
+            $payload = unserialize((string) file_get_contents($outputFile));
+
+            $this->assertSame(1, $exitCode);
+            $this->assertIsArray($payload);
+            $this->assertSame([], $payload['nodes']);
+            $this->assertSame(
+                'Boundwize\\StructArmed\\Analyser\\Parallel\\WorkerFailedException: Invalid worker payload.',
+                $payload['error']
+            );
+        } finally {
+            if (file_exists($inputFile)) {
+                unlink($inputFile);
+            }
+
+            if (file_exists($outputFile)) {
+                unlink($outputFile);
+            }
+
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testApplicationClearsConfiguredCacheWithoutAnalyseCommand(): void
     {
         $basePath       = $this->createProjectDirectory();
