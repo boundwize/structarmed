@@ -153,8 +153,8 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $dependencies  = array_values(array_unique(array_merge($this->fileUses, $dependencyCollectorVisitor->names)));
         $methods       = $this->collectMethods($classLike, $complexityCollectorVisitor->complexity);
-        $functionCalls = array_unique($functionCallCollectorVisitor->calls);
-        $superglobals  = array_unique($superglobalCollectorVisitor->found);
+        $functionCalls = array_values(array_unique($functionCallCollectorVisitor->calls));
+        $superglobals  = array_values(array_unique($superglobalCollectorVisitor->found));
         $implements    = $this->collectImplements($classLike);
         $traits        = $this->collectTraits($classLike);
         $constants     = $this->collectConstants($classLike);
