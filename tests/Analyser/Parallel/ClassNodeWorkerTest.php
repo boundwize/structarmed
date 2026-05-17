@@ -60,7 +60,6 @@ PHP);
 
         $result = $this->readResult($outputStream);
 
-        $this->assertIsArray($result);
         $this->assertArrayHasKey('nodes', $result);
         $this->assertArrayHasKey('error', $result);
         $this->assertNull($result['error']);
@@ -82,7 +81,6 @@ PHP);
 
         $result = $this->readResult($outputStream);
 
-        $this->assertIsArray($result);
         $this->assertSame([], $result['nodes']);
         $this->assertIsString($result['error']);
 
@@ -128,7 +126,6 @@ PHP);
 
         $result = $this->readResult($outputStream);
 
-        $this->assertIsArray($result);
         $this->assertNull($result['error']);
         $this->assertIsArray($result['nodes']);
         $this->assertCount(1, $result['nodes']);
@@ -148,13 +145,16 @@ PHP);
         return $stream;
     }
 
-    /** @return array<mixed> */
+    /**
+     * @param resource $stream
+     * @return array<mixed>
+     */
     private function readResult(mixed $stream): array
     {
         rewind($stream);
         $content = (string) stream_get_contents($stream);
         $lines   = array_filter(explode("\n", $content));
 
-        return (array) unserialize((string) base64_decode((string) end($lines)));
+        return (array) unserialize(base64_decode((string) end($lines)));
     }
 }

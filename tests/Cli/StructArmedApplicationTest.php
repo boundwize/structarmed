@@ -17,10 +17,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
+use function fclose;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
-use function fclose;
 use function fopen;
 use function fwrite;
 use function glob;
@@ -840,8 +840,12 @@ PHP);
      * @param resource|null $stdout
      * @return array{int, string}
      */
-    private function runApplication(array $argv, ?string $basePath = null, mixed $stdin = null, mixed $stdout = null): array
-    {
+    private function runApplication(
+        array $argv,
+        ?string $basePath = null,
+        mixed $stdin = null,
+        mixed $stdout = null
+    ): array {
         ob_start();
         $exitCode = (new StructArmedApplication())->run($argv, $basePath, $stdin, $stdout);
         $output   = ob_get_clean();

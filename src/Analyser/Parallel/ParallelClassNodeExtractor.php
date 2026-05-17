@@ -124,7 +124,7 @@ final readonly class ParallelClassNodeExtractor
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
                     $pending[$key]['stdoutBuffer'] .= $data;
-                    $count = substr_count($data, "\n");
+                    $count                          = substr_count($data, "\n");
                     for ($i = 0; $i < $count; $i++) {
                         $fileIdx = $pending[$key]['filesAdvanced'];
                         if ($fileIdx < count($pending[$key]['files'])) {
@@ -154,7 +154,7 @@ final readonly class ParallelClassNodeExtractor
                 try {
                     $lines      = array_filter(explode("\n", $pending[$key]['stdoutBuffer']));
                     $resultLine = (string) end($lines);
-                    $result     = unserialize((string) base64_decode($resultLine));
+                    $result     = unserialize(base64_decode($resultLine));
 
                     if (
                         ! is_array($result)

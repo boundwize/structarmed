@@ -24,13 +24,17 @@ use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
-    /** @param resource|null $outputStream @param resource|null $inputStream */
+    /**
+     * @param resource|null $outputStream
+     * @param resource|null $inputStream
+     */
     public static function run(mixed $outputStream = null, mixed $inputStream = null): int
     {
         $stream = $outputStream ?? STDOUT;
+        $input  = $inputStream ?? STDIN;
 
         try {
-            $payload = unserialize((string) stream_get_contents($inputStream ?? STDIN));
+            $payload = unserialize((string) stream_get_contents($input));
 
             if (! is_array($payload)) {
                 throw new WorkerFailedException('Invalid worker payload.');
