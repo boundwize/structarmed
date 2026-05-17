@@ -18,13 +18,15 @@ use function count;
 use function dirname;
 use function fclose;
 use function feof;
+use function file_put_contents;
 use function fread;
-use function fwrite;
 use function is_array;
+use function is_dir;
 use function is_resource;
 use function is_string;
 use function max;
 use function min;
+use function mkdir;
 use function proc_close;
 use function serialize;
 use function sprintf;
@@ -33,6 +35,9 @@ use function stream_set_blocking;
 use function strpos;
 use function substr;
 use function substr_count;
+use function sys_get_temp_dir;
+use function tempnam;
+use function unlink;
 use function unserialize;
 use function usleep;
 
@@ -49,6 +54,7 @@ final readonly class ParallelClassNodeExtractor
         private array $layers,
         private array $layerPatterns,
         private int $workerCount,
+        private ?string $cacheDirectory = null,
     ) {
     }
 
@@ -70,11 +76,33 @@ final readonly class ParallelClassNodeExtractor
         foreach (array_chunk($files, max(1, $chunkSize)) as $chunk) {
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
             // to avoid error in test that mock it
+            $dir = $this->cacheDirectory ?? sys_get_temp_dir();
+
+            if (! is_dir($dir)) {
+                mkdir($dir, 0777, true);
+            }
+
+            $inputFile = tempnam($dir, 'structarmed-worker-');
+            // phpcs:enable
+
+            if ($inputFile === false) {
+                throw new RuntimeException('Unable to create temporary file for parallel analysis.');
+            }
+
+            file_put_contents($inputFile, serialize([
+                'basePath'      => $this->basePath,
+                'layers'        => $this->layers,
+                'layerPatterns' => $this->layerPatterns,
+                'files'         => $chunk,
+            ]));
+
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            // to avoid error in test that mock it
             $process = proc_open(
             // phpcs:enable
-                [PHP_BINARY, $script, '--internal-worker'],
+                [PHP_BINARY, $script, '--internal-worker', $inputFile],
                 [
-                    0 => ['pipe', 'r'],
+                    0 => ['file', '/dev/null', 'r'],
                     1 => ['pipe', 'w'],
                     2 => ['pipe', 'w'],
                 ],
@@ -82,18 +110,12 @@ final readonly class ParallelClassNodeExtractor
             );
 
             if ($process === false) {
+                unlink($inputFile);
+
                 throw new RuntimeException('Unable to start parallel analysis worker.');
             }
 
-            assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]));
-
-            fwrite($pipes[0], serialize([
-                'basePath'      => $this->basePath,
-                'layers'        => $this->layers,
-                'layerPatterns' => $this->layerPatterns,
-                'files'         => $chunk,
-            ]));
-            fclose($pipes[0]);
+            assert(isset($pipes[1]) && isset($pipes[2]));
 
             $stdoutPipe = $pipes[1];
             $stderrPipe = $pipes[2];
@@ -103,6 +125,7 @@ final readonly class ParallelClassNodeExtractor
                 'process'       => $process,
                 'files'         => $chunk,
                 'filesAdvanced' => 0,
+                'inputFile'     => $inputFile,
                 'stdoutPipe'    => $stdoutPipe,
                 'stderrPipe'    => $stderrPipe,
                 'stdoutBuffer'  => '',
@@ -192,6 +215,8 @@ final readonly class ParallelClassNodeExtractor
                     if (is_resource($stderrPipe)) {
                         fclose($stderrPipe);
                     }
+
+                    unlink($pending[$key]['inputFile']);
                 }
 
                 unset($pending[$key]);

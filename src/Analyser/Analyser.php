@@ -400,6 +400,7 @@ final readonly class Analyser
                 $layers,
                 $layerPatterns,
                 $options->workerCount,
+                $this->analysisResultCache?->getCacheDirectory(),
             ))->extract($filesToParse, $progressHandler);
         } else {
             $layerResolver    = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
