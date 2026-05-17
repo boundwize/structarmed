@@ -37,7 +37,8 @@ final readonly class PhpFileFinder
      */
     public function files(string $basePath, array $skipPaths = []): array
     {
-        $files = [];
+        $files          = [];
+        $normalisedBase = rtrim(str_replace('\\', '/', realpath($basePath) ?: $basePath), '/');
 
         foreach ($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath) as $sourcePath) {
             $fullPath = rtrim($basePath, '/') . '/' . ltrim($sourcePath, '/');
@@ -54,7 +55,7 @@ final readonly class PhpFileFinder
                 }
 
                 $path = $file->getPathname();
-                if (str_ends_with($path, '.php') && ! $this->isSkipped($path, $basePath, $skipPaths)) {
+                if (str_ends_with($path, '.php') && ! $this->isSkipped($path, $normalisedBase, $skipPaths)) {
                     $files[] = $path;
                 }
             }
@@ -66,14 +67,13 @@ final readonly class PhpFileFinder
     /**
      * @param list<string> $skipPaths
      */
-    private function isSkipped(string $filePath, string $basePath, array $skipPaths): bool
+    private function isSkipped(string $filePath, string $normalisedBase, array $skipPaths): bool
     {
         if ($skipPaths === []) {
             return false;
         }
 
         $normalisedFile = rtrim(str_replace('\\', '/', realpath($filePath) ?: $filePath), '/');
-        $normalisedBase = rtrim(str_replace('\\', '/', realpath($basePath) ?: $basePath), '/');
 
         $relativePath = substr($normalisedFile, strlen($normalisedBase) + 1);
 
