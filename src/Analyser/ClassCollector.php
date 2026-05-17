@@ -98,11 +98,11 @@ final class ClassCollector extends NodeVisitorAbstract
     public function enterNode(Node $node): null
     {
         if ($node instanceof UseItem) {
-            $this->fileUses[] = implode('\\', $node->name->getParts());
+            $this->fileUses[] = $node->name->toString();
         }
 
         if ($node instanceof Function_ && isset($node->namespacedName)) {
-            $this->fileFunctions[] = implode('\\', $node->namespacedName->getParts());
+            $this->fileFunctions[] = $node->namespacedName->toString();
         }
 
         return null;
@@ -155,7 +155,7 @@ final class ClassCollector extends NodeVisitorAbstract
             line:          $classLike->getStartLine(),
             layer:         $layer,
             extends:       $classLike instanceof Class_ && $classLike->extends instanceof Name
-                               ? implode('\\', $classLike->extends->getParts())
+                               ? $classLike->extends->toString()
                                : null,
             isAbstract:    $classLike instanceof Class_ && $classLike->isAbstract(),
             isFinal:       $classLike instanceof Class_ && $classLike->isFinal(),
@@ -256,7 +256,7 @@ final class ClassCollector extends NodeVisitorAbstract
     private function resolveClassName(ClassLike $classLike): string
     {
         return isset($classLike->namespacedName)
-            ? implode('\\', $classLike->namespacedName->getParts())
+            ? $classLike->namespacedName->toString()
             : (string) $classLike->name;
     }
 
@@ -273,7 +273,7 @@ final class ClassCollector extends NodeVisitorAbstract
             public function enterNode(Node $node): null
             {
                 if ($node instanceof FullyQualified) {
-                    $name = implode('\\', $node->getParts());
+                    $name = $node->toString();
                     if (! in_array(strtolower($name), ['true', 'false', 'null'], true)) {
                         $this->names[] = $name;
                     }
@@ -298,7 +298,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
         if ($classLike instanceof Class_ || $classLike instanceof Enum_) {
             foreach ($classLike->implements as $interface) {
-                $interfaces[] = implode('\\', $interface->getParts());
+                $interfaces[] = $interface->toString();
             }
         }
 
@@ -322,7 +322,7 @@ final class ClassCollector extends NodeVisitorAbstract
             }
 
             foreach ($stmt->traits as $trait) {
-                $traits[] = implode('\\', $trait->getParts());
+                $traits[] = $trait->toString();
             }
         }
 
