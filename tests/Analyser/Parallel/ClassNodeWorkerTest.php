@@ -11,10 +11,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
-use function array_filter;
-use function base64_decode;
-use function end;
-use function explode;
 use function fclose;
 use function file_put_contents;
 use function fopen;
@@ -22,6 +18,8 @@ use function fwrite;
 use function rewind;
 use function serialize;
 use function stream_get_contents;
+use function strpos;
+use function substr;
 use function unserialize;
 
 #[CoversClass(ClassNodeWorker::class)]
@@ -152,9 +150,13 @@ PHP);
     private function readResult(mixed $stream): array
     {
         rewind($stream);
-        $content = (string) stream_get_contents($stream);
-        $lines   = array_filter(explode("\n", $content));
+        $content   = (string) stream_get_contents($stream);
+        $resultPos = strpos($content, 'RESULT:');
+        $headerEnd = $resultPos !== false ? strpos($content, "\n", $resultPos) : false;
+        $length    = ($resultPos !== false && $headerEnd !== false)
+            ? (int) substr($content, $resultPos + 7, $headerEnd - $resultPos - 7)
+            : 0;
 
-        return (array) unserialize(base64_decode((string) end($lines)));
+        return (array) unserialize(substr($content, (int) $headerEnd + 1, $length));
     }
 }

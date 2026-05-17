@@ -9,7 +9,6 @@ use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Throwable;
 
-use function base64_encode;
 use function count;
 use function fflush;
 use function fwrite;
@@ -17,6 +16,7 @@ use function is_array;
 use function serialize;
 use function sprintf;
 use function stream_get_contents;
+use function strlen;
 use function unserialize;
 
 use const STDIN;
@@ -76,15 +76,17 @@ final readonly class ClassNodeWorker
             $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
             $progressHandler->finish();
 
-            fwrite($stream, base64_encode(serialize(['nodes' => $nodes, 'error' => null])) . "\n");
+            $data = serialize(['nodes' => $nodes, 'error' => null]);
+            fwrite($stream, 'RESULT:' . strlen($data) . "\n" . $data);
             fflush($stream);
 
             return 0;
         } catch (Throwable $throwable) {
-            fwrite($stream, base64_encode(serialize([
+            $data = serialize([
                 'nodes' => [],
                 'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
-            ])) . "\n");
+            ]);
+            fwrite($stream, 'RESULT:' . strlen($data) . "\n" . $data);
             fflush($stream);
 
             return 1;

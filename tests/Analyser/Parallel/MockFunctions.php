@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
-use function base64_encode;
 use function serialize;
+use function strlen;
 use function var_export;
 
 use const PHP_BINARY;
 
 // phpcs:disable
-$GLOBALS['mock_proc_open']        = false;
-$GLOBALS['mock_stdout_payload']   = null;
+$GLOBALS['mock_proc_open']      = false;
+$GLOBALS['mock_stdout_payload'] = null;
 // phpcs:enable
 
 /**
@@ -27,9 +27,10 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
     }
 
     if ($GLOBALS['mock_stdout_payload'] !== null) {
-        $encoded                        = base64_encode(serialize($GLOBALS['mock_stdout_payload']));
+        $data                           = serialize($GLOBALS['mock_stdout_payload']);
         $GLOBALS['mock_stdout_payload'] = null;
-        $script                         = 'stream_get_contents(STDIN); echo ' . var_export($encoded . "\n", true) . ';';
+        $output                         = 'RESULT:' . strlen($data) . "\n" . $data;
+        $script                         = 'stream_get_contents(STDIN); echo ' . var_export($output, true) . ';';
 
         return \proc_open([PHP_BINARY, '-r', $script], $descriptorspec, $pipes);
     }

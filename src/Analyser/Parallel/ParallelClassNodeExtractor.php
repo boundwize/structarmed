@@ -9,17 +9,13 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
 use function array_chunk;
-use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
 use function assert;
-use function base64_decode;
 use function ceil;
 use function count;
 use function dirname;
-use function end;
-use function explode;
 use function fclose;
 use function feof;
 use function fread;
@@ -34,6 +30,8 @@ use function serialize;
 use function sprintf;
 use function stream_get_contents;
 use function stream_set_blocking;
+use function strpos;
+use function substr;
 use function substr_count;
 use function unserialize;
 use function usleep;
@@ -152,9 +150,13 @@ final readonly class ParallelClassNodeExtractor
                 $stderrPipe = $pending[$key]['stderrPipe'];
 
                 try {
-                    $lines      = array_filter(explode("\n", $pending[$key]['stdoutBuffer']));
-                    $resultLine = (string) end($lines);
-                    $result     = unserialize(base64_decode($resultLine));
+                    $buffer    = $pending[$key]['stdoutBuffer'];
+                    $resultPos = strpos($buffer, 'RESULT:');
+                    $headerEnd = $resultPos !== false ? strpos($buffer, "\n", $resultPos) : false;
+                    $length    = ($resultPos !== false && $headerEnd !== false)
+                        ? (int) substr($buffer, $resultPos + 7, $headerEnd - $resultPos - 7)
+                        : 0;
+                    $result    = unserialize(substr($buffer, (int) $headerEnd + 1, $length));
 
                     if (
                         ! is_array($result)
