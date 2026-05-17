@@ -153,7 +153,7 @@ final readonly class ParallelClassNodeExtractor
                     $buffer    = $pending[$key]['stdoutBuffer'];
                     $resultPos = strpos($buffer, 'RESULT:');
                     $headerEnd = $resultPos !== false ? strpos($buffer, "\n", $resultPos) : false;
-                    $length    = ($resultPos !== false && $headerEnd !== false)
+                    $length    = $resultPos !== false && $headerEnd !== false
                         ? (int) substr($buffer, $resultPos + 7, $headerEnd - $resultPos - 7)
                         : 0;
                     $result    = unserialize(substr($buffer, (int) $headerEnd + 1, $length));

@@ -153,7 +153,7 @@ PHP);
         $content   = (string) stream_get_contents($stream);
         $resultPos = strpos($content, 'RESULT:');
         $headerEnd = $resultPos !== false ? strpos($content, "\n", $resultPos) : false;
-        $length    = ($resultPos !== false && $headerEnd !== false)
+        $length    = $resultPos !== false && $headerEnd !== false
             ? (int) substr($content, $resultPos + 7, $headerEnd - $resultPos - 7)
             : 0;
 
