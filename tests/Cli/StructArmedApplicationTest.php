@@ -20,6 +20,9 @@ use function bin2hex;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function fclose;
+use function fopen;
+use function fwrite;
 use function glob;
 use function is_dir;
 use function json_decode;
@@ -27,11 +30,11 @@ use function mkdir;
 use function ob_get_clean;
 use function ob_start;
 use function random_bytes;
+use function rewind;
 use function rmdir;
 use function serialize;
 use function str_replace;
 use function sys_get_temp_dir;
-use function tempnam;
 use function unlink;
 
 #[CoversClass(AnalyseCommand::class)]
@@ -810,34 +813,37 @@ PHP);
 
     public function testInternalWorkerRoutesDelegatestoClassNodeWorker(): void
     {
-        $inputFile  = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-input-');
-        $outputFile = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-output-');
+        $inputStream  = fopen('php://memory', 'r+');
+        $outputStream = fopen('php://memory', 'w+');
+        $this->assertNotFalse($inputStream);
+        $this->assertNotFalse($outputStream);
 
-        file_put_contents($inputFile, serialize([
+        fwrite($inputStream, serialize([
             'basePath'      => sys_get_temp_dir(),
             'layers'        => [],
             'layerPatterns' => [],
             'files'         => [],
         ]));
+        rewind($inputStream);
 
-        try {
-            [$exitCode] = $this->runApplication(['structarmed', '--internal-worker', $inputFile, $outputFile]);
+        [$exitCode] = $this->runApplication(['structarmed', '--internal-worker'], null, $inputStream, $outputStream);
 
-            $this->assertSame(0, $exitCode);
-        } finally {
-            @unlink($inputFile);
-            @unlink($outputFile);
-        }
+        fclose($inputStream);
+        fclose($outputStream);
+
+        $this->assertSame(0, $exitCode);
     }
 
     /**
      * @param list<string> $argv
+     * @param resource|null $stdin
+     * @param resource|null $stdout
      * @return array{int, string}
      */
-    private function runApplication(array $argv, ?string $basePath = null): array
+    private function runApplication(array $argv, ?string $basePath = null, mixed $stdin = null, mixed $stdout = null): array
     {
         ob_start();
-        $exitCode = (new StructArmedApplication())->run($argv, $basePath);
+        $exitCode = (new StructArmedApplication())->run($argv, $basePath, $stdin, $stdout);
         $output   = ob_get_clean();
         $this->assertIsString($output);
 

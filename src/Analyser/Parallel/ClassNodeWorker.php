@@ -9,25 +9,28 @@ use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Throwable;
 
+use function base64_encode;
 use function count;
 use function fflush;
-use function file_get_contents;
-use function file_put_contents;
 use function fwrite;
 use function is_array;
 use function serialize;
 use function sprintf;
+use function stream_get_contents;
 use function unserialize;
 
+use const STDIN;
 use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
-    /** @param resource|null $outputStream */
-    public static function run(string $inputFile, string $outputFile, mixed $outputStream = null): int
+    /** @param resource|null $outputStream @param resource|null $inputStream */
+    public static function run(mixed $outputStream = null, mixed $inputStream = null): int
     {
+        $stream = $outputStream ?? STDOUT;
+
         try {
-            $payload = unserialize((string) file_get_contents($inputFile));
+            $payload = unserialize((string) stream_get_contents($inputStream ?? STDIN));
 
             if (! is_array($payload)) {
                 throw new WorkerFailedException('Invalid worker payload.');
@@ -43,8 +46,6 @@ final readonly class ClassNodeWorker
             $files = $payload['files'];
 
             $layerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
-
-            $stream = $outputStream ?? STDOUT;
 
             $progressHandler = new class ($stream) implements ProgressHandlerInterface {
                 /** @param resource $stream */
@@ -71,17 +72,16 @@ final readonly class ClassNodeWorker
             $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
             $progressHandler->finish();
 
-            file_put_contents($outputFile, serialize([
-                'nodes' => $nodes,
-                'error' => null,
-            ]));
+            fwrite($stream, base64_encode(serialize(['nodes' => $nodes, 'error' => null])) . "\n");
+            fflush($stream);
 
             return 0;
         } catch (Throwable $throwable) {
-            file_put_contents($outputFile, serialize([
+            fwrite($stream, base64_encode(serialize([
                 'nodes' => [],
                 'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
-            ]));
+            ])) . "\n");
+            fflush($stream);
 
             return 1;
         }

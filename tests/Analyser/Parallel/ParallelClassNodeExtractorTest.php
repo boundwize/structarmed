@@ -15,14 +15,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
-use function bin2hex;
 use function file_put_contents;
-use function glob;
-use function is_dir;
-use function random_bytes;
-use function rmdir;
-use function sys_get_temp_dir;
-use function unlink;
 
 #[CoversClass(ParallelClassNodeExtractor::class)]
 final class ParallelClassNodeExtractorTest extends TestCase
@@ -113,36 +106,6 @@ PHP);
         $this->assertContains('App\\Domain\\Bar', $classNames);
     }
 
-    public function testExtractWithCacheDirectoryCreatesWorkerTempFilesInIt(): void
-    {
-        $dir      = $this->makeTemporaryDirectory('structarmed-parallel-test');
-        $cacheDir = $this->makeTemporaryDirectory('structarmed-parallel-cache');
-        $file     = $dir . '/Baz.php';
-
-        file_put_contents($file, <<<'PHP'
-<?php
-
-namespace App\Domain;
-
-final class Baz
-{
-}
-PHP);
-
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
-            basePath: $dir,
-            layers: ['Domain' => 'App\\Domain'],
-            layerPatterns: [],
-            workerCount: 2,
-            cacheDirectory: $cacheDir,
-        );
-
-        $result = $parallelClassNodeExtractor->extract([$file]);
-
-        $this->assertCount(1, $result);
-        $this->assertSame('App\\Domain\\Baz', $result[0]->className);
-    }
-
     public function testExtractWithLayerPatternsUsesChainResolver(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
@@ -217,44 +180,6 @@ PHP);
         $parallelClassNodeExtractor->extract([$fileWithNullByte]);
     }
 
-    public function testExtractWithNonExistentCacheDirectoryCreatesIt(): void
-    {
-        $dir      = $this->makeTemporaryDirectory('structarmed-parallel-test');
-        $cacheDir = sys_get_temp_dir() . '/structarmed-cache-mkdir-' . bin2hex(random_bytes(6));
-        $file     = $dir . '/Qux.php';
-
-        file_put_contents($file, <<<'PHP'
-<?php
-
-namespace App\Domain;
-
-final class Qux
-{
-}
-PHP);
-
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
-            basePath: $dir,
-            layers: ['Domain' => 'App\\Domain'],
-            layerPatterns: [],
-            workerCount: 2,
-            cacheDirectory: $cacheDir,
-        );
-
-        try {
-            $result = $parallelClassNodeExtractor->extract([$file]);
-            $this->assertCount(1, $result);
-        } finally {
-            if (is_dir($cacheDir)) {
-                foreach (glob($cacheDir . '/*') ?: [] as $tmpFile) {
-                    @unlink($tmpFile);
-                }
-
-                rmdir($cacheDir);
-            }
-        }
-    }
-
     public function testExtractThrowsWhenProcOpenFails(): void
     {
         $GLOBALS['mock_proc_open'] = true;
@@ -275,29 +200,9 @@ PHP);
         }
     }
 
-    public function testExtractThrowsWhenTempnamFails(): void
-    {
-        $GLOBALS['mock_tempnam'] = true;
-
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
-        $file = $dir . '/Foo.php';
-        file_put_contents($file, '<?php class Foo {}');
-
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
-
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Unable to create temporary file for parallel analysis.');
-
-        try {
-            $parallelClassNodeExtractor->extract([$file]);
-        } finally {
-            $GLOBALS['mock_tempnam'] = false;
-        }
-    }
-
     public function testExtractThrowsWhenPayloadIsInvalid(): void
     {
-        $GLOBALS['mock_file_get_contents_payload'] = ['invalid' => 'payload'];
+        $GLOBALS['mock_stdout_payload'] = ['invalid' => 'payload'];
 
         $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
         $file = $dir . '/Foo.php';
@@ -311,14 +216,13 @@ PHP);
         try {
             $parallelClassNodeExtractor->extract([$file]);
         } finally {
-            $GLOBALS['mock_file_get_contents_payload'] = null;
-            $GLOBALS['mock_tracked_tempnam_files']     = [];
+            $GLOBALS['mock_stdout_payload'] = null;
         }
     }
 
     public function testExtractThrowsWhenErrorPayloadIsInvalid(): void
     {
-        $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => ['not_a_string']];
+        $GLOBALS['mock_stdout_payload'] = ['nodes' => [], 'error' => ['not_a_string']];
 
         $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
         $file = $dir . '/Foo.php';
@@ -332,8 +236,7 @@ PHP);
         try {
             $parallelClassNodeExtractor->extract([$file]);
         } finally {
-            $GLOBALS['mock_file_get_contents_payload'] = null;
-            $GLOBALS['mock_tracked_tempnam_files']     = [];
+            $GLOBALS['mock_stdout_payload'] = null;
         }
     }
 }

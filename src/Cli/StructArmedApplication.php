@@ -15,14 +15,16 @@ final readonly class StructArmedApplication
 {
     /**
      * @param list<string> $argv
+     * @param resource|null $stdin
+     * @param resource|null $stdout
      */
-    public function run(array $argv, ?string $basePath = null): int
+    public function run(array $argv, ?string $basePath = null, mixed $stdin = null, mixed $stdout = null): int
     {
         $basePath ??= (string) getcwd();
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
-            return ClassNodeWorker::run($argv[2] ?? '', $argv[3] ?? '');
+            return ClassNodeWorker::run($stdout, $stdin);
         }
 
         if (in_array($command, [null, '--help', '-h'], true)) {
