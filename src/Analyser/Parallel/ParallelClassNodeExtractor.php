@@ -102,7 +102,7 @@ final readonly class ParallelClassNodeExtractor
             // phpcs:enable
                 [PHP_BINARY, $script, '--internal-worker', $inputFile],
                 [
-                    0 => ['file', '/dev/null', 'r'],
+                    0 => ['pipe', 'r'],
                     1 => ['pipe', 'w'],
                     2 => ['pipe', 'w'],
                 ],
@@ -115,7 +115,8 @@ final readonly class ParallelClassNodeExtractor
                 throw new RuntimeException('Unable to start parallel analysis worker.');
             }
 
-            assert(isset($pipes[1]) && isset($pipes[2]));
+            assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]));
+            fclose($pipes[0]);
 
             $stdoutPipe = $pipes[1];
             $stderrPipe = $pipes[2];
