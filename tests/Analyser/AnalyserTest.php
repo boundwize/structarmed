@@ -18,6 +18,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 use function array_map;
 use function dirname;
@@ -110,6 +111,14 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
         $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testAnalyserFileSizeFallsBackForMissingFile(): void
+    {
+        $basePath         = $this->makeTempProject([]);
+        $reflectionMethod = new ReflectionMethod(Analyser::class, 'fileSize');
+
+        $this->assertSame(1, $reflectionMethod->invoke(new Analyser($basePath), $basePath . '/missing.php'));
     }
 
     public function testArchitectureLayerPathDoesNotMatchSiblingDirectoryWithSamePrefix(): void

@@ -7,12 +7,17 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 use function fclose;
 use function file_put_contents;
 use function is_array;
+use function is_int;
 use function is_string;
 
 use const PHP_BINARY;
 
 // phpcs:disable
 $GLOBALS['mock_proc_open'] = false;
+$GLOBALS['mock_proc_open_calls'] = 0;
+$GLOBALS['mock_is_dir'] = null;
+$GLOBALS['mock_mkdir_calls'] = 0;
+$GLOBALS['mock_tempnam'] = null;
 // phpcs:enable
 
 /**
@@ -28,8 +33,15 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
     }
 
     if (is_array($GLOBALS['mock_proc_open'])) {
-        /** @var array{resultPayload?: string, stderrPayload?: string, progressPayload?: string} $mockProcOpen */
+        $procOpenCalls                   = $GLOBALS['mock_proc_open_calls'];
+        $GLOBALS['mock_proc_open_calls'] = is_int($procOpenCalls) ? $procOpenCalls + 1 : 1;
+
+        /** @var array{failOnCall?: int, resultPayload?: string, stderrPayload?: string, progressPayload?: string} $mockProcOpen */
         $mockProcOpen = $GLOBALS['mock_proc_open'];
+
+        if (($mockProcOpen['failOnCall'] ?? null) === $GLOBALS['mock_proc_open_calls']) {
+            return false;
+        }
 
         if (is_array($command)) {
             $outputFile = $command[4] ?? null;
@@ -75,4 +87,36 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
     $pipes   = $nativePipes;
 
     return $process;
+}
+
+function is_dir(string $filename): bool
+{
+    if ($GLOBALS['mock_is_dir'] !== null) {
+        return (bool) $GLOBALS['mock_is_dir'];
+    }
+
+    return \is_dir($filename);
+}
+
+function mkdir(string $directory, int $permissions = 0777, bool $recursive = false): bool
+{
+    $mkdirCalls                  = $GLOBALS['mock_mkdir_calls'];
+    $GLOBALS['mock_mkdir_calls'] = is_int($mkdirCalls) ? $mkdirCalls + 1 : 1;
+
+    if ($GLOBALS['mock_is_dir'] !== null) {
+        return true;
+    }
+
+    return \mkdir($directory, $permissions, $recursive);
+}
+
+function tempnam(string $directory, string $prefix): string|false
+{
+    if ($GLOBALS['mock_tempnam'] !== null) {
+        $mockTempnam = $GLOBALS['mock_tempnam'];
+
+        return is_string($mockTempnam) ? $mockTempnam : false;
+    }
+
+    return \tempnam($directory, $prefix);
 }

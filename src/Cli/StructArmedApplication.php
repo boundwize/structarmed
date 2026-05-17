@@ -45,8 +45,8 @@ final readonly class StructArmedApplication
 
         if ($command === '--internal-worker') {
             if (isset($argv[2], $argv[3])) {
-                $workerInput = fopen($argv[2], 'r');
-                $resultFd    = fopen($argv[3], 'w');
+                $workerInput = @fopen($argv[2], 'r');
+                $resultFd    = @fopen($argv[3], 'w');
 
                 if (! is_resource($workerInput) || ! is_resource($resultFd)) {
                     if (is_resource($workerInput)) {
@@ -57,7 +57,13 @@ final readonly class StructArmedApplication
                         fclose($resultFd);
                     }
 
-                    fwrite(STDERR, "Unable to open parallel analysis worker files.\n");
+                    $errorFd = STDERR;
+                    if ($this->progressStreamOpener instanceof Closure) {
+                        $errorFd = ($this->progressStreamOpener)();
+                    }
+
+                    assert(is_resource($errorFd));
+                    fwrite($errorFd, "Unable to open parallel analysis worker files.\n");
 
                     return 1;
                 }

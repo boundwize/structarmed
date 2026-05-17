@@ -15,24 +15,24 @@ use function array_key_exists;
 use function array_merge;
 use function array_values;
 use function assert;
+use function ceil;
 use function count;
 use function dirname;
 use function fclose;
 use function file_get_contents;
 use function file_put_contents;
 use function is_array;
-use function is_dir;
 use function is_resource;
 use function is_string;
+use function max;
 use function min;
-use function mkdir;
 use function proc_close;
 use function serialize;
 use function sprintf;
+use function sqrt;
 use function str_replace;
 use function substr_count;
 use function sys_get_temp_dir;
-use function tempnam;
 use function unlink;
 use function unserialize;
 use function usort;
@@ -66,74 +66,76 @@ final readonly class ParallelClassNodeExtractor
         $workerCount = min($this->workerCount, count($files));
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
 
-        $processes = [];
-        foreach ($this->buildQueue($files, $workerCount) as $chunk) {
-            try {
-                $processes[] = $this->spawnWorker($chunk, $script);
-            } catch (RuntimeException $runtimeException) {
-                foreach ($processes as $process) {
-                    proc_close($process['process']);
-                    $this->cleanup($this->workerFiles($process));
-                }
-
-                throw $runtimeException;
-            }
-        }
-
         $nodes   = [];
         $failure = null;
 
-        foreach ($processes as $process) {
-            $exitCode = proc_close($process['process']);
+        foreach ($this->workerWaves($this->buildQueue($files, $workerCount), $workerCount) as $wave) {
+            $processes = [];
+            foreach ($wave as $chunk) {
+                try {
+                    $processes[] = $this->spawnWorker($chunk, $script);
+                } catch (RuntimeException $runtimeException) {
+                    foreach ($processes as $process) {
+                        proc_close($process['process']);
+                        $this->cleanup($this->workerFiles($process));
+                    }
 
-            try {
-                $this->advanceProgress($process, $progressHandler);
-                $resultBuffer  = (string) file_get_contents($process['outputFile']);
-                $stderrContent = str_replace(
-                    ClassNodeWorker::PROGRESS_MARKER,
-                    '',
-                    (string) file_get_contents($process['stderrFile']),
-                );
-                $result        = @unserialize($resultBuffer);
-
-                if (
-                    ! is_array($result)
-                    || ! isset($result['nodes'])
-                    || ! is_array($result['nodes'])
-                    || ! array_key_exists('error', $result)
-                ) {
-                    throw new RuntimeException(sprintf(
-                        "Parallel analysis worker returned an invalid payload.%s",
-                        $stderrContent !== '' ? "\n" . $stderrContent : '',
-                    ));
+                    throw $runtimeException;
                 }
-
-                $error = $result['error'];
-
-                if ($error !== null && ! is_string($error)) {
-                    throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
-                }
-
-                if ($error !== null || $exitCode !== 0) {
-                    throw new RuntimeException(sprintf(
-                        "Parallel analysis worker failed: %s%s",
-                        $error ?? 'unknown error',
-                        $stderrContent !== '' ? "\n" . $stderrContent : ''
-                    ));
-                }
-
-                /** @var list<ClassNode> $workerNodes */
-                $workerNodes = $result['nodes'];
-                $nodes       = array_merge($nodes, $workerNodes);
-            } catch (RuntimeException $runtimeException) {
-                $failure ??= $runtimeException->getMessage();
-            } finally {
-                $this->cleanup($this->workerFiles($process));
             }
-        }
 
-        if ($failure !== null) {
-            throw new RuntimeException($failure);
+            foreach ($processes as $process) {
+                $exitCode = proc_close($process['process']);
+
+                try {
+                    $this->advanceProgress($process, $progressHandler);
+                    $resultBuffer  = (string) file_get_contents($process['outputFile']);
+                    $stderrContent = str_replace(
+                        ClassNodeWorker::PROGRESS_MARKER,
+                        '',
+                        (string) file_get_contents($process['stderrFile']),
+                    );
+                    $result        = @unserialize($resultBuffer);
+
+                    if (
+                        ! is_array($result)
+                        || ! isset($result['nodes'])
+                        || ! is_array($result['nodes'])
+                        || ! array_key_exists('error', $result)
+                    ) {
+                        throw new RuntimeException(sprintf(
+                            "Parallel analysis worker returned an invalid payload.%s",
+                            $stderrContent !== '' ? "\n" . $stderrContent : '',
+                        ));
+                    }
+
+                    $error = $result['error'];
+
+                    if ($error !== null && ! is_string($error)) {
+                        throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
+                    }
+
+                    if ($error !== null || $exitCode !== 0) {
+                        throw new RuntimeException(sprintf(
+                            "Parallel analysis worker failed: %s%s",
+                            $error ?? 'unknown error',
+                            $stderrContent !== '' ? "\n" . $stderrContent : ''
+                        ));
+                    }
+
+                    /** @var list<ClassNode> $workerNodes */
+                    $workerNodes = $result['nodes'];
+                    $nodes       = array_merge($nodes, $workerNodes);
+                } catch (RuntimeException $runtimeException) {
+                    $failure ??= $runtimeException->getMessage();
+                } finally {
+                    $this->cleanup($this->workerFiles($process));
+                }
+            }
+
+            if ($failure !== null) {
+                throw new RuntimeException($failure);
+            }
         }
 
         return $nodes;
@@ -161,11 +163,11 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * Distributes files across exactly $workerCount batches using the Longest
+     * Distributes files across bounded batches using the Longest
      * Processing Time (LPT) algorithm: sort by size descending, then assign each
-     * file to the least-loaded bucket. This produces one balanced wave — each
-     * worker gets roughly equal total byte weight — so no sequential second wave
-     * is needed and wall time matches a single parallel sweep.
+     * file to the least-loaded bucket. The queue is processed in worker-count
+     * waves so individual batches stay smaller without starting too many workers
+     * at once.
      *
      * @param list<array{file: string, size: int}> $files
      * @return list<list<string>>
@@ -174,12 +176,18 @@ final readonly class ParallelClassNodeExtractor
     {
         usort($files, static fn (array $a, array $b): int => $b['size'] <=> $a['size']);
 
+        $fileCount  = count($files);
+        $batchCount = min(
+            $fileCount,
+            max($workerCount, (int) ceil(sqrt($fileCount))),
+        );
+
         /** @var array<int, array{files: list<string>, load: int}> $buckets */
-        $buckets = array_fill(0, $workerCount, ['files' => [], 'load' => 0]);
+        $buckets = array_fill(0, $batchCount, ['files' => [], 'load' => 0]);
 
         foreach ($files as ['file' => $file, 'size' => $size]) {
             $minIdx = 0;
-            for ($i = 1; $i < $workerCount; $i++) {
+            for ($i = 1; $i < $batchCount; $i++) {
                 if ($buckets[$i]['load'] < $buckets[$minIdx]['load']) {
                     $minIdx = $i;
                 }
@@ -195,6 +203,33 @@ final readonly class ParallelClassNodeExtractor
             array_column($buckets, 'files'),
             static fn (array $chunk): bool => $chunk !== [],
         ));
+    }
+
+    /**
+     * @param list<list<string>> $queue
+     * @return list<list<list<string>>>
+     */
+    private function workerWaves(array $queue, int $workerCount): array
+    {
+        $waves = [];
+        $wave  = [];
+
+        foreach ($queue as $chunk) {
+            $wave[] = $chunk;
+
+            if (count($wave) < $workerCount) {
+                continue;
+            }
+
+            $waves[] = $wave;
+            $wave    = [];
+        }
+
+        if ($wave !== []) {
+            $waves[] = $wave;
+        }
+
+        return $waves;
     }
 
     /**
@@ -271,12 +306,12 @@ final readonly class ParallelClassNodeExtractor
     {
         $dir = sys_get_temp_dir();
 
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to allow tests to mock filesystem edge cases in this namespace
         if (! is_dir($dir)) {
             mkdir($dir, 0777, true);
         }
 
-        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-        // to avoid error in test that mock it
         $file = tempnam($dir, 'structarmed-worker-');
         // phpcs:enable
 

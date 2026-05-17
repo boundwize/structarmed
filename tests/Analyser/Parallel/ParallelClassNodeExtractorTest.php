@@ -9,7 +9,9 @@ require_once __DIR__ . '/MockFunctions.php';
 // phpcs:enable
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
+use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -188,7 +190,7 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 4);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Unable to start parallel analysis worker.');
@@ -197,6 +199,166 @@ PHP);
             $parallelClassNodeExtractor->extract($this->analysisFiles($file));
         } finally {
             $GLOBALS['mock_proc_open'] = false;
+        }
+    }
+
+    public function testExtractCleansUpStartedWorkersWhenLaterWorkerFailsToStart(): void
+    {
+        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file1 = $dir . '/Foo.php';
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file1, '<?php class Foo {}');
+        file_put_contents($file2, '<?php class Bar {}');
+
+        $GLOBALS['mock_proc_open']       = [
+            'failOnCall'    => 2,
+            'resultPayload' => serialize([
+                'nodes' => [],
+                'error' => null,
+            ]),
+        ];
+        $GLOBALS['mock_proc_open_calls'] = 0;
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 4);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to start parallel analysis worker.');
+
+        try {
+            $parallelClassNodeExtractor->extract($this->analysisFiles($file1, $file2));
+        } finally {
+            $GLOBALS['mock_proc_open']       = false;
+            $GLOBALS['mock_proc_open_calls'] = 0;
+        }
+    }
+
+    public function testExtractSplitsLargeInputIntoSmallerBatches(): void
+    {
+        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $files = [];
+
+        for ($i = 0; $i < 300; $i++) {
+            $files[] = ['file' => $dir . '/File' . $i . '.php', 'size' => 1];
+        }
+
+        $GLOBALS['mock_proc_open']       = [
+            'resultPayload' => serialize([
+                'nodes' => [],
+                'error' => null,
+            ]),
+        ];
+        $GLOBALS['mock_proc_open_calls'] = 0;
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 4);
+
+        try {
+            $result = $parallelClassNodeExtractor->extract($files);
+        } finally {
+            $procOpenCalls                   = $GLOBALS['mock_proc_open_calls'];
+            $GLOBALS['mock_proc_open']       = false;
+            $GLOBALS['mock_proc_open_calls'] = 0;
+        }
+
+        $this->assertSame([], $result);
+        $this->assertSame(18, $procOpenCalls);
+    }
+
+    public function testExtractAdvancesProgressFromWorkerMarkers(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $GLOBALS['mock_proc_open'] = [
+            'progressPayload' => ClassNodeWorker::PROGRESS_MARKER . ClassNodeWorker::PROGRESS_MARKER,
+            'resultPayload'   => serialize([
+                'nodes' => [],
+                'error' => null,
+            ]),
+        ];
+
+        $advancedFiles = [];
+        $progress      = new class ($advancedFiles) implements ProgressHandlerInterface {
+            /** @param list<string> $advancedFiles */
+            public function __construct(
+                /** @phpstan-ignore property.onlyWritten */
+                private array &$advancedFiles
+            ) {
+            }
+
+            public function start(int $total): void
+            {
+            }
+
+            public function advance(string $file): void
+            {
+                $this->advancedFiles[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        try {
+            $result = $parallelClassNodeExtractor->extract($this->analysisFiles($file), $progress);
+        } finally {
+            $GLOBALS['mock_proc_open'] = false;
+        }
+
+        $this->assertSame([], $result);
+        $this->assertSame([$file], $advancedFiles);
+    }
+
+    public function testExtractCreatesMissingTemporaryDirectoryBeforeWorkerFiles(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $GLOBALS['mock_is_dir']      = false;
+        $GLOBALS['mock_mkdir_calls'] = 0;
+        $GLOBALS['mock_proc_open']   = [
+            'resultPayload' => serialize([
+                'nodes' => [],
+                'error' => null,
+            ]),
+        ];
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        try {
+            $result = $parallelClassNodeExtractor->extract($this->analysisFiles($file));
+        } finally {
+            $mkdirCalls                  = $GLOBALS['mock_mkdir_calls'];
+            $GLOBALS['mock_is_dir']      = null;
+            $GLOBALS['mock_mkdir_calls'] = 0;
+            $GLOBALS['mock_proc_open']   = false;
+        }
+
+        $this->assertSame([], $result);
+        $this->assertSame(3, $mkdirCalls);
+    }
+
+    public function testExtractThrowsWhenTemporaryFileCannotBeCreated(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $GLOBALS['mock_tempnam'] = false;
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to create temporary file for parallel analysis.');
+
+        try {
+            $parallelClassNodeExtractor->extract($this->analysisFiles($file));
+        } finally {
+            $GLOBALS['mock_tempnam'] = null;
         }
     }
 

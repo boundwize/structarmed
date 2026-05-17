@@ -139,6 +139,64 @@ final class StructArmedApplicationTest extends TestCase
         }
     }
 
+    public function testApplicationReturnsErrorWhenInternalWorkerInputFileCannotBeOpened(): void
+    {
+        $basePath    = $this->createTempDirectory();
+        $outputFile  = $basePath . '/worker-output';
+        $errorStream = tmpfile();
+        $this->assertIsResource($errorStream);
+
+        try {
+            $exitCode = (new StructArmedApplication(
+                progressStreamOpener: static fn () => $errorStream
+            ))
+                ->run([
+                    'structarmed',
+                    '--internal-worker',
+                    $basePath . '/missing-input',
+                    $outputFile,
+                ]);
+
+            $this->assertSame(1, $exitCode);
+        } finally {
+            if (file_exists($outputFile)) {
+                unlink($outputFile);
+            }
+
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationReturnsErrorWhenInternalWorkerOutputFileCannotBeOpened(): void
+    {
+        $basePath    = $this->createTempDirectory();
+        $inputFile   = $basePath . '/worker-input';
+        $errorStream = tmpfile();
+        $this->assertIsResource($errorStream);
+
+        try {
+            file_put_contents($inputFile, serialize('invalid payload'));
+
+            $exitCode = (new StructArmedApplication(
+                progressStreamOpener: static fn () => $errorStream
+            ))
+                ->run([
+                    'structarmed',
+                    '--internal-worker',
+                    $inputFile,
+                    $basePath . '/missing-directory/worker-output',
+                ]);
+
+            $this->assertSame(1, $exitCode);
+        } finally {
+            if (file_exists($inputFile)) {
+                unlink($inputFile);
+            }
+
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testApplicationClearsConfiguredCacheWithoutAnalyseCommand(): void
     {
         $basePath       = $this->createProjectDirectory();
