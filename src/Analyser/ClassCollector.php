@@ -136,7 +136,9 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->internalFunctions ??= array_flip(array_map(strtolower(...), get_defined_functions()['internal']));
 
         $dependencyCollectorVisitor   = new DependencyCollectorVisitor();
-        $functionCallCollectorVisitor = new FunctionCallCollectorVisitor($this->fileFunctions, $this->internalFunctions ?? []);
+        $functionCallCollectorVisitor = new FunctionCallCollectorVisitor(
+            $this->fileFunctions, $this->internalFunctions ?? []
+        );
         $superglobalCollectorVisitor  = new SuperglobalCollectorVisitor(self::SUPERGLOBALS);
         $complexityCollectorVisitor   = new ComplexityCollectorVisitor();
 
