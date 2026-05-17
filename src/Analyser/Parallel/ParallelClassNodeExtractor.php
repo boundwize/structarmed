@@ -64,8 +64,9 @@ final readonly class ParallelClassNodeExtractor
             return [];
         }
 
-        $workerCount = min($this->workerCount, count($files));
-        $chunkSize   = (int) ceil(count($files) / $workerCount);
+        $fileCount   = count($files);
+        $workerCount = min($this->workerCount, $fileCount);
+        $chunkSize   = (int) ceil($fileCount / $workerCount);
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $processes   = [];
 
@@ -127,17 +128,19 @@ final readonly class ParallelClassNodeExtractor
             $anyActivity = false;
 
             foreach (array_keys($pending) as $key) {
-                $stdoutPipe = $pending[$key]['stdoutPipe'];
+                $stdoutPipe  = $pending[$key]['stdoutPipe'];
+                $workerFiles = $pending[$key]['files'];
+                $totalFiles  = count($workerFiles);
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
-                    $count = substr_count($data, "\n");
-                    for ($i = 0; $i < $count; $i++) {
-                        $fileIdx = $pending[$key]['filesAdvanced'];
-                        if ($fileIdx < count($pending[$key]['files'])) {
-                            $progressHandler?->advance($pending[$key]['files'][$fileIdx]);
-                            $pending[$key]['filesAdvanced']++;
+                    $newlines = substr_count($data, "\n");
+                    for ($i = 0; $i < $newlines; $i++) {
+                        if ($pending[$key]['filesAdvanced'] >= $totalFiles) {
+                            break;
                         }
+
+                        $progressHandler?->advance($workerFiles[$pending[$key]['filesAdvanced']++]);
                     }
 
                     $anyActivity = true;
@@ -157,40 +160,12 @@ final readonly class ParallelClassNodeExtractor
                 $exitCode = proc_close($procResource);
 
                 try {
-                    // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                    $result = unserialize((string) file_get_contents($pending[$key]['outputFile']));
-                    // phpcs:enable
-
-                    if (
-                        ! is_array($result)
-                        || ! isset($result['nodes'])
-                        || ! is_array($result['nodes'])
-                        || ! array_key_exists('error', $result)
-                    ) {
-                        throw new RuntimeException('Parallel analysis worker returned an invalid payload.');
-                    }
-
-                    $error = $result['error'];
-
-                    if ($error !== null && ! is_string($error)) {
-                        throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
-                    }
-
-                    if ($error !== null || $exitCode !== 0) {
-                        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                        // to avoid error in test that mock it
-                        $stderr = (string) file_get_contents($pending[$key]['stderrFile']);
-                        // phpcs:enable
-
-                        throw new RuntimeException(sprintf(
-                            "Parallel analysis worker failed: %s%s",
-                            $error ?? 'unknown error',
-                            $stderr !== '' ? "\n" . $stderr : ''
-                        ));
-                    }
-
                     /** @var list<ClassNode> $workerNodes */
-                    $workerNodes = $result['nodes'];
+                    $workerNodes = $this->collectWorkerNodes(
+                        $pending[$key]['outputFile'],
+                        $pending[$key]['stderrFile'],
+                        $exitCode,
+                    );
                     $nodes       = array_merge($nodes, $workerNodes);
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
@@ -216,6 +191,50 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return $nodes;
+    }
+
+    /**
+     * @return list<ClassNode>
+     */
+    private function collectWorkerNodes(string $outputFile, string $stderrFile, int $exitCode): array
+    {
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
+        $result = unserialize((string) file_get_contents($outputFile));
+        // phpcs:enable
+
+        if (
+            ! is_array($result)
+            || ! isset($result['nodes'])
+            || ! is_array($result['nodes'])
+            || ! array_key_exists('error', $result)
+        ) {
+            throw new RuntimeException('Parallel analysis worker returned an invalid payload.');
+        }
+
+        $error = $result['error'];
+
+        if ($error !== null && ! is_string($error)) {
+            throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
+        }
+
+        if ($error !== null || $exitCode !== 0) {
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            // to avoid error in test that mock it
+            $stderr = (string) file_get_contents($stderrFile);
+            // phpcs:enable
+
+            throw new RuntimeException(sprintf(
+                "Parallel analysis worker failed: %s%s",
+                $error ?? 'unknown error',
+                $stderr !== '' ? "\n" . $stderr : ''
+            ));
+        }
+
+        /** @var list<ClassNode> $workerNodes */
+        $workerNodes = $result['nodes'];
+
+        return $workerNodes;
     }
 
     /**
