@@ -64,8 +64,9 @@ final readonly class ParallelClassNodeExtractor
             return [];
         }
 
-        $workerCount = min($this->workerCount, count($files));
-        $chunkSize   = (int) ceil(count($files) / $workerCount);
+        $totalFiles  = count($files);
+        $workerCount = min($this->workerCount, $totalFiles);
+        $chunkSize   = (int) ceil($totalFiles / $workerCount);
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $processes   = [];
 
