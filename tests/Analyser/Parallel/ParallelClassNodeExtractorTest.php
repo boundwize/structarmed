@@ -58,7 +58,7 @@ PHP);
             workerCount: 1,
         );
 
-        $result = $parallelClassNodeExtractor->extract([$file]);
+        $result = $parallelClassNodeExtractor->extract($this->analysisFiles($file));
 
         $this->assertCount(1, $result);
         $this->assertInstanceOf(ClassNode::class, $result[0]);
@@ -98,7 +98,7 @@ PHP);
             workerCount: 2,
         );
 
-        $result = $parallelClassNodeExtractor->extract([$file1, $file2]);
+        $result = $parallelClassNodeExtractor->extract($this->analysisFiles($file1, $file2));
 
         $this->assertCount(2, $result);
         $classNames = [$result[0]->className, $result[1]->className];
@@ -128,7 +128,7 @@ PHP);
             workerCount: 2,
         );
 
-        $result = $parallelClassNodeExtractor->extract([$file]);
+        $result = $parallelClassNodeExtractor->extract($this->analysisFiles($file));
 
         $this->assertCount(1, $result);
     }
@@ -155,7 +155,7 @@ PHP);
             workerCount: 1,
         );
 
-        $result = $parallelClassNodeExtractor->extract([$file]);
+        $result = $parallelClassNodeExtractor->extract($this->analysisFiles($file));
 
         $this->assertCount(1, $result);
         $this->assertSame('App\\Domain\\FooService', $result[0]->className);
@@ -177,7 +177,7 @@ PHP);
         );
 
         $this->expectException(RuntimeException::class);
-        $parallelClassNodeExtractor->extract([$fileWithNullByte]);
+        $parallelClassNodeExtractor->extract($this->analysisFiles($fileWithNullByte));
     }
 
     public function testExtractThrowsWhenProcOpenFails(): void
@@ -194,7 +194,7 @@ PHP);
         $this->expectExceptionMessage('Unable to start parallel analysis worker.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract($this->analysisFiles($file));
         } finally {
             $GLOBALS['mock_proc_open'] = false;
         }
@@ -218,7 +218,7 @@ PHP);
         $this->expectExceptionMessage('Parallel analysis worker returned an invalid payload.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract($this->analysisFiles($file));
         } finally {
             $GLOBALS['mock_proc_open'] = false;
         }
@@ -243,7 +243,7 @@ PHP);
         $this->expectExceptionMessage('Parallel analysis worker returned an invalid error payload.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract($this->analysisFiles($file));
         } finally {
             $GLOBALS['mock_proc_open'] = false;
         }
@@ -266,9 +266,23 @@ PHP);
         $this->expectExceptionMessage('worker failed before writing a result');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract($this->analysisFiles($file));
         } finally {
             $GLOBALS['mock_proc_open'] = false;
         }
+    }
+
+    /**
+     * @return list<array{file: string, size: int}>
+     */
+    private function analysisFiles(string ...$files): array
+    {
+        $analysisFiles = [];
+
+        foreach ($files as $file) {
+            $analysisFiles[] = ['file' => $file, 'size' => 1];
+        }
+
+        return $analysisFiles;
     }
 }

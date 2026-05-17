@@ -20,7 +20,6 @@ use function dirname;
 use function fclose;
 use function file_get_contents;
 use function file_put_contents;
-use function filesize;
 use function is_array;
 use function is_dir;
 use function is_resource;
@@ -55,7 +54,7 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @param list<string> $files
+     * @param list<array{file: string, size: int}> $files
      * @return list<ClassNode>
      */
     public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
@@ -168,22 +167,17 @@ final readonly class ParallelClassNodeExtractor
      * worker gets roughly equal total byte weight — so no sequential second wave
      * is needed and wall time matches a single parallel sweep.
      *
-     * @param list<string> $files
+     * @param list<array{file: string, size: int}> $files
      * @return list<list<string>>
      */
     private function buildQueue(array $files, int $workerCount): array
     {
-        $sized = [];
-        foreach ($files as $file) {
-            $sized[] = ['file' => $file, 'size' => @filesize($file) ?: 1];
-        }
-
-        usort($sized, static fn (array $a, array $b): int => $b['size'] <=> $a['size']);
+        usort($files, static fn (array $a, array $b): int => $b['size'] <=> $a['size']);
 
         /** @var array<int, array{files: list<string>, load: int}> $buckets */
         $buckets = array_fill(0, $workerCount, ['files' => [], 'load' => 0]);
 
-        foreach ($sized as ['file' => $file, 'size' => $size]) {
+        foreach ($files as ['file' => $file, 'size' => $size]) {
             $minIdx = 0;
             for ($i = 1; $i < $workerCount; $i++) {
                 if ($buckets[$i]['load'] < $buckets[$minIdx]['load']) {

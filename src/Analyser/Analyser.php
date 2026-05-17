@@ -27,6 +27,7 @@ use function array_key_exists;
 use function array_unique;
 use function array_values;
 use function count;
+use function filesize;
 use function fnmatch;
 use function getcwd;
 use function in_array;
@@ -375,7 +376,7 @@ final readonly class Analyser
             $cachedClassNodes = $this->analysisResultCache?->loadClassNodes($file, $this->classNodeCacheNamespace);
 
             if ($cachedClassNodes === null) {
-                $filesToParse[] = $file;
+                $filesToParse[] = ['file' => $file, 'size' => $this->fileSize($file)];
                 continue;
             }
 
@@ -402,14 +403,15 @@ final readonly class Analyser
                 $options->workerCount,
             ))->extract($filesToParse, $progressHandler);
         } else {
+            $filePaths        = $this->filePaths($filesToParse);
             $layerResolver    = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
-            $parsedClassNodes = (new ClassNodeExtractor($layerResolver))->extract($filesToParse, $progressHandler);
+            $parsedClassNodes = (new ClassNodeExtractor($layerResolver))->extract($filePaths, $progressHandler);
         }
 
         $classNodesByFile = [];
 
         foreach ($filesToParse as $fileToParse) {
-            $classNodesByFile[$fileToParse] = [];
+            $classNodesByFile[$fileToParse['file']] = [];
         }
 
         foreach ($parsedClassNodes as $parsedClassNode) {
@@ -431,6 +433,32 @@ final readonly class Analyser
         $progressHandler?->finish();
 
         return $classNodes;
+    }
+
+    private function fileSize(string $file): int
+    {
+        if (! is_file($file)) {
+            return 1;
+        }
+
+        $size = filesize($file);
+
+        return $size === false || $size < 1 ? 1 : $size;
+    }
+
+    /**
+     * @param list<array{file: string, size: int}> $files
+     * @return list<string>
+     */
+    private function filePaths(array $files): array
+    {
+        $filePaths = [];
+
+        foreach ($files as $file) {
+            $filePaths[] = $file['file'];
+        }
+
+        return $filePaths;
     }
 
     /**
