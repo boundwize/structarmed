@@ -7,7 +7,6 @@ namespace Boundwize\StructArmed\Cli;
 use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
 
 use function array_slice;
-use function fopen;
 use function getcwd;
 use function in_array;
 use function sprintf;
@@ -25,11 +24,7 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
-            $inputFile = $argv[2] ?? null;
-            $handle    = $inputFile !== null ? fopen($inputFile, 'rb') : null;
-            $input     = $handle !== false ? ($handle ?? $stdin) : null;
-
-            return ClassNodeWorker::run($input, $stdout);
+            return ClassNodeWorker::run($stdin, $stdout);
         }
 
         if (in_array($command, [null, '--help', '-h'], true)) {

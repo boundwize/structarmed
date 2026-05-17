@@ -18,26 +18,22 @@ use function count;
 use function dirname;
 use function fclose;
 use function feof;
-use function file_put_contents;
 use function fread;
+use function fwrite;
 use function is_array;
-use function is_dir;
 use function is_resource;
 use function is_string;
 use function max;
 use function min;
-use function mkdir;
 use function proc_close;
 use function serialize;
 use function sprintf;
 use function stream_get_contents;
 use function stream_set_blocking;
+use function strlen;
 use function strpos;
 use function substr;
 use function substr_count;
-use function sys_get_temp_dir;
-use function tempnam;
-use function unlink;
 use function unserialize;
 use function usleep;
 
@@ -54,7 +50,6 @@ final readonly class ParallelClassNodeExtractor
         private array $layers,
         private array $layerPatterns,
         private int $workerCount,
-        private ?string $cacheDirectory = null,
     ) {
     }
 
@@ -76,31 +71,9 @@ final readonly class ParallelClassNodeExtractor
         foreach (array_chunk($files, max(1, $chunkSize)) as $chunk) {
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
             // to avoid error in test that mock it
-            $dir = $this->cacheDirectory ?? sys_get_temp_dir();
-
-            if (! is_dir($dir)) {
-                mkdir($dir, 0777, true);
-            }
-
-            $inputFile = tempnam($dir, 'structarmed-worker-');
-            // phpcs:enable
-
-            if ($inputFile === false) {
-                throw new RuntimeException('Unable to create temporary file for parallel analysis.');
-            }
-
-            file_put_contents($inputFile, serialize([
-                'basePath'      => $this->basePath,
-                'layers'        => $this->layers,
-                'layerPatterns' => $this->layerPatterns,
-                'files'         => $chunk,
-            ]));
-
-            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-            // to avoid error in test that mock it
             $process = proc_open(
             // phpcs:enable
-                [PHP_BINARY, $script, '--internal-worker', $inputFile],
+                [PHP_BINARY, $script, '--internal-worker'],
                 [
                     0 => ['pipe', 'r'],
                     1 => ['pipe', 'w'],
@@ -110,23 +83,30 @@ final readonly class ParallelClassNodeExtractor
             );
 
             if ($process === false) {
-                unlink($inputFile);
-
                 throw new RuntimeException('Unable to start parallel analysis worker.');
             }
 
             assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]));
-            fclose($pipes[0]);
 
+            $stdinPipe  = $pipes[0];
             $stdoutPipe = $pipes[1];
             $stderrPipe = $pipes[2];
+
+            stream_set_blocking($stdinPipe, false);
             stream_set_blocking($stdoutPipe, false);
 
             $processes[] = [
                 'process'       => $process,
                 'files'         => $chunk,
                 'filesAdvanced' => 0,
-                'inputFile'     => $inputFile,
+                'stdinPipe'     => $stdinPipe,
+                'stdinPayload'  => serialize([
+                    'basePath'      => $this->basePath,
+                    'layers'        => $this->layers,
+                    'layerPatterns' => $this->layerPatterns,
+                    'files'         => $chunk,
+                ]),
+                'stdinOffset'   => 0,
                 'stdoutPipe'    => $stdoutPipe,
                 'stderrPipe'    => $stderrPipe,
                 'stdoutBuffer'  => '',
@@ -141,6 +121,34 @@ final readonly class ParallelClassNodeExtractor
             $anyActivity = false;
 
             foreach (array_keys($pending) as $key) {
+                // Feed pending stdin data to the worker in non-blocking chunks.
+                // fwrite returns false on a broken pipe (worker crashed) or the number
+                // of bytes actually written (possibly 0 if the buffer is temporarily full).
+                $stdinPipe = $pending[$key]['stdinPipe'];
+                if ($stdinPipe !== null) {
+                    $payload = $pending[$key]['stdinPayload'];
+                    $offset  = $pending[$key]['stdinOffset'];
+                    $written = fwrite($stdinPipe, substr($payload, $offset, 16384));
+
+                    if ($written === false) {
+                        // Broken pipe: worker crashed early; close and let proc_close surface the error.
+                        fclose($stdinPipe);
+                        $pending[$key]['stdinPipe']    = null;
+                        $pending[$key]['stdinPayload'] = '';
+                        $anyActivity                   = true;
+                    } elseif ($written > 0) {
+                        $pending[$key]['stdinOffset'] += $written;
+                        $anyActivity                   = true;
+                    }
+
+                    if ($pending[$key]['stdinPipe'] !== null && $pending[$key]['stdinOffset'] >= strlen($payload)) {
+                        fclose($stdinPipe);
+                        $pending[$key]['stdinPipe']    = null;
+                        $pending[$key]['stdinPayload'] = '';
+                        $anyActivity                   = true;
+                    }
+                }
+
                 $stdoutPipe = $pending[$key]['stdoutPipe'];
 
                 $data = fread($stdoutPipe, 8192);
@@ -162,7 +170,14 @@ final readonly class ParallelClassNodeExtractor
                     continue;
                 }
 
-                // Pipe EOF means the worker exited and the OS closed its write end.
+                // Stdout EOF means the worker exited and the OS closed its write end.
+                // Close any stdin that was not fully drained (e.g. worker crashed early).
+                $stdinPipe = $pending[$key]['stdinPipe'];
+                if ($stdinPipe !== null) {
+                    fclose($stdinPipe);
+                    $pending[$key]['stdinPipe'] = null;
+                }
+
                 // proc_close() has not been called yet so waitpid() inside it correctly
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
@@ -216,8 +231,6 @@ final readonly class ParallelClassNodeExtractor
                     if (is_resource($stderrPipe)) {
                         fclose($stderrPipe);
                     }
-
-                    unlink($pending[$key]['inputFile']);
                 }
 
                 unset($pending[$key]);
