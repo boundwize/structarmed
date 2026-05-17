@@ -12,33 +12,54 @@ use function array_column;
 use function array_fill;
 use function array_filter;
 use function array_key_exists;
+use function array_keys;
 use function array_merge;
 use function array_values;
 use function assert;
-use function ceil;
 use function count;
 use function dirname;
 use function fclose;
+use function feof;
 use function file_get_contents;
 use function file_put_contents;
+use function fread;
 use function is_array;
 use function is_resource;
 use function is_string;
-use function max;
 use function min;
 use function proc_close;
 use function serialize;
 use function sprintf;
-use function sqrt;
 use function str_replace;
+use function stream_set_blocking;
 use function substr_count;
 use function sys_get_temp_dir;
 use function unlink;
 use function unserialize;
+use function usleep;
 use function usort;
 
 use const PHP_BINARY;
+use const PHP_OS_FAMILY;
 
+/**
+ * @phpstan-type WorkerProcess array{
+ *     process: resource,
+ *     files: list<string>,
+ *     inputFile: string,
+ *     outputFile: string,
+ *     stderrFile: string,
+ *     stdoutPipe?: resource
+ * }
+ * @phpstan-type WorkerProcessWithPipe array{
+ *     process: resource,
+ *     files: list<string>,
+ *     inputFile: string,
+ *     outputFile: string,
+ *     stderrFile: string,
+ *     stdoutPipe: resource
+ * }
+ */
 final readonly class ParallelClassNodeExtractor
 {
     /**
@@ -50,6 +71,7 @@ final readonly class ParallelClassNodeExtractor
         private array $layers,
         private array $layerPatterns,
         private int $workerCount,
+        private ?bool $usesProgressPipe = null,
     ) {
     }
 
@@ -65,109 +87,213 @@ final readonly class ParallelClassNodeExtractor
 
         $workerCount = min($this->workerCount, count($files));
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
+        $processes   = [];
 
-        $nodes   = [];
-        $failure = null;
-
-        foreach ($this->workerWaves($this->buildQueue($files, $workerCount), $workerCount) as $wave) {
-            $processes = [];
-            foreach ($wave as $chunk) {
-                try {
-                    $processes[] = $this->spawnWorker($chunk, $script);
-                } catch (RuntimeException $runtimeException) {
-                    foreach ($processes as $process) {
-                        proc_close($process['process']);
-                        $this->cleanup($this->workerFiles($process));
-                    }
-
-                    throw $runtimeException;
+        foreach ($this->buildQueue($files, $workerCount) as $chunk) {
+            try {
+                $processes[] = $this->spawnWorker($chunk, $script);
+            } catch (RuntimeException $runtimeException) {
+                foreach ($processes as $process) {
+                    $this->closeWorker($process);
+                    $this->cleanup($this->workerFiles($process));
                 }
-            }
 
-            foreach ($processes as $process) {
-                $exitCode = proc_close($process['process']);
+                throw $runtimeException;
+            }
+        }
+
+        $nodes         = [];
+        $failure       = null;
+        $pending       = $processes;
+        $advancedFiles = array_fill(0, count($processes), 0);
+
+        while ($pending !== []) {
+            $anyActivity = false;
+
+            foreach (array_keys($pending) as $key) {
+                if (isset($pending[$key]['stdoutPipe'])) {
+                    $progress            = $this->advanceProgressFromPipe(
+                        $pending[$key],
+                        $advancedFiles[$key],
+                        $progressHandler,
+                    );
+                    $advancedFiles[$key] = $progress['advancedFiles'];
+                    $hasActivity         = $progress['hasActivity'];
+                    $anyActivity         = $hasActivity || $anyActivity;
+
+                    if (! feof($pending[$key]['stdoutPipe'])) {
+                        continue;
+                    }
+
+                    fclose($pending[$key]['stdoutPipe']);
+                }
+
+                $procResource = $pending[$key]['process'];
+                assert(is_resource($procResource));
+                $exitCode = proc_close($procResource);
+
+                if (! isset($pending[$key]['stdoutPipe'])) {
+                    $advancedFiles[$key] = $this->advanceProgressFromFile(
+                        $pending[$key],
+                        $advancedFiles[$key],
+                        $progressHandler,
+                    );
+                }
 
                 try {
-                    $this->advanceProgress($process, $progressHandler);
-                    $resultBuffer  = (string) file_get_contents($process['outputFile']);
-                    $stderrContent = str_replace(
-                        ClassNodeWorker::PROGRESS_MARKER,
-                        '',
-                        (string) file_get_contents($process['stderrFile']),
-                    );
-                    $result        = @unserialize($resultBuffer);
-
-                    if (
-                        ! is_array($result)
-                        || ! isset($result['nodes'])
-                        || ! is_array($result['nodes'])
-                        || ! array_key_exists('error', $result)
-                    ) {
-                        throw new RuntimeException(sprintf(
-                            "Parallel analysis worker returned an invalid payload.%s",
-                            $stderrContent !== '' ? "\n" . $stderrContent : '',
-                        ));
-                    }
-
-                    $error = $result['error'];
-
-                    if ($error !== null && ! is_string($error)) {
-                        throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
-                    }
-
-                    if ($error !== null || $exitCode !== 0) {
-                        throw new RuntimeException(sprintf(
-                            "Parallel analysis worker failed: %s%s",
-                            $error ?? 'unknown error',
-                            $stderrContent !== '' ? "\n" . $stderrContent : ''
-                        ));
-                    }
-
                     /** @var list<ClassNode> $workerNodes */
-                    $workerNodes = $result['nodes'];
+                    $workerNodes = $this->workerNodes($pending[$key], $exitCode);
                     $nodes       = array_merge($nodes, $workerNodes);
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
                 } finally {
-                    $this->cleanup($this->workerFiles($process));
+                    $this->cleanup($this->workerFiles($pending[$key]));
                 }
+
+                unset($pending[$key]);
+                unset($advancedFiles[$key]);
+                $anyActivity = true;
             }
 
-            if ($failure !== null) {
-                throw new RuntimeException($failure);
+            if (! $anyActivity) {
+                usleep(5000);
             }
+        }
+
+        if ($failure !== null) {
+            throw new RuntimeException($failure);
         }
 
         return $nodes;
     }
 
     /**
-     * @param array{files: list<string>, stderrFile: string} $process
+     * @param array<string, mixed> $process
+     * @phpstan-param WorkerProcessWithPipe $process
+     * @return array{advancedFiles: int, hasActivity: bool}
      */
-    private function advanceProgress(array $process, ?ProgressHandlerInterface $progressHandler): void
-    {
-        if (! $progressHandler instanceof ProgressHandlerInterface) {
-            return;
+    private function advanceProgressFromPipe(
+        array $process,
+        int $advancedFiles,
+        ?ProgressHandlerInterface $progressHandler
+    ): array {
+        $data = fread($process['stdoutPipe'], 8192);
+
+        if ($data === false || $data === '') {
+            return [
+                'advancedFiles' => $advancedFiles,
+                'hasActivity'   => false,
+            ];
         }
 
-        $progressContent = (string) file_get_contents($process['stderrFile']);
-        $progressCount   = substr_count($progressContent, ClassNodeWorker::PROGRESS_MARKER);
-
-        for ($i = 0; $i < $progressCount; $i++) {
-            if (! isset($process['files'][$i])) {
-                return;
-            }
-
-            $progressHandler->advance($process['files'][$i]);
-        }
+        return [
+            'advancedFiles' => $this->advanceProgressMarkers(
+                $process['files'],
+                $advancedFiles,
+                substr_count($data, ClassNodeWorker::PROGRESS_MARKER),
+                $progressHandler,
+            ),
+            'hasActivity'   => true,
+        ];
     }
 
     /**
-     * Distributes files across bounded batches using the Longest
+     * @param array<string, mixed> $process
+     * @phpstan-param WorkerProcess $process
+     */
+    private function advanceProgressFromFile(
+        array $process,
+        int $advancedFiles,
+        ?ProgressHandlerInterface $progressHandler
+    ): int {
+        $progressContent = (string) file_get_contents($process['stderrFile']);
+
+        return $this->advanceProgressMarkers(
+            $process['files'],
+            $advancedFiles,
+            substr_count($progressContent, ClassNodeWorker::PROGRESS_MARKER),
+            $progressHandler,
+        );
+    }
+
+    /**
+     * @param list<string> $files
+     */
+    private function advanceProgressMarkers(
+        array $files,
+        int $advancedFiles,
+        int $progressCount,
+        ?ProgressHandlerInterface $progressHandler
+    ): int {
+        if (! $progressHandler instanceof ProgressHandlerInterface) {
+            return $advancedFiles;
+        }
+
+        for ($i = 0; $i < $progressCount; $i++) {
+            if (! isset($files[$advancedFiles])) {
+                return $advancedFiles;
+            }
+
+            $progressHandler->advance($files[$advancedFiles]);
+            $advancedFiles++;
+        }
+
+        return $advancedFiles;
+    }
+
+    /**
+     * @param array<string, mixed> $process
+     * @phpstan-param WorkerProcess $process
+     * @return list<ClassNode>
+     */
+    private function workerNodes(array $process, int $exitCode): array
+    {
+        $resultBuffer  = (string) file_get_contents($process['outputFile']);
+        $stderrContent = str_replace(
+            ClassNodeWorker::PROGRESS_MARKER,
+            '',
+            (string) file_get_contents($process['stderrFile']),
+        );
+        $result        = @unserialize($resultBuffer);
+
+        if (
+            ! is_array($result)
+            || ! isset($result['nodes'])
+            || ! is_array($result['nodes'])
+            || ! array_key_exists('error', $result)
+        ) {
+            throw new RuntimeException(sprintf(
+                "Parallel analysis worker returned an invalid payload.%s",
+                $stderrContent !== '' ? "\n" . $stderrContent : '',
+            ));
+        }
+
+        $error = $result['error'];
+
+        if ($error !== null && ! is_string($error)) {
+            throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
+        }
+
+        if ($error !== null || $exitCode !== 0) {
+            throw new RuntimeException(sprintf(
+                "Parallel analysis worker failed: %s%s",
+                $error ?? 'unknown error',
+                $stderrContent !== '' ? "\n" . $stderrContent : ''
+            ));
+        }
+
+        /** @var list<ClassNode> $workerNodes */
+        $workerNodes = $result['nodes'];
+
+        return $workerNodes;
+    }
+
+    /**
+     * Distributes files across worker batches using the Longest
      * Processing Time (LPT) algorithm: sort by size descending, then assign each
-     * file to the least-loaded bucket. The queue is processed in worker-count
-     * waves so individual batches stay smaller without starting too many workers
-     * at once.
+     * file to the least-loaded bucket. This keeps the number of PHP worker
+     * launches bounded to the configured worker count while still avoiding one
+     * worker receiving all of the largest files.
      *
      * @param list<array{file: string, size: int}> $files
      * @return list<list<string>>
@@ -176,18 +302,12 @@ final readonly class ParallelClassNodeExtractor
     {
         usort($files, static fn (array $a, array $b): int => $b['size'] <=> $a['size']);
 
-        $fileCount  = count($files);
-        $batchCount = min(
-            $fileCount,
-            max($workerCount, (int) ceil(sqrt($fileCount))),
-        );
-
         /** @var array<int, array{files: list<string>, load: int}> $buckets */
-        $buckets = array_fill(0, $batchCount, ['files' => [], 'load' => 0]);
+        $buckets = array_fill(0, $workerCount, ['files' => [], 'load' => 0]);
 
         foreach ($files as ['file' => $file, 'size' => $size]) {
             $minIdx = 0;
-            for ($i = 1; $i < $batchCount; $i++) {
+            for ($i = 1; $i < $workerCount; $i++) {
                 if ($buckets[$i]['load'] < $buckets[$minIdx]['load']) {
                     $minIdx = $i;
                 }
@@ -206,40 +326,14 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @param list<list<string>> $queue
-     * @return list<list<list<string>>>
-     */
-    private function workerWaves(array $queue, int $workerCount): array
-    {
-        $waves = [];
-        $wave  = [];
-
-        foreach ($queue as $chunk) {
-            $wave[] = $chunk;
-
-            if (count($wave) < $workerCount) {
-                continue;
-            }
-
-            $waves[] = $wave;
-            $wave    = [];
-        }
-
-        if ($wave !== []) {
-            $waves[] = $wave;
-        }
-
-        return $waves;
-    }
-
-    /**
      * @param list<string> $chunk
      * @return array{
      *      process: resource,
      *      files: list<string>,
      *      inputFile: string,
      *      outputFile: string,
-     *      stderrFile: string
+     *      stderrFile: string,
+     *      stdoutPipe?: resource
      * }
      */
     private function spawnWorker(array $chunk, string $script): array
@@ -257,16 +351,18 @@ final readonly class ParallelClassNodeExtractor
             'files'         => $chunk,
         ]));
 
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => $this->usesProgressPipe() ? ['pipe', 'w'] : ['file', $stderrFile, 'a'],
+            2 => ['file', $stderrFile, 'a'],
+        ];
+
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
         $process = proc_open(
         // phpcs:enable
             [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
-            [
-                0 => ['pipe', 'r'],
-                1 => ['file', $stderrFile, 'a'],
-                2 => ['file', $stderrFile, 'a'],
-            ],
+            $descriptors,
             $pipes,
         );
 
@@ -281,13 +377,26 @@ final readonly class ParallelClassNodeExtractor
 
         assert(is_resource($process));
 
-        return [
+        $worker = [
             'process'    => $process,
             'files'      => $chunk,
             'inputFile'  => $inputFile,
             'outputFile' => $outputFile,
             'stderrFile' => $stderrFile,
         ];
+
+        if ($this->usesProgressPipe()) {
+            assert(isset($pipes[1]));
+            stream_set_blocking($pipes[1], false);
+            $worker['stdoutPipe'] = $pipes[1];
+        }
+
+        return $worker;
+    }
+
+    private function usesProgressPipe(): bool
+    {
+        return $this->usesProgressPipe ?? PHP_OS_FAMILY !== 'Windows';
     }
 
     /**
@@ -323,7 +432,8 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @param array{inputFile: string, outputFile: string, stderrFile: string} $process
+     * @param array<string, mixed> $process
+     * @phpstan-param WorkerProcess $process
      * @return list<string>
      */
     private function workerFiles(array $process): array
@@ -333,6 +443,19 @@ final readonly class ParallelClassNodeExtractor
             $process['outputFile'],
             $process['stderrFile'],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $process
+     * @phpstan-param WorkerProcess $process
+     */
+    private function closeWorker(array $process): void
+    {
+        if (isset($process['stdoutPipe'])) {
+            fclose($process['stdoutPipe']);
+        }
+
+        proc_close($process['process']);
     }
 
     /** @param list<string> $files */

@@ -6,10 +6,14 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use function fclose;
 use function file_put_contents;
+use function fopen;
+use function fwrite;
 use function is_array;
 use function is_int;
 use function is_string;
+use function rewind;
 
+use const FILE_APPEND;
 use const PHP_BINARY;
 
 // phpcs:disable
@@ -49,15 +53,27 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
                 file_put_contents($outputFile, $mockProcOpen['resultPayload']);
             }
 
+            $progressPayload      = $mockProcOpen['progressPayload'] ?? '';
+            $stdoutFileDescriptor = $descriptorspec[1] ?? null;
+            if (
+                $progressPayload !== ''
+                && is_array($stdoutFileDescriptor)
+                && ($stdoutFileDescriptor[0] ?? null) === 'file'
+                && isset($stdoutFileDescriptor[1])
+            ) {
+                file_put_contents($stdoutFileDescriptor[1], $progressPayload);
+            }
+
             $stderrFileDescriptor = $descriptorspec[2] ?? null;
             if (
                 is_array($stderrFileDescriptor)
                 && isset($stderrFileDescriptor[1])
-                && (isset($mockProcOpen['progressPayload']) || isset($mockProcOpen['stderrPayload']))
+                && isset($mockProcOpen['stderrPayload'])
             ) {
                 file_put_contents(
                     $stderrFileDescriptor[1],
-                    ($mockProcOpen['progressPayload'] ?? '') . ($mockProcOpen['stderrPayload'] ?? '')
+                    $mockProcOpen['stderrPayload'],
+                    FILE_APPEND,
                 );
             }
         }
@@ -76,6 +92,19 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
         fclose($realPipes[2]);
 
         $pipes = [0 => $realPipes[0]];
+
+        $stdoutDescriptor = $descriptorspec[1] ?? null;
+        if (
+            is_array($stdoutDescriptor)
+            && ($stdoutDescriptor[0] ?? null) === 'pipe'
+        ) {
+            $stdoutPipe = fopen('php://temp', 'r+');
+            if ($stdoutPipe !== false) {
+                fwrite($stdoutPipe, $mockProcOpen['progressPayload'] ?? '');
+                rewind($stdoutPipe);
+                $pipes[1] = $stdoutPipe;
+            }
+        }
 
         return $process;
     }

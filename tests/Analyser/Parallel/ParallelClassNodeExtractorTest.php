@@ -232,7 +232,7 @@ PHP);
         }
     }
 
-    public function testExtractSplitsLargeInputIntoSmallerBatches(): void
+    public function testExtractDistributesLargeInputAcrossWorkers(): void
     {
         $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');
         $files = [];
@@ -260,7 +260,7 @@ PHP);
         }
 
         $this->assertSame([], $result);
-        $this->assertSame(18, $procOpenCalls);
+        $this->assertSame(4, $procOpenCalls);
     }
 
     public function testExtractAdvancesProgressFromWorkerMarkers(): void
@@ -301,6 +301,55 @@ PHP);
         };
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        try {
+            $result = $parallelClassNodeExtractor->extract($this->analysisFiles($file), $progress);
+        } finally {
+            $GLOBALS['mock_proc_open'] = false;
+        }
+
+        $this->assertSame([], $result);
+        $this->assertSame([$file], $advancedFiles);
+    }
+
+    public function testExtractAdvancesProgressFromWorkerMarkerFile(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $GLOBALS['mock_proc_open'] = [
+            'progressPayload' => ClassNodeWorker::PROGRESS_MARKER,
+            'resultPayload'   => serialize([
+                'nodes' => [],
+                'error' => null,
+            ]),
+        ];
+
+        $advancedFiles = [];
+        $progress      = new class ($advancedFiles) implements ProgressHandlerInterface {
+            /** @param list<string> $advancedFiles */
+            public function __construct(
+                /** @phpstan-ignore property.onlyWritten */
+                private array &$advancedFiles
+            ) {
+            }
+
+            public function start(int $total): void
+            {
+            }
+
+            public function advance(string $file): void
+            {
+                $this->advancedFiles[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2, false);
 
         try {
             $result = $parallelClassNodeExtractor->extract($this->analysisFiles($file), $progress);
