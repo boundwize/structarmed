@@ -37,22 +37,16 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
                 file_put_contents($outputFile, $mockProcOpen['resultPayload']);
             }
 
-            $progressFileDescriptor = $descriptorspec[1] ?? null;
-            if (
-                is_array($progressFileDescriptor)
-                && isset($progressFileDescriptor[1])
-                && isset($mockProcOpen['progressPayload'])
-            ) {
-                file_put_contents($progressFileDescriptor[1], $mockProcOpen['progressPayload']);
-            }
-
             $stderrFileDescriptor = $descriptorspec[2] ?? null;
             if (
                 is_array($stderrFileDescriptor)
                 && isset($stderrFileDescriptor[1])
-                && isset($mockProcOpen['stderrPayload'])
+                && (isset($mockProcOpen['progressPayload']) || isset($mockProcOpen['stderrPayload']))
             ) {
-                file_put_contents($stderrFileDescriptor[1], $mockProcOpen['stderrPayload']);
+                file_put_contents(
+                    $stderrFileDescriptor[1],
+                    ($mockProcOpen['progressPayload'] ?? '') . ($mockProcOpen['stderrPayload'] ?? '')
+                );
             }
         }
 

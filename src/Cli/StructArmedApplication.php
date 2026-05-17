@@ -63,7 +63,7 @@ final readonly class StructArmedApplication
                 }
 
                 try {
-                    return ClassNodeWorker::run($workerInput, $resultFd);
+                    return ClassNodeWorker::run($workerInput, $resultFd, STDERR);
                 } finally {
                     fclose($workerInput);
                     fclose($resultFd);

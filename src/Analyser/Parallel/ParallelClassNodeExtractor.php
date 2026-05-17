@@ -30,6 +30,7 @@ use function mkdir;
 use function proc_close;
 use function serialize;
 use function sprintf;
+use function str_replace;
 use function substr_count;
 use function sys_get_temp_dir;
 use function tempnam;
@@ -89,7 +90,11 @@ final readonly class ParallelClassNodeExtractor
             try {
                 $this->advanceProgress($process, $progressHandler);
                 $resultBuffer  = (string) file_get_contents($process['outputFile']);
-                $stderrContent = (string) file_get_contents($process['stderrFile']);
+                $stderrContent = str_replace(
+                    ClassNodeWorker::PROGRESS_MARKER,
+                    '',
+                    (string) file_get_contents($process['stderrFile']),
+                );
                 $result        = @unserialize($resultBuffer);
 
                 if (
@@ -136,7 +141,7 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @param array{files: list<string>, progressFile: string} $process
+     * @param array{files: list<string>, stderrFile: string} $process
      */
     private function advanceProgress(array $process, ?ProgressHandlerInterface $progressHandler): void
     {
@@ -144,7 +149,7 @@ final readonly class ParallelClassNodeExtractor
             return;
         }
 
-        $progressContent = (string) file_get_contents($process['progressFile']);
+        $progressContent = (string) file_get_contents($process['stderrFile']);
         $progressCount   = substr_count($progressContent, ClassNodeWorker::PROGRESS_MARKER);
 
         for ($i = 0; $i < $progressCount; $i++) {
@@ -205,17 +210,15 @@ final readonly class ParallelClassNodeExtractor
      *      files: list<string>,
      *      inputFile: string,
      *      outputFile: string,
-     *      stderrFile: string,
-     *      progressFile: string
+     *      stderrFile: string
      * }
      */
     private function spawnWorker(array $chunk, string $script): array
     {
         [
-            'inputFile'    => $inputFile,
-            'outputFile'   => $outputFile,
-            'stderrFile'   => $stderrFile,
-            'progressFile' => $progressFile,
+            'inputFile'  => $inputFile,
+            'outputFile' => $outputFile,
+            'stderrFile' => $stderrFile,
         ] = $this->createWorkerFiles();
 
         file_put_contents($inputFile, serialize([
@@ -232,14 +235,14 @@ final readonly class ParallelClassNodeExtractor
             [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
             [
                 0 => ['pipe', 'r'],
-                1 => ['file', $progressFile, 'w'],
-                2 => ['file', $stderrFile, 'w'],
+                1 => ['file', $stderrFile, 'a'],
+                2 => ['file', $stderrFile, 'a'],
             ],
             $pipes,
         );
 
         if ($process === false) {
-            $this->cleanup([$inputFile, $outputFile, $stderrFile, $progressFile]);
+            $this->cleanup([$inputFile, $outputFile, $stderrFile]);
 
             throw new RuntimeException('Unable to start parallel analysis worker.');
         }
@@ -250,25 +253,23 @@ final readonly class ParallelClassNodeExtractor
         assert(is_resource($process));
 
         return [
-            'process'      => $process,
-            'files'        => $chunk,
-            'inputFile'    => $inputFile,
-            'outputFile'   => $outputFile,
-            'stderrFile'   => $stderrFile,
-            'progressFile' => $progressFile,
+            'process'    => $process,
+            'files'      => $chunk,
+            'inputFile'  => $inputFile,
+            'outputFile' => $outputFile,
+            'stderrFile' => $stderrFile,
         ];
     }
 
     /**
-     * @return array{inputFile: string, outputFile: string, stderrFile: string, progressFile: string}
+     * @return array{inputFile: string, outputFile: string, stderrFile: string}
      */
     private function createWorkerFiles(): array
     {
         return [
-            'inputFile'    => $this->temporaryFile(),
-            'outputFile'   => $this->temporaryFile(),
-            'stderrFile'   => $this->temporaryFile(),
-            'progressFile' => $this->temporaryFile(),
+            'inputFile'  => $this->temporaryFile(),
+            'outputFile' => $this->temporaryFile(),
+            'stderrFile' => $this->temporaryFile(),
         ];
     }
 
@@ -293,7 +294,7 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @param array{inputFile: string, outputFile: string, stderrFile: string, progressFile: string} $process
+     * @param array{inputFile: string, outputFile: string, stderrFile: string} $process
      * @return list<string>
      */
     private function workerFiles(array $process): array
@@ -302,7 +303,6 @@ final readonly class ParallelClassNodeExtractor
             $process['inputFile'],
             $process['outputFile'],
             $process['stderrFile'],
-            $process['progressFile'],
         ];
     }
 
