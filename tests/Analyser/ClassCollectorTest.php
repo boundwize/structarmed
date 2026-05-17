@@ -285,6 +285,31 @@ PHP;
         $this->assertNotContains('App\Support\missing_function', $classNode->functionCalls);
     }
 
+    public function testResolvesNamespacedFunctionCallWhenNameShadowsInternalFunction(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App;
+
+function strlen(string $s)
+{
+    return 100;
+}
+
+class Bar
+{
+    public function run()
+    {
+        return strlen('test');
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertContains('App\strlen', $classNode->functionCalls);
+        $this->assertNotContains('strlen', $classNode->functionCalls);
+    }
+
     public function testCollectsSuperglobals(): void
     {
         $classNode = $this->collect('<?php class Foo { public function bar(): void { $x = $_GET["id"]; } }');

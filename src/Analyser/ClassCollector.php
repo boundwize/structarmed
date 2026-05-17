@@ -40,13 +40,10 @@ use PhpParser\Node\UseItem;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
-use function array_flip;
-use function array_map;
 use function array_merge;
 use function array_unique;
 use function array_values;
 use function count;
-use function get_defined_functions;
 use function implode;
 use function in_array;
 use function is_string;
@@ -67,9 +64,6 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /** @var ClassNode[] */
     private array $nodes = [];
-
-    /** @var array<string, int>|null */
-    private ?array $internalFunctions = null;
 
     private string $currentFile = '';
 
@@ -425,20 +419,16 @@ final class ClassCollector extends NodeVisitorAbstract
      */
     private function collectFunctionCalls(ClassLike $classLike): array
     {
-        $this->internalFunctions ??= array_flip(array_map(strtolower(...), get_defined_functions()['internal']));
-
         $nodeTraverser = new NodeTraverser();
-        $visitor       = new class ($this->fileFunctions, $this->internalFunctions) extends NodeVisitorAbstract {
+        $visitor       = new class ($this->fileFunctions) extends NodeVisitorAbstract {
             /** @var string[] */
             public array $calls = [];
 
             /**
              * @param string[] $fileFunctions
-             * @param array<string, int> $internalFunctions
              */
             public function __construct(
                 private readonly array $fileFunctions,
-                private readonly array $internalFunctions,
             ) {
             }
 
@@ -456,21 +446,19 @@ final class ClassCollector extends NodeVisitorAbstract
 
             private function resolveFunctionName(Name $name): string
             {
-                if ($name instanceof FullyQualified) {
-                    return implode('\\', $name->getParts());
-                }
+                $functionName = $name->toString();
 
-                $functionName = implode('\\', $name->getParts());
-                if (isset($this->internalFunctions[strtolower($functionName)])) {
+                if ($name instanceof FullyQualified) {
                     return $functionName;
                 }
 
                 $namespacedName = $name->getAttribute('namespacedName');
+
                 if (
                     $namespacedName instanceof Name
-                    && in_array(implode('\\', $namespacedName->getParts()), $this->fileFunctions, true)
+                    && in_array($namespacedName->toString(), $this->fileFunctions, true)
                 ) {
-                    return implode('\\', $namespacedName->getParts());
+                    return $namespacedName->toString();
                 }
 
                 return $functionName;
