@@ -22,6 +22,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
+use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_unique;
@@ -407,12 +408,7 @@ final readonly class Analyser
             $parsedClassNodes = (new ClassNodeExtractor($layerResolver))->extract($filesToParse, $progressHandler);
         }
 
-        $classNodesByFile = [];
-
-        foreach ($filesToParse as $fileToParse) {
-            $classNodesByFile[$fileToParse] = [];
-        }
-
+        $classNodesByFile = array_fill_keys($filesToParse, []);
         foreach ($parsedClassNodes as $parsedClassNode) {
             $classNodes[] = $parsedClassNode;
 
