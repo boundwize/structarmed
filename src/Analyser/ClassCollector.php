@@ -40,14 +40,10 @@ use PhpParser\Node\UseItem;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
-use function array_flip;
-use function array_map;
 use function array_merge;
 use function array_unique;
 use function array_values;
 use function count;
-use function get_defined_functions;
-use function implode;
 use function in_array;
 use function is_string;
 use function strtolower;
@@ -67,9 +63,6 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /** @var ClassNode[] */
     private array $nodes = [];
-
-    /** @var array<string, int>|null */
-    private ?array $internalFunctions = null;
 
     private string $currentFile = '';
 
@@ -104,11 +97,11 @@ final class ClassCollector extends NodeVisitorAbstract
     public function enterNode(Node $node): null
     {
         if ($node instanceof UseItem) {
-            $this->fileUses[] = implode('\\', $node->name->getParts());
+            $this->fileUses[] = $node->name->toString();
         }
 
         if ($node instanceof Function_ && isset($node->namespacedName)) {
-            $this->fileFunctions[] = implode('\\', $node->namespacedName->getParts());
+            $this->fileFunctions[] = $node->namespacedName->toString();
         }
 
         return null;
@@ -161,7 +154,7 @@ final class ClassCollector extends NodeVisitorAbstract
             line:          $classLike->getStartLine(),
             layer:         $layer,
             extends:       $classLike instanceof Class_ && $classLike->extends instanceof Name
-                               ? implode('\\', $classLike->extends->getParts())
+                               ? $classLike->extends->toString()
                                : null,
             isAbstract:    $classLike instanceof Class_ && $classLike->isAbstract(),
             isFinal:       $classLike instanceof Class_ && $classLike->isFinal(),
@@ -262,7 +255,7 @@ final class ClassCollector extends NodeVisitorAbstract
     private function resolveClassName(ClassLike $classLike): string
     {
         return isset($classLike->namespacedName)
-            ? implode('\\', $classLike->namespacedName->getParts())
+            ? $classLike->namespacedName->toString()
             : (string) $classLike->name;
     }
 
@@ -279,7 +272,7 @@ final class ClassCollector extends NodeVisitorAbstract
             public function enterNode(Node $node): null
             {
                 if ($node instanceof FullyQualified) {
-                    $name = implode('\\', $node->getParts());
+                    $name = $node->toString();
                     if (! in_array(strtolower($name), ['true', 'false', 'null'], true)) {
                         $this->names[] = $name;
                     }
@@ -304,7 +297,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
         if ($classLike instanceof Class_ || $classLike instanceof Enum_) {
             foreach ($classLike->implements as $interface) {
-                $interfaces[] = implode('\\', $interface->getParts());
+                $interfaces[] = $interface->toString();
             }
         }
 
@@ -328,7 +321,7 @@ final class ClassCollector extends NodeVisitorAbstract
             }
 
             foreach ($stmt->traits as $trait) {
-                $traits[] = implode('\\', $trait->getParts());
+                $traits[] = $trait->toString();
             }
         }
 
@@ -425,20 +418,16 @@ final class ClassCollector extends NodeVisitorAbstract
      */
     private function collectFunctionCalls(ClassLike $classLike): array
     {
-        $this->internalFunctions ??= array_flip(array_map(strtolower(...), get_defined_functions()['internal']));
-
         $nodeTraverser = new NodeTraverser();
-        $visitor       = new class ($this->fileFunctions, $this->internalFunctions) extends NodeVisitorAbstract {
+        $visitor       = new class ($this->fileFunctions) extends NodeVisitorAbstract {
             /** @var string[] */
             public array $calls = [];
 
             /**
              * @param string[] $fileFunctions
-             * @param array<string, int> $internalFunctions
              */
             public function __construct(
                 private readonly array $fileFunctions,
-                private readonly array $internalFunctions,
             ) {
             }
 
@@ -456,21 +445,19 @@ final class ClassCollector extends NodeVisitorAbstract
 
             private function resolveFunctionName(Name $name): string
             {
-                if ($name instanceof FullyQualified) {
-                    return implode('\\', $name->getParts());
-                }
+                $functionName = $name->toString();
 
-                $functionName = implode('\\', $name->getParts());
-                if (isset($this->internalFunctions[strtolower($functionName)])) {
+                if ($name instanceof FullyQualified) {
                     return $functionName;
                 }
 
                 $namespacedName = $name->getAttribute('namespacedName');
+
                 if (
                     $namespacedName instanceof Name
-                    && in_array(implode('\\', $namespacedName->getParts()), $this->fileFunctions, true)
+                    && in_array($namespacedName->toString(), $this->fileFunctions, true)
                 ) {
-                    return implode('\\', $namespacedName->getParts());
+                    return $namespacedName->toString();
                 }
 
                 return $functionName;
