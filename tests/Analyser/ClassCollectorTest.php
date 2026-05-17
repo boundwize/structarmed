@@ -246,6 +246,49 @@ PHP;
         $this->assertContains('Vendor\debug', $classNode->functionCalls);
     }
 
+    public function testResolvesAliasedImportedFunctionCallToOriginalName(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App;
+
+use function Other\debug as log;
+
+class Foo {
+    public function run(): void {
+        log("x");
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertContains('Other\debug', $classNode->functionCalls);
+        $this->assertNotContains('log', $classNode->functionCalls);
+        $this->assertNotContains('App\log', $classNode->functionCalls);
+    }
+
+    public function testResolvesQualifiedCallViaNamespaceAlias(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App;
+
+use Foo;
+
+class Bar
+{
+    public function run()
+    {
+        return Foo\strlen('test');
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertContains('Foo\strlen', $classNode->functionCalls);
+        $this->assertNotContains('App\Foo\strlen', $classNode->functionCalls);
+    }
+
     public function testKeepsNativeFunctionCallsUnqualifiedInsideNamespace(): void
     {
         $classNode = $this->collect(
@@ -308,6 +351,33 @@ PHP;
 
         $this->assertContains('App\strlen', $classNode->functionCalls);
         $this->assertNotContains('strlen', $classNode->functionCalls);
+    }
+
+    public function testExplicitUseFunctionOverridesLocalNamespacedDefinition(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App;
+
+use function strlen;
+
+function strlen(string $s)
+{
+    return 100;
+}
+
+class Bar
+{
+    public function run()
+    {
+        return strlen('test');
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertContains('strlen', $classNode->functionCalls);
+        $this->assertNotContains('App\strlen', $classNode->functionCalls);
     }
 
     public function testCollectsSuperglobals(): void
