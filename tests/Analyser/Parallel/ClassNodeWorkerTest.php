@@ -54,7 +54,7 @@ PHP);
         $outputStream = fopen('php://memory', 'w+');
         $this->assertNotFalse($outputStream);
 
-        $exitCode = ClassNodeWorker::run($outputStream, $inputStream);
+        $exitCode = ClassNodeWorker::run($inputStream, $outputStream);
 
         $this->assertSame(0, $exitCode);
 
@@ -75,7 +75,7 @@ PHP);
         $outputStream = fopen('php://memory', 'w+');
         $this->assertNotFalse($outputStream);
 
-        $exitCode = ClassNodeWorker::run($outputStream, $inputStream);
+        $exitCode = ClassNodeWorker::run($inputStream, $outputStream);
 
         $this->assertSame(1, $exitCode);
 
@@ -120,7 +120,7 @@ PHP);
         $outputStream = fopen('php://memory', 'w+');
         $this->assertNotFalse($outputStream);
 
-        $exitCode = ClassNodeWorker::run($outputStream, $inputStream);
+        $exitCode = ClassNodeWorker::run($inputStream, $outputStream);
 
         $this->assertSame(0, $exitCode);
 

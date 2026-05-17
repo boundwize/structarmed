@@ -24,7 +24,7 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
-            return ClassNodeWorker::run($stdout, $stdin);
+            return ClassNodeWorker::run($stdin, $stdout);
         }
 
         if (in_array($command, [null, '--help', '-h'], true)) {

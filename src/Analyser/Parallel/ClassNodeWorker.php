@@ -25,13 +25,13 @@ use const STDOUT;
 final readonly class ClassNodeWorker
 {
     /**
-     * @param resource|null $outputStream
      * @param resource|null $inputStream
+     * @param resource|null $outputStream
      */
-    public static function run(mixed $outputStream = null, mixed $inputStream = null): int
+    public static function run(mixed $inputStream = null, mixed $outputStream = null): int
     {
-        $stream = $outputStream ?? STDOUT;
         $input  = $inputStream ?? STDIN;
+        $stream = $outputStream ?? STDOUT;
 
         try {
             $payload = unserialize((string) stream_get_contents($input));
