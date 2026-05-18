@@ -114,9 +114,23 @@ final class WorkerPayloadSocket
      */
     private static function writeAll(mixed $stream, string $data): void
     {
-        $offset = 0;
         $length = strlen($data);
 
+        if ($length === 0) {
+            return;
+        }
+
+        $written = fwrite($stream, $data);
+
+        if ($written === $length) {
+            return;
+        }
+
+        if ($written === false) {
+            throw new RuntimeException('Unable to write worker payload.');
+        }
+
+        $offset = $written;
         while ($offset < $length) {
             $written = fwrite($stream, substr($data, $offset, self::WRITE_CHUNK_SIZE));
 

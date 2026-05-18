@@ -96,7 +96,7 @@ final readonly class ParallelClassNodeExtractor
             $exceptPipes = null;
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
             // to allow tests to mock stream_select in this namespace
-            $selected = stream_select($readStreams, $writePipes, $exceptPipes, 0, 50000);
+            $selected = stream_select($readStreams, $writePipes, $exceptPipes, 0, 5000);
             // phpcs:enable
 
             if ($selected === false) {
