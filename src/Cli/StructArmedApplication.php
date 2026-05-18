@@ -14,6 +14,7 @@ use function sprintf;
 
 final readonly class StructArmedApplication
 {
+    /** @param (Closure(): int)|null $internalWorkerRunner */
     public function __construct(private ?Closure $internalWorkerRunner = null)
     {
     }
