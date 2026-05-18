@@ -122,30 +122,42 @@ final readonly class ParallelClassNodeExtractor
                 if (($meta['type'] ?? null) === 'result') {
                     $this->consumeWorkerResult($worker, $readStream);
 
-                    if (! $worker->trackProgress) {
-                        $stderrPipe = $worker->stderrPipe;
-                        if (is_resource($stderrPipe)) {
-                            $remaining = fread($stderrPipe, 8192);
-                            if ($remaining !== false && $remaining !== '') {
+                    $stderrPipe = $worker->stderrPipe;
+                    if (is_resource($stderrPipe)) {
+                        $remaining = fread($stderrPipe, 8192);
+                        if ($remaining !== false && $remaining !== '') {
+                            $count = substr_count($remaining, "\n");
+                            if ($count !== strlen($remaining)) {
                                 $worker->stderrBuffer .= str_replace("\n", '', $remaining);
                             }
 
-                            if (feof($stderrPipe)) {
-                                fclose($stderrPipe);
-                                $this->handleCompletedWorker(
-                                    $pending,
-                                    $key,
-                                    $worker,
-                                    $nodes,
-                                    $failure,
-                                    $batchQueue,
-                                    $nextBatch,
-                                    $batchCount,
-                                    $nextWorkerId,
-                                    $script,
-                                    false,
-                                );
+                            if ($worker->trackProgress) {
+                                $fileCount = count($worker->files);
+                                for ($i = 0; $i < $count; $i++) {
+                                    $fileIdx = $worker->filesAdvanced;
+                                    if ($fileIdx < $fileCount) {
+                                        $progressHandler?->advance($worker->files[$fileIdx]);
+                                        $worker->filesAdvanced++;
+                                    }
+                                }
                             }
+                        }
+
+                        if (feof($stderrPipe)) {
+                            fclose($stderrPipe);
+                            $this->handleCompletedWorker(
+                                $pending,
+                                $key,
+                                $worker,
+                                $nodes,
+                                $failure,
+                                $batchQueue,
+                                $nextBatch,
+                                $batchCount,
+                                $nextWorkerId,
+                                $script,
+                                $worker->trackProgress,
+                            );
                         }
                     }
 
