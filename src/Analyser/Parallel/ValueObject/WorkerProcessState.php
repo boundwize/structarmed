@@ -11,6 +11,8 @@ final class WorkerProcessState
 {
     public int $filesAdvanced = 0;
 
+    public string $stderrBuffer = '';
+
     public ?RuntimeException $resultFailure = null;
 
     /** @var array{nodes: list<ClassNode>, error: string|null}|null */

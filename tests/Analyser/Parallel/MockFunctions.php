@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use function in_array;
+use function is_callable;
 use function serialize;
 use function str_replace;
 
 // phpcs:disable
 $GLOBALS['mock_proc_open']                 = false;
+$GLOBALS['mock_proc_open_callback']        = null;
+$GLOBALS['mock_proc_open_command']         = null;
 $GLOBALS['mock_tempnam']                   = false;
 $GLOBALS['mock_file_get_contents_payload'] = null;
 $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -24,6 +27,15 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
 {
     if ($GLOBALS['mock_proc_open'] === true) {
         return false;
+    }
+
+    if (is_callable($GLOBALS['mock_proc_open_callback'])) {
+        return $GLOBALS['mock_proc_open_callback']($command, $descriptorspec, $pipes);
+    }
+
+    if ($GLOBALS['mock_proc_open_command'] !== null) {
+        /** @var list<string>|string $command */
+        $command = $GLOBALS['mock_proc_open_command'];
     }
 
     return \proc_open($command, $descriptorspec, $pipes);

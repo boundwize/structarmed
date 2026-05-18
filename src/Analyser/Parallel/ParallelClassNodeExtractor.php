@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Analyser\Parallel\ValueObject\WorkerFinalizedState;
 use Boundwize\StructArmed\Analyser\Parallel\ValueObject\WorkerProcessState;
+use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
 use function array_chunk;
@@ -29,6 +29,7 @@ use function max;
 use function min;
 use function proc_close;
 use function sprintf;
+use function str_replace;
 use function stream_get_contents;
 use function stream_select;
 use function stream_set_blocking;
@@ -122,7 +123,9 @@ final readonly class ParallelClassNodeExtractor
 
                 $data = fread($stderrPipe, 8192);
                 if ($data !== false && $data !== '') {
-                    $count = substr_count($data, "\n");
+                    $count                 = substr_count($data, "\n");
+                    $worker->stderrBuffer .= str_replace("\n", '', $data);
+
                     for ($i = 0; $i < $count; $i++) {
                         $fileIdx = $worker->filesAdvanced;
                         if ($fileIdx < count($worker->files)) {
@@ -346,7 +349,11 @@ final readonly class ParallelClassNodeExtractor
         }
 
         $stderrPipe = $workerProcessState->stderrPipe;
-        $stderr     = is_resource($stderrPipe) ? (string) stream_get_contents($stderrPipe) : '';
+        $stderr     = $workerProcessState->stderrBuffer;
+
+        if (is_resource($stderrPipe)) {
+            $stderr .= (string) stream_get_contents($stderrPipe);
+        }
 
         if (is_resource($stderrPipe)) {
             fclose($stderrPipe);
