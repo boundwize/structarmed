@@ -24,8 +24,12 @@ use const STDOUT;
 final readonly class ClassNodeWorker
 {
     /** @param resource|null $outputStream */
-    public static function run(string $address, string $workerId = '', mixed $outputStream = null, mixed $socketStream = null): int
-    {
+    public static function run(
+        string $address,
+        string $workerId = '',
+        mixed $outputStream = null,
+        mixed $socketStream = null
+    ): int {
         $stream = $socketStream;
 
         try {

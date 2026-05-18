@@ -296,8 +296,12 @@ final readonly class ParallelClassNodeExtractor
     /**
      * @param list<string> $files
      */
-    private function startWorker(string $workerId, array $files, string $socketAddress, string $script): WorkerProcessState
-    {
+    private function startWorker(
+        string $workerId,
+        array $files,
+        string $socketAddress,
+        string $script
+    ): WorkerProcessState {
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
         $process = proc_open(
@@ -405,7 +409,11 @@ final readonly class ParallelClassNodeExtractor
 
             $hello = WorkerPayloadSocket::readPayload($workerSocket);
 
-            if (! isset($hello['workerId']) || ! is_string($hello['workerId']) || ! isset($byWorkerId[$hello['workerId']])) {
+            if (
+                ! isset($hello['workerId'])
+                || ! is_string($hello['workerId'])
+                || ! isset($byWorkerId[$hello['workerId']])
+            ) {
                 fclose($workerSocket);
 
                 throw new RuntimeException('Parallel analysis worker returned an invalid hello payload.');
