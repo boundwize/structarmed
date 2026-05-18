@@ -63,12 +63,14 @@ final readonly class Analyser
 
     /**
      * @param list<string> $scanPaths
+     * @param list<string>|null $files
      */
     public function analyse(
         Architecture $architecture,
         array $scanPaths = [],
         ?ProgressHandlerInterface $progressHandler = null,
-        ?AnalyserOptions $analyserOptions = null
+        ?AnalyserOptions $analyserOptions = null,
+        ?array $files = null
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
         $layers                  = $this->resolveLayers($architecture);
@@ -108,7 +110,7 @@ final readonly class Analyser
         $layerPatterns      = $architecture->getLayerPatterns();
         $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
 
-        $files      = $this->filesForAnalysis($architecture, $scanPaths);
+        $files    ??= $this->filesForAnalysis($architecture, $scanPaths);
         $classNodes = $this->collectClassNodes(
             $files,
             $progressHandler,

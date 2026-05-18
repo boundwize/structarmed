@@ -295,8 +295,12 @@ final readonly class ParallelClassNodeExtractor
     /**
      * @param list<string> $files
      */
-    private function startWorker(string $workerId, array $files, string $script, bool $trackProgress): WorkerProcessState
-    {
+    private function startWorker(
+        string $workerId,
+        array $files,
+        string $script,
+        bool $trackProgress
+    ): WorkerProcessState {
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
         $process = proc_open(
