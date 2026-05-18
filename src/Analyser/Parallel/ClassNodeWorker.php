@@ -17,6 +17,8 @@ use function fwrite;
 use function is_array;
 use function is_resource;
 use function is_string;
+use function max;
+use function sqrt;
 use function sprintf;
 use function str_repeat;
 
@@ -78,9 +80,9 @@ final readonly class ClassNodeWorker
             $nodes = self::extractNodes(
                 $payload,
                 new class ($progressStream) implements ProgressHandlerInterface {
-                    private const FLUSH_EVERY = 32;
-
                     private int $pendingAdvances = 0;
+
+                    private int $flushEvery = 1;
 
                     /** @param resource $stream */
                     public function __construct(private readonly mixed $stream)
@@ -89,13 +91,14 @@ final readonly class ClassNodeWorker
 
                     public function start(int $total): void
                     {
+                        $this->flushEvery = max(1, (int) ceil(sqrt($total)));
                     }
 
                     public function advance(string $file): void
                     {
                         $this->pendingAdvances++;
 
-                        if ($this->pendingAdvances < self::FLUSH_EVERY) {
+                        if ($this->pendingAdvances < $this->flushEvery) {
                             return;
                         }
 
