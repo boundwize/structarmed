@@ -330,9 +330,9 @@ final readonly class ParallelClassNodeExtractor
             return max(1, $totalFiles);
         }
 
-        $targetBatchCount = (int) ceil($totalFiles / 512);
-        $targetBatchCount = max($workerCount, $targetBatchCount);
-        $targetBatchCount = min($totalFiles, $workerCount * 4, $targetBatchCount);
+        $filesPerWorker = (int) ceil($totalFiles / $workerCount);
+        $targetBatchesPerWorker = min(4, max(1, (int) ceil($filesPerWorker / 256)));
+        $targetBatchCount = min($totalFiles, $workerCount * $targetBatchesPerWorker);
 
         return max(1, (int) ceil($totalFiles / $targetBatchCount));
     }
