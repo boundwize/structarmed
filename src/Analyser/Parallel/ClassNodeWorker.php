@@ -10,26 +10,34 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Throwable;
 
 use function count;
+use function fclose;
 use function fflush;
-use function file_get_contents;
-use function file_put_contents;
 use function fwrite;
 use function is_array;
-use function serialize;
+use function is_resource;
+use function is_string;
 use function sprintf;
-use function unserialize;
 
 use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
     /** @param resource|null $outputStream */
-    public static function run(string $inputFile, string $outputFile, mixed $outputStream = null): int
+    public static function run(string $address, mixed $outputStream = null, mixed $socketStream = null): int
     {
-        try {
-            $payload = unserialize((string) file_get_contents($inputFile));
+        $stream = $socketStream;
 
-            if (! is_array($payload)) {
+        try {
+            $stream ??= WorkerPayloadSocket::connect($address);
+            $payload = WorkerPayloadSocket::readPayload($stream);
+
+            if (
+                ! isset($payload['basePath'], $payload['layers'], $payload['layerPatterns'], $payload['files'])
+                || ! is_string($payload['basePath'])
+                || ! is_array($payload['layers'])
+                || ! is_array($payload['layerPatterns'])
+                || ! is_array($payload['files'])
+            ) {
                 throw new WorkerFailedException('Invalid worker payload.');
             }
 
@@ -44,9 +52,9 @@ final readonly class ClassNodeWorker
 
             $layerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
 
-            $stream = $outputStream ?? STDOUT;
+            $progressStream = $outputStream ?? STDOUT;
 
-            $progressHandler = new class ($stream) implements ProgressHandlerInterface {
+            $progressHandler = new class ($progressStream) implements ProgressHandlerInterface {
                 /** @param resource $stream */
                 public function __construct(private readonly mixed $stream)
                 {
@@ -71,17 +79,23 @@ final readonly class ClassNodeWorker
             $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
             $progressHandler->finish();
 
-            file_put_contents($outputFile, serialize([
+            WorkerPayloadSocket::writePayload($stream, [
                 'nodes' => $nodes,
                 'error' => null,
-            ]));
+            ]);
+
+            fclose($stream);
 
             return 0;
         } catch (Throwable $throwable) {
-            file_put_contents($outputFile, serialize([
-                'nodes' => [],
-                'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
-            ]));
+            if (is_resource($stream)) {
+                WorkerPayloadSocket::writePayload($stream, [
+                    'nodes' => [],
+                    'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
+                ]);
+
+                fclose($stream);
+            }
 
             return 1;
         }

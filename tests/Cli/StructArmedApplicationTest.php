@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Cli;
 
 use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Analyser\Parallel\WorkerPayloadSocket;
 use Boundwize\StructArmed\Cli\AnalyseCommand;
 use Boundwize\StructArmed\Cli\ClearCacheCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
@@ -26,10 +27,15 @@ use function json_decode;
 use function mkdir;
 use function ob_get_clean;
 use function ob_start;
+use function proc_close;
+use function proc_open;
 use function random_bytes;
 use function rmdir;
-use function serialize;
 use function str_replace;
+use function stream_get_contents;
+use function stream_socket_accept;
+use function stream_socket_get_name;
+use function stream_socket_server;
 use function sys_get_temp_dir;
 use function tempnam;
 use function unlink;
@@ -810,23 +816,52 @@ PHP);
 
     public function testInternalWorkerRoutesDelegatestoClassNodeWorker(): void
     {
-        $inputFile  = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-input-');
-        $outputFile = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-output-');
+        $server = stream_socket_server('tcp://127.0.0.1:0');
+        $this->assertNotFalse($server);
 
-        file_put_contents($inputFile, serialize([
+        $address = stream_socket_get_name($server, false);
+        $this->assertIsString($address);
+
+        $process = proc_open(
+            ['php', __DIR__ . '/../../bin/structarmed.php', '--internal-worker', 'tcp://' . $address],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+        );
+
+        $this->assertNotFalse($process);
+        $this->assertIsArray($pipes);
+        $this->assertArrayHasKey(1, $pipes);
+        $this->assertArrayHasKey(2, $pipes);
+
+        $connection = stream_socket_accept($server, 5);
+        $this->assertNotFalse($connection);
+
+        WorkerPayloadSocket::writePayload($connection, [
             'basePath'      => sys_get_temp_dir(),
             'layers'        => [],
             'layerPatterns' => [],
             'files'         => [],
-        ]));
+        ]);
+
+        $result = WorkerPayloadSocket::readPayload($connection);
 
         try {
-            [$exitCode] = $this->runApplication(['structarmed', '--internal-worker', $inputFile, $outputFile]);
+            $stdout = stream_get_contents($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            $exitCode = proc_close($process);
 
             $this->assertSame(0, $exitCode);
+            $this->assertSame([], $result['nodes']);
+            $this->assertNull($result['error']);
+            $this->assertIsString($stdout);
+            $this->assertIsString($stderr);
         } finally {
-            @unlink($inputFile);
-            @unlink($outputFile);
+            fclose($connection);
+            fclose($server);
         }
     }
 

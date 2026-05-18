@@ -5,20 +5,23 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
+use Boundwize\StructArmed\Analyser\Parallel\WorkerPayloadSocket;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerFailedException;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
-use function file_get_contents;
 use function file_put_contents;
 use function fopen;
-use function serialize;
-use function unserialize;
+use function stream_get_meta_data;
+use function stream_socket_accept;
+use function stream_socket_get_name;
+use function stream_socket_server;
 
 #[CoversClass(ClassNodeWorker::class)]
 #[CoversClass(WorkerFailedException::class)]
+#[CoversClass(WorkerPayloadSocket::class)]
 final class ClassNodeWorkerTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
@@ -38,21 +41,20 @@ final class Foo
 }
 PHP);
 
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
-        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
+        ['client' => $clientStream, 'server' => $serverStream] = $this->createSocketStreams();
 
-        file_put_contents($inputFile, serialize([
+        WorkerPayloadSocket::writePayload($clientStream, [
             'basePath'      => $dir,
             'layers'        => ['Domain' => 'App\\Domain'],
             'layerPatterns' => [],
             'files'         => [$srcFile],
-        ]));
+        ]);
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = ClassNodeWorker::run('', $this->silentStream(), $serverStream);
 
         $this->assertSame(0, $exitCode);
 
-        $result = unserialize((string) file_get_contents($outputFile));
+        $result = WorkerPayloadSocket::readPayload($clientStream);
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('nodes', $result);
@@ -63,16 +65,15 @@ PHP);
 
     public function testRunWithInvalidPayloadReturnsOneAndWritesError(): void
     {
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
-        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
+        ['client' => $clientStream, 'server' => $serverStream] = $this->createSocketStreams();
 
-        file_put_contents($inputFile, serialize('not-an-array'));
+        WorkerPayloadSocket::writePayload($clientStream, ['invalid-payload']);
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = ClassNodeWorker::run('', $this->silentStream(), $serverStream);
 
         $this->assertSame(1, $exitCode);
 
-        $result = unserialize((string) file_get_contents($outputFile));
+        $result = WorkerPayloadSocket::readPayload($clientStream);
 
         $this->assertIsArray($result);
         $this->assertSame([], $result['nodes']);
@@ -102,21 +103,20 @@ final class FooService
 }
 PHP);
 
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
-        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
+        ['client' => $clientStream, 'server' => $serverStream] = $this->createSocketStreams();
 
-        file_put_contents($inputFile, serialize([
+        WorkerPayloadSocket::writePayload($clientStream, [
             'basePath'      => $dir,
             'layers'        => ['Domain' => 'App\\Domain'],
             'layerPatterns' => ['Domain' => ['pattern' => '/Service$/', 'excludePattern' => null]],
             'files'         => [$srcFile],
-        ]));
+        ]);
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = ClassNodeWorker::run('', $this->silentStream(), $serverStream);
 
         $this->assertSame(0, $exitCode);
 
-        $result = unserialize((string) file_get_contents($outputFile));
+        $result = WorkerPayloadSocket::readPayload($clientStream);
 
         $this->assertIsArray($result);
         $this->assertNull($result['error']);
@@ -131,5 +131,31 @@ PHP);
         $this->assertNotFalse($stream);
 
         return $stream;
+    }
+
+    /**
+     * @return array{client: resource, server: resource}
+     */
+    private function createSocketStreams(): array
+    {
+        $server = stream_socket_server('tcp://127.0.0.1:0');
+        $this->assertNotFalse($server);
+
+        $metadata = stream_get_meta_data($server);
+        $this->assertIsArray($metadata);
+
+        $address = stream_socket_get_name($server, false);
+        $this->assertIsString($address);
+
+        $client = WorkerPayloadSocket::connect('tcp://' . $address);
+        $accepted = stream_socket_accept($server, 1);
+        $this->assertNotFalse($accepted);
+
+        fclose($server);
+
+        return [
+            'client' => $client,
+            'server' => $accepted,
+        ];
     }
 }
