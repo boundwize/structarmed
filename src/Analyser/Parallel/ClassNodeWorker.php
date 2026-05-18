@@ -23,12 +23,17 @@ use const STDOUT;
 final readonly class ClassNodeWorker
 {
     /** @param resource|null $outputStream */
-    public static function run(string $address, mixed $outputStream = null, mixed $socketStream = null): int
+    public static function run(string $address, string $workerId = '', mixed $outputStream = null, mixed $socketStream = null): int
     {
         $stream = $socketStream;
 
         try {
             $stream ??= WorkerPayloadSocket::connect($address);
+
+            if ($socketStream === null) {
+                WorkerPayloadSocket::writePayload($stream, ['workerId' => $workerId]);
+            }
+
             $payload = WorkerPayloadSocket::readPayload($stream);
 
             if (

@@ -50,7 +50,7 @@ PHP);
             'files'         => [$srcFile],
         ]);
 
-        $exitCode = ClassNodeWorker::run('', $this->silentStream(), $serverStream);
+        $exitCode = ClassNodeWorker::run('', '', $this->silentStream(), $serverStream);
 
         $this->assertSame(0, $exitCode);
 
@@ -69,7 +69,7 @@ PHP);
 
         WorkerPayloadSocket::writePayload($clientStream, ['invalid-payload']);
 
-        $exitCode = ClassNodeWorker::run('', $this->silentStream(), $serverStream);
+        $exitCode = ClassNodeWorker::run('', '', $this->silentStream(), $serverStream);
 
         $this->assertSame(1, $exitCode);
 
@@ -112,7 +112,7 @@ PHP);
             'files'         => [$srcFile],
         ]);
 
-        $exitCode = ClassNodeWorker::run('', $this->silentStream(), $serverStream);
+        $exitCode = ClassNodeWorker::run('', '', $this->silentStream(), $serverStream);
 
         $this->assertSame(0, $exitCode);
 

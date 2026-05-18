@@ -823,7 +823,7 @@ PHP);
         $this->assertIsString($address);
 
         $process = proc_open(
-            ['php', __DIR__ . '/../../bin/structarmed.php', '--internal-worker', 'tcp://' . $address],
+            ['php', __DIR__ . '/../../bin/structarmed.php', '--internal-worker', 'tcp://' . $address, 'test-worker'],
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -839,6 +839,9 @@ PHP);
 
         $connection = stream_socket_accept($server, 5);
         $this->assertNotFalse($connection);
+
+        $hello = WorkerPayloadSocket::readPayload($connection);
+        $this->assertSame(['workerId' => 'test-worker'], $hello);
 
         WorkerPayloadSocket::writePayload($connection, [
             'basePath'      => sys_get_temp_dir(),
