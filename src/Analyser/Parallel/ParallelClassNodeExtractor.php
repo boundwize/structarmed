@@ -18,7 +18,6 @@ use function count;
 use function dirname;
 use function fclose;
 use function feof;
-use function file_put_contents;
 use function fread;
 use function is_array;
 use function is_dir;
@@ -28,13 +27,13 @@ use function max;
 use function min;
 use function mkdir;
 use function proc_close;
-use function serialize;
 use function sprintf;
+use function stream_get_contents;
 use function stream_set_blocking;
+use function stream_socket_accept;
+use function stream_socket_get_name;
+use function stream_socket_server;
 use function substr_count;
-use function sys_get_temp_dir;
-use function unlink;
-use function unserialize;
 use function usleep;
 
 use const PHP_BINARY;
@@ -64,6 +63,8 @@ final readonly class ParallelClassNodeExtractor
             return [];
         }
 
+        $this->ensureCacheDirectoryExists();
+
         $totalFiles  = count($files);
         $workerCount = min($this->workerCount, $totalFiles);
         $chunkSize   = (int) ceil($totalFiles / $workerCount);
@@ -71,52 +72,68 @@ final readonly class ParallelClassNodeExtractor
         $processes   = [];
 
         foreach (array_chunk($files, max(1, $chunkSize)) as $chunk) {
-            [
-                'inputFile'  => $inputFile,
-                'outputFile' => $outputFile,
-                'stderrFile' => $stderrFile,
-            ] = $this->createWorkerFiles();
-
-            file_put_contents($inputFile, serialize([
-                'basePath'      => $this->basePath,
-                'layers'        => $this->layers,
-                'layerPatterns' => $this->layerPatterns,
-                'files'         => $chunk,
-            ]));
+            ['server' => $serverSocket, 'address' => $socketAddress] = $this->createWorkerListener();
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
             // to avoid error in test that mock it
             $process = proc_open(
             // phpcs:enable
-                [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
+                [PHP_BINARY, $script, '--internal-worker', $socketAddress],
                 [
                     0 => ['pipe', 'r'],
                     1 => ['pipe', 'w'],
-                    2 => ['file', $stderrFile, 'w'],
+                    2 => ['pipe', 'w'],
                 ],
                 $pipes,
             );
 
             if ($process === false) {
-                $this->cleanup([$inputFile, $outputFile, $stderrFile]);
+                fclose($serverSocket);
 
                 throw new RuntimeException('Unable to start parallel analysis worker.');
             }
 
-            assert(isset($pipes[0]) && isset($pipes[1]));
+            assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]));
             fclose($pipes[0]);
 
+            $workerSocket = stream_socket_accept($serverSocket, 5);
+            fclose($serverSocket);
+
+            if ($workerSocket === false) {
+                $stderrPipe = $pipes[2];
+                $stderr     = is_resource($stderrPipe) ? (string) stream_get_contents($stderrPipe) : '';
+
+                fclose($pipes[1]);
+                fclose($stderrPipe);
+
+                $procResource = $process;
+                assert(is_resource($procResource));
+                proc_close($procResource);
+
+                throw new RuntimeException(sprintf(
+                    'Parallel analysis worker failed: unable to establish worker socket.%s',
+                    $stderr !== '' ? "\n" . $stderr : ''
+                ));
+            }
+
+            WorkerPayloadSocket::writePayload($workerSocket, [
+                'basePath'      => $this->basePath,
+                'layers'        => $this->layers,
+                'layerPatterns' => $this->layerPatterns,
+                'files'         => $chunk,
+            ]);
+
             $stdoutPipe = $pipes[1];
+            $stderrPipe = $pipes[2];
             stream_set_blocking($stdoutPipe, false);
 
             $processes[] = [
                 'process'       => $process,
                 'files'         => $chunk,
                 'filesAdvanced' => 0,
-                'inputFile'     => $inputFile,
-                'outputFile'    => $outputFile,
-                'stderrFile'    => $stderrFile,
+                'socket'        => $workerSocket,
                 'stdoutPipe'    => $stdoutPipe,
+                'stderrPipe'    => $stderrPipe,
             ];
         }
 
@@ -153,14 +170,16 @@ final readonly class ParallelClassNodeExtractor
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
 
+                $stderrPipe = $pending[$key]['stderrPipe'];
+                $stderr     = (string) stream_get_contents($stderrPipe);
+                fclose($stderrPipe);
+
                 $procResource = $pending[$key]['process'];
                 assert(is_resource($procResource));
                 $exitCode = proc_close($procResource);
 
                 try {
-                    // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                    $result = unserialize((string) file_get_contents($pending[$key]['outputFile']));
-                    // phpcs:enable
+                    $result = WorkerPayloadSocket::readPayload($pending[$key]['socket']);
 
                     if (
                         ! is_array($result)
@@ -178,11 +197,6 @@ final readonly class ParallelClassNodeExtractor
                     }
 
                     if ($error !== null || $exitCode !== 0) {
-                        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                        // to avoid error in test that mock it
-                        $stderr = (string) file_get_contents($pending[$key]['stderrFile']);
-                        // phpcs:enable
-
                         throw new RuntimeException(sprintf(
                             "Parallel analysis worker failed: %s%s",
                             $error ?? 'unknown error',
@@ -194,13 +208,16 @@ final readonly class ParallelClassNodeExtractor
                     $workerNodes = $result['nodes'];
                     $nodes       = array_merge($nodes, $workerNodes);
                 } catch (RuntimeException $runtimeException) {
-                    $failure ??= $runtimeException->getMessage();
+                    if ($exitCode !== 0 && $stderr !== '') {
+                        $failure ??= sprintf(
+                            "Parallel analysis worker failed: unknown error\n%s",
+                            $stderr
+                        );
+                    } else {
+                        $failure ??= $runtimeException->getMessage();
+                    }
                 } finally {
-                    $this->cleanup([
-                        $pending[$key]['inputFile'],
-                        $pending[$key]['outputFile'],
-                        $pending[$key]['stderrFile'],
-                    ]);
+                    fclose($pending[$key]['socket']);
                 }
 
                 unset($pending[$key]);
@@ -220,44 +237,34 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @return array{inputFile: string, outputFile: string, stderrFile: string}
+     * @return array{server: resource, address: string}
      */
-    private function createWorkerFiles(): array
+    private function createWorkerListener(): array
     {
+        $server = stream_socket_server('tcp://127.0.0.1:0');
+
+        if ($server === false) {
+            throw new RuntimeException('Unable to create socket for parallel analysis worker.');
+        }
+
+        $address = stream_socket_get_name($server, false);
+
+        if (! is_string($address) || $address === '') {
+            fclose($server);
+
+            throw new RuntimeException('Unable to resolve socket address for parallel analysis worker.');
+        }
+
         return [
-            'inputFile'  => $this->temporaryFile(),
-            'outputFile' => $this->temporaryFile(),
-            'stderrFile' => $this->temporaryFile(),
+            'server' => $server,
+            'address' => 'tcp://' . $address,
         ];
     }
 
-    private function temporaryFile(): string
+    private function ensureCacheDirectoryExists(): void
     {
-        $dir = $this->cacheDirectory ?? sys_get_temp_dir();
-
-        if (! is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
-
-        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-        // to avoid error in test that mock it
-        $file = tempnam($dir, 'structarmed-worker-');
-        // phpcs:enable
-
-        if ($file === false) {
-            throw new RuntimeException('Unable to create temporary file for parallel analysis.');
-        }
-
-        return $file;
-    }
-
-    /**
-     * @param list<string> $files
-     */
-    private function cleanup(array $files): void
-    {
-        foreach ($files as $file) {
-            @unlink($file);
+        if ($this->cacheDirectory !== null && ! is_dir($this->cacheDirectory)) {
+            mkdir($this->cacheDirectory, 0777, true);
         }
     }
 }
