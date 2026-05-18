@@ -67,7 +67,9 @@ final readonly class ClassNodeWorker
                 ]);
 
                 if ($shouldCloseResultStream) {
+                    // @codeCoverageIgnoreStart
                     fclose($stream);
+                    // @codeCoverageIgnoreEnd
                 }
             }
 
