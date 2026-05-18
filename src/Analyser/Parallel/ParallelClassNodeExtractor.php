@@ -63,15 +63,16 @@ final readonly class ParallelClassNodeExtractor
         $workerCount = min($this->workerCount, $totalFiles);
         $chunkSize   = $this->determineBatchSize($totalFiles, $workerCount);
         /** @var int<1, max> $chunkSize */
-        $batchQueue   = array_chunk($files, $chunkSize);
-        $workerCount  = min($workerCount, count($batchQueue));
-        $script       = dirname(__DIR__, 3) . '/bin/structarmed.php';
-        $nodes        = [];
-        $failure      = null;
-        $pending      = [];
-        $nextWorkerId = 0;
-        $nextBatch    = 0;
-        $batchCount   = count($batchQueue);
+        $batchQueue    = array_chunk($files, $chunkSize);
+        $workerCount   = min($workerCount, count($batchQueue));
+        $script        = dirname(__DIR__, 3) . '/bin/structarmed.php';
+        $trackProgress = $progressHandler instanceof ProgressHandlerInterface;
+        $nodes         = [];
+        $failure       = null;
+        $pending       = [];
+        $nextWorkerId  = 0;
+        $nextBatch     = 0;
+        $batchCount    = count($batchQueue);
 
         while ($nextBatch < $batchCount && count($pending) < $workerCount) {
             /** @var non-empty-list<string> $filesForWorker */
@@ -81,7 +82,7 @@ final readonly class ParallelClassNodeExtractor
                 workerId: (string) $nextWorkerId++,
                 files: $filesForWorker,
                 script: $script,
-                trackProgress: $progressHandler instanceof ProgressHandlerInterface,
+                trackProgress: $trackProgress,
             );
         }
 
@@ -131,14 +132,10 @@ final readonly class ParallelClassNodeExtractor
                                 $worker->stderrBuffer .= str_replace("\n", '', $remaining);
                             }
 
-                            if ($worker->trackProgress) {
-                                $fileCount = count($worker->files);
-                                for ($i = 0; $i < $count; $i++) {
-                                    $fileIdx = $worker->filesAdvanced;
-                                    if ($fileIdx < $fileCount) {
-                                        $progressHandler?->advance($worker->files[$fileIdx]);
-                                        $worker->filesAdvanced++;
-                                    }
+                            if ($worker->trackProgress && $count > 0) {
+                                $advanceable = min($count, count($worker->files) - $worker->filesAdvanced);
+                                for ($i = 0; $i < $advanceable; $i++) {
+                                    $progressHandler?->advance($worker->files[$worker->filesAdvanced++]);
                                 }
                             }
                         }
