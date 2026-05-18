@@ -41,17 +41,13 @@ final readonly class ClassNodeWorker
 
             $payload = WorkerPayloadSocket::readPayload($stream);
 
-            if ($socketStream !== null || self::isLegacyPayload($payload)) {
-                $progressStream = $outputStream ?? STDOUT;
+            $progressStream = $outputStream ?? STDOUT;
 
-                if (! is_resource($progressStream)) {
-                    throw new WorkerFailedException('Invalid worker progress stream.');
-                }
-
-                return self::runLegacyBatch($payload, $progressStream, $stream);
+            if (! is_resource($progressStream)) {
+                throw new WorkerFailedException('Invalid worker progress stream.');
             }
 
-            return self::runBatchLoop($stream, $payload);
+            return self::runBatch($payload, $progressStream, $stream);
         } catch (Throwable $throwable) {
             if (is_resource($stream)) {
                 WorkerPayloadSocket::writePayload($stream, [
@@ -71,7 +67,7 @@ final readonly class ClassNodeWorker
      * @param resource $stream
      * @param resource $progressStream
      */
-    private static function runLegacyBatch(array $payload, mixed $progressStream, mixed $stream): int
+    private static function runBatch(array $payload, mixed $progressStream, mixed $stream): int
     {
         try {
             $nodes = self::extractNodes(
@@ -119,72 +115,6 @@ final readonly class ClassNodeWorker
     }
 
     /**
-     * @param resource $stream
-     * @param array<mixed> $payload
-     */
-    private static function runBatchLoop(mixed $stream, array $payload): int
-    {
-        $currentPayload = $payload;
-
-        while (true) {
-            $type = $currentPayload['type'] ?? null;
-
-            if ($type === 'stop') {
-                fclose($stream);
-
-                return 0;
-            }
-
-            try {
-                if ($type !== 'batch') {
-                    throw new WorkerFailedException('Invalid worker payload.');
-                }
-
-                $nodes = self::extractNodes(
-                    $currentPayload,
-                    new class ($stream) implements ProgressHandlerInterface {
-                        /** @param resource $stream */
-                        public function __construct(private readonly mixed $stream)
-                        {
-                        }
-
-                        public function start(int $total): void
-                        {
-                        }
-
-                        public function advance(string $file): void
-                        {
-                            WorkerPayloadSocket::writePayload($this->stream, ['type' => 'progress']);
-                        }
-
-                        public function finish(): void
-                        {
-                        }
-                    },
-                );
-
-                WorkerPayloadSocket::writePayload($stream, [
-                    'type'  => 'result',
-                    'nodes' => $nodes,
-                    'error' => null,
-                ]);
-            } catch (Throwable $throwable) {
-                WorkerPayloadSocket::writePayload($stream, [
-                    'type'  => 'result',
-                    'nodes' => [],
-                    'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
-                ]);
-
-                fclose($stream);
-
-                return 1;
-            }
-
-            $currentPayload = WorkerPayloadSocket::readPayload($stream);
-        }
-    }
-
-    /**
      * @param array<mixed> $payload
      * @return list<ClassNode>
      */
@@ -215,12 +145,5 @@ final readonly class ClassNodeWorker
             $progressHandler->finish();
 
             return $nodes;
-    }
-
-        /** @param array<mixed> $payload */
-    private static function isLegacyPayload(array $payload): bool
-    {
-        return ! isset($payload['type'])
-            && isset($payload['basePath'], $payload['layers'], $payload['layerPatterns'], $payload['files']);
     }
 }
