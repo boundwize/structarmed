@@ -18,6 +18,7 @@ use function is_array;
 use function is_resource;
 use function is_string;
 use function sprintf;
+use function str_repeat;
 
 use const STDOUT;
 
@@ -77,6 +78,10 @@ final readonly class ClassNodeWorker
             $nodes = self::extractNodes(
                 $payload,
                 new class ($progressStream) implements ProgressHandlerInterface {
+                    private const FLUSH_EVERY = 32;
+
+                    private int $pendingAdvances = 0;
+
                     /** @param resource $stream */
                     public function __construct(private readonly mixed $stream)
                     {
@@ -88,12 +93,26 @@ final readonly class ClassNodeWorker
 
                     public function advance(string $file): void
                     {
-                        fwrite($this->stream, "\n");
+                        $this->pendingAdvances++;
+
+                        if ($this->pendingAdvances < self::FLUSH_EVERY) {
+                            return;
+                        }
+
+                        fwrite($this->stream, str_repeat("\n", $this->pendingAdvances));
                         fflush($this->stream);
+                        $this->pendingAdvances = 0;
                     }
 
                     public function finish(): void
                     {
+                        if ($this->pendingAdvances === 0) {
+                            return;
+                        }
+
+                        fwrite($this->stream, str_repeat("\n", $this->pendingAdvances));
+                        fflush($this->stream);
+                        $this->pendingAdvances = 0;
                     }
                 },
             );
