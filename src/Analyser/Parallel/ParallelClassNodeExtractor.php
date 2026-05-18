@@ -63,179 +63,182 @@ final readonly class ParallelClassNodeExtractor
 
         $totalFiles  = count($files);
         $workerCount = min($this->workerCount, $totalFiles);
-        $chunkSize   = (int) ceil($totalFiles / $workerCount);
+        $chunkSize   = $this->determineBatchSize($totalFiles, $workerCount);
+        $batchQueue  = array_values(array_chunk($files, $chunkSize));
+        $workerCount = min($workerCount, count($batchQueue));
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
         ['server' => $serverSocket, 'address' => $socketAddress] = $this->createWorkerListener();
-        $processes   = [];
-
-        foreach (array_chunk($files, max(1, $chunkSize)) as $workerIndex => $chunk) {
-            $workerId = (string) $workerIndex;
-
-            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-            // to avoid error in test that mock it
-            $process = proc_open(
-            // phpcs:enable
-                [PHP_BINARY, $script, '--internal-worker', $socketAddress, $workerId],
-                [
-                    0 => ['pipe', 'r'],
-                    1 => ['pipe', 'w'],
-                    2 => ['pipe', 'w'],
-                ],
-                $pipes,
-            );
-
-            if ($process === false) {
-                fclose($serverSocket);
-
-                throw new RuntimeException('Unable to start parallel analysis worker.');
-            }
-
-            assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]));
-            fclose($pipes[0]);
-
-            $stdoutPipe = $pipes[1];
-            $stderrPipe = $pipes[2];
-            stream_set_blocking($stdoutPipe, false);
-
-            $processes[] = new WorkerProcessState(
-                workerId: $workerId,
-                process: $process,
-                files: $chunk,
-                stdoutPipe: $stdoutPipe,
-                stderrPipe: $stderrPipe,
-            );
-        }
-
-        try {
-            $processes = $this->acceptWorkerConnections($serverSocket, $processes);
-        } finally {
-            fclose($serverSocket);
-        }
-
         $nodes   = [];
         $failure = null;
-        $pending = $processes;
+        $pending = [];
+        $nextWorkerId = 0;
 
-        while ($pending !== []) {
-            ['streams' => $readStreams, 'meta' => $streamMeta] = $this->collectReadableStreams($pending);
+        try {
+            while ($batchQueue !== [] && count($pending) < $workerCount) {
+                $nextBatch = array_shift($batchQueue);
+                assert(is_array($nextBatch));
 
-            if ($readStreams === []) {
-                break;
+                $pending[] = $this->startWorker(
+                    workerId: (string) $nextWorkerId++,
+                    files: $nextBatch,
+                    socketAddress: $socketAddress,
+                    script: $script,
+                );
             }
 
-            $writePipes = null;
-            $exceptPipes = null;
-            $selected = stream_select($readStreams, $writePipes, $exceptPipes, 0, 50000);
+            $pending = $this->acceptWorkerConnections($serverSocket, $pending);
 
-            if ($selected === false) {
-                throw new RuntimeException('Unable to wait for parallel analysis worker progress.');
-            }
+            while ($pending !== []) {
+                ['streams' => $readStreams, 'meta' => $streamMeta] = $this->collectReadableStreams($pending);
 
-            if ($selected === 0) {
-                continue;
-            }
+                if ($readStreams === []) {
+                    break;
+                }
 
-            foreach ($readStreams as $stream) {
-                $meta = $streamMeta[(int) $stream] ?? null;
-                $key = $meta['key'] ?? null;
+                $writePipes = null;
+                $exceptPipes = null;
+                $selected = stream_select($readStreams, $writePipes, $exceptPipes, 0, 50000);
 
-                if ($key === null || ! isset($pending[$key])) {
+                if ($selected === false) {
+                    throw new RuntimeException('Unable to wait for parallel analysis worker progress.');
+                }
+
+                if ($selected === 0) {
                     continue;
                 }
 
-                $worker = $pending[$key];
+                foreach ($readStreams as $stream) {
+                    $meta = $streamMeta[(int) $stream] ?? null;
+                    $key = $meta['key'] ?? null;
 
-                if (($meta['type'] ?? null) === 'socket') {
-                    $this->consumeWorkerSocket($worker, $stream);
+                    if ($key === null || ! isset($pending[$key])) {
+                        continue;
+                    }
 
-                    continue;
-                }
+                    $worker = $pending[$key];
 
-                $stdoutPipe = $stream;
+                    if (($meta['type'] ?? null) === 'socket') {
+                        $this->consumeWorkerSocket($worker, $stream);
 
-                $data = fread($stdoutPipe, 8192);
-                if ($data !== false && $data !== '') {
-                    $count = substr_count($data, "\n");
-                    for ($i = 0; $i < $count; $i++) {
-                        $fileIdx = $worker->filesAdvanced;
-                        if ($fileIdx < count($worker->files)) {
-                            $progressHandler?->advance($worker->files[$fileIdx]);
-                            $worker->filesAdvanced++;
+                        continue;
+                    }
+
+                    $stdoutPipe = $stream;
+
+                    $data = fread($stdoutPipe, 8192);
+                    if ($data !== false && $data !== '') {
+                        $count = substr_count($data, "\n");
+                        for ($i = 0; $i < $count; $i++) {
+                            $fileIdx = $worker->filesAdvanced;
+                            if ($fileIdx < count($worker->files)) {
+                                $progressHandler?->advance($worker->files[$fileIdx]);
+                                $worker->filesAdvanced++;
+                            }
                         }
                     }
-                }
 
-                if (! feof($stdoutPipe)) {
-                    continue;
-                }
-
-                // Pipe EOF means the worker exited and the OS closed its write end.
-                // proc_close() has not been called yet so waitpid() inside it correctly
-                // returns the real exit code (no double-waitpid race with proc_get_status).
-                fclose($stdoutPipe);
-
-                $finalizedWorker = $this->finalizeWorker($worker);
-                $result = $finalizedWorker->result;
-                $socketFailure = $finalizedWorker->socketFailure;
-                $stderr = $finalizedWorker->stderr;
-                $exitCode = $finalizedWorker->exitCode;
-
-                if ($socketFailure !== null) {
-                    if ($exitCode !== 0 && $stderr !== '') {
-                        $failure ??= sprintf(
-                            "Parallel analysis worker failed: unknown error\n%s",
-                            $stderr
-                        );
-                    } else {
-                        $failure ??= $socketFailure->getMessage();
+                    if (! feof($stdoutPipe)) {
+                        continue;
                     }
 
+                    // Pipe EOF means the worker exited and the OS closed its write end.
+                    // proc_close() has not been called yet so waitpid() inside it correctly
+                    // returns the real exit code (no double-waitpid race with proc_get_status).
+                    fclose($stdoutPipe);
+
+                    $finalizedWorker = $this->finalizeWorker($worker);
+                    $result = $finalizedWorker->result;
+                    $socketFailure = $finalizedWorker->socketFailure;
+                    $stderr = $finalizedWorker->stderr;
+                    $exitCode = $finalizedWorker->exitCode;
+
+                    if ($socketFailure !== null) {
+                        if ($exitCode !== 0 && $stderr !== '') {
+                            $failure ??= sprintf(
+                                "Parallel analysis worker failed: unknown error\n%s",
+                                $stderr
+                            );
+                        } else {
+                            $failure ??= $socketFailure->getMessage();
+                        }
+
+                        unset($pending[$key]);
+
+                        if ($batchQueue !== [] && $failure === null) {
+                            $nextBatch = array_shift($batchQueue);
+                            assert(is_array($nextBatch));
+
+                            $newWorker = $this->startWorker(
+                                workerId: (string) $nextWorkerId++,
+                                files: $nextBatch,
+                                socketAddress: $socketAddress,
+                                script: $script,
+                            );
+                            $accepted = $this->acceptWorkerConnections($serverSocket, [$newWorker]);
+                            $pending[] = $accepted[0];
+                        }
+
+                        continue;
+                    }
+
+                    if (
+                        ! is_array($result)
+                        || ! isset($result['nodes'])
+                        || ! is_array($result['nodes'])
+                        || ! array_key_exists('error', $result)
+                    ) {
+                        $failure ??= 'Parallel analysis worker returned an invalid payload.';
+
+                        unset($pending[$key]);
+
+                        continue;
+                    }
+
+                    $error = $result['error'];
+
+                    if ($error !== null && ! is_string($error)) {
+                        $failure ??= 'Parallel analysis worker returned an invalid error payload.';
+
+                        unset($pending[$key]);
+
+                        continue;
+                    }
+
+                    if ($error !== null || $exitCode !== 0) {
+                        $failure ??= sprintf(
+                            "Parallel analysis worker failed: %s%s",
+                            $error ?? 'unknown error',
+                            $stderr !== '' ? "\n" . $stderr : ''
+                        );
+
+                        unset($pending[$key]);
+
+                        continue;
+                    }
+
+                    /** @var list<ClassNode> $workerNodes */
+                    $workerNodes = $result['nodes'];
+                    $nodes       = array_merge($nodes, $workerNodes);
+
                     unset($pending[$key]);
 
-                    continue;
+                    if ($batchQueue !== [] && $failure === null) {
+                        $nextBatch = array_shift($batchQueue);
+                        assert(is_array($nextBatch));
+
+                        $newWorker = $this->startWorker(
+                            workerId: (string) $nextWorkerId++,
+                            files: $nextBatch,
+                            socketAddress: $socketAddress,
+                            script: $script,
+                        );
+                        $accepted = $this->acceptWorkerConnections($serverSocket, [$newWorker]);
+                        $pending[] = $accepted[0];
+                    }
                 }
-
-                if (
-                    ! is_array($result)
-                    || ! isset($result['nodes'])
-                    || ! is_array($result['nodes'])
-                    || ! array_key_exists('error', $result)
-                ) {
-                    $failure ??= 'Parallel analysis worker returned an invalid payload.';
-
-                    unset($pending[$key]);
-
-                    continue;
-                }
-
-                $error = $result['error'];
-
-                if ($error !== null && ! is_string($error)) {
-                    $failure ??= 'Parallel analysis worker returned an invalid error payload.';
-
-                    unset($pending[$key]);
-
-                    continue;
-                }
-
-                if ($error !== null || $exitCode !== 0) {
-                    $failure ??= sprintf(
-                        "Parallel analysis worker failed: %s%s",
-                        $error ?? 'unknown error',
-                        $stderr !== '' ? "\n" . $stderr : ''
-                    );
-
-                    unset($pending[$key]);
-
-                    continue;
-                }
-
-                /** @var list<ClassNode> $workerNodes */
-                $workerNodes = $result['nodes'];
-                $nodes       = array_merge($nodes, $workerNodes);
-
-                unset($pending[$key]);
             }
+        } finally {
+            fclose($serverSocket);
         }
 
         if ($failure !== null) {
@@ -246,7 +249,7 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-    * @param list<WorkerProcessState> $processes
+        * @param list<WorkerProcessState> $processes
      * @return array{streams: list<resource>, meta: array<int, array{key: int, type: 'stdout'|'socket'}>}
      */
     private function collectReadableStreams(array $processes): array
@@ -280,7 +283,6 @@ final readonly class ParallelClassNodeExtractor
 
     /**
      * @param resource $stream
-     * @param resource $stream
      */
     private function consumeWorkerSocket(WorkerProcessState $worker, mixed $stream): void
     {
@@ -295,8 +297,65 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @return WorkerFinalizedState
+     * @param list<string> $files
      */
+    private function startWorker(string $workerId, array $files, string $socketAddress, string $script): WorkerProcessState
+    {
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
+        $process = proc_open(
+        // phpcs:enable
+            [PHP_BINARY, $script, '--internal-worker', $socketAddress, $workerId],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+        );
+
+        if ($process === false) {
+            throw new RuntimeException('Unable to start parallel analysis worker.');
+        }
+
+        assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]));
+        fclose($pipes[0]);
+
+        $stdoutPipe = $pipes[1];
+        $stderrPipe = $pipes[2];
+        stream_set_blocking($stdoutPipe, false);
+
+        return new WorkerProcessState(
+            workerId: $workerId,
+            process: $process,
+            files: $files,
+            stdoutPipe: $stdoutPipe,
+            stderrPipe: $stderrPipe,
+        );
+    }
+
+    private function determineBatchSize(int $totalFiles, int $workerCount): int
+    {
+        if ($workerCount <= 1) {
+            return max(1, $totalFiles);
+        }
+
+        $targetBatchesPerWorker = 1;
+
+        if ($totalFiles > $workerCount * 256) {
+            $targetBatchesPerWorker = 2;
+        }
+
+        if ($totalFiles > $workerCount * 1024) {
+            $targetBatchesPerWorker = 4;
+        }
+
+        $targetBatchCount = max(1, min($totalFiles, $workerCount * $targetBatchesPerWorker));
+
+        return max(1, (int) ceil($totalFiles / $targetBatchCount));
+    }
+
+    /** @return WorkerFinalizedState */
     private function finalizeWorker(WorkerProcessState $worker): WorkerFinalizedState
     {
         if (is_resource($worker->socket)) {
@@ -323,8 +382,8 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-        * @param list<WorkerProcessState> $processes
-        * @return list<WorkerProcessState>
+     * @param list<WorkerProcessState> $processes
+     * @return list<WorkerProcessState>
      */
     private function acceptWorkerConnections(mixed $serverSocket, array $processes): array
     {

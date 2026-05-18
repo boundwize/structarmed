@@ -12,17 +12,17 @@ final class WorkerProcessState
     public mixed $process;
 
     /** @var list<string> */
-    public array $files;
+    public array $files = [];
 
     public int $filesAdvanced = 0;
 
-    /** @var resource|null */
-    public mixed $socket = null;
+    public ?RuntimeException $socketFailure = null;
 
     /** @var array<mixed>|null */
     public ?array $result = null;
 
-    public ?RuntimeException $socketFailure = null;
+    /** @var resource|null */
+    public mixed $socket = null;
 
     /** @var resource */
     public mixed $stdoutPipe;
@@ -32,7 +32,6 @@ final class WorkerProcessState
 
     /**
      * @param resource $process
-     * @param list<string> $files
      * @param resource $stdoutPipe
      * @param resource $stderrPipe
      */
