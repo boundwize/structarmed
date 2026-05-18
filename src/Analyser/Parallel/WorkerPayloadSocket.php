@@ -6,10 +6,11 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use RuntimeException;
 
-use function assert;
 use function fclose;
+use function fread;
 use function fwrite;
 use function is_array;
+use function is_int;
 use function pack;
 use function serialize;
 use function sprintf;
@@ -17,8 +18,8 @@ use function stream_get_meta_data;
 use function stream_socket_client;
 use function strlen;
 use function substr;
-use function unserialize;
 use function unpack;
+use function unserialize;
 
 use const STREAM_CLIENT_CONNECT;
 
@@ -42,7 +43,7 @@ final class WorkerPayloadSocket
      */
     public static function readPayload(mixed $stream): array
     {
-        $header = self::readExact($stream, 4);
+        $header        = self::readExact($stream, 4);
         $decodedHeader = unpack('Nlength', $header);
 
         if (! is_array($decodedHeader) || ! isset($decodedHeader['length'])) {
@@ -67,7 +68,7 @@ final class WorkerPayloadSocket
     /** @return resource */
     public static function connect(string $address, float $timeoutSeconds = 5.0): mixed
     {
-        $errorCode = 0;
+        $errorCode    = 0;
         $errorMessage = '';
 
         $stream = stream_socket_client(
@@ -93,9 +94,8 @@ final class WorkerPayloadSocket
     public static function closeWrite(mixed $stream): void
     {
         $metadata = stream_get_meta_data($stream);
-        assert(is_array($metadata));
 
-        if (($metadata['mode'] ?? null) === 'r') {
+        if ($metadata['mode'] === 'r') {
             return;
         }
 
@@ -129,7 +129,14 @@ final class WorkerPayloadSocket
         $buffer = '';
 
         while (strlen($buffer) < $length) {
-            $chunk = fread($stream, $length - strlen($buffer));
+            $remaining = $length - strlen($buffer);
+
+            if ($remaining < 1) {
+                throw new RuntimeException('Unable to read worker payload.');
+            }
+
+            /** @var int<1, max> $remaining */
+            $chunk = fread($stream, $remaining);
 
             if ($chunk === false || $chunk === '') {
                 throw new RuntimeException('Unable to read worker payload.');

@@ -4,31 +4,20 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
+use Boundwize\StructArmed\Analyser\ClassNode;
 use RuntimeException;
 
 final class WorkerProcessState
 {
-    /** @var resource */
-    public mixed $process;
-
-    /** @var list<string> */
-    public array $files = [];
-
     public int $filesAdvanced = 0;
 
     public ?RuntimeException $socketFailure = null;
 
-    /** @var array<mixed>|null */
+    /** @var array{nodes: list<ClassNode>, error: string|null}|null */
     public ?array $result = null;
 
     /** @var resource|null */
-    public mixed $socket = null;
-
-    /** @var resource */
-    public mixed $stdoutPipe;
-
-    /** @var resource */
-    public mixed $stderrPipe;
+    public mixed $socket;
 
     /**
      * @param resource $process
@@ -37,14 +26,11 @@ final class WorkerProcessState
      */
     public function __construct(
         public readonly string $workerId,
-        mixed $process,
-        array $files,
-        mixed $stdoutPipe,
-        mixed $stderrPipe,
+        public mixed $process,
+        /** @var list<string> */
+        public array $files,
+        public mixed $stdoutPipe,
+        public mixed $stderrPipe
     ) {
-        $this->process = $process;
-        $this->files = $files;
-        $this->stdoutPipe = $stdoutPipe;
-        $this->stderrPipe = $stderrPipe;
     }
 }

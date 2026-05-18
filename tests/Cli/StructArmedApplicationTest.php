@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Cli;
 
+use Boundwize\StructArmed\Analyser\Parallel\WorkerPayloadSocket;
 use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
-use Boundwize\StructArmed\Analyser\Parallel\WorkerPayloadSocket;
 use Boundwize\StructArmed\Cli\AnalyseCommand;
 use Boundwize\StructArmed\Cli\ClearCacheCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
@@ -18,6 +18,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
+use function fclose;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
@@ -37,7 +38,6 @@ use function stream_socket_accept;
 use function stream_socket_get_name;
 use function stream_socket_server;
 use function sys_get_temp_dir;
-use function tempnam;
 use function unlink;
 
 #[CoversClass(AnalyseCommand::class)]
@@ -833,7 +833,6 @@ PHP);
         );
 
         $this->assertNotFalse($process);
-        $this->assertIsArray($pipes);
         $this->assertArrayHasKey(1, $pipes);
         $this->assertArrayHasKey(2, $pipes);
 
@@ -853,8 +852,8 @@ PHP);
         $result = WorkerPayloadSocket::readPayload($connection);
 
         try {
-            $stdout = stream_get_contents($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
+            $stdout   = stream_get_contents($pipes[1]);
+            $stderr   = stream_get_contents($pipes[2]);
             $exitCode = proc_close($process);
 
             $this->assertSame(0, $exitCode);
