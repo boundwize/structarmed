@@ -23,6 +23,7 @@ use function sprintf;
 use function sqrt;
 use function str_repeat;
 
+use const STDIN;
 use const STDOUT;
 
 final readonly class ClassNodeWorker
@@ -47,7 +48,9 @@ final readonly class ClassNodeWorker
                 WorkerPayloadSocket::writePayload($stream, ['workerId' => $workerId]);
             }
 
-            $payload = WorkerPayloadSocket::readPayload($stream);
+            $payload = $socketStream === null
+                ? WorkerPayloadSocket::readPayload(STDIN)
+                : WorkerPayloadSocket::readPayload($stream);
 
             $progressStream = $outputStream ?? STDOUT;
 

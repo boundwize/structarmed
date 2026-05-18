@@ -842,12 +842,13 @@ PHP);
         $hello = WorkerPayloadSocket::readPayload($connection);
         $this->assertSame(['workerId' => 'test-worker'], $hello);
 
-        WorkerPayloadSocket::writePayload($connection, [
+        WorkerPayloadSocket::writePayload($pipes[0], [
             'basePath'      => sys_get_temp_dir(),
             'layers'        => [],
             'layerPatterns' => [],
             'files'         => [],
         ]);
+        fclose($pipes[0]);
 
         $result = WorkerPayloadSocket::readPayload($connection);
 

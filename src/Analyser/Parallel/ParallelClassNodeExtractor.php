@@ -324,6 +324,12 @@ final readonly class ParallelClassNodeExtractor
         }
 
         assert(isset($pipes[0]) && isset($pipes[1]) && isset($pipes[2]));
+        WorkerPayloadSocket::writePayload($pipes[0], [
+            'basePath'      => $this->basePath,
+            'layers'        => $this->layers,
+            'layerPatterns' => $this->layerPatterns,
+            'files'         => $files,
+        ]);
         fclose($pipes[0]);
 
         $stdoutPipe = $pipes[1];
@@ -426,13 +432,6 @@ final readonly class ParallelClassNodeExtractor
 
                 throw new RuntimeException('Parallel analysis worker connected more than once.');
             }
-
-            WorkerPayloadSocket::writePayload($workerSocket, [
-                'basePath'      => $this->basePath,
-                'layers'        => $this->layers,
-                'layerPatterns' => $this->layerPatterns,
-                'files'         => $processes[$key]->files,
-            ]);
 
             $processes[$key]->socket = $workerSocket;
             $acceptedWorkers++;
