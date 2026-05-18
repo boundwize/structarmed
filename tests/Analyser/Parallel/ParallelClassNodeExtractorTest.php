@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
-// phpcs:disable
-require_once __DIR__ . '/MockFunctions.php';
-// phpcs:enable
-
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;

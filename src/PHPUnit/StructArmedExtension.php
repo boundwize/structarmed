@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\PHPUnit;
 
 use Boundwize\StructArmed\Analyser\Analyser;
+use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
+use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use PHPUnit\Runner\Extension\Extension;
 use PHPUnit\Runner\Extension\Facade;
 use PHPUnit\Runner\Extension\ParameterCollection;
@@ -31,11 +34,34 @@ final class StructArmedExtension implements Extension
             : ConfigLoader::discover($basePath);
 
         $architecture = ConfigLoader::load($configFile);
-        $analyser     = new Analyser($basePath);
+
+        $analysisResultCache          = new AnalysisResultCache($basePath, $architecture->getCacheDirectory());
+        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
+
+        if (
+            $analysisResultCache->hasDifferentConfig($configHash)
+            || $analysisResultCache->hasDifferentComposerGeneratedVersion($composerGeneratedVersionHash)
+        ) {
+            $analysisResultCache->clear();
+        }
+
+        $analyser = new Analyser($basePath, $analysisResultCache, $configHash);
+
+        $files    = $analyser->filesForAnalysis($architecture);
+        $metadata = $analysisCacheMetadataFactory->metadata($basePath, $configFile, [], $files);
+        $cacheKey = $analysisCacheMetadataFactory->key($metadata);
 
         $start                   = microtime(true);
-        $ruleViolationCollection = $analyser->analyse($architecture);
-        $elapsed                 = microtime(true) - $start;
+        $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
+
+        if (! $ruleViolationCollection instanceof RuleViolationCollection) {
+            $ruleViolationCollection = $analyser->analyse($architecture);
+            $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
+        }
+
+        $elapsed = microtime(true) - $start;
 
         $report = (new ConsoleReport())->render($ruleViolationCollection, $elapsed);
         echo $report;
