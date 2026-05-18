@@ -29,7 +29,9 @@ use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
-    /** @param resource|null $progressStream */
+    /**
+     * @param resource|null $progressStream
+     */
     public static function run(
         mixed $progressStream = null,
         mixed $payloadStream = null,
@@ -136,7 +138,6 @@ final readonly class ClassNodeWorker
             if ($shouldCloseResultStream) {
                 fclose($resultStream);
             }
-
             return 0;
         } catch (Throwable $throwable) {
             WorkerPayloadSocket::writePayload($resultStream, [
@@ -147,7 +148,6 @@ final readonly class ClassNodeWorker
             if ($shouldCloseResultStream) {
                 fclose($resultStream);
             }
-
             return 1;
         }
     }
