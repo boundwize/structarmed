@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
-use Boundwize\StructArmed\Analyser\Parallel\WorkerPayloadSocket;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerFailedException;
+use Boundwize\StructArmed\Analyser\Parallel\WorkerPayloadSocket;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
+use function fclose;
 use function file_put_contents;
 use function fopen;
 use function stream_get_meta_data;
@@ -56,7 +57,6 @@ PHP);
 
         $result = WorkerPayloadSocket::readPayload($clientStream);
 
-        $this->assertIsArray($result);
         $this->assertArrayHasKey('nodes', $result);
         $this->assertArrayHasKey('error', $result);
         $this->assertNull($result['error']);
@@ -75,7 +75,6 @@ PHP);
 
         $result = WorkerPayloadSocket::readPayload($clientStream);
 
-        $this->assertIsArray($result);
         $this->assertSame([], $result['nodes']);
         $this->assertIsString($result['error']);
     }
@@ -118,7 +117,6 @@ PHP);
 
         $result = WorkerPayloadSocket::readPayload($clientStream);
 
-        $this->assertIsArray($result);
         $this->assertNull($result['error']);
         $this->assertIsArray($result['nodes']);
         $this->assertCount(1, $result['nodes']);
@@ -142,12 +140,11 @@ PHP);
         $this->assertNotFalse($server);
 
         $metadata = stream_get_meta_data($server);
-        $this->assertIsArray($metadata);
 
         $address = stream_socket_get_name($server, false);
         $this->assertIsString($address);
 
-        $client = WorkerPayloadSocket::connect('tcp://' . $address);
+        $client   = WorkerPayloadSocket::connect('tcp://' . $address);
         $accepted = stream_socket_accept($server, 1);
         $this->assertNotFalse($accepted);
 

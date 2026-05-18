@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
+use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
@@ -30,6 +31,10 @@ final readonly class ClassNodeWorker
         try {
             $stream ??= WorkerPayloadSocket::connect($address);
 
+            if (! is_resource($stream)) {
+                throw new WorkerFailedException('Invalid worker socket stream.');
+            }
+
             if ($socketStream === null) {
                 WorkerPayloadSocket::writePayload($stream, ['workerId' => $workerId]);
             }
@@ -37,7 +42,13 @@ final readonly class ClassNodeWorker
             $payload = WorkerPayloadSocket::readPayload($stream);
 
             if ($socketStream !== null || self::isLegacyPayload($payload)) {
-                return self::runLegacyBatch($payload, $outputStream ?? STDOUT, $stream);
+                $progressStream = $outputStream ?? STDOUT;
+
+                if (! is_resource($progressStream)) {
+                    throw new WorkerFailedException('Invalid worker progress stream.');
+                }
+
+                return self::runLegacyBatch($payload, $progressStream, $stream);
             }
 
             return self::runBatchLoop($stream, $payload);
@@ -107,7 +118,10 @@ final readonly class ClassNodeWorker
         }
     }
 
-    /** @param resource $stream */
+    /**
+     * @param resource $stream
+     * @param array<mixed> $payload
+     */
     private static function runBatchLoop(mixed $stream, array $payload): int
     {
         $currentPayload = $payload;
@@ -150,13 +164,13 @@ final readonly class ClassNodeWorker
                 );
 
                 WorkerPayloadSocket::writePayload($stream, [
-                    'type' => 'result',
+                    'type'  => 'result',
                     'nodes' => $nodes,
                     'error' => null,
                 ]);
             } catch (Throwable $throwable) {
                 WorkerPayloadSocket::writePayload($stream, [
-                    'type' => 'result',
+                    'type'  => 'result',
                     'nodes' => [],
                     'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
                 ]);
@@ -186,7 +200,6 @@ final readonly class ClassNodeWorker
             throw new WorkerFailedException('Invalid worker payload.');
         }
 
-            /** @var string $basePath */
             $basePath = $payload['basePath'];
             /** @var array<string, string|list<string>> $layers */
             $layers = $payload['layers'];
@@ -195,19 +208,19 @@ final readonly class ClassNodeWorker
             /** @var list<string> $files */
             $files = $payload['files'];
 
-            $layerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
+            $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
 
             $progressHandler->start(count($files));
-            $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
+            $nodes = (new ClassNodeExtractor($chainLayerResolver))->extract($files, $progressHandler);
             $progressHandler->finish();
 
             return $nodes;
-        }
+    }
 
         /** @param array<mixed> $payload */
-        private static function isLegacyPayload(array $payload): bool
-        {
-            return ! isset($payload['type'])
-                && isset($payload['basePath'], $payload['layers'], $payload['layerPatterns'], $payload['files']);
+    private static function isLegacyPayload(array $payload): bool
+    {
+        return ! isset($payload['type'])
+            && isset($payload['basePath'], $payload['layers'], $payload['layerPatterns'], $payload['files']);
     }
 }

@@ -199,5 +199,4 @@ PHP);
             $GLOBALS['mock_proc_open'] = false;
         }
     }
-
 }
