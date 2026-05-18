@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Analyser\Parallel\ValueObject\WorkerFinalizedState;
 use Boundwize\StructArmed\Analyser\Parallel\ValueObject\WorkerProcessState;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerPayloadSocket;
+use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use Closure;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -338,6 +339,105 @@ PHP);
         } finally {
             $GLOBALS['mock_proc_open_command']      = null;
             $GLOBALS['mock_stream_select_callback'] = null;
+        }
+    }
+
+    public function testExtractReturnsNodesWhenPendingWorkerHasNoReadableStreams(): void
+    {
+        $script = $this->createSuccessfulWorkerScript();
+
+        $GLOBALS['mock_proc_open_command']      = [PHP_BINARY, $script];
+        $GLOBALS['mock_stream_select_callback'] = static function (
+            ?array &$read,
+            ?array &$write,
+            ?array &$except,
+            ?int $seconds,
+            ?int $microseconds = null
+        ): int {
+            assert(isset($read[0], $read[1]));
+
+            $stderrPipe = $read[0];
+            $resultPipe = $read[1];
+            assert(is_resource($stderrPipe));
+            assert(is_resource($resultPipe));
+
+            fclose($stderrPipe);
+            $read = [$resultPipe];
+
+            return 1;
+        };
+
+        try {
+            $parallelClassNodeExtractor = new ParallelClassNodeExtractor('/tmp', [], [], 1);
+
+            $this->assertSame([], $parallelClassNodeExtractor->extract(['/tmp/Foo.php']));
+        } finally {
+            $GLOBALS['mock_proc_open_command']      = null;
+            $GLOBALS['mock_stream_select_callback'] = null;
+        }
+    }
+
+    public function testExtractAdvancesProgressFromWorkerStderrNewlines(): void
+    {
+        $script = $this->createWorkerScript(<<<'PHP'
+<?php
+$header = fread(STDIN, 4);
+
+if ($header === false || $header === '') {
+    exit(1);
+}
+
+$decodedHeader = unpack('Nlength', $header);
+$length        = $decodedHeader['length'];
+$payload       = '';
+
+while (strlen($payload) < $length) {
+    $chunk = fread(STDIN, $length - strlen($payload));
+
+    if ($chunk === false || $chunk === '') {
+        exit(1);
+    }
+
+    $payload .= $chunk;
+}
+
+fwrite(STDERR, "\n\n");
+
+$result = serialize(['nodes' => [], 'error' => null]);
+
+fwrite(STDOUT, pack('N', strlen($result)) . $result);
+PHP);
+
+        $GLOBALS['mock_proc_open_command'] = [PHP_BINARY, $script];
+
+        try {
+            $progressHandler = new class implements ProgressHandlerInterface {
+                /** @var list<string> */
+                public array $advancedFiles = [];
+
+                public function start(int $total): void
+                {
+                }
+
+                public function advance(string $file): void
+                {
+                    $this->advancedFiles[] = $file;
+                }
+
+                public function finish(): void
+                {
+                }
+            };
+
+            $parallelClassNodeExtractor = new ParallelClassNodeExtractor('/tmp', [], [], 1);
+
+            $this->assertSame(
+                [],
+                $parallelClassNodeExtractor->extract(['/tmp/Foo.php', '/tmp/Bar.php'], $progressHandler)
+            );
+            $this->assertSame(['/tmp/Foo.php', '/tmp/Bar.php'], $progressHandler->advancedFiles);
+        } finally {
+            $GLOBALS['mock_proc_open_command'] = null;
         }
     }
 

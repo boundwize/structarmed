@@ -146,6 +146,17 @@ PHP);
         $this->assertSame(1, $exitCode);
     }
 
+    public function testRunClosesImplicitResultStreamOnFailure(): void
+    {
+        $resultStream     = $this->memoryStream();
+        $reflectionMethod = new ReflectionMethod(ClassNodeWorker::class, 'runWithStreams');
+
+        $exitCode = $reflectionMethod->invoke(null, $this->silentStream(), 'not-a-stream', $resultStream, true);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertFalse(is_resource($resultStream));
+    }
+
     public function testWorkerFailedExceptionExtendsRuntimeException(): void
     {
         $workerFailedException = new WorkerFailedException('test error');

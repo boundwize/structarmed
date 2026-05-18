@@ -38,10 +38,22 @@ final readonly class ClassNodeWorker
         mixed $payloadStream = null,
         mixed $resultStream = null
     ): int {
-        $inputStream             = $payloadStream ?? STDIN;
-        $stream                  = $resultStream ?? STDOUT;
-        $shouldCloseResultStream = $resultStream === null;
+        return self::runWithStreams(
+            $progressStream,
+            $payloadStream ?? STDIN,
+            $resultStream ?? STDOUT,
+            $resultStream === null
+        );
+    }
 
+    /** Streams stay mixed so invalid worker streams can be reported as payload failures. */
+    private static function runWithStreams(
+        mixed $progressStream,
+        mixed $inputStream,
+        mixed $resultStream,
+        bool $shouldCloseResultStream
+    ): int {
+        $stream = $resultStream;
         try {
             if (! is_resource($inputStream)) {
                 throw new WorkerFailedException('Invalid worker payload stream.');
@@ -68,9 +80,7 @@ final readonly class ClassNodeWorker
                 ]);
 
                 if ($shouldCloseResultStream) {
-                    // @codeCoverageIgnoreStart
                     fclose($stream);
-                    // @codeCoverageIgnoreEnd
                 }
             }
 
