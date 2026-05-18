@@ -10,6 +10,7 @@ use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Throwable;
 
+use function ceil;
 use function count;
 use function fclose;
 use function fflush;
@@ -18,8 +19,8 @@ use function is_array;
 use function is_resource;
 use function is_string;
 use function max;
-use function sqrt;
 use function sprintf;
+use function sqrt;
 use function str_repeat;
 
 use const STDOUT;
