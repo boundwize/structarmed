@@ -24,6 +24,8 @@ use const STREAM_CLIENT_CONNECT;
 
 final class WorkerPayloadSocket
 {
+    private const WRITE_CHUNK_SIZE = 8192;
+
     /**
      * @param resource $stream
      * @param array<mixed> $payload
@@ -116,7 +118,7 @@ final class WorkerPayloadSocket
         $length = strlen($data);
 
         while ($offset < $length) {
-            $written = fwrite($stream, substr($data, $offset));
+            $written = fwrite($stream, substr($data, $offset, self::WRITE_CHUNK_SIZE));
 
             if ($written === false || $written === 0) {
                 throw new RuntimeException('Unable to write worker payload.');

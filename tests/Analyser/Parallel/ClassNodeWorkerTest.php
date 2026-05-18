@@ -233,6 +233,48 @@ PHP);
         $this->assertSame(3, substr_count($progressOutput, "\n"));
     }
 
+    public function testRunSkipsProgressWritesWhenProgressTrackingIsDisabled(): void
+    {
+        $dir   = $this->makeTemporaryDirectory('structarmed-worker-test');
+        $files = [];
+
+        foreach (['Foo', 'Bar', 'Baz'] as $className) {
+            $file = $dir . '/' . $className . '.php';
+            file_put_contents($file, <<<PHP
+<?php
+
+namespace App\\Domain;
+
+final class {$className}
+{
+}
+PHP);
+            $files[] = $file;
+        }
+
+        $payloadStream = $this->memoryStream();
+        WorkerPayloadSocket::writePayload($payloadStream, [
+            'basePath'      => $dir,
+            'layers'        => ['Domain' => 'App\\Domain'],
+            'layerPatterns' => [],
+            'files'         => $files,
+            'trackProgress' => false,
+        ]);
+        rewind($payloadStream);
+
+        $progressStream = $this->memoryStream();
+        $resultStream   = $this->memoryStream();
+
+        $exitCode = ClassNodeWorker::run($progressStream, $payloadStream, $resultStream);
+
+        $this->assertSame(0, $exitCode);
+
+        rewind($progressStream);
+        $progressOutput = stream_get_contents($progressStream);
+        $this->assertIsString($progressOutput);
+        $this->assertSame('', $progressOutput);
+    }
+
     public function testRunBatchClosesImplicitResultStreamOnSuccess(): void
     {
         $reflectionMethod = new ReflectionMethod(ClassNodeWorker::class, 'runBatch');

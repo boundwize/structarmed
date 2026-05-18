@@ -12,9 +12,7 @@ use RuntimeException;
 
 use function array_chunk;
 use function array_key_exists;
-use function array_keys;
 use function array_merge;
-use function array_shift;
 use function assert;
 use function ceil;
 use function count;
@@ -32,6 +30,7 @@ use function sprintf;
 use function str_replace;
 use function stream_get_contents;
 use function stream_set_blocking;
+use function strlen;
 use function substr_count;
 
 use const PHP_BINARY;
@@ -71,15 +70,18 @@ final readonly class ParallelClassNodeExtractor
         $failure      = null;
         $pending      = [];
         $nextWorkerId = 0;
+        $nextBatch    = 0;
+        $batchCount   = count($batchQueue);
 
-        while ($batchQueue !== [] && count($pending) < $workerCount) {
-            /** @var non-empty-list<string> $nextBatch */
-            $nextBatch = array_shift($batchQueue);
+        while ($nextBatch < $batchCount && count($pending) < $workerCount) {
+            /** @var non-empty-list<string> $filesForWorker */
+            $filesForWorker = $batchQueue[$nextBatch++];
 
             $pending[] = $this->startWorker(
                 workerId: (string) $nextWorkerId++,
-                files: $nextBatch,
+                files: $filesForWorker,
                 script: $script,
+                trackProgress: $progressHandler !== null,
             );
         }
 
@@ -129,12 +131,16 @@ final readonly class ParallelClassNodeExtractor
 
                 $data = fread($stderrPipe, 8192);
                 if ($data !== false && $data !== '') {
-                    $count                 = substr_count($data, "\n");
-                    $worker->stderrBuffer .= str_replace("\n", '', $data);
+                    $count = substr_count($data, "\n");
 
+                    if ($count !== strlen($data)) {
+                        $worker->stderrBuffer .= str_replace("\n", '', $data);
+                    }
+
+                    $fileCount = count($worker->files);
                     for ($i = 0; $i < $count; $i++) {
                         $fileIdx = $worker->filesAdvanced;
-                        if ($fileIdx < count($worker->files)) {
+                        if ($fileIdx < $fileCount) {
                             $progressHandler?->advance($worker->files[$fileIdx]);
                             $worker->filesAdvanced++;
                         }
@@ -196,14 +202,15 @@ final readonly class ParallelClassNodeExtractor
 
                 unset($pending[$key]);
 
-                if ($batchQueue !== [] && $failure === null) {
-                    /** @var non-empty-list<string> $nextBatch */
-                    $nextBatch = array_shift($batchQueue);
+                if ($nextBatch < $batchCount && $failure === null) {
+                    /** @var non-empty-list<string> $filesForWorker */
+                    $filesForWorker = $batchQueue[$nextBatch++];
 
                     $pending[] = $this->startWorker(
                         workerId: (string) $nextWorkerId++,
-                        files: $nextBatch,
+                        files: $filesForWorker,
                         script: $script,
+                        trackProgress: $progressHandler !== null,
                     );
                 }
             }
@@ -225,8 +232,7 @@ final readonly class ParallelClassNodeExtractor
         $readStreams = [];
         $streamMeta  = [];
 
-        foreach (array_keys($processes) as $key) {
-            $worker     = $processes[$key];
+        foreach ($processes as $key => $worker) {
             $stderrPipe = $worker->stderrPipe;
 
             if (is_resource($stderrPipe)) {
@@ -289,7 +295,7 @@ final readonly class ParallelClassNodeExtractor
     /**
      * @param list<string> $files
      */
-    private function startWorker(string $workerId, array $files, string $script): WorkerProcessState
+    private function startWorker(string $workerId, array $files, string $script, bool $trackProgress): WorkerProcessState
     {
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
@@ -319,6 +325,7 @@ final readonly class ParallelClassNodeExtractor
             'layers'        => $this->layers,
             'layerPatterns' => $this->layerPatterns,
             'files'         => $files,
+            'trackProgress' => $trackProgress,
         ]);
         fclose($payloadPipe);
 

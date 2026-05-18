@@ -16,6 +16,7 @@ use function fclose;
 use function fflush;
 use function fwrite;
 use function is_array;
+use function is_bool;
 use function is_resource;
 use function is_string;
 use function max;
@@ -160,7 +161,7 @@ final readonly class ClassNodeWorker
      * @param array<mixed> $payload
      * @return list<ClassNode>
      */
-    private static function extractNodes(array $payload, ProgressHandlerInterface $progressHandler): array
+    private static function extractNodes(array $payload, ?ProgressHandlerInterface $progressHandler): array
     {
         if (
             ! isset($payload['basePath'], $payload['layers'], $payload['layerPatterns'], $payload['files'])
@@ -168,6 +169,7 @@ final readonly class ClassNodeWorker
             || ! is_array($payload['layers'])
             || ! is_array($payload['layerPatterns'])
             || ! is_array($payload['files'])
+            || (isset($payload['trackProgress']) && ! is_bool($payload['trackProgress']))
         ) {
             throw new WorkerFailedException('Invalid worker payload.');
         }
@@ -179,12 +181,23 @@ final readonly class ClassNodeWorker
         $layerPatterns = $payload['layerPatterns'];
         /** @var list<string> $files */
         $files = $payload['files'];
+        /** @var bool $trackProgress */
+        $trackProgress = $payload['trackProgress'] ?? true;
 
         $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
 
-        $progressHandler->start(count($files));
-        $nodes = (new ClassNodeExtractor($chainLayerResolver))->extract($files, $progressHandler);
-        $progressHandler->finish();
+        if ($trackProgress) {
+            $progressHandler?->start(count($files));
+        }
+
+        $nodes = (new ClassNodeExtractor($chainLayerResolver))->extract(
+            $files,
+            $trackProgress ? $progressHandler : null
+        );
+
+        if ($trackProgress) {
+            $progressHandler?->finish();
+        }
 
         return $nodes;
     }
