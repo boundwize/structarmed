@@ -281,6 +281,27 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testConfigHashIsDifferentWhenLaterCacheEntryDiffers(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        $this->writeCachePayload($cacheDirectory, [
+            'metadata'   => ['configHash' => 'same'],
+            'violations' => [],
+        ], 'a-match.json');
+        $this->writeCachePayload($cacheDirectory, [
+            'metadata'   => ['configHash' => 'old'],
+            'violations' => [],
+        ], 'z-different.json');
+
+        try {
+            $this->assertTrue($analysisResultCache->hasDifferentConfig('same'));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testConfigHashSkipsUnreadableCachePayloadsAndDirectories(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
@@ -373,6 +394,27 @@ final class AnalysisResultCacheTest extends TestCase
             );
 
             $this->assertTrue($analysisResultCache->hasDifferentComposerGeneratedVersion('new'));
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testComposerGeneratedVersionHashIsDifferentWhenLaterCacheEntryDiffers(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        $this->writeCachePayload($cacheDirectory, [
+            'metadata'   => ['composerGeneratedVersionHash' => 'same'],
+            'violations' => [],
+        ], 'a-match.json');
+        $this->writeCachePayload($cacheDirectory, [
+            'metadata'   => ['composerGeneratedVersionHash' => 'old'],
+            'violations' => [],
+        ], 'z-different.json');
+
+        try {
+            $this->assertTrue($analysisResultCache->hasDifferentComposerGeneratedVersion('same'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
