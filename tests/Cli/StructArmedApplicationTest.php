@@ -45,6 +45,15 @@ use function unlink;
 #[CoversClass(Baseline::class)]
 final class StructArmedApplicationTest extends TestCase
 {
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function helpCommandProvider(): iterable
+    {
+        yield '--help' => ['--help'];
+        yield '-h' => ['-h'];
+    }
+
     public function testApplicationPrintsUsageWithoutCommand(): void
     {
         [$exitCode, $output] = $this->runApplication(['structarmed']);
@@ -54,12 +63,28 @@ final class StructArmedApplicationTest extends TestCase
         $this->assertStringContainsString('structarmed analyse|analyze', $output);
     }
 
+    #[DataProvider('helpCommandProvider')]
+    public function testApplicationPrintsUsageForHelpAliases(string $helpCommand): void
+    {
+        [$exitCode, $output] = $this->runApplication(['structarmed', $helpCommand]);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('structarmed init', $output);
+    }
+
     public function testApplicationRejectsUnknownCommand(): void
     {
         [$exitCode, $output] = $this->runApplication(['structarmed', 'unknown']);
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Unknown command: unknown', $output);
+    }
+
+    public function testApplicationRunsInjectedInternalWorker(): void
+    {
+        $application = new StructArmedApplication(static fn (): int => 7);
+
+        $this->assertSame(7, $application->run(['structarmed', '--internal-worker']));
     }
 
     public function testApplicationClearsCacheWithoutAnalyseCommand(): void

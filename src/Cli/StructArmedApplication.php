@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
+use Closure;
 
 use function array_slice;
 use function getcwd;
@@ -13,6 +14,10 @@ use function sprintf;
 
 final readonly class StructArmedApplication
 {
+    public function __construct(private ?Closure $internalWorkerRunner = null)
+    {
+    }
+
     /**
      * @param list<string> $argv
      */
@@ -22,7 +27,9 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
-            return ClassNodeWorker::run();
+            return $this->internalWorkerRunner !== null
+                ? ($this->internalWorkerRunner)()
+                : ClassNodeWorker::run();
         }
 
         if (in_array($command, [null, '--help', '-h'], true)) {

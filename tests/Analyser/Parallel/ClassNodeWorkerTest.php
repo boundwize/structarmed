@@ -10,11 +10,15 @@ use Boundwize\StructArmed\Analyser\Parallel\WorkerPayloadSocket;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use RuntimeException;
 
 use function file_put_contents;
 use function fopen;
+use function is_resource;
 use function rewind;
+use function stream_get_contents;
+use function substr_count;
 
 #[CoversClass(ClassNodeWorker::class)]
 #[CoversClass(WorkerFailedException::class)]
@@ -81,6 +85,67 @@ PHP);
         $this->assertIsString($result['error']);
     }
 
+    public function testRunWithInvalidPayloadStreamReturnsOneAndWritesError(): void
+    {
+        $resultStream     = $this->memoryStream();
+        $reflectionMethod = new ReflectionMethod(ClassNodeWorker::class, 'run');
+
+        $exitCode = $reflectionMethod->invoke(null, $this->silentStream(), 'not-a-stream', $resultStream);
+
+        $this->assertSame(1, $exitCode);
+
+        rewind($resultStream);
+        $result = WorkerPayloadSocket::readPayload($resultStream);
+
+        $this->assertSame([], $result['nodes']);
+        $this->assertIsString($result['error']);
+        $this->assertStringContainsString('Invalid worker payload stream.', $result['error']);
+    }
+
+    public function testRunWithInvalidProgressStreamReturnsOneAndWritesError(): void
+    {
+        $payloadStream = $this->memoryStream();
+        WorkerPayloadSocket::writePayload($payloadStream, [
+            'basePath'      => __DIR__,
+            'layers'        => [],
+            'layerPatterns' => [],
+            'files'         => [],
+        ]);
+        rewind($payloadStream);
+
+        $resultStream     = $this->memoryStream();
+        $reflectionMethod = new ReflectionMethod(ClassNodeWorker::class, 'run');
+
+        $exitCode = $reflectionMethod->invoke(null, 'not-a-stream', $payloadStream, $resultStream);
+
+        $this->assertSame(1, $exitCode);
+
+        rewind($resultStream);
+        $result = WorkerPayloadSocket::readPayload($resultStream);
+
+        $this->assertSame([], $result['nodes']);
+        $this->assertIsString($result['error']);
+        $this->assertStringContainsString('Invalid worker progress stream.', $result['error']);
+    }
+
+    public function testRunWithInvalidResultStreamReturnsOne(): void
+    {
+        $payloadStream = $this->memoryStream();
+        WorkerPayloadSocket::writePayload($payloadStream, [
+            'basePath'      => __DIR__,
+            'layers'        => [],
+            'layerPatterns' => [],
+            'files'         => [],
+        ]);
+        rewind($payloadStream);
+
+        $runMethod = new ReflectionMethod(ClassNodeWorker::class, 'run');
+
+        $exitCode = $runMethod->invoke(null, $this->silentStream(), $payloadStream, 'not-a-stream');
+
+        $this->assertSame(1, $exitCode);
+    }
+
     public function testWorkerFailedExceptionExtendsRuntimeException(): void
     {
         $workerFailedException = new WorkerFailedException('test error');
@@ -125,6 +190,79 @@ PHP);
         $this->assertNull($result['error']);
         $this->assertIsArray($result['nodes']);
         $this->assertCount(1, $result['nodes']);
+    }
+
+    public function testRunBatchesProgressWritesAcrossMultipleFiles(): void
+    {
+        $dir   = $this->makeTemporaryDirectory('structarmed-worker-test');
+        $files = [];
+
+        foreach (['Foo', 'Bar', 'Baz'] as $className) {
+            $file = $dir . '/' . $className . '.php';
+            file_put_contents($file, <<<PHP
+<?php
+
+namespace App\\Domain;
+
+final class {$className}
+{
+}
+PHP);
+            $files[] = $file;
+        }
+
+        $payloadStream = $this->memoryStream();
+        WorkerPayloadSocket::writePayload($payloadStream, [
+            'basePath'      => $dir,
+            'layers'        => ['Domain' => 'App\\Domain'],
+            'layerPatterns' => [],
+            'files'         => $files,
+        ]);
+        rewind($payloadStream);
+
+        $progressStream = $this->memoryStream();
+        $resultStream   = $this->memoryStream();
+
+        $exitCode = ClassNodeWorker::run($progressStream, $payloadStream, $resultStream);
+
+        $this->assertSame(0, $exitCode);
+
+        rewind($progressStream);
+        $progressOutput = stream_get_contents($progressStream);
+        $this->assertIsString($progressOutput);
+        $this->assertSame(3, substr_count($progressOutput, "\n"));
+    }
+
+    public function testRunBatchClosesImplicitResultStreamOnSuccess(): void
+    {
+        $runBatch = new ReflectionMethod(ClassNodeWorker::class, 'runBatch');
+        $runBatch->setAccessible(true);
+
+        $progressStream = $this->silentStream();
+        $resultStream   = $this->memoryStream();
+
+        $exitCode = $runBatch->invoke(null, [
+            'basePath'      => __DIR__,
+            'layers'        => [],
+            'layerPatterns' => [],
+            'files'         => [],
+        ], $progressStream, $resultStream, true);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertFalse(is_resource($resultStream));
+    }
+
+    public function testRunBatchClosesImplicitResultStreamOnFailure(): void
+    {
+        $runBatch = new ReflectionMethod(ClassNodeWorker::class, 'runBatch');
+        $runBatch->setAccessible(true);
+
+        $resultStream = $this->memoryStream();
+
+        $exitCode = $runBatch->invoke(null, ['invalid-payload'], $this->silentStream(), $resultStream, true);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertFalse(is_resource($resultStream));
     }
 
     /** @return resource */
