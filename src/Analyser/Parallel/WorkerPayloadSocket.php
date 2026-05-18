@@ -135,9 +135,7 @@ final class WorkerPayloadSocket
                 throw new RuntimeException('Unable to read worker payload.');
             }
 
-            /** @var int<1, max> $remaining */
             $chunk = fread($stream, $remaining);
-
             if ($chunk === false || $chunk === '') {
                 throw new RuntimeException('Unable to read worker payload.');
             }
