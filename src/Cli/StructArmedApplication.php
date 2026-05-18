@@ -28,7 +28,7 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
-            return $this->internalWorkerRunner !== null
+            return $this->internalWorkerRunner instanceof Closure
                 ? ($this->internalWorkerRunner)()
                 : ClassNodeWorker::run();
         }

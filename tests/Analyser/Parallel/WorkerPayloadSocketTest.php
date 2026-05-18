@@ -136,8 +136,7 @@ final class WorkerPayloadSocketTest extends TestCase
 
     public function testWriteAllThrowsWhenStreamCannotBeWritten(): void
     {
-        $writeAll = new ReflectionMethod(WorkerPayloadSocket::class, 'writeAll');
-        $writeAll->setAccessible(true);
+        $reflectionMethod = new ReflectionMethod(WorkerPayloadSocket::class, 'writeAll');
 
         $stream = fopen('php://temp', 'r');
         $this->assertNotFalse($stream);
@@ -145,6 +144,6 @@ final class WorkerPayloadSocketTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Unable to write worker payload.');
 
-        $writeAll->invoke(null, $stream, 'payload');
+        $reflectionMethod->invoke(null, $stream, 'payload');
     }
 }
