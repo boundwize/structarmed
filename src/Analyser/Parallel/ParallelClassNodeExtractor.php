@@ -81,7 +81,7 @@ final readonly class ParallelClassNodeExtractor
                 workerId: (string) $nextWorkerId++,
                 files: $filesForWorker,
                 script: $script,
-                trackProgress: $progressHandler !== null,
+                trackProgress: $progressHandler instanceof ProgressHandlerInterface,
             );
         }
 
@@ -89,9 +89,7 @@ final readonly class ParallelClassNodeExtractor
             ['streams' => $readStreams, 'meta' => $streamMeta] = $this->collectReadableStreams($pending);
 
             if ($readStreams === []) {
-                // @codeCoverageIgnoreStart
                 break;
-                // @codeCoverageIgnoreEnd
             }
 
             $writePipes  = null;
@@ -210,7 +208,7 @@ final readonly class ParallelClassNodeExtractor
                         workerId: (string) $nextWorkerId++,
                         files: $filesForWorker,
                         script: $script,
-                        trackProgress: $progressHandler !== null,
+                        trackProgress: $progressHandler instanceof ProgressHandlerInterface,
                     );
                 }
             }
