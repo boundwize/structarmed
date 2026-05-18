@@ -41,11 +41,13 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
 use function array_merge;
+use function array_pop;
 use function array_unique;
 use function array_values;
 use function count;
 use function in_array;
 use function is_string;
+use function spl_object_id;
 use function strtolower;
 
 final class ClassCollector extends NodeVisitorAbstract
@@ -136,17 +138,15 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function collectClassLike(ClassLike $classLike): void
     {
-        $className     = $this->resolveClassName($classLike);
-        $layers        = $this->layerResolver->resolveAll($className, $this->currentFile);
-        $layer         = $this->layerResolver->resolve($className, $this->currentFile);
-        $dependencies  = $this->collectDependencies($classLike);
-        $methods       = $this->collectMethods($classLike);
-        $functionCalls = $this->collectFunctionCalls($classLike);
-        $superglobals  = $this->collectSuperglobals($classLike);
-        $implements    = $this->collectImplements($classLike);
-        $traits        = $this->collectTraits($classLike);
-        $constants     = $this->collectConstants($classLike);
-        $properties    = $this->collectProperties($classLike);
+        $analysis   = $this->collectClassLikeAnalysis($classLike);
+        $className  = $this->resolveClassName($classLike);
+        $layers     = $this->layerResolver->resolveAll($className, $this->currentFile);
+        $layer      = $this->layerResolver->resolve($className, $this->currentFile);
+        $methods    = $this->collectMethods($classLike, $analysis['complexityByMethodId']);
+        $implements = $this->collectImplements($classLike);
+        $traits     = $this->collectTraits($classLike);
+        $constants  = $this->collectConstants($classLike);
+        $properties = $this->collectProperties($classLike);
 
         $this->nodes[] = new ClassNode(
             className:     $className,
@@ -161,14 +161,14 @@ final class ClassCollector extends NodeVisitorAbstract
             isInterface:   $classLike instanceof Interface_,
             isReadonly:    $classLike instanceof Class_ && $classLike->isReadonly(),
             isTrait:       $classLike instanceof Trait_,
-            dependencies:  $dependencies,
+            dependencies:  $analysis['dependencies'],
             implements:    $implements,
             traits:        $traits,
             methods:       $methods,
             constants:     $constants,
             properties:    $properties,
-            functionCalls: $functionCalls,
-            superglobals:  $superglobals,
+            functionCalls: $analysis['functionCalls'],
+            superglobals:  $analysis['superglobals'],
             layers:        $layers,
             isEnum:        $classLike instanceof Enum_,
         );
@@ -260,32 +260,155 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * @return list<string>
+     * @return array{
+     *     dependencies: list<string>,
+     *     functionCalls: string[],
+     *     superglobals: string[],
+     *     complexityByMethodId: array<int, int>
+     * }
      */
-    private function collectDependencies(ClassLike $classLike): array
+    private function collectClassLikeAnalysis(ClassLike $classLike): array
     {
+        $methodIds = [];
+
+        foreach ($classLike->getMethods() as $classMethod) {
+            $methodIds[spl_object_id($classMethod)] = true;
+        }
+
         $nodeTraverser = new NodeTraverser();
-        $visitor       = new class extends NodeVisitorAbstract {
+        $visitor       = new class ($this->fileFunctions, $methodIds, self::SUPERGLOBALS) extends NodeVisitorAbstract {
             /** @var string[] */
-            public array $names = [];
+            public array $dependencies = [];
+
+            /** @var string[] */
+            public array $functionCalls = [];
+
+            /** @var string[] */
+            public array $superglobals = [];
+
+            /** @var array<int, int> */
+            public array $complexityByMethodId = [];
+
+            /** @var list<int> */
+            private array $activeMethodIds = [];
+
+            /**
+             * @param string[]         $fileFunctions
+             * @param array<int, true> $methodIds
+             * @param string[]         $superglobalNames
+             */
+            public function __construct(
+                private readonly array $fileFunctions,
+                private readonly array $methodIds,
+                private readonly array $superglobalNames,
+            ) {
+            }
 
             public function enterNode(Node $node): null
             {
+                if ($node instanceof ClassMethod) {
+                    $methodId = spl_object_id($node);
+
+                    if (isset($this->methodIds[$methodId])) {
+                        $this->activeMethodIds[]               = $methodId;
+                        $this->complexityByMethodId[$methodId] = 1;
+                    }
+                }
+
                 if ($node instanceof FullyQualified) {
                     $name = $node->toString();
                     if (! in_array(strtolower($name), ['true', 'false', 'null'], true)) {
-                        $this->names[] = $name;
+                        $this->dependencies[] = $name;
+                    }
+                }
+
+                if (
+                    $node instanceof FuncCall
+                    && $node->name instanceof Name
+                ) {
+                    $this->functionCalls[] = $this->resolveFunctionName($node->name);
+                }
+
+                if (
+                    $node instanceof Variable
+                    && is_string($node->name)
+                    && in_array($node->name, $this->superglobalNames, true)
+                ) {
+                    $this->superglobals[] = '$' . $node->name;
+                }
+
+                if ($this->activeMethodIds !== [] && $this->isComplexityBranch($node)) {
+                    foreach ($this->activeMethodIds as $activeMethodId) {
+                        $this->complexityByMethodId[$activeMethodId]++;
                     }
                 }
 
                 return null;
+            }
+
+            public function leaveNode(Node $node): null
+            {
+                if (! $node instanceof ClassMethod) {
+                    return null;
+                }
+
+                $methodId = spl_object_id($node);
+
+                if (isset($this->methodIds[$methodId])) {
+                    array_pop($this->activeMethodIds);
+                }
+
+                return null;
+            }
+
+            private function resolveFunctionName(Name $name): string
+            {
+                $functionName = $name->toString();
+
+                if ($name instanceof FullyQualified) {
+                    return $functionName;
+                }
+
+                $namespacedName = $name->getAttribute('namespacedName');
+
+                if (
+                    $namespacedName instanceof Name
+                    && in_array($namespacedName->toString(), $this->fileFunctions, true)
+                ) {
+                    return $namespacedName->toString();
+                }
+
+                return $functionName;
+            }
+
+            private function isComplexityBranch(Node $node): bool
+            {
+                return $node instanceof If_
+                    || $node instanceof ElseIf_
+                    || $node instanceof For_
+                    || $node instanceof Foreach_
+                    || $node instanceof While_
+                    || $node instanceof Do_
+                    || $node instanceof Case_
+                    || $node instanceof Catch_
+                    || $node instanceof Ternary
+                    || $node instanceof BooleanAnd
+                    || $node instanceof BooleanOr
+                    || $node instanceof LogicalAnd
+                    || $node instanceof LogicalOr
+                    || $node instanceof Match_;
             }
         };
 
         $nodeTraverser->addVisitor($visitor);
         $nodeTraverser->traverse([$classLike]);
 
-        return array_values(array_unique(array_merge($this->fileUses, $visitor->names)));
+        return [
+            'dependencies'         => array_values(array_unique(array_merge($this->fileUses, $visitor->dependencies))),
+            'functionCalls'        => array_values(array_unique($visitor->functionCalls)),
+            'superglobals'         => array_values(array_unique($visitor->superglobals)),
+            'complexityByMethodId' => $visitor->complexityByMethodId,
+        ];
     }
 
     /**
@@ -330,8 +453,9 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /**
      * @return MethodNode[]
+     * @param array<int, int> $complexityByMethodId
      */
-    private function collectMethods(ClassLike $classLike): array
+    private function collectMethods(ClassLike $classLike, array $complexityByMethodId): array
     {
         $methods = [];
 
@@ -342,7 +466,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 hasReturnType:        $classMethod->returnType !== null,
                 isStatic:             $classMethod->isStatic(),
                 paramCount:           count($classMethod->params),
-                cyclomaticComplexity: $this->calculateComplexity($classMethod),
+                cyclomaticComplexity: $complexityByMethodId[spl_object_id($classMethod)] ?? 1,
                 lineCount:            ($classMethod->getEndLine() - $classMethod->getStartLine()) + 1,
                 hasExplicitVisibility: $this->hasExplicitVisibilityFlag($classMethod->flags),
                 line:                 $classMethod->getStartLine(),
@@ -368,142 +492,5 @@ final class ClassCollector extends NodeVisitorAbstract
     private function hasExplicitVisibilityFlag(int $flags): bool
     {
         return ($flags & Modifiers::VISIBILITY_MASK) !== 0;
-    }
-
-    private function calculateComplexity(ClassMethod $classMethod): int
-    {
-        // Start at 1, add 1 for each branch point
-        $complexity = 1;
-
-        $nodeTraverser = new NodeTraverser();
-        $visitor       = new class extends NodeVisitorAbstract {
-            public int $count = 0;
-
-            public function enterNode(Node $node): null
-            {
-                if (
-                    $node instanceof If_
-                    || $node instanceof ElseIf_
-                    || $node instanceof For_
-                    || $node instanceof Foreach_
-                    || $node instanceof While_
-                    || $node instanceof Do_
-                    || $node instanceof Case_
-                    || $node instanceof Catch_
-                    || $node instanceof Ternary
-                    || $node instanceof BooleanAnd
-                    || $node instanceof BooleanOr
-                    || $node instanceof LogicalAnd
-                    || $node instanceof LogicalOr
-                    || $node instanceof Match_
-                ) {
-                    $this->count++;
-                }
-
-                return null;
-            }
-        };
-
-        $nodeTraverser->addVisitor($visitor);
-
-        if ($classMethod->stmts !== null) {
-            $nodeTraverser->traverse($classMethod->stmts);
-        }
-
-        return $complexity + $visitor->count;
-    }
-
-    /**
-     * @return string[]
-     */
-    private function collectFunctionCalls(ClassLike $classLike): array
-    {
-        $nodeTraverser = new NodeTraverser();
-        $visitor       = new class ($this->fileFunctions) extends NodeVisitorAbstract {
-            /** @var string[] */
-            public array $calls = [];
-
-            /**
-             * @param string[] $fileFunctions
-             */
-            public function __construct(
-                private readonly array $fileFunctions,
-            ) {
-            }
-
-            public function enterNode(Node $node): null
-            {
-                if (
-                    $node instanceof FuncCall
-                    && $node->name instanceof Name
-                ) {
-                    $this->calls[] = $this->resolveFunctionName($node->name);
-                }
-
-                return null;
-            }
-
-            private function resolveFunctionName(Name $name): string
-            {
-                $functionName = $name->toString();
-
-                if ($name instanceof FullyQualified) {
-                    return $functionName;
-                }
-
-                $namespacedName = $name->getAttribute('namespacedName');
-
-                if (
-                    $namespacedName instanceof Name
-                    && in_array($namespacedName->toString(), $this->fileFunctions, true)
-                ) {
-                    return $namespacedName->toString();
-                }
-
-                return $functionName;
-            }
-        };
-
-        $nodeTraverser->addVisitor($visitor);
-        $nodeTraverser->traverse([$classLike]);
-
-        return array_unique($visitor->calls);
-    }
-
-    /**
-     * @return string[]
-     */
-    private function collectSuperglobals(ClassLike $classLike): array
-    {
-        $nodeTraverser = new NodeTraverser();
-        $visitor       = new class (self::SUPERGLOBALS) extends NodeVisitorAbstract {
-            /** @var string[] */
-            public array $found = [];
-
-            /**
-             * @param string[] $superglobals
-             */
-            public function __construct(private readonly array $superglobals)
-            {
-            }
-
-            public function enterNode(Node $node): null
-            {
-                if (
-                    $node instanceof Variable
-                    && is_string($node->name)
-                    && in_array($node->name, $this->superglobals, true)
-                ) {
-                    $this->found[] = '$' . $node->name;
-                }
-
-                return null;
-            }
-        };
-
-        $nodeTraverser->addVisitor($visitor);
-        $nodeTraverser->traverse([$classLike]);
-
-        return array_unique($visitor->found);
     }
 }
