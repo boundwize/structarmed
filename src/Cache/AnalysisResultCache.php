@@ -154,9 +154,7 @@ final readonly class AnalysisResultCache
                 continue;
             }
 
-            if ($metadata['configHash'] !== $configHash) {
-                return true;
-            }
+            return $metadata['configHash'] !== $configHash;
         }
 
         return false;
@@ -189,9 +187,7 @@ final readonly class AnalysisResultCache
                 continue;
             }
 
-            if ($metadata['composerGeneratedVersionHash'] !== $composerGeneratedVersionHash) {
-                return true;
-            }
+            return $metadata['composerGeneratedVersionHash'] !== $composerGeneratedVersionHash;
         }
 
         return false;
