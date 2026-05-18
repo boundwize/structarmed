@@ -97,17 +97,13 @@ final readonly class ParallelClassNodeExtractor
             $stderrPipe = $pipes[2];
             stream_set_blocking($stdoutPipe, false);
 
-            $processes[] = [
-                'workerId'      => $workerId,
-                'process'       => $process,
-                'files'         => $chunk,
-                'filesAdvanced' => 0,
-                'socket'        => null,
-                'result'        => null,
-                'socketFailure' => null,
-                'stdoutPipe'    => $stdoutPipe,
-                'stderrPipe'    => $stderrPipe,
-            ];
+            $processes[] = new WorkerProcessState(
+                workerId: $workerId,
+                process: $process,
+                files: $chunk,
+                stdoutPipe: $stdoutPipe,
+                stderrPipe: $stderrPipe,
+            );
         }
 
         try {
@@ -147,8 +143,10 @@ final readonly class ParallelClassNodeExtractor
                     continue;
                 }
 
+                $worker = $pending[$key];
+
                 if (($meta['type'] ?? null) === 'socket') {
-                    $this->consumeWorkerSocket($pending[$key], $stream);
+                    $this->consumeWorkerSocket($worker, $stream);
 
                     continue;
                 }
@@ -159,10 +157,10 @@ final readonly class ParallelClassNodeExtractor
                 if ($data !== false && $data !== '') {
                     $count = substr_count($data, "\n");
                     for ($i = 0; $i < $count; $i++) {
-                        $fileIdx = $pending[$key]['filesAdvanced'];
-                        if ($fileIdx < count($pending[$key]['files'])) {
-                            $progressHandler?->advance($pending[$key]['files'][$fileIdx]);
-                            $pending[$key]['filesAdvanced']++;
+                        $fileIdx = $worker->filesAdvanced;
+                        if ($fileIdx < count($worker->files)) {
+                            $progressHandler?->advance($worker->files[$fileIdx]);
+                            $worker->filesAdvanced++;
                         }
                     }
                 }
@@ -176,11 +174,11 @@ final readonly class ParallelClassNodeExtractor
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
 
-                $finalizedWorker = $this->finalizeWorker($pending[$key]);
-                $result = $finalizedWorker['result'];
-                $socketFailure = $finalizedWorker['socketFailure'];
-                $stderr = $finalizedWorker['stderr'];
-                $exitCode = $finalizedWorker['exitCode'];
+                $finalizedWorker = $this->finalizeWorker($worker);
+                $result = $finalizedWorker->result;
+                $socketFailure = $finalizedWorker->socketFailure;
+                $stderr = $finalizedWorker->stderr;
+                $exitCode = $finalizedWorker->exitCode;
 
                 if ($socketFailure !== null) {
                     if ($exitCode !== 0 && $stderr !== '') {
@@ -248,7 +246,7 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @param list<array{workerId: string, process: resource, files: list<string>, filesAdvanced: int, socket: resource|null, result: array<mixed>|null, socketFailure: RuntimeException|null, stdoutPipe: resource, stderrPipe: resource}> $processes
+    * @param list<WorkerProcessState> $processes
      * @return array{streams: list<resource>, meta: array<int, array{key: int, type: 'stdout'|'socket'}>}
      */
     private function collectReadableStreams(array $processes): array
@@ -257,19 +255,20 @@ final readonly class ParallelClassNodeExtractor
         $streamMeta  = [];
 
         foreach (array_keys($processes) as $key) {
-            $stdoutPipe = $processes[$key]['stdoutPipe'];
+            $worker = $processes[$key];
+            $stdoutPipe = $worker->stdoutPipe;
 
             if (is_resource($stdoutPipe)) {
                 $readStreams[] = $stdoutPipe;
                 $streamMeta[(int) $stdoutPipe] = ['key' => $key, 'type' => 'stdout'];
             }
 
-            $socket = $processes[$key]['socket'];
+            $socket = $worker->socket;
 
             if (
                 is_resource($socket)
-                && $processes[$key]['result'] === null
-                && $processes[$key]['socketFailure'] === null
+                && $worker->result === null
+                && $worker->socketFailure === null
             ) {
                 $readStreams[] = $socket;
                 $streamMeta[(int) $socket] = ['key' => $key, 'type' => 'socket'];
@@ -280,60 +279,59 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * @param array{workerId: string, process: resource, files: list<string>, filesAdvanced: int, socket: resource|null, result: array<mixed>|null, socketFailure: RuntimeException|null, stdoutPipe: resource, stderrPipe: resource} $worker
+     * @param resource $stream
      * @param resource $stream
      */
-    private function consumeWorkerSocket(array &$worker, mixed $stream): void
+    private function consumeWorkerSocket(WorkerProcessState $worker, mixed $stream): void
     {
         try {
-            $worker['result'] = WorkerPayloadSocket::readPayload($stream);
+            $worker->result = WorkerPayloadSocket::readPayload($stream);
         } catch (RuntimeException $runtimeException) {
-            $worker['socketFailure'] = $runtimeException;
+            $worker->socketFailure = $runtimeException;
         } finally {
             fclose($stream);
-            $worker['socket'] = null;
+            $worker->socket = null;
         }
     }
 
     /**
-     * @param array{workerId: string, process: resource, files: list<string>, filesAdvanced: int, socket: resource|null, result: array<mixed>|null, socketFailure: RuntimeException|null, stdoutPipe: resource, stderrPipe: resource} $worker
-     * @return array{result: array<mixed>|null, socketFailure: RuntimeException|null, stderr: string, exitCode: int}
+     * @return WorkerFinalizedState
      */
-    private function finalizeWorker(array &$worker): array
+    private function finalizeWorker(WorkerProcessState $worker): WorkerFinalizedState
     {
-        if (is_resource($worker['socket'])) {
-            $this->consumeWorkerSocket($worker, $worker['socket']);
+        if (is_resource($worker->socket)) {
+            $this->consumeWorkerSocket($worker, $worker->socket);
         }
 
-        $stderrPipe = $worker['stderrPipe'];
+        $stderrPipe = $worker->stderrPipe;
         $stderr     = is_resource($stderrPipe) ? (string) stream_get_contents($stderrPipe) : '';
 
         if (is_resource($stderrPipe)) {
             fclose($stderrPipe);
         }
 
-        $procResource = $worker['process'];
+        $procResource = $worker->process;
         assert(is_resource($procResource));
         $exitCode = proc_close($procResource);
 
-        return [
-            'result' => $worker['result'],
-            'socketFailure' => $worker['socketFailure'],
-            'stderr' => $stderr,
-            'exitCode' => $exitCode,
-        ];
+        return new WorkerFinalizedState(
+            result: $worker->result,
+            socketFailure: $worker->socketFailure,
+            stderr: $stderr,
+            exitCode: $exitCode,
+        );
     }
 
     /**
-        * @param list<array{workerId: string, process: resource, files: list<string>, filesAdvanced: int, socket: resource|null, result: array<mixed>|null, socketFailure: RuntimeException|null, stdoutPipe: resource, stderrPipe: resource}> $processes
-        * @return list<array{workerId: string, process: resource, files: list<string>, filesAdvanced: int, socket: resource, result: array<mixed>|null, socketFailure: RuntimeException|null, stdoutPipe: resource, stderrPipe: resource}>
+        * @param list<WorkerProcessState> $processes
+        * @return list<WorkerProcessState>
      */
     private function acceptWorkerConnections(mixed $serverSocket, array $processes): array
     {
         $byWorkerId = [];
 
         foreach ($processes as $key => $process) {
-            $byWorkerId[$process['workerId']] = $key;
+            $byWorkerId[$process->workerId] = $key;
         }
 
         $acceptedWorkers = 0;
@@ -355,7 +353,7 @@ final readonly class ParallelClassNodeExtractor
 
             $key = $byWorkerId[$hello['workerId']];
 
-            if ($processes[$key]['socket'] !== null) {
+            if ($processes[$key]->socket !== null) {
                 fclose($workerSocket);
 
                 throw new RuntimeException('Parallel analysis worker connected more than once.');
@@ -365,10 +363,10 @@ final readonly class ParallelClassNodeExtractor
                 'basePath'      => $this->basePath,
                 'layers'        => $this->layers,
                 'layerPatterns' => $this->layerPatterns,
-                'files'         => $processes[$key]['files'],
+                'files'         => $processes[$key]->files,
             ]);
 
-            $processes[$key]['socket'] = $workerSocket;
+            $processes[$key]->socket = $workerSocket;
             $acceptedWorkers++;
         }
 
