@@ -122,6 +122,33 @@ final readonly class ParallelClassNodeExtractor
                 if (($meta['type'] ?? null) === 'result') {
                     $this->consumeWorkerResult($worker, $readStream);
 
+                    if (! $worker->trackProgress) {
+                        $stderrPipe = $worker->stderrPipe;
+                        if (is_resource($stderrPipe)) {
+                            $remaining = fread($stderrPipe, 8192);
+                            if ($remaining !== false && $remaining !== '') {
+                                $worker->stderrBuffer .= str_replace("\n", '', $remaining);
+                            }
+
+                            if (feof($stderrPipe)) {
+                                fclose($stderrPipe);
+                                $this->handleCompletedWorker(
+                                    $pending,
+                                    $key,
+                                    $worker,
+                                    $nodes,
+                                    $failure,
+                                    $batchQueue,
+                                    $nextBatch,
+                                    $batchCount,
+                                    $nextWorkerId,
+                                    $script,
+                                    false,
+                                );
+                            }
+                        }
+                    }
+
                     continue;
                 }
 
@@ -135,12 +162,14 @@ final readonly class ParallelClassNodeExtractor
                         $worker->stderrBuffer .= str_replace("\n", '', $data);
                     }
 
-                    $fileCount = count($worker->files);
-                    for ($i = 0; $i < $count; $i++) {
-                        $fileIdx = $worker->filesAdvanced;
-                        if ($fileIdx < $fileCount) {
-                            $progressHandler?->advance($worker->files[$fileIdx]);
-                            $worker->filesAdvanced++;
+                    if ($worker->trackProgress) {
+                        $fileCount = count($worker->files);
+                        for ($i = 0; $i < $count; $i++) {
+                            $fileIdx = $worker->filesAdvanced;
+                            if ($fileIdx < $fileCount) {
+                                $progressHandler?->advance($worker->files[$fileIdx]);
+                                $worker->filesAdvanced++;
+                            }
                         }
                     }
                 }
@@ -151,66 +180,19 @@ final readonly class ParallelClassNodeExtractor
 
                 fclose($stderrPipe);
 
-                $finalizedWorker = $this->finalizeWorker($worker);
-                $result          = $finalizedWorker->result;
-                $resultFailure   = $finalizedWorker->resultFailure;
-                $stderr          = $finalizedWorker->stderr;
-                $exitCode        = $finalizedWorker->exitCode;
-
-                if ($resultFailure instanceof RuntimeException) {
-                    if ($exitCode !== 0 && $stderr !== '') {
-                        $failure ??= sprintf(
-                            "Parallel analysis worker failed: unknown error\n%s",
-                            $stderr
-                        );
-                    } else {
-                        $failure ??= $resultFailure->getMessage();
-                    }
-
-                    unset($pending[$key]);
-
-                    continue;
-                }
-
-                if ($result === null) {
-                    $failure ??= 'Parallel analysis worker returned an invalid payload.';
-
-                    unset($pending[$key]);
-
-                    continue;
-                }
-
-                $error = $result['error'];
-
-                if ($error !== null || $exitCode !== 0) {
-                    $failure ??= sprintf(
-                        "Parallel analysis worker failed: %s%s",
-                        $error ?? 'unknown error',
-                        $stderr !== '' ? "\n" . $stderr : ''
-                    );
-
-                    unset($pending[$key]);
-
-                    continue;
-                }
-
-                /** @var list<ClassNode> $workerNodes */
-                $workerNodes = $result['nodes'];
-                $nodes       = array_merge($nodes, $workerNodes);
-
-                unset($pending[$key]);
-
-                if ($nextBatch < $batchCount && $failure === null) {
-                    /** @var non-empty-list<string> $filesForWorker */
-                    $filesForWorker = $batchQueue[$nextBatch++];
-
-                    $pending[] = $this->startWorker(
-                        workerId: (string) $nextWorkerId++,
-                        files: $filesForWorker,
-                        script: $script,
-                        trackProgress: $progressHandler instanceof ProgressHandlerInterface,
-                    );
-                }
+                $this->handleCompletedWorker(
+                    $pending,
+                    $key,
+                    $worker,
+                    $nodes,
+                    $failure,
+                    $batchQueue,
+                    $nextBatch,
+                    $batchCount,
+                    $nextWorkerId,
+                    $script,
+                    true,
+                );
             }
         }
 
@@ -341,6 +323,7 @@ final readonly class ParallelClassNodeExtractor
             files: $files,
             stderrPipe: $stderrPipe,
             resultPipe: $resultPipe,
+            trackProgress: $trackProgress,
         );
     }
 
@@ -355,6 +338,86 @@ final readonly class ParallelClassNodeExtractor
         $targetBatchCount       = min($totalFiles, $workerCount * $targetBatchesPerWorker);
 
         return max(1, (int) ceil($totalFiles / $targetBatchCount));
+    }
+
+    /**
+     * @param array<int, WorkerProcessState> $pending
+     * @param list<ClassNode> $nodes
+     * @param list<list<string>> $batchQueue
+     */
+    private function handleCompletedWorker(
+        array &$pending,
+        int $key,
+        WorkerProcessState $workerProcessState,
+        array &$nodes,
+        ?string &$failure,
+        array $batchQueue,
+        int &$nextBatch,
+        int $batchCount,
+        int &$nextWorkerId,
+        string $script,
+        bool $trackProgress,
+    ): void {
+        $workerFinalizedState = $this->finalizeWorker($workerProcessState);
+        $result               = $workerFinalizedState->result;
+        $resultFailure        = $workerFinalizedState->resultFailure;
+        $stderr               = $workerFinalizedState->stderr;
+        $exitCode             = $workerFinalizedState->exitCode;
+
+        if ($resultFailure instanceof RuntimeException) {
+            if ($exitCode !== 0 && $stderr !== '') {
+                $failure ??= sprintf(
+                    "Parallel analysis worker failed: unknown error\n%s",
+                    $stderr
+                );
+            } else {
+                $failure ??= $resultFailure->getMessage();
+            }
+
+            unset($pending[$key]);
+
+            return;
+        }
+
+        if ($result === null) {
+            $failure ??= 'Parallel analysis worker returned an invalid payload.';
+
+            unset($pending[$key]);
+
+            return;
+        }
+
+        $error = $result['error'];
+
+        if ($error !== null || $exitCode !== 0) {
+            $failure ??= sprintf(
+                "Parallel analysis worker failed: %s%s",
+                $error ?? 'unknown error',
+                $stderr !== '' ? "\n" . $stderr : ''
+            );
+
+            unset($pending[$key]);
+
+            return;
+        }
+
+        /** @var list<ClassNode> $workerNodes */
+        $workerNodes = $result['nodes'];
+        $nodes       = array_merge($nodes, $workerNodes);
+
+        unset($pending[$key]);
+
+        if ($nextBatch < $batchCount && $failure === null) {
+            /** @var non-empty-list<string> $filesForWorker */
+            $filesForWorker = $batchQueue[$nextBatch++];
+
+            $pending[] = $this->startWorker(
+                workerId: (string) $nextWorkerId++,
+                files: $filesForWorker,
+                script: $script,
+                trackProgress: $trackProgress,
+            );
+        }
     }
 
     private function finalizeWorker(WorkerProcessState $workerProcessState): WorkerFinalizedState

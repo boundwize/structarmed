@@ -147,7 +147,19 @@ final class WorkerPayloadSocket
      */
     private static function readExact(mixed $stream, int $length): string
     {
-        $buffer = '';
+        assert($length > 0);
+
+        $chunk = fread($stream, $length);
+
+        if ($chunk !== false && strlen($chunk) === $length) {
+            return $chunk;
+        }
+
+        if ($chunk === false) {
+            throw new RuntimeException('Unable to read worker payload.');
+        }
+
+        $buffer = $chunk;
 
         while (strlen($buffer) < $length) {
             $remaining = $length - strlen($buffer);

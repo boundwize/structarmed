@@ -30,6 +30,7 @@ final class WorkerProcessState
         public array $files,
         public mixed $stderrPipe,
         public mixed $resultPipe = null,
+        public readonly bool $trackProgress = false,
     ) {
     }
 }
