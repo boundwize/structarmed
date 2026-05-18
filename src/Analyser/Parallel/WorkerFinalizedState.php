@@ -14,7 +14,7 @@ final readonly class WorkerFinalizedState
      */
     public function __construct(
         public ?array $result,
-        public ?RuntimeException $socketFailure,
+        public ?RuntimeException $resultFailure,
         public string $stderr,
         public int $exitCode,
     ) {

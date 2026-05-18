@@ -11,17 +11,14 @@ final class WorkerProcessState
 {
     public int $filesAdvanced = 0;
 
-    public ?RuntimeException $socketFailure = null;
+    public ?RuntimeException $resultFailure = null;
 
     /** @var array{nodes: list<ClassNode>, error: string|null}|null */
     public ?array $result = null;
 
-    /** @var resource|null */
-    public $socket;
-
     /**
      * @param resource $process
-     * @param resource $stdoutPipe
+     * @param resource|null $resultPipe
      * @param resource $stderrPipe
      */
     public function __construct(
@@ -29,8 +26,8 @@ final class WorkerProcessState
         public mixed $process,
         /** @var list<string> */
         public array $files,
-        public mixed $stdoutPipe,
-        public mixed $stderrPipe
+        public mixed $stderrPipe,
+        public mixed $resultPipe = null,
     ) {
     }
 }
