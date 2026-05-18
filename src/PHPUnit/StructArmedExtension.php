@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\PHPUnit;
 
 use Boundwize\StructArmed\Analyser\Analyser;
+use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
@@ -31,7 +33,20 @@ final class StructArmedExtension implements Extension
             : ConfigLoader::discover($basePath);
 
         $architecture = ConfigLoader::load($configFile);
-        $analyser     = new Analyser($basePath);
+
+        $analysisResultCache          = new AnalysisResultCache($basePath, $architecture->getCacheDirectory());
+        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
+
+        if (
+            $analysisResultCache->hasDifferentConfig($configHash)
+            || $analysisResultCache->hasDifferentComposerGeneratedVersion($composerGeneratedVersionHash)
+        ) {
+            $analysisResultCache->clear();
+        }
+
+        $analyser = new Analyser($basePath, $analysisResultCache, $configHash);
 
         $start                   = microtime(true);
         $ruleViolationCollection = $analyser->analyse($architecture);

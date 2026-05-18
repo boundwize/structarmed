@@ -19,6 +19,8 @@ use ReflectionClass;
 use function chdir;
 use function file_put_contents;
 use function getcwd;
+use function json_encode;
+use function mkdir;
 
 #[CoversClass(StructArmedExtension::class)]
 final class StructArmedExtensionTest extends TestCase
@@ -53,6 +55,82 @@ final class StructArmedExtensionTest extends TestCase
                 $this->configuration(),
                 new Facade(),
                 ParameterCollection::fromArray([])
+            );
+        } finally {
+            chdir($previousPath);
+        }
+    }
+
+    public function testBootstrapUsesCacheDirectoryFromConfig(): void
+    {
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
+
+        $basePath = $this->makeTemporaryDirectory('structarmed-extension-project');
+        $srcDir   = $basePath . '/src';
+        mkdir($srcDir);
+        file_put_contents($srcDir . '/Foo.php', "<?php\nclass Foo {}\n");
+
+        $cacheDir   = $this->registerTemporaryPath($basePath . '/custom-cache');
+        $configPath = $basePath . '/structarmed.php';
+        file_put_contents(
+            $configPath,
+            "<?php\nreturn " . Architecture::class . "::define()"
+            . "->layer('App', 'src/')"
+            . "->cacheDirectory('" . $cacheDir . "');\n"
+        );
+
+        chdir($basePath);
+
+        try {
+            $this->expectOutputRegex('/No violations found/');
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                ParameterCollection::fromArray(['config' => $configPath])
+            );
+        } finally {
+            chdir($previousPath);
+        }
+
+        $this->assertDirectoryExists($cacheDir);
+    }
+
+    public function testBootstrapClearsCacheWhenConfigChanges(): void
+    {
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
+
+        $basePath = $this->makeTemporaryDirectory('structarmed-extension-stale');
+        $srcDir   = $basePath . '/src';
+        mkdir($srcDir);
+        file_put_contents($srcDir . '/Bar.php', "<?php\nclass Bar {}\n");
+
+        $cacheDir   = $basePath . '/custom-cache';
+        $configPath = $basePath . '/structarmed.php';
+        file_put_contents(
+            $configPath,
+            "<?php\nreturn " . Architecture::class . "::define()"
+            . "->layer('App', 'src/')"
+            . "->cacheDirectory('" . $cacheDir . "');\n"
+        );
+
+        mkdir($cacheDir, 0777, true);
+        file_put_contents($cacheDir . '/stale.json', json_encode([
+            'metadata'   => ['configHash' => 'stale-hash-that-will-not-match'],
+            'violations' => [],
+        ]));
+
+        chdir($basePath);
+
+        try {
+            $this->expectOutputRegex('/No violations found/');
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                ParameterCollection::fromArray(['config' => $configPath])
             );
         } finally {
             chdir($previousPath);
