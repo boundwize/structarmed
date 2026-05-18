@@ -21,15 +21,12 @@ use function fclose;
 use function feof;
 use function fread;
 use function is_array;
-use function is_dir;
 use function is_resource;
 use function is_string;
 use function max;
 use function min;
-use function mkdir;
 use function proc_close;
 use function sprintf;
-use function stream_get_meta_data;
 use function stream_get_contents;
 use function stream_set_blocking;
 use function stream_select;
@@ -51,7 +48,6 @@ final readonly class ParallelClassNodeExtractor
         private array $layers,
         private array $layerPatterns,
         private int $workerCount,
-        private ?string $cacheDirectory = null,
     ) {
     }
 
@@ -64,8 +60,6 @@ final readonly class ParallelClassNodeExtractor
         if ($files === []) {
             return [];
         }
-
-        $this->ensureCacheDirectoryExists();
 
         $totalFiles  = count($files);
         $workerCount = min($this->workerCount, $totalFiles);
@@ -346,12 +340,5 @@ final readonly class ParallelClassNodeExtractor
             'server' => $server,
             'address' => 'tcp://' . $address,
         ];
-    }
-
-    private function ensureCacheDirectoryExists(): void
-    {
-        if ($this->cacheDirectory !== null && ! is_dir($this->cacheDirectory)) {
-            mkdir($this->cacheDirectory, 0777, true);
-        }
     }
 }
