@@ -31,7 +31,6 @@ use function proc_close;
 use function sprintf;
 use function str_replace;
 use function stream_get_contents;
-use function stream_select;
 use function stream_set_blocking;
 use function substr_count;
 
@@ -88,12 +87,17 @@ final readonly class ParallelClassNodeExtractor
             ['streams' => $readStreams, 'meta' => $streamMeta] = $this->collectReadableStreams($pending);
 
             if ($readStreams === []) {
+                // @codeCoverageIgnoreStart
                 break;
+                // @codeCoverageIgnoreEnd
             }
 
             $writePipes  = null;
             $exceptPipes = null;
-            $selected    = stream_select($readStreams, $writePipes, $exceptPipes, 0, 50000);
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            // to allow tests to mock stream_select in this namespace
+            $selected = stream_select($readStreams, $writePipes, $exceptPipes, 0, 50000);
+            // phpcs:enable
 
             if ($selected === false) {
                 throw new RuntimeException('Unable to wait for parallel analysis worker progress.');
@@ -102,6 +106,8 @@ final readonly class ParallelClassNodeExtractor
             if ($selected === 0) {
                 continue;
             }
+
+            assert(is_array($readStreams));
 
             foreach ($readStreams as $readStream) {
                 $meta = $streamMeta[(int) $readStream] ?? null;

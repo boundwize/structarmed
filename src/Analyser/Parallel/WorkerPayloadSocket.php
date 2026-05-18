@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use RuntimeException;
 
+use function assert;
 use function fclose;
 use function fread;
 use function fwrite;
@@ -15,10 +16,8 @@ use function pack;
 use function serialize;
 use function sprintf;
 use function stream_get_meta_data;
-use function stream_socket_client;
 use function strlen;
 use function substr;
-use function unpack;
 use function unserialize;
 
 use const STREAM_CLIENT_CONNECT;
@@ -43,8 +42,11 @@ final class WorkerPayloadSocket
      */
     public static function readPayload(mixed $stream): array
     {
-        $header        = self::readExact($stream, 4);
+        $header = self::readExact($stream, 4);
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to allow tests to mock unpack in this namespace
         $decodedHeader = unpack('Nlength', $header);
+        // phpcs:enable
 
         if (! is_array($decodedHeader) || ! isset($decodedHeader['length'])) {
             throw new RuntimeException('Unable to read worker payload header.');
@@ -71,6 +73,8 @@ final class WorkerPayloadSocket
         $errorCode    = 0;
         $errorMessage = '';
 
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to allow tests to mock stream_socket_client in this namespace
         $stream = stream_socket_client(
             $address,
             $errorCode,
@@ -78,6 +82,7 @@ final class WorkerPayloadSocket
             $timeoutSeconds,
             STREAM_CLIENT_CONNECT,
         );
+        // phpcs:enable
 
         if ($stream === false) {
             throw new RuntimeException(sprintf(
@@ -130,10 +135,7 @@ final class WorkerPayloadSocket
 
         while (strlen($buffer) < $length) {
             $remaining = $length - strlen($buffer);
-
-            if ($remaining < 1) {
-                throw new RuntimeException('Unable to read worker payload.');
-            }
+            assert($remaining > 0);
 
             $chunk = fread($stream, $remaining);
             if ($chunk === false || $chunk === '') {

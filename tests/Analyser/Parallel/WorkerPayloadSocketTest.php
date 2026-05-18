@@ -16,12 +16,8 @@ use function fopen;
 use function fwrite;
 use function is_resource;
 use function pack;
-use function restore_error_handler;
 use function rewind;
 use function serialize;
-use function set_error_handler;
-use function stream_socket_get_name;
-use function stream_socket_server;
 use function strlen;
 use function sys_get_temp_dir;
 use function tempnam;
@@ -30,6 +26,18 @@ use function unlink;
 #[CoversClass(WorkerPayloadSocket::class)]
 final class WorkerPayloadSocketTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        $GLOBALS['mock_stream_socket_client_callback'] = null;
+        $GLOBALS['mock_unpack_callback']               = null;
+    }
+
+    protected function tearDown(): void
+    {
+        $GLOBALS['mock_stream_socket_client_callback'] = null;
+        $GLOBALS['mock_unpack_callback']               = null;
+    }
+
     public function testPayloadRoundTrip(): void
     {
         $stream = fopen('php://temp', 'w+');
@@ -55,6 +63,40 @@ final class WorkerPayloadSocketTest extends TestCase
         WorkerPayloadSocket::readPayload($stream);
     }
 
+    public function testReadPayloadThrowsWhenHeaderCannotBeDecoded(): void
+    {
+        $stream = fopen('php://temp', 'w+');
+        $this->assertNotFalse($stream);
+
+        fwrite($stream, "\x00\x00\x00\x00");
+        rewind($stream);
+
+        $GLOBALS['mock_unpack_callback'] = static fn (string $format, string $string, int $offset = 0): false => false;
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to read worker payload header.');
+
+        WorkerPayloadSocket::readPayload($stream);
+    }
+
+    public function testReadPayloadThrowsWhenDecodedLengthIsInvalid(): void
+    {
+        $stream = fopen('php://temp', 'w+');
+        $this->assertNotFalse($stream);
+
+        fwrite($stream, "\x00\x00\x00\x00");
+        rewind($stream);
+
+        $GLOBALS['mock_unpack_callback'] = static fn (string $format, string $string, int $offset = 0): array => [
+            'length' => -1,
+        ];
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unable to read worker payload header.');
+
+        WorkerPayloadSocket::readPayload($stream);
+    }
+
     public function testReadPayloadThrowsWhenPayloadIsNotAnArray(): void
     {
         $stream = fopen('php://temp', 'w+');
@@ -72,37 +114,35 @@ final class WorkerPayloadSocketTest extends TestCase
 
     public function testConnectCanOpenSocketConnection(): void
     {
-        $server = stream_socket_server('tcp://127.0.0.1:0');
-        $this->assertNotFalse($server);
+        $stream = fopen('php://temp', 'w+');
+        $this->assertNotFalse($stream);
 
-        $address = stream_socket_get_name($server, false);
-        $this->assertIsString($address);
+        $GLOBALS['mock_stream_socket_client_callback'] = static fn (): mixed => $stream;
 
-        $client = WorkerPayloadSocket::connect('tcp://' . $address);
+        $this->assertSame($stream, WorkerPayloadSocket::connect('tcp://127.0.0.1:12345'));
 
-        fclose($client);
-        fclose($server);
+        fclose($stream);
     }
 
     public function testConnectThrowsWhenSocketCannotBeOpened(): void
     {
-        $server = stream_socket_server('tcp://127.0.0.1:0');
-        $this->assertNotFalse($server);
+        $GLOBALS['mock_stream_socket_client_callback'] = static function (
+            string $address,
+            ?int &$errorCode = null,
+            ?string &$errorMessage = null
+        ): false {
+            $errorCode    = 111;
+            $errorMessage = 'connection refused';
 
-        $address = stream_socket_get_name($server, false);
-        $this->assertIsString($address);
-        fclose($server);
+            return false;
+        };
 
-        set_error_handler(static fn (): bool => true);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage(
+            'Unable to connect to parallel analysis worker socket [tcp://127.0.0.1:12345]: connection refused'
+        );
 
-        try {
-            $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('Unable to connect to parallel analysis worker socket');
-
-            WorkerPayloadSocket::connect('tcp://' . $address, 0.1);
-        } finally {
-            restore_error_handler();
-        }
+        WorkerPayloadSocket::connect('tcp://127.0.0.1:12345', 0.1);
     }
 
     public function testCloseWriteLeavesReadOnlyStreamOpen(): void
