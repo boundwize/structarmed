@@ -82,9 +82,9 @@ final class StructArmedApplicationTest extends TestCase
 
     public function testApplicationRunsInjectedInternalWorker(): void
     {
-        $application = new StructArmedApplication(static fn (): int => 7);
+        $structArmedApplication = new StructArmedApplication(static fn (): int => 7);
 
-        $this->assertSame(7, $application->run(['structarmed', '--internal-worker']));
+        $this->assertSame(7, $structArmedApplication->run(['structarmed', '--internal-worker']));
     }
 
     public function testApplicationClearsCacheWithoutAnalyseCommand(): void

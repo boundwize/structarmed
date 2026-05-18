@@ -139,9 +139,9 @@ PHP);
         ]);
         rewind($payloadStream);
 
-        $runMethod = new ReflectionMethod(ClassNodeWorker::class, 'run');
+        $reflectionMethod = new ReflectionMethod(ClassNodeWorker::class, 'run');
 
-        $exitCode = $runMethod->invoke(null, $this->silentStream(), $payloadStream, 'not-a-stream');
+        $exitCode = $reflectionMethod->invoke(null, $this->silentStream(), $payloadStream, 'not-a-stream');
 
         $this->assertSame(1, $exitCode);
     }
@@ -235,13 +235,12 @@ PHP);
 
     public function testRunBatchClosesImplicitResultStreamOnSuccess(): void
     {
-        $runBatch = new ReflectionMethod(ClassNodeWorker::class, 'runBatch');
-        $runBatch->setAccessible(true);
+        $reflectionMethod = new ReflectionMethod(ClassNodeWorker::class, 'runBatch');
 
         $progressStream = $this->silentStream();
         $resultStream   = $this->memoryStream();
 
-        $exitCode = $runBatch->invoke(null, [
+        $exitCode = $reflectionMethod->invoke(null, [
             'basePath'      => __DIR__,
             'layers'        => [],
             'layerPatterns' => [],
@@ -254,12 +253,11 @@ PHP);
 
     public function testRunBatchClosesImplicitResultStreamOnFailure(): void
     {
-        $runBatch = new ReflectionMethod(ClassNodeWorker::class, 'runBatch');
-        $runBatch->setAccessible(true);
+        $reflectionMethod = new ReflectionMethod(ClassNodeWorker::class, 'runBatch');
 
         $resultStream = $this->memoryStream();
 
-        $exitCode = $runBatch->invoke(null, ['invalid-payload'], $this->silentStream(), $resultStream, true);
+        $exitCode = $reflectionMethod->invoke(null, ['invalid-payload'], $this->silentStream(), $resultStream, true);
 
         $this->assertSame(1, $exitCode);
         $this->assertFalse(is_resource($resultStream));

@@ -55,6 +55,7 @@ final class WorkerPayloadSocket
         if (! is_int($length) || $length < 0) {
             throw new RuntimeException('Unable to read worker payload header.');
         }
+
         $payload = unserialize(self::readExact($stream, $length));
 
         if (! is_array($payload)) {
@@ -133,6 +134,7 @@ final class WorkerPayloadSocket
             if ($remaining < 1) {
                 throw new RuntimeException('Unable to read worker payload.');
             }
+
             $chunk = fread($stream, $remaining);
             if ($chunk === false || $chunk === '') {
                 throw new RuntimeException('Unable to read worker payload.');

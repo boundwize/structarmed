@@ -169,6 +169,7 @@ final readonly class ParallelClassNodeExtractor
 
                     continue;
                 }
+
                 $error = $result['error'];
 
                 if ($error !== null || $exitCode !== 0) {

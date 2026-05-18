@@ -138,6 +138,7 @@ final readonly class ClassNodeWorker
             if ($shouldCloseResultStream) {
                 fclose($resultStream);
             }
+
             return 0;
         } catch (Throwable $throwable) {
             WorkerPayloadSocket::writePayload($resultStream, [
@@ -148,6 +149,7 @@ final readonly class ClassNodeWorker
             if ($shouldCloseResultStream) {
                 fclose($resultStream);
             }
+
             return 1;
         }
     }
@@ -168,20 +170,20 @@ final readonly class ClassNodeWorker
             throw new WorkerFailedException('Invalid worker payload.');
         }
 
-            $basePath = $payload['basePath'];
-            /** @var array<string, string|list<string>> $layers */
-            $layers = $payload['layers'];
-            /** @var array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns */
-            $layerPatterns = $payload['layerPatterns'];
-            /** @var list<string> $files */
-            $files = $payload['files'];
+        $basePath = $payload['basePath'];
+        /** @var array<string, string|list<string>> $layers */
+        $layers = $payload['layers'];
+        /** @var array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns */
+        $layerPatterns = $payload['layerPatterns'];
+        /** @var list<string> $files */
+        $files = $payload['files'];
 
-            $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
 
-            $progressHandler->start(count($files));
-            $nodes = (new ClassNodeExtractor($chainLayerResolver))->extract($files, $progressHandler);
-            $progressHandler->finish();
+        $progressHandler->start(count($files));
+        $nodes = (new ClassNodeExtractor($chainLayerResolver))->extract($files, $progressHandler);
+        $progressHandler->finish();
 
-            return $nodes;
+        return $nodes;
     }
 }
