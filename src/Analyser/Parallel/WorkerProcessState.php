@@ -17,7 +17,7 @@ final class WorkerProcessState
     public ?array $result = null;
 
     /** @var resource|null */
-    public mixed $socket = null;
+    public $socket;
 
     /**
      * @param resource $process
