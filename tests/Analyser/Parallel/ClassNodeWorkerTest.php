@@ -139,7 +139,7 @@ PHP);
         $server = stream_socket_server('tcp://127.0.0.1:0');
         $this->assertNotFalse($server);
 
-        $metadata = stream_get_meta_data($server);
+        stream_get_meta_data($server);
 
         $address = stream_socket_get_name($server, false);
         $this->assertIsString($address);

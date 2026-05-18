@@ -13,6 +13,7 @@ use function array_key_exists;
 use function array_keys;
 use function array_merge;
 use function array_shift;
+use function array_values;
 use function assert;
 use function ceil;
 use function count;
@@ -61,9 +62,9 @@ final readonly class ParallelClassNodeExtractor
             return [];
         }
 
-        $totalFiles                                              = count($files);
-        $workerCount                                             = min($this->workerCount, $totalFiles);
-        $chunkSize                                               = $this->determineBatchSize($totalFiles, $workerCount);
+        $totalFiles  = count($files);
+        $workerCount = min($this->workerCount, $totalFiles);
+        $chunkSize   = $this->determineBatchSize($totalFiles, $workerCount);
         /** @var int<1, max> $chunkSize */
         $batchQueue                                              = array_chunk($files, $chunkSize);
         $workerCount                                             = min($workerCount, count($batchQueue));
@@ -223,7 +224,7 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-    * @param array<int, WorkerProcessState> $processes
+     * @param array<int, WorkerProcessState> $processes
      * @return array{streams: list<resource>, meta: array<int, array{key: int, type: 'stdout'|'socket'}>}
      */
     private function collectReadableStreams(array $processes): array
