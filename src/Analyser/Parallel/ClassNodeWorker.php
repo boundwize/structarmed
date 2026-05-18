@@ -23,42 +23,40 @@ use function sprintf;
 use function sqrt;
 use function str_repeat;
 
+use const STDERR;
 use const STDIN;
 use const STDOUT;
 
 final readonly class ClassNodeWorker
 {
-    /** @param resource|null $outputStream */
+    /** @param resource|null $progressStream */
     public static function run(
-        string $address,
-        string $workerId = '',
-        mixed $outputStream = null,
-        mixed $socketStream = null
+        mixed $progressStream = null,
+        mixed $payloadStream = null,
+        mixed $resultStream = null
     ): int {
-        $stream = $socketStream;
+        $inputStream             = $payloadStream ?? STDIN;
+        $stream                  = $resultStream ?? STDOUT;
+        $shouldCloseResultStream = $resultStream === null;
 
         try {
-            $stream ??= WorkerPayloadSocket::connect($address);
+            if (! is_resource($inputStream)) {
+                throw new WorkerFailedException('Invalid worker payload stream.');
+            }
 
             if (! is_resource($stream)) {
-                throw new WorkerFailedException('Invalid worker socket stream.');
+                throw new WorkerFailedException('Invalid worker result stream.');
             }
 
-            if ($socketStream === null) {
-                WorkerPayloadSocket::writePayload($stream, ['workerId' => $workerId]);
-            }
+            $payload = WorkerPayloadSocket::readPayload($inputStream);
 
-            $payload = $socketStream === null
-                ? WorkerPayloadSocket::readPayload(STDIN)
-                : WorkerPayloadSocket::readPayload($stream);
-
-            $progressStream = $outputStream ?? STDOUT;
+            $progressStream ??= STDERR;
 
             if (! is_resource($progressStream)) {
                 throw new WorkerFailedException('Invalid worker progress stream.');
             }
 
-            return self::runBatch($payload, $progressStream, $stream);
+            return self::runBatch($payload, $progressStream, $stream, $shouldCloseResultStream);
         } catch (Throwable $throwable) {
             if (is_resource($stream)) {
                 WorkerPayloadSocket::writePayload($stream, [
@@ -66,7 +64,9 @@ final readonly class ClassNodeWorker
                     'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
                 ]);
 
-                fclose($stream);
+                if ($shouldCloseResultStream) {
+                    fclose($stream);
+                }
             }
 
             return 1;
@@ -75,11 +75,15 @@ final readonly class ClassNodeWorker
 
     /**
      * @param array<mixed> $payload
-     * @param resource $stream
      * @param resource $progressStream
+     * @param resource $resultStream
      */
-    private static function runBatch(array $payload, mixed $progressStream, mixed $stream): int
-    {
+    private static function runBatch(
+        array $payload,
+        mixed $progressStream,
+        mixed $resultStream,
+        bool $shouldCloseResultStream
+    ): int {
         try {
             $nodes = self::extractNodes(
                 $payload,
@@ -124,21 +128,25 @@ final readonly class ClassNodeWorker
                 },
             );
 
-            WorkerPayloadSocket::writePayload($stream, [
+            WorkerPayloadSocket::writePayload($resultStream, [
                 'nodes' => $nodes,
                 'error' => null,
             ]);
 
-            fclose($stream);
+            if ($shouldCloseResultStream) {
+                fclose($resultStream);
+            }
 
             return 0;
         } catch (Throwable $throwable) {
-            WorkerPayloadSocket::writePayload($stream, [
+            WorkerPayloadSocket::writePayload($resultStream, [
                 'nodes' => [],
                 'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
             ]);
 
-            fclose($stream);
+            if ($shouldCloseResultStream) {
+                fclose($resultStream);
+            }
 
             return 1;
         }

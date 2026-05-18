@@ -12,13 +12,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
-use function fclose;
 use function file_put_contents;
 use function fopen;
-use function stream_get_meta_data;
-use function stream_socket_accept;
-use function stream_socket_get_name;
-use function stream_socket_server;
+use function rewind;
 
 #[CoversClass(ClassNodeWorker::class)]
 #[CoversClass(WorkerFailedException::class)]
@@ -42,20 +38,23 @@ final class Foo
 }
 PHP);
 
-        ['client' => $clientStream, 'server' => $serverStream] = $this->createSocketStreams();
-
-        WorkerPayloadSocket::writePayload($clientStream, [
+        $payloadStream = $this->memoryStream();
+        WorkerPayloadSocket::writePayload($payloadStream, [
             'basePath'      => $dir,
             'layers'        => ['Domain' => 'App\\Domain'],
             'layerPatterns' => [],
             'files'         => [$srcFile],
         ]);
+        rewind($payloadStream);
 
-        $exitCode = ClassNodeWorker::run('', '', $this->silentStream(), $serverStream);
+        $resultStream = $this->memoryStream();
+
+        $exitCode = ClassNodeWorker::run($this->silentStream(), $payloadStream, $resultStream);
 
         $this->assertSame(0, $exitCode);
 
-        $result = WorkerPayloadSocket::readPayload($clientStream);
+        rewind($resultStream);
+        $result = WorkerPayloadSocket::readPayload($resultStream);
 
         $this->assertArrayHasKey('nodes', $result);
         $this->assertArrayHasKey('error', $result);
@@ -65,15 +64,18 @@ PHP);
 
     public function testRunWithInvalidPayloadReturnsOneAndWritesError(): void
     {
-        ['client' => $clientStream, 'server' => $serverStream] = $this->createSocketStreams();
+        $payloadStream = $this->memoryStream();
+        WorkerPayloadSocket::writePayload($payloadStream, ['invalid-payload']);
+        rewind($payloadStream);
 
-        WorkerPayloadSocket::writePayload($clientStream, ['invalid-payload']);
+        $resultStream = $this->memoryStream();
 
-        $exitCode = ClassNodeWorker::run('', '', $this->silentStream(), $serverStream);
+        $exitCode = ClassNodeWorker::run($this->silentStream(), $payloadStream, $resultStream);
 
         $this->assertSame(1, $exitCode);
 
-        $result = WorkerPayloadSocket::readPayload($clientStream);
+        rewind($resultStream);
+        $result = WorkerPayloadSocket::readPayload($resultStream);
 
         $this->assertSame([], $result['nodes']);
         $this->assertIsString($result['error']);
@@ -102,20 +104,23 @@ final class FooService
 }
 PHP);
 
-        ['client' => $clientStream, 'server' => $serverStream] = $this->createSocketStreams();
-
-        WorkerPayloadSocket::writePayload($clientStream, [
+        $payloadStream = $this->memoryStream();
+        WorkerPayloadSocket::writePayload($payloadStream, [
             'basePath'      => $dir,
             'layers'        => ['Domain' => 'App\\Domain'],
             'layerPatterns' => ['Domain' => ['pattern' => '/Service$/', 'excludePattern' => null]],
             'files'         => [$srcFile],
         ]);
+        rewind($payloadStream);
 
-        $exitCode = ClassNodeWorker::run('', '', $this->silentStream(), $serverStream);
+        $resultStream = $this->memoryStream();
+
+        $exitCode = ClassNodeWorker::run($this->silentStream(), $payloadStream, $resultStream);
 
         $this->assertSame(0, $exitCode);
 
-        $result = WorkerPayloadSocket::readPayload($clientStream);
+        rewind($resultStream);
+        $result = WorkerPayloadSocket::readPayload($resultStream);
 
         $this->assertNull($result['error']);
         $this->assertIsArray($result['nodes']);
@@ -131,28 +136,12 @@ PHP);
         return $stream;
     }
 
-    /**
-     * @return array{client: resource, server: resource}
-     */
-    private function createSocketStreams(): array
+    /** @return resource */
+    private function memoryStream(): mixed
     {
-        $server = stream_socket_server('tcp://127.0.0.1:0');
-        $this->assertNotFalse($server);
+        $stream = fopen('php://temp', 'w+');
+        $this->assertNotFalse($stream);
 
-        stream_get_meta_data($server);
-
-        $address = stream_socket_get_name($server, false);
-        $this->assertIsString($address);
-
-        $client   = WorkerPayloadSocket::connect('tcp://' . $address);
-        $accepted = stream_socket_accept($server, 1);
-        $this->assertNotFalse($accepted);
-
-        fclose($server);
-
-        return [
-            'client' => $client,
-            'server' => $accepted,
-        ];
+        return $stream;
     }
 }

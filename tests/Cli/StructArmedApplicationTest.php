@@ -34,9 +34,6 @@ use function random_bytes;
 use function rmdir;
 use function str_replace;
 use function stream_get_contents;
-use function stream_socket_accept;
-use function stream_socket_get_name;
-use function stream_socket_server;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -816,14 +813,8 @@ PHP);
 
     public function testInternalWorkerRoutesDelegatestoClassNodeWorker(): void
     {
-        $server = stream_socket_server('tcp://127.0.0.1:0');
-        $this->assertNotFalse($server);
-
-        $address = stream_socket_get_name($server, false);
-        $this->assertIsString($address);
-
         $process = proc_open(
-            ['php', __DIR__ . '/../../bin/structarmed.php', '--internal-worker', 'tcp://' . $address, 'test-worker'],
+            ['php', __DIR__ . '/../../bin/structarmed.php', '--internal-worker'],
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -833,14 +824,9 @@ PHP);
         );
 
         $this->assertNotFalse($process);
+        $this->assertArrayHasKey(0, $pipes);
         $this->assertArrayHasKey(1, $pipes);
         $this->assertArrayHasKey(2, $pipes);
-
-        $connection = stream_socket_accept($server, 5);
-        $this->assertNotFalse($connection);
-
-        $hello = WorkerPayloadSocket::readPayload($connection);
-        $this->assertSame(['workerId' => 'test-worker'], $hello);
 
         WorkerPayloadSocket::writePayload($pipes[0], [
             'basePath'      => sys_get_temp_dir(),
@@ -850,22 +836,15 @@ PHP);
         ]);
         fclose($pipes[0]);
 
-        $result = WorkerPayloadSocket::readPayload($connection);
+        $result = WorkerPayloadSocket::readPayload($pipes[1]);
 
-        try {
-            $stdout   = stream_get_contents($pipes[1]);
-            $stderr   = stream_get_contents($pipes[2]);
-            $exitCode = proc_close($process);
+        $stderr   = stream_get_contents($pipes[2]);
+        $exitCode = proc_close($process);
 
-            $this->assertSame(0, $exitCode);
-            $this->assertSame([], $result['nodes']);
-            $this->assertNull($result['error']);
-            $this->assertIsString($stdout);
-            $this->assertIsString($stderr);
-        } finally {
-            fclose($connection);
-            fclose($server);
-        }
+        $this->assertSame(0, $exitCode);
+        $this->assertSame([], $result['nodes']);
+        $this->assertNull($result['error']);
+        $this->assertIsString($stderr);
     }
 
     /**
