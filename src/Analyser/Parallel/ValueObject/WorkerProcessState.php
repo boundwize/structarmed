@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser\Parallel;
+namespace Boundwize\StructArmed\Analyser\Parallel\ValueObject;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use RuntimeException;

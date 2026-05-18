@@ -6,6 +6,8 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Analyser\Parallel\ValueObject\WorkerFinalizedState;
+use Boundwize\StructArmed\Analyser\Parallel\ValueObject\WorkerProcessState;
 use RuntimeException;
 
 use function array_chunk;
