@@ -8,7 +8,6 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-use function preg_match;
 use function sprintf;
 
 final readonly class ClassNameMustBeStudlyCapsRule implements RuleInterface
@@ -25,7 +24,7 @@ final readonly class ClassNameMustBeStudlyCapsRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ((bool) preg_match('/^[A-Z][A-Za-z0-9]*$/', $classNode->shortName())) {
+        if ($classNode->nameMatches('/^[A-Z][A-Za-z0-9]*$/')) {
             return null;
         }
 
