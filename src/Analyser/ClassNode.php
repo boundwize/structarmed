@@ -96,26 +96,24 @@ final readonly class ClassNode
             return true;
         }
 
-        if ($this->isLoadedClassLike($classOrNamespace)) {
-            return false;
-        }
+        $isMayBeClassLike = ! str_ends_with($classOrNamespace, '\\');
+        $namespace        = rtrim($classOrNamespace, '\\') . '\\';
 
-        $namespace = rtrim($classOrNamespace, '\\') . '\\';
         foreach ($this->dependencies as $dependency) {
             if (str_starts_with($dependency, $namespace)) {
-                return true;
+                return ! $this->isLoadedClassLike($classOrNamespace, $isMayBeClassLike);
             }
         }
 
         return false;
     }
 
-    private function isLoadedClassLike(string $name): bool
+    private function isLoadedClassLike(string $name, bool $isMayBeClassLike): bool
     {
-        return class_exists($name, false)
+        return $isMayBeClassLike && (class_exists($name, false)
             || interface_exists($name, false)
             || trait_exists($name, false)
-            || enum_exists($name, false);
+            || enum_exists($name, false));
     }
 
     public function implementsInterface(string $interface): bool
