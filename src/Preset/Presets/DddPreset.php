@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
+use Boundwize\StructArmed\Rule\Rules\Class_\MayNotImplementInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\NamingConventionRule;
@@ -17,6 +18,7 @@ use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use DateTime;
 use Exception;
+use JsonSerializable;
 
 use function sprintf;
 use function strtolower;
@@ -65,6 +67,8 @@ final readonly class DddPreset implements PresetInterface
     public const DOMAIN_NO_DATETIME = 'ddd.safety.domain_no_datetime';
 
     public const DOMAIN_NO_BASE_EXCEPTION = 'ddd.safety.domain_no_base_exception';
+
+    public const DOMAIN_NO_JSON_SERIALIZABLE = 'ddd.safety.domain_no_json_serializable';
 
     public function __construct(
         private int $maxComplexity = 5,
@@ -246,6 +250,11 @@ final readonly class DddPreset implements PresetInterface
         $architecture->rule(
             self::DOMAIN_NO_BASE_EXCEPTION,
             new MayNotUseClassRule(layer: 'Domain', forbiddenClass: Exception::class)
+        );
+
+        $architecture->rule(
+            self::DOMAIN_NO_JSON_SERIALIZABLE,
+            new MayNotImplementInterfaceRule(layer: 'Domain', interface: JsonSerializable::class)
         );
 
         foreach (['Domain', 'Application'] as $layer) {
