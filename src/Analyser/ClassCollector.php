@@ -61,6 +61,7 @@ final class ClassCollector extends NodeVisitorAbstract
         '_SERVER',
         '_ENV',
         '_FILES',
+        'GLOBALS',
     ];
 
     /** @var ClassNode[] */
