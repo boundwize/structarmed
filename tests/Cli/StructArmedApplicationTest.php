@@ -61,10 +61,16 @@ final class StructArmedApplicationTest extends TestCase
 
     public function testApplicationClearsCacheWithoutAnalyseCommand(): void
     {
-        [$exitCode, $output] = $this->runApplication(['structarmed', '--clear-cache']);
+        $basePath = $this->createTempDirectory();
 
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('StructArmed cache cleared.', $output);
+        try {
+            [$exitCode, $output] = $this->runApplication(['structarmed', '--clear-cache'], $basePath);
+
+            $this->assertSame(0, $exitCode);
+            $this->assertStringContainsString('StructArmed cache cleared.', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
     }
 
     public function testApplicationClearsConfiguredCacheWithoutAnalyseCommand(): void

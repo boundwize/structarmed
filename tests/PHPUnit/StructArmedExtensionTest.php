@@ -23,6 +23,7 @@ use function file_put_contents;
 use function getcwd;
 use function json_encode;
 use function mkdir;
+use function var_export;
 
 #[CoversClass(StructArmedExtension::class)]
 #[CoversClass(BaselineFilter::class)]
@@ -32,7 +33,10 @@ final class StructArmedExtensionTest extends TestCase
 
     public function testBootstrapPrintsPassingReport(): void
     {
-        $configPath = $this->writeConfig('return ' . Architecture::class . '::define();');
+        $configPath = $this->writeConfig(
+            'return ' . Architecture::class . "::define()\n"
+            . $this->cacheDirectoryCall() . ';'
+        );
 
         $this->expectOutputRegex('/No violations found/');
 
@@ -145,7 +149,8 @@ final class StructArmedExtensionTest extends TestCase
         $configPath = $this->writeConfig(
             'return ' . Architecture::class . "::define()\n"
             . "    ->layer('Domain', 'tests/Fixtures/sample/src/Domain/')\n"
-            . "    ->rule('must_be_final', new " . MustBeFinalRule::class . "('Domain'));"
+            . "    ->rule('must_be_final', new " . MustBeFinalRule::class . "('Domain'))\n"
+            . $this->cacheDirectoryCall() . ';'
         );
 
         $this->expectException(ViolationsFoundException::class);
@@ -211,7 +216,9 @@ PHP);
     public function testBootstrapPropagatesExceptionWhenBaselineFileMissing(): void
     {
         $configPath = $this->writeConfig(
-            'return ' . Architecture::class . "::define()->baseline('missing-baseline.php');"
+            'return ' . Architecture::class . "::define()\n"
+            . "    ->baseline('missing-baseline.php')\n"
+            . $this->cacheDirectoryCall() . ';'
         );
 
         $this->expectException(RuntimeException::class);
@@ -238,6 +245,13 @@ PHP);
         }
 
         return ParameterCollection::fromArray($parameters);
+    }
+
+    private function cacheDirectoryCall(): string
+    {
+        return '    ->cacheDirectory('
+            . var_export($this->makeTemporaryDirectory('structarmed-extension-cache'), true)
+            . ')';
     }
 
     private function writeConfig(string $body): string
