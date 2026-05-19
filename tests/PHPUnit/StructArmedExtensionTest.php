@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\PHPUnit;
 
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\PHPUnit\StructArmedExtension;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
@@ -15,34 +16,43 @@ use PHPUnit\Runner\Extension\Facade;
 use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
 use ReflectionClass;
+use RuntimeException;
 
 use function chdir;
 use function file_put_contents;
 use function getcwd;
 use function json_encode;
 use function mkdir;
+use function var_export;
 
 #[CoversClass(StructArmedExtension::class)]
+#[CoversClass(BaselineFilter::class)]
 final class StructArmedExtensionTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
 
     public function testBootstrapPrintsPassingReport(): void
     {
-        $configPath = $this->writeConfig('return ' . Architecture::class . '::define();');
+        $configPath = $this->writeConfig(
+            'return ' . Architecture::class . "::define()\n"
+            . $this->cacheDirectoryCall() . ';'
+        );
 
         $this->expectOutputRegex('/No violations found/');
 
         (new StructArmedExtension())->bootstrap(
             $this->configuration(),
             new Facade(),
-            ParameterCollection::fromArray(['config' => $configPath])
+            $this->parameters($configPath)
         );
     }
 
     public function testBootstrapDiscoversConfigWhenParameterIsMissing(): void
     {
-        $basePath     = $this->makeTempProjectConfig('return ' . Architecture::class . '::define();');
+        $basePath     = $this->makeTempProjectConfig(
+            'return ' . Architecture::class . "::define()\n"
+            . $this->cacheDirectoryCall() . ';'
+        );
         $previousPath = getcwd();
         $this->assertIsString($previousPath);
 
@@ -54,7 +64,7 @@ final class StructArmedExtensionTest extends TestCase
             (new StructArmedExtension())->bootstrap(
                 $this->configuration(),
                 new Facade(),
-                ParameterCollection::fromArray([])
+                $this->parameters()
             );
         } finally {
             chdir($previousPath);
@@ -88,7 +98,7 @@ final class StructArmedExtensionTest extends TestCase
             (new StructArmedExtension())->bootstrap(
                 $this->configuration(),
                 new Facade(),
-                ParameterCollection::fromArray(['config' => $configPath])
+                $this->parameters($configPath)
             );
         } finally {
             chdir($previousPath);
@@ -130,7 +140,7 @@ final class StructArmedExtensionTest extends TestCase
             (new StructArmedExtension())->bootstrap(
                 $this->configuration(),
                 new Facade(),
-                ParameterCollection::fromArray(['config' => $configPath])
+                $this->parameters($configPath)
             );
         } finally {
             chdir($previousPath);
@@ -142,7 +152,8 @@ final class StructArmedExtensionTest extends TestCase
         $configPath = $this->writeConfig(
             'return ' . Architecture::class . "::define()\n"
             . "    ->layer('Domain', 'tests/Fixtures/sample/src/Domain/')\n"
-            . "    ->rule('must_be_final', new " . MustBeFinalRule::class . "('Domain'));"
+            . "    ->rule('must_be_final', new " . MustBeFinalRule::class . "('Domain'))\n"
+            . $this->cacheDirectoryCall() . ';'
         );
 
         $this->expectException(ViolationsFoundException::class);
@@ -152,13 +163,109 @@ final class StructArmedExtensionTest extends TestCase
         (new StructArmedExtension())->bootstrap(
             $this->configuration(),
             new Facade(),
-            ParameterCollection::fromArray(['config' => $configPath])
+            $this->parameters($configPath)
         );
+    }
+
+    public function testBootstrapDoesNotThrowWhenViolationsAreBaselined(): void
+    {
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
+
+        $basePath = $this->makeTemporaryDirectory('structarmed-extension-baselined');
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', "<?php\n\nnamespace App;\n\nclass Foo\n{\n}\n");
+        file_put_contents($basePath . '/structarmed-baseline.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+return [
+    [
+        'rule'    => 'source.must_be_final',
+        'message' => 'Class [App\Foo] must be declared final',
+        'file'    => 'src/Foo.php',
+        'line'    => 5,
+        'class'   => 'App\Foo',
+        'layer'   => 'Source',
+    ],
+];
+PHP);
+
+        $configPath = $basePath . '/structarmed.php';
+        file_put_contents(
+            $configPath,
+            '<?php' . "\n\nreturn " . Architecture::class . "::define()\n"
+            . "    ->layer('Source', 'src/')\n"
+            . "    ->rule('source.must_be_final', new " . MustBeFinalRule::class . "('Source'))\n"
+            . "    ->baseline('structarmed-baseline.php')\n"
+            . $this->cacheDirectoryCall() . ";\n"
+        );
+
+        chdir($basePath);
+
+        try {
+            $this->expectOutputRegex('/No violations found/');
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                $this->parameters($configPath)
+            );
+        } finally {
+            chdir($previousPath);
+        }
+    }
+
+    public function testBootstrapPropagatesExceptionWhenBaselineFileMissing(): void
+    {
+        $configPath = $this->writeConfig(
+            'return ' . Architecture::class . "::define()\n"
+            . "    ->baseline('missing-baseline.php')\n"
+            . $this->cacheDirectoryCall() . ';'
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Baseline file [missing-baseline.php] does not exist.');
+
+        (new StructArmedExtension())->bootstrap(
+            $this->configuration(),
+            new Facade(),
+            $this->parameters($configPath)
+        );
+    }
+
+    public function testProgressIsEnabledWhenParameterIsMissing(): void
+    {
+        $reflectionClass = new ReflectionClass(StructArmedExtension::class);
+
+        $this->assertTrue($reflectionClass->getMethod('isProgressEnabled')->invoke(
+            new StructArmedExtension(),
+            ParameterCollection::fromArray([])
+        ));
     }
 
     private function configuration(): Configuration
     {
         return (new ReflectionClass(Configuration::class))->newInstanceWithoutConstructor();
+    }
+
+    private function parameters(?string $configPath = null): ParameterCollection
+    {
+        $parameters = ['progress' => 'false'];
+
+        if ($configPath !== null) {
+            $parameters['config'] = $configPath;
+        }
+
+        return ParameterCollection::fromArray($parameters);
+    }
+
+    private function cacheDirectoryCall(): string
+    {
+        return '    ->cacheDirectory('
+            . var_export($this->makeTemporaryDirectory('structarmed-extension-cache'), true)
+            . ')';
     }
 
     private function writeConfig(string $body): string
