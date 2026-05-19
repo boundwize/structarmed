@@ -49,7 +49,10 @@ final class StructArmedExtensionTest extends TestCase
 
     public function testBootstrapDiscoversConfigWhenParameterIsMissing(): void
     {
-        $basePath     = $this->makeTempProjectConfig('return ' . Architecture::class . '::define();');
+        $basePath     = $this->makeTempProjectConfig(
+            'return ' . Architecture::class . "::define()\n"
+            . $this->cacheDirectoryCall() . ';'
+        );
         $previousPath = getcwd();
         $this->assertIsString($previousPath);
 
@@ -195,7 +198,8 @@ PHP);
             '<?php' . "\n\nreturn " . Architecture::class . "::define()\n"
             . "    ->layer('Source', 'src/')\n"
             . "    ->rule('source.must_be_final', new " . MustBeFinalRule::class . "('Source'))\n"
-            . "    ->baseline('structarmed-baseline.php');\n"
+            . "    ->baseline('structarmed-baseline.php')\n"
+            . $this->cacheDirectoryCall() . ";\n"
         );
 
         chdir($basePath);
