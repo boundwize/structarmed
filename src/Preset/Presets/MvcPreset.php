@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
+use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustHaveSuffixRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MaxDependencyCountRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
@@ -39,6 +40,8 @@ final readonly class MvcPreset implements PresetInterface
     public const VIEW_NOT_DEPEND_MODEL = 'mvc.layer.view_not_depend_model';
 
     // Controller rules
+    public const CONTROLLER_NAME_MUST_END_WITH_CONTROLLER = 'mvc.controller.name_must_end_with_controller';
+
     public const CONTROLLER_MUST_BE_FINAL = 'mvc.controller.must_be_final';
 
     public const CONTROLLER_MAX_COMPLEXITY = 'mvc.controller.max_complexity';
@@ -137,6 +140,11 @@ final readonly class MvcPreset implements PresetInterface
 
     private function applyControllerRules(Architecture $architecture): self
     {
+        $architecture->rule(
+            self::CONTROLLER_NAME_MUST_END_WITH_CONTROLLER,
+            new ClassNameMustHaveSuffixRule(layer: 'Controller', suffix: 'Controller')
+        );
+
         $architecture->rule(
             self::CONTROLLER_MUST_BE_FINAL,
             new MustBeFinalRule(layer: 'Controller', classNamePattern: '/Controller$/')
