@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustHaveSuffixRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustNotHavePrefixRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MaxDependencyCountRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
@@ -57,6 +58,8 @@ final readonly class MvcPreset implements PresetInterface
     public const CONTROLLER_MUST_HAVE_RETURN_TYPES = 'mvc.controller.must_have_return_types';
 
     // Model rules
+    public const MODEL_NAME_MUST_NOT_START_WITH_MODEL = 'mvc.model.name_must_not_start_with_model';
+
     public const MODEL_NO_ECHO = 'mvc.model.no_echo';
 
     public const MODEL_NO_PRINT = 'mvc.model.no_print';
@@ -194,6 +197,11 @@ final readonly class MvcPreset implements PresetInterface
 
     private function applyModelRules(Architecture $architecture): self
     {
+        $architecture->rule(
+            self::MODEL_NAME_MUST_NOT_START_WITH_MODEL,
+            new ClassNameMustNotHavePrefixRule(layer: 'Model', prefix: 'Model')
+        );
+
         $architecture->rule(
             self::MODEL_NO_ECHO,
             new MayNotCallFunctionRule(layer: 'Model', function: 'echo')
