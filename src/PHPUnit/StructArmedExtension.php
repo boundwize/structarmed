@@ -77,7 +77,7 @@ final class StructArmedExtension implements Extension
         $ruleViolationCollection = (new BaselineFilter())->apply($ruleViolationCollection, $architecture, $basePath);
 
         $report = (new ConsoleReport())->render($ruleViolationCollection, $elapsed);
-        echo $report;
+        echo $report . "\n";
 
         if ($ruleViolationCollection->hasViolations()) {
             throw new ViolationsFoundException(sprintf(
