@@ -39,7 +39,7 @@ final class StructArmedExtensionTest extends TestCase
         (new StructArmedExtension())->bootstrap(
             $this->configuration(),
             new Facade(),
-            ParameterCollection::fromArray(['config' => $configPath])
+            $this->parameters($configPath)
         );
     }
 
@@ -57,7 +57,7 @@ final class StructArmedExtensionTest extends TestCase
             (new StructArmedExtension())->bootstrap(
                 $this->configuration(),
                 new Facade(),
-                ParameterCollection::fromArray([])
+                $this->parameters()
             );
         } finally {
             chdir($previousPath);
@@ -91,7 +91,7 @@ final class StructArmedExtensionTest extends TestCase
             (new StructArmedExtension())->bootstrap(
                 $this->configuration(),
                 new Facade(),
-                ParameterCollection::fromArray(['config' => $configPath])
+                $this->parameters($configPath)
             );
         } finally {
             chdir($previousPath);
@@ -133,7 +133,7 @@ final class StructArmedExtensionTest extends TestCase
             (new StructArmedExtension())->bootstrap(
                 $this->configuration(),
                 new Facade(),
-                ParameterCollection::fromArray(['config' => $configPath])
+                $this->parameters($configPath)
             );
         } finally {
             chdir($previousPath);
@@ -155,7 +155,7 @@ final class StructArmedExtensionTest extends TestCase
         (new StructArmedExtension())->bootstrap(
             $this->configuration(),
             new Facade(),
-            ParameterCollection::fromArray(['config' => $configPath])
+            $this->parameters($configPath)
         );
     }
 
@@ -201,7 +201,7 @@ PHP);
             (new StructArmedExtension())->bootstrap(
                 $this->configuration(),
                 new Facade(),
-                ParameterCollection::fromArray(['config' => $configPath])
+                $this->parameters($configPath)
             );
         } finally {
             chdir($previousPath);
@@ -220,13 +220,24 @@ PHP);
         (new StructArmedExtension())->bootstrap(
             $this->configuration(),
             new Facade(),
-            ParameterCollection::fromArray(['config' => $configPath])
+            $this->parameters($configPath)
         );
     }
 
     private function configuration(): Configuration
     {
         return (new ReflectionClass(Configuration::class))->newInstanceWithoutConstructor();
+    }
+
+    private function parameters(?string $configPath = null): ParameterCollection
+    {
+        $parameters = ['progress' => 'false'];
+
+        if ($configPath !== null) {
+            $parameters['config'] = $configPath;
+        }
+
+        return ParameterCollection::fromArray($parameters);
     }
 
     private function writeConfig(string $body): string
