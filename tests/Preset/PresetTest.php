@@ -119,6 +119,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(DddPreset::ENTITY_MUST_BE_FINAL, $rules);
         $this->assertArrayHasKey(DddPreset::VALUE_OBJECT_MUST_BE_FINAL, $rules);
         $this->assertArrayHasKey(DddPreset::EVENT_MUST_BE_FINAL, $rules);
+        $this->assertArrayHasKey(DddPreset::DOMAIN_NO_JSON_SERIALIZABLE, $rules);
         $this->assertArrayHasKey('ddd.safety.domain_no_dd', $rules);
         $this->assertArrayHasKey('ddd.safety.application_no_exit', $rules);
     }
