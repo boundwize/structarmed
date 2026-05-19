@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Version;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -17,13 +18,14 @@ use const PHP_FLOAT_EPSILON;
 
 #[CoversClass(ConsoleReport::class)]
 #[CoversClass(JsonReport::class)]
+#[CoversClass(Version::class)]
 final class ReportTest extends TestCase
 {
     public function testConsoleReportRendersPassingResult(): void
     {
         $report = (new ConsoleReport())->render(new RuleViolationCollection(), 0.12);
 
-        $this->assertStringContainsString('StructArmed', $report);
+        $this->assertStringContainsString('StructArmed ' . Version::current(), $report);
         $this->assertStringContainsString('No violations found', $report);
     }
 
@@ -56,6 +58,8 @@ final class ReportTest extends TestCase
         $data = json_decode($json, true);
 
         $this->assertIsArray($data);
+        $this->assertArrayNotHasKey('tool', $data);
+        $this->assertArrayNotHasKey('version', $data);
         $this->assertIsArray($data['violations']);
         $this->assertIsArray($data['violations'][0]);
         $this->assertSame('rule.key', $data['violations'][0]['rule']);
