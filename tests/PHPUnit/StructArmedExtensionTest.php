@@ -237,9 +237,9 @@ PHP);
 
     public function testProgressIsEnabledWhenParameterIsMissing(): void
     {
-        $reflection = new ReflectionClass(StructArmedExtension::class);
+        $reflectionClass = new ReflectionClass(StructArmedExtension::class);
 
-        $this->assertTrue($reflection->getMethod('isProgressEnabled')->invoke(
+        $this->assertTrue($reflectionClass->getMethod('isProgressEnabled')->invoke(
             new StructArmedExtension(),
             ParameterCollection::fromArray([])
         ));
