@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\PHPUnit;
 
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\PHPUnit\StructArmedExtension;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
@@ -15,6 +16,7 @@ use PHPUnit\Runner\Extension\Facade;
 use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
 use ReflectionClass;
+use RuntimeException;
 
 use function chdir;
 use function file_put_contents;
@@ -23,6 +25,7 @@ use function json_encode;
 use function mkdir;
 
 #[CoversClass(StructArmedExtension::class)]
+#[CoversClass(BaselineFilter::class)]
 final class StructArmedExtensionTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
@@ -148,6 +151,71 @@ final class StructArmedExtensionTest extends TestCase
         $this->expectException(ViolationsFoundException::class);
         $this->expectExceptionMessage('StructArmed found');
         $this->expectOutputRegex('/Found \d+ violation/');
+
+        (new StructArmedExtension())->bootstrap(
+            $this->configuration(),
+            new Facade(),
+            ParameterCollection::fromArray(['config' => $configPath])
+        );
+    }
+
+    public function testBootstrapDoesNotThrowWhenViolationsAreBaselined(): void
+    {
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
+
+        $basePath = $this->makeTemporaryDirectory('structarmed-extension-baselined');
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', "<?php\n\nnamespace App;\n\nclass Foo\n{\n}\n");
+        file_put_contents($basePath . '/structarmed-baseline.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+return [
+    [
+        'rule'    => 'source.must_be_final',
+        'message' => 'Class [App\Foo] must be declared final',
+        'file'    => 'src/Foo.php',
+        'line'    => 5,
+        'class'   => 'App\Foo',
+        'layer'   => 'Source',
+    ],
+];
+PHP);
+
+        $configPath = $basePath . '/structarmed.php';
+        file_put_contents(
+            $configPath,
+            '<?php' . "\n\nreturn " . Architecture::class . "::define()\n"
+            . "    ->layer('Source', 'src/')\n"
+            . "    ->rule('source.must_be_final', new " . MustBeFinalRule::class . "('Source'))\n"
+            . "    ->baseline('structarmed-baseline.php');\n"
+        );
+
+        chdir($basePath);
+
+        try {
+            $this->expectOutputRegex('/No violations found/');
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                ParameterCollection::fromArray(['config' => $configPath])
+            );
+        } finally {
+            chdir($previousPath);
+        }
+    }
+
+    public function testBootstrapPropagatesExceptionWhenBaselineFileMissing(): void
+    {
+        $configPath = $this->writeConfig(
+            'return ' . Architecture::class . "::define()->baseline('missing-baseline.php');"
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Baseline file [missing-baseline.php] does not exist.');
 
         (new StructArmedExtension())->bootstrap(
             $this->configuration(),

@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Cli;
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Baseline\Baseline;
+use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Config\ConfigLoader;
@@ -191,18 +192,16 @@ final readonly class AnalyseCommand
             return 0;
         }
 
-        if ($architecture->getBaseline() !== null) {
-            try {
-                $ruleViolationCollection = $baseline->filter(
-                    $ruleViolationCollection,
-                    $architecture->getBaseline(),
-                    $basePath
-                );
-            } catch (RuntimeException $runtimeException) {
-                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+        try {
+            $ruleViolationCollection = (new BaselineFilter())->apply(
+                $ruleViolationCollection,
+                $architecture,
+                $basePath
+            );
+        } catch (RuntimeException $runtimeException) {
+            echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
-                return 1;
-            }
+            return 1;
         }
 
         $report = match ($reportType) {

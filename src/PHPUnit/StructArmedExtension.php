@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\PHPUnit;
 
 use Boundwize\StructArmed\Analyser\Analyser;
+use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Config\ConfigLoader;
@@ -62,6 +63,8 @@ final class StructArmedExtension implements Extension
         }
 
         $elapsed = microtime(true) - $start;
+
+        $ruleViolationCollection = (new BaselineFilter())->apply($ruleViolationCollection, $architecture, $basePath);
 
         $report = (new ConsoleReport())->render($ruleViolationCollection, $elapsed);
         echo $report;
