@@ -92,24 +92,30 @@ final readonly class ClassNode
 
     public function dependsOn(string $classOrNamespace): bool
     {
-        if (
-            class_exists($classOrNamespace, false)
-            || interface_exists($classOrNamespace, false)
-            || trait_exists($classOrNamespace, false)
-            || enum_exists($classOrNamespace, false)
-        ) {
-            return in_array($classOrNamespace, $this->dependencies, true);
+        if (in_array($classOrNamespace, $this->dependencies, true)) {
+            return true;
+        }
+
+        if ($this->isLoadedClassLike($classOrNamespace)) {
+            return false;
         }
 
         $namespace = rtrim($classOrNamespace, '\\') . '\\';
-
         foreach ($this->dependencies as $dependency) {
-            if ($dependency === $classOrNamespace || str_starts_with($dependency, $namespace)) {
+            if (str_starts_with($dependency, $namespace)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function isLoadedClassLike(string $name): bool
+    {
+        return class_exists($name, false)
+            || interface_exists($name, false)
+            || trait_exists($name, false)
+            || enum_exists($name, false);
     }
 
     public function implementsInterface(string $interface): bool
