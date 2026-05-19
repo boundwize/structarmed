@@ -231,6 +231,16 @@ PHP);
         );
     }
 
+    public function testProgressIsEnabledWhenParameterIsMissing(): void
+    {
+        $reflection = new ReflectionClass(StructArmedExtension::class);
+
+        $this->assertTrue($reflection->getMethod('isProgressEnabled')->invoke(
+            new StructArmedExtension(),
+            ParameterCollection::fromArray([])
+        ));
+    }
+
     private function configuration(): Configuration
     {
         return (new ReflectionClass(Configuration::class))->newInstanceWithoutConstructor();
