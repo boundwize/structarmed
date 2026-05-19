@@ -6,6 +6,8 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
+use DateTime;
+use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -103,6 +105,62 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\OrderService'));
         $this->assertTrue($classNode->callsFunction('var_dump'));
         $this->assertTrue($classNode->accessesSuperglobals());
+    }
+
+    public function testDependsOnMatchesExistingClassesExactly(): void
+    {
+        $classNode = new ClassNode(
+            className:    'App\\Domain\\OrderService',
+            file:         '/src/OrderService.php',
+            line:         5,
+            layer:        'Domain',
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  false,
+            isReadonly:   false,
+            dependencies: [DateTimeImmutable::class],
+        );
+
+        $this->assertTrue($classNode->dependsOn(DateTimeImmutable::class));
+        $this->assertFalse($classNode->dependsOn(DateTime::class));
+    }
+
+    public function testDependsOnDoesNotTreatLoadedClassAsNamespacePrefix(): void
+    {
+        $classNode = new ClassNode(
+            className:    'App\\Domain\\OrderService',
+            file:         '/src/OrderService.php',
+            line:         5,
+            layer:        'Domain',
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  false,
+            isReadonly:   false,
+            dependencies: [self::class . '\\NestedDependency'],
+        );
+
+        $this->assertFalse($classNode->dependsOn(self::class));
+    }
+
+    public function testDependsOnMatchesNamespaceBoundaries(): void
+    {
+        $classNode = new ClassNode(
+            className:    'App\\Domain\\OrderService',
+            file:         '/src/OrderService.php',
+            line:         5,
+            layer:        'Domain',
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  false,
+            isReadonly:   false,
+            dependencies: ['Vendor\\PackageExtra\\Service'],
+        );
+
+        $this->assertTrue($classNode->dependsOn('Vendor\\PackageExtra'));
+        $this->assertFalse($classNode->dependsOn('Vendor\\Package'));
     }
 
     public function testConstructorParamCountReturnsConstructorParamsOrZero(): void

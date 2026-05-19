@@ -39,6 +39,17 @@ final class MayNotUseClassRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseClassRule->evaluate($classNode));
     }
 
+    public function testPassesWhenDependencyOnlySharesForbiddenClassPrefix(): void
+    {
+        $mayNotUseClassRule = new MayNotUseClassRule(
+            layer: 'Domain',
+            forbiddenClass: 'Vendor\\ForbiddenService'
+        );
+        $classNode          = $this->makeNode(['Vendor\\ForbiddenServiceExtra']);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseClassRule->evaluate($classNode));
+    }
+
     public function testViolatesWhenForbiddenClassIsUsed(): void
     {
         $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class);

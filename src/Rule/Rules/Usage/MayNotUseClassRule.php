@@ -8,7 +8,6 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-use function in_array;
 use function preg_match;
 use function sprintf;
 
@@ -36,7 +35,7 @@ final readonly class MayNotUseClassRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if (! in_array($this->forbiddenClass, $classNode->dependencies, true)) {
+        if (! $classNode->dependsOn($this->forbiddenClass)) {
             return null;
         }
 
