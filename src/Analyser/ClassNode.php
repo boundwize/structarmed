@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
+use function class_exists;
 use function end;
+use function enum_exists;
 use function explode;
 use function in_array;
+use function interface_exists;
 use function preg_match;
+use function rtrim;
 use function str_ends_with;
 use function str_starts_with;
+use function trait_exists;
 
 final readonly class ClassNode
 {
@@ -87,8 +92,19 @@ final readonly class ClassNode
 
     public function dependsOn(string $classOrNamespace): bool
     {
+        if (
+            class_exists($classOrNamespace, false)
+            || interface_exists($classOrNamespace, false)
+            || trait_exists($classOrNamespace, false)
+            || enum_exists($classOrNamespace, false)
+        ) {
+            return in_array($classOrNamespace, $this->dependencies, true);
+        }
+
+        $namespace = rtrim($classOrNamespace, '\\') . '\\';
+
         foreach ($this->dependencies as $dependency) {
-            if (str_starts_with($dependency, $classOrNamespace)) {
+            if ($dependency === $classOrNamespace || str_starts_with($dependency, $namespace)) {
                 return true;
             }
         }
