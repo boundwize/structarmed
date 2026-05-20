@@ -397,13 +397,14 @@ final class AnalyserTest extends TestCase
         $this->assertTrue($progress->finished);
     }
 
-    public function testFilesForAnalysisIgnoresLeafDirectories(): void
+    public function testFilesForAnalysisIgnoresDirectorySymlinks(): void
     {
         $basePath = $this->makeTempProject([
             'src/Foo.php'      => '<?php namespace App; final class Foo {}',
             'src/Docs/read.md' => '# ignored',
         ]);
-        mkdir($basePath . '/src/Empty');
+        mkdir($basePath . '/LinkedDirectory');
+        symlink($basePath . '/LinkedDirectory', $basePath . '/src/LinkedDirectory');
 
         $architecture = Architecture::define()
             ->layer('Source', 'src/');

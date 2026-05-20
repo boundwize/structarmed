@@ -16,6 +16,7 @@ use function file_put_contents;
 use function mkdir;
 use function random_bytes;
 use function rmdir;
+use function symlink;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -129,14 +130,15 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
-    public function testPhpFileFinderIgnoresLeafDirectories(): void
+    public function testPhpFileFinderIgnoresDirectorySymlinks(): void
     {
         $basePath = $this->makeTempDir();
 
         try {
             mkdir($basePath . '/src');
-            mkdir($basePath . '/src/Empty');
             mkdir($basePath . '/src/Docs');
+            mkdir($basePath . '/LinkedDirectory');
+            symlink($basePath . '/LinkedDirectory', $basePath . '/src/LinkedDirectory');
             file_put_contents($basePath . '/src/Docs/readme.md', '<? echo "x";');
             file_put_contents($basePath . '/src/Foo.php', '<?php echo "x";');
 
@@ -147,9 +149,10 @@ final class Psr1PhpTagsRuleTest extends TestCase
         } finally {
             unlink($basePath . '/src/Foo.php');
             unlink($basePath . '/src/Docs/readme.md');
+            unlink($basePath . '/src/LinkedDirectory');
             rmdir($basePath . '/src/Docs');
-            rmdir($basePath . '/src/Empty');
             rmdir($basePath . '/src');
+            rmdir($basePath . '/LinkedDirectory');
             rmdir($basePath);
         }
     }
