@@ -129,6 +129,31 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testPhpFileFinderIgnoresLeafDirectories(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            mkdir($basePath . '/src/Empty');
+            mkdir($basePath . '/src/Docs');
+            file_put_contents($basePath . '/src/Docs/readme.md', '<? echo "x";');
+            file_put_contents($basePath . '/src/Foo.php', '<?php echo "x";');
+
+            $this->assertSame(
+                [$basePath . '/src/Foo.php'],
+                (new PhpFileFinder(['src/']))->files($basePath)
+            );
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            unlink($basePath . '/src/Docs/readme.md');
+            rmdir($basePath . '/src/Docs');
+            rmdir($basePath . '/src/Empty');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testEvaluateProjectReturnsFirstViolation(): void
     {
         $basePath = $this->makeTempDir();
