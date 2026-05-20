@@ -18,6 +18,8 @@ use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use FilesystemIterator;
+use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
@@ -476,11 +478,7 @@ final readonly class Analyser
                 continue;
             }
 
-            foreach ($this->phpFiles($fullPath) as $file) {
-                if ($this->isSkipped($file, $skipPaths)) {
-                    continue;
-                }
-
+            foreach ($this->phpFiles($fullPath, $skipPaths) as $file) {
                 $files[] = $file;
             }
         }
@@ -534,6 +532,10 @@ final readonly class Analyser
      */
     private function isSkipped(string $path, array $skipPaths): bool
     {
+        if ($skipPaths === []) {
+            return false;
+        }
+
         $path         = $this->normalisePath($path);
         $relativePath = $this->relativePath($path);
 
@@ -598,20 +600,30 @@ final readonly class Analyser
     }
 
     /**
+     * @param list<string> $skipPaths
      * @return string[]
      */
-    private function phpFiles(string $path): array
+    private function phpFiles(string $path, array $skipPaths): array
     {
         $files    = [];
         $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($path)
+            new RecursiveCallbackFilterIterator(
+                new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
+                function (SplFileInfo $file) use ($skipPaths): bool {
+                    if (! $file->isDir() && $file->getExtension() !== 'php') {
+                        return false;
+                    }
+
+                    return ! $this->isSkipped($file->getPathname(), $skipPaths);
+                }
+            )
         );
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
             $realPath = $file->getRealPath();
 
-            if ($file->getExtension() === 'php' && $realPath !== false) {
+            if ($realPath !== false) {
                 $files[] = $realPath;
             }
         }
