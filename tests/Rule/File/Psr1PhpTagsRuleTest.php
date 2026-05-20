@@ -16,8 +16,12 @@ use function file_put_contents;
 use function mkdir;
 use function random_bytes;
 use function rmdir;
+use function str_replace;
+use function symlink;
 use function sys_get_temp_dir;
 use function unlink;
+
+use const DIRECTORY_SEPARATOR;
 
 #[CoversClass(PhpFileFinder::class)]
 #[CoversClass(Psr1PhpTagsRule::class)]
@@ -125,6 +129,35 @@ final class Psr1PhpTagsRuleTest extends TestCase
         } finally {
             unlink($basePath . '/src/readme.md');
             rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testPhpFileFinderIgnoresDirectorySymlinks(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            mkdir($basePath . '/src/Docs');
+            mkdir($basePath . '/LinkedDirectory');
+            symlink($basePath . '/LinkedDirectory', $basePath . '/src/LinkedDirectory');
+            file_put_contents($basePath . '/src/Docs/readme.md', '<? echo "x";');
+            file_put_contents($basePath . '/src/Foo.php', '<?php echo "x";');
+
+            $files = (new PhpFileFinder(['src/']))->files($basePath);
+
+            $this->assertCount(1, $files);
+            $this->assertStringEndsWith('/src/Foo.php', str_replace('\\', '/', $files[0]));
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            unlink($basePath . '/src/Docs/readme.md');
+            DIRECTORY_SEPARATOR === '\\'
+                ? rmdir($basePath . '/src/LinkedDirectory')
+                : unlink($basePath . '/src/LinkedDirectory');
+            rmdir($basePath . '/src/Docs');
+            rmdir($basePath . '/src');
+            rmdir($basePath . '/LinkedDirectory');
             rmdir($basePath);
         }
     }

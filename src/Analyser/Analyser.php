@@ -621,6 +621,10 @@ final readonly class Analyser
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
+            if (! $file->isFile()) {
+                continue;
+            }
+
             $realPath = $file->getRealPath();
 
             if ($realPath !== false) {

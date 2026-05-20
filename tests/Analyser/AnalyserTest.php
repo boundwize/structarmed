@@ -397,6 +397,24 @@ final class AnalyserTest extends TestCase
         $this->assertTrue($progress->finished);
     }
 
+    public function testFilesForAnalysisIgnoresDirectorySymlinks(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'      => '<?php namespace App; final class Foo {}',
+            'src/Docs/read.md' => '# ignored',
+        ]);
+        mkdir($basePath . '/LinkedDirectory');
+        symlink($basePath . '/LinkedDirectory', $basePath . '/src/LinkedDirectory');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        $files = (new Analyser($basePath))->filesForAnalysis($architecture);
+
+        $this->assertCount(1, $files);
+        $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($files[0]));
+    }
+
     public function testAnalyserReportsProgressOnlyForFilesMissingFromClassNodeCache(): void
     {
         $basePath            = $this->makeTempProject([

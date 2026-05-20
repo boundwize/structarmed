@@ -63,6 +63,10 @@ final readonly class PhpFileFinder
 
             /** @var SplFileInfo $file */
             foreach ($iterator as $file) {
+                if (! $file->isFile()) {
+                    continue;
+                }
+
                 $files[] = $file->getPathname();
             }
         }
