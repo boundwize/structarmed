@@ -111,6 +111,24 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testIgnoresNonPhpFilesInSourcePath(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/readme.md', '<? echo "x";');
+
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
+
+            $this->assertSame([], $violations);
+        } finally {
+            unlink($basePath . '/src/readme.md');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testEvaluateProjectReturnsFirstViolation(): void
     {
         $basePath = $this->makeTempDir();

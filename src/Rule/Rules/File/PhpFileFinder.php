@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\File;
 
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
+use FilesystemIterator;
+use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
@@ -14,7 +16,6 @@ use function is_dir;
 use function ltrim;
 use function realpath;
 use function rtrim;
-use function str_ends_with;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
@@ -47,17 +48,22 @@ final readonly class PhpFileFinder
                 continue;
             }
 
-            $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($fullPath));
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveCallbackFilterIterator(
+                    new RecursiveDirectoryIterator($fullPath, FilesystemIterator::SKIP_DOTS),
+                    function (SplFileInfo $file) use ($normalisedBase, $skipPaths): bool {
+                        if (! $file->isDir() && $file->getExtension() !== 'php') {
+                            return false;
+                        }
 
+                        return ! $this->isSkipped($file->getPathname(), $normalisedBase, $skipPaths);
+                    }
+                )
+            );
+
+            /** @var SplFileInfo $file */
             foreach ($iterator as $file) {
-                if (! $file instanceof SplFileInfo || ! $file->isFile()) {
-                    continue;
-                }
-
-                $path = $file->getPathname();
-                if (str_ends_with($path, '.php') && ! $this->isSkipped($path, $normalisedBase, $skipPaths)) {
-                    $files[] = $path;
-                }
+                $files[] = $file->getPathname();
             }
         }
 
