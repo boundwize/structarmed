@@ -19,6 +19,8 @@ use function sys_get_temp_dir;
 use function tempnam;
 use function unlink;
 
+use const DIRECTORY_SEPARATOR;
+
 trait TemporaryDirectoryCleanupTrait
 {
     /** @var list<string> */
@@ -79,6 +81,14 @@ trait TemporaryDirectoryCleanupTrait
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
+            if ($file->isDir() && $file->isLink()) {
+                DIRECTORY_SEPARATOR === '\\'
+                    ? rmdir($file->getPathname())
+                    : unlink($file->getPathname());
+
+                continue;
+            }
+
             if ($file->isDir() && ! $file->isLink()) {
                 rmdir($file->getPathname());
 
