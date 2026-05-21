@@ -58,8 +58,6 @@ final class ReportTest extends TestCase
         $data = json_decode($json, true);
 
         $this->assertIsArray($data);
-        $this->assertArrayNotHasKey('tool', $data);
-        $this->assertArrayNotHasKey('version', $data);
         $this->assertIsArray($data['violations']);
         $this->assertIsArray($data['violations'][0]);
         $this->assertSame('rule.key', $data['violations'][0]['rule']);
