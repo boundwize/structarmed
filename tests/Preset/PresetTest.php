@@ -110,13 +110,21 @@ final class PresetTest extends TestCase
         )->apply($architecture);
 
         $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
-        $this->assertCount(2, $architecture->getRules());
+        $this->assertCount(4, $architecture->getRules());
         $this->assertArrayHasKey(
             Psr15Preset::MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE,
             $architecture->getRules()
         );
         $this->assertArrayHasKey(
             Psr15Preset::HANDLER_MUST_IMPLEMENT_REQUEST_HANDLER_INTERFACE,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            Psr15Preset::MIDDLEWARE_INTERFACE_IMPLEMENTATION_MUST_HAVE_MIDDLEWARE_SUFFIX,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            Psr15Preset::REQUEST_HANDLER_INTERFACE_IMPLEMENTATION_MUST_HAVE_HANDLER_SUFFIX,
             $architecture->getRules()
         );
     }

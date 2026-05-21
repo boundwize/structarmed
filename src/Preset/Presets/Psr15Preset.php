@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
+use Boundwize\StructArmed\Rule\Rules\Class_\ClassImplementingInterfaceMustHaveSuffixRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustImplementInterfaceRule;
 
 final readonly class Psr15Preset implements PresetInterface
@@ -17,6 +18,12 @@ final readonly class Psr15Preset implements PresetInterface
 
     public const HANDLER_MUST_IMPLEMENT_REQUEST_HANDLER_INTERFACE =
         'psr15.handler.must_implement_request_handler_interface';
+
+    public const MIDDLEWARE_INTERFACE_IMPLEMENTATION_MUST_HAVE_MIDDLEWARE_SUFFIX =
+        'psr15.middleware_interface_implementation.must_have_middleware_suffix';
+
+    public const REQUEST_HANDLER_INTERFACE_IMPLEMENTATION_MUST_HAVE_HANDLER_SUFFIX =
+        'psr15.request_handler_interface_implementation.must_have_handler_suffix';
 
     private const MIDDLEWARE_INTERFACE = 'Psr\\Http\\Server\\MiddlewareInterface';
 
@@ -48,6 +55,24 @@ final readonly class Psr15Preset implements PresetInterface
                 layer: self::SOURCE_LAYER,
                 interface: self::REQUEST_HANDLER_INTERFACE,
                 classNamePattern: '/Handler$/'
+            )
+        );
+
+        $architecture->rule(
+            self::MIDDLEWARE_INTERFACE_IMPLEMENTATION_MUST_HAVE_MIDDLEWARE_SUFFIX,
+            new ClassImplementingInterfaceMustHaveSuffixRule(
+                layer: self::SOURCE_LAYER,
+                interface: self::MIDDLEWARE_INTERFACE,
+                suffix: 'Middleware'
+            )
+        );
+
+        $architecture->rule(
+            self::REQUEST_HANDLER_INTERFACE_IMPLEMENTATION_MUST_HAVE_HANDLER_SUFFIX,
+            new ClassImplementingInterfaceMustHaveSuffixRule(
+                layer: self::SOURCE_LAYER,
+                interface: self::REQUEST_HANDLER_INTERFACE,
+                suffix: 'Handler'
             )
         );
     }
