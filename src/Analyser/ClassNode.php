@@ -85,9 +85,9 @@ final readonly class ClassNode
         return str_starts_with($this->shortName(), $prefix);
     }
 
-    public function nameMatches(string $pattern): bool
+    public function nameMatches(string $pattern, bool $isFullName = false): bool
     {
-        return (bool) preg_match($pattern, $this->shortName());
+        return (bool) preg_match($pattern, $isFullName ? $this->className : $this->shortName());
     }
 
     public function dependsOn(string $classOrNamespace): bool

@@ -34,7 +34,7 @@ final readonly class NamingConventionRule implements RuleInterface
             return false;
         }
 
-        return (bool) preg_match($this->classNamePattern, $classNode->className);
+        return $classNode->nameMatches($this->classNamePattern, isFullName: true);
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation

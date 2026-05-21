@@ -10,37 +10,34 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MustBeInterfaceRule implements RuleInterface
+final readonly class ClassImplementingInterfaceMustHaveSuffixRule implements RuleInterface
 {
     public function __construct(
         private string $layer,
-        private ?string $classNamePattern = null,
+        private string $interface,
+        private string $suffix,
     ) {
     }
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        if (! $classNode->isInLayer($this->layer)) {
-            return false;
-        }
-
-        if ($this->classNamePattern !== null) {
-            return $classNode->nameMatches($this->classNamePattern, isFullName: true);
-        }
-
-        return true;
+        return $classNode->isClass()
+            && $classNode->isInLayer($this->layer)
+            && $classNode->implementsInterface($this->interface);
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ($classNode->isInterface) {
+        if ($classNode->nameEndsWith($this->suffix)) {
             return null;
         }
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must be an interface',
-                $classNode->className
+                'Class [%s] implementing interface [%s] must have suffix [%s]',
+                $classNode->className,
+                $this->interface,
+                $this->suffix
             ),
             file:      $classNode->file,
             line:      $classNode->line,
