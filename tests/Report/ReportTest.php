@@ -17,7 +17,7 @@ use const PHP_FLOAT_EPSILON;
 
 #[CoversClass(ConsoleReport::class)]
 #[CoversClass(JsonReport::class)]
-final class reportTest extends TestCase
+final class ReportTest extends TestCase
 {
     public function testConsoleReportRendersPassingResult(): void
     {
