@@ -54,18 +54,8 @@ final class ColorSupportTest extends TestCase
             noColor: null,
             forceColor: null,
             callback: function (): void {
-                $previousGithubActions = getenv('GITHUB_ACTIONS');
                 putenv('GITHUB_ACTIONS=true');
-
-                try {
-                    $this->assertTrue(ColorSupport::detect());
-                } finally {
-                    putenv(
-                        $previousGithubActions === false
-                            ? 'GITHUB_ACTIONS'
-                            : 'GITHUB_ACTIONS=' . $previousGithubActions
-                    );
-                }
+                $this->assertTrue(ColorSupport::detect());
             }
         );
     }
@@ -103,17 +93,20 @@ final class ColorSupportTest extends TestCase
      */
     private function withEnvironment(?string $noColor, ?string $forceColor, callable $callback): void
     {
-        $previousNoColor    = getenv('NO_COLOR');
-        $previousForceColor = getenv('FORCE_COLOR');
+        $previousNoColor       = getenv('NO_COLOR');
+        $previousForceColor    = getenv('FORCE_COLOR');
+        $previousGithubActions = getenv('GITHUB_ACTIONS');
 
         $this->setEnvironment('NO_COLOR', $noColor);
         $this->setEnvironment('FORCE_COLOR', $forceColor);
+        $this->setEnvironment('GITHUB_ACTIONS', null);
 
         try {
             $callback();
         } finally {
             $this->setEnvironment('NO_COLOR', $previousNoColor === false ? null : $previousNoColor);
             $this->setEnvironment('FORCE_COLOR', $previousForceColor === false ? null : $previousForceColor);
+            $this->setEnvironment('GITHUB_ACTIONS', $previousGithubActions === false ? null : $previousGithubActions);
         }
     }
 

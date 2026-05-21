@@ -26,7 +26,7 @@ final class ConsoleProgressBarTest extends TestCase
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
+        $consoleProgressBar = new ConsoleProgressBar($stream, 10, false, true);
         $consoleProgressBar->start(2);
         $consoleProgressBar->advance('/tmp/Foo.php');
         $consoleProgressBar->advance('/tmp/Bar.php');
@@ -131,7 +131,7 @@ final class ConsoleProgressBarTest extends TestCase
         $stream = fopen('php://temp', 'w+');
         $this->assertIsResource($stream);
 
-        $consoleProgressBar = new ConsoleProgressBar($stream, 10, null, false);
+        $consoleProgressBar = new ConsoleProgressBar($stream, 10, false, false);
         $consoleProgressBar->start(93);
 
         for ($i = 0; $i < 93; $i++) {
@@ -173,17 +173,20 @@ final class ConsoleProgressBarTest extends TestCase
      */
     private function withEnvironment(?string $noColor, ?string $forceColor, callable $callback): void
     {
-        $previousNoColor    = getenv('NO_COLOR');
-        $previousForceColor = getenv('FORCE_COLOR');
+        $previousNoColor       = getenv('NO_COLOR');
+        $previousForceColor    = getenv('FORCE_COLOR');
+        $previousGithubActions = getenv('GITHUB_ACTIONS');
 
         $this->setEnvironment('NO_COLOR', $noColor);
         $this->setEnvironment('FORCE_COLOR', $forceColor);
+        $this->setEnvironment('GITHUB_ACTIONS', null);
 
         try {
             $callback();
         } finally {
             $this->setEnvironment('NO_COLOR', $previousNoColor === false ? null : $previousNoColor);
             $this->setEnvironment('FORCE_COLOR', $previousForceColor === false ? null : $previousForceColor);
+            $this->setEnvironment('GITHUB_ACTIONS', $previousGithubActions === false ? null : $previousGithubActions);
         }
     }
 
