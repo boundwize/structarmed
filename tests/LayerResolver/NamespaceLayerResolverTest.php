@@ -172,6 +172,9 @@ final class NamespaceLayerResolverTest extends TestCase
         $filePath               = $this->basePath . '/src/Domain/Order.php';
 
         $this->assertSame('Domain', $namespaceLayerResolver->resolve('App\\Domain\\Order', $filePath));
+        $this->assertSame('Domain', $namespaceLayerResolver->resolve('App\\Domain\\Order', $filePath));
+
+        $this->assertSame(['Source', 'Domain'], $namespaceLayerResolver->resolveAll('App\\Domain\\Order', $filePath));
         $this->assertSame(['Source', 'Domain'], $namespaceLayerResolver->resolveAll('App\\Domain\\Order', $filePath));
     }
 
