@@ -27,6 +27,8 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
     /** @var array<string, list<string>> */
     private array $normalisedLayers;
 
+    private NamespaceLayerResolverCache $namespaceLayerResolverCache;
+
     /**
      * @param array<string, string|list<string>> $layers  Map of layer name → path prefixes
      */
@@ -44,18 +46,50 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
             }
         }
 
-        $this->normalisedLayers = $normalisedLayers;
+        $this->normalisedLayers            = $normalisedLayers;
+        $this->namespaceLayerResolverCache = new NamespaceLayerResolverCache();
     }
 
     public function resolve(string $className, string $filePath): ?string
     {
-        $normalised    = $this->normalisePath($filePath);
+        return $this->resolveMatches($filePath)['matchedLayer'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function resolveAll(string $className, string $filePath): array
+    {
+        return $this->resolveMatches($filePath)['matchedLayers'];
+    }
+
+    /**
+     * @return array{matchedLayer: string|null, matchedLayers: list<string>}
+     */
+    private function resolveMatches(string $filePath): array
+    {
+        $normalised = $this->normalisePath($filePath);
+
+        $matches = $this->namespaceLayerResolverCache->get($normalised);
+
+        if ($matches !== null) {
+            return $matches;
+        }
+
         $matchedLayer  = null;
+        $matchedLayers = [];
         $matchedLength = -1;
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
+            $layerMatched = false;
+
             foreach ($layerPaths as $layerPath) {
                 if ($this->matchesLayerPath($normalised, $layerPath)) {
+                    if (! $layerMatched) {
+                        $matchedLayers[] = $layerName;
+                        $layerMatched    = true;
+                    }
+
                     $length = strlen($layerPath);
 
                     if ($length > $matchedLength) {
@@ -66,27 +100,14 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
             }
         }
 
-        return $matchedLayer;
-    }
+        $matches = [
+            'matchedLayer'  => $matchedLayer,
+            'matchedLayers' => $matchedLayers,
+        ];
 
-    /**
-     * @return int[]|string[]
-     */
-    public function resolveAll(string $className, string $filePath): array
-    {
-        $normalised = $this->normalisePath($filePath);
-        $matched    = [];
+        $this->namespaceLayerResolverCache->set($normalised, $matches);
 
-        foreach ($this->normalisedLayers as $layerName => $layerPaths) {
-            foreach ($layerPaths as $layerPath) {
-                if ($this->matchesLayerPath($normalised, $layerPath)) {
-                    $matched[] = $layerName;
-                    break;
-                }
-            }
-        }
-
-        return $matched;
+        return $matches;
     }
 
     private function normalisePath(string $path): string

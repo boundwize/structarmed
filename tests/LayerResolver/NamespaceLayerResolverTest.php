@@ -8,6 +8,7 @@ use App\Domain\Entities\Order;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolverCache;
 use Boundwize\StructArmed\Tests\ArchitectureTest;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\TestCase;
 use function dirname;
 
 #[CoversClass(NamespaceLayerResolver::class)]
+#[CoversClass(NamespaceLayerResolverCache::class)]
 #[CoversClass(ChainLayerResolver::class)]
 final class NamespaceLayerResolverTest extends TestCase
 {
@@ -156,6 +158,21 @@ final class NamespaceLayerResolverTest extends TestCase
         );
 
         $this->assertSame([], $layers);
+    }
+
+    public function testReusesCachedMatchesForSameFilePath(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                'Source' => 'src/',
+                'Domain' => 'src/Domain/',
+            ],
+            basePath: $this->basePath
+        );
+        $filePath               = $this->basePath . '/src/Domain/Order.php';
+
+        $this->assertSame('Domain', $namespaceLayerResolver->resolve('App\\Domain\\Order', $filePath));
+        $this->assertSame(['Source', 'Domain'], $namespaceLayerResolver->resolveAll('App\\Domain\\Order', $filePath));
     }
 
     public function testChainResolverTriesResolversInOrder(): void
