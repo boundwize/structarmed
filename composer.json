@@ -9,7 +9,11 @@
         "ddd",
         "mvc",
         "layer",
-        "enforcement"
+        "enforcement",
+        "psr1",
+        "psr12",
+        "psr4",
+        "psr15"
     ],
     "homepage": "https://github.com/boundwize/structarmed",
     "license": "MIT",
