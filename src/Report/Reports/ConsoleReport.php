@@ -39,7 +39,7 @@ final class ConsoleReport implements ReportInterface
 
         foreach ($ruleViolationCollection as $violation) {
             $lines[] = '';
-            $lines[] = sprintf('%s  [%s]', ColorSupport::wrap('✗', '31', $useColor), $violation->ruleKey);
+            $lines[] = sprintf('%s  [%s]', ColorSupport::wrap('✗', '91', $useColor), $violation->ruleKey);
             $lines[] = sprintf('   %s', $violation->message);
             $lines[] = sprintf('   → %s:%d', $violation->file, $violation->line);
 
