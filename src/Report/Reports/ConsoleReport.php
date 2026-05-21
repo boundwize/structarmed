@@ -20,8 +20,8 @@ final class ConsoleReport implements ReportInterface
 {
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
-        $useColor = ColorSupport::detect();
-        $lines    = [];
+        $useColor  = ColorSupport::detect();
+        $lines     = [];
         $lines     = [];
         $heading   = sprintf('StructArmed %s — Architecture Enforcement', Version::current());
         $lineWidth = strlen($heading);
