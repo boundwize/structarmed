@@ -6,9 +6,9 @@ namespace Boundwize\StructArmed\Tests\LayerResolver;
 
 use App\Domain\Entities\Order;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
+use Boundwize\StructArmed\LayerResolver\ChainLayerResolverCache;
 use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
-use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolverCache;
 use Boundwize\StructArmed\Tests\ArchitectureTest;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -16,8 +16,9 @@ use PHPUnit\Framework\TestCase;
 use function dirname;
 
 #[CoversClass(NamespaceLayerResolver::class)]
-#[CoversClass(NamespaceLayerResolverCache::class)]
+#[CoversClass(ChainLayerResolverCache::class)]
 #[CoversClass(ChainLayerResolver::class)]
+
 final class NamespaceLayerResolverTest extends TestCase
 {
     private string $basePath;
@@ -162,17 +163,62 @@ final class NamespaceLayerResolverTest extends TestCase
 
     public function testReusesCachedMatchesForSameFilePath(): void
     {
-        $namespaceLayerResolver = new NamespaceLayerResolver(
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
             layers: [
                 'Source' => 'src/',
                 'Domain' => 'src/Domain/',
             ],
             basePath: $this->basePath
         );
-        $filePath               = $this->basePath . '/src/Domain/Order.php';
+        $filePath           = $this->basePath . '/src/Domain/Order.php';
 
-        $this->assertSame('Domain', $namespaceLayerResolver->resolve('App\\Domain\\Order', $filePath));
-        $this->assertSame(['Source', 'Domain'], $namespaceLayerResolver->resolveAll('App\\Domain\\Order', $filePath));
+        $this->assertSame('Domain', $chainLayerResolver->resolve('App\\Domain\\Order', $filePath));
+        $this->assertSame(['Source', 'Domain'], $chainLayerResolver->resolveAll('App\\Domain\\Order', $filePath));
+    }
+
+    public function testChainResolverCachesResolveResult(): void
+    {
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
+            layers: ['Domain' => 'src/Domain/'],
+            basePath: $this->basePath
+        );
+        $filePath           = $this->basePath . '/src/Domain/Order.php';
+
+        $first  = $chainLayerResolver->resolve('App\\Domain\\Order', $filePath);
+        $second = $chainLayerResolver->resolve('App\\Domain\\Order', $filePath);
+
+        $this->assertSame($first, $second);
+    }
+
+    public function testChainResolverCachesNullResolveResult(): void
+    {
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
+            layers: ['Domain' => 'src/Domain/'],
+            basePath: $this->basePath
+        );
+
+        $first  = $chainLayerResolver->resolve('App\\Other\\Foo', '/other/Foo.php');
+        $second = $chainLayerResolver->resolve('App\\Other\\Foo', '/other/Foo.php');
+
+        $this->assertNull($first);
+        $this->assertNull($second);
+    }
+
+    public function testChainResolverCachesResolveAllResult(): void
+    {
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
+            layers: [
+                'Source' => 'src/',
+                'Domain' => 'src/Domain/',
+            ],
+            basePath: $this->basePath
+        );
+        $filePath           = $this->basePath . '/src/Domain/Order.php';
+
+        $first  = $chainLayerResolver->resolveAll('App\\Domain\\Order', $filePath);
+        $second = $chainLayerResolver->resolveAll('App\\Domain\\Order', $filePath);
+
+        $this->assertSame($first, $second);
     }
 
     public function testChainResolverTriesResolversInOrder(): void
