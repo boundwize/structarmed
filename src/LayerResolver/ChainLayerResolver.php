@@ -60,20 +60,18 @@ final readonly class ChainLayerResolver implements LayerResolverInterface
             return $matches;
         }
 
-        $matchedLayer = null;
-
-        foreach ($this->resolvers as $resolver) {
-            $layer = $resolver->resolve($className, $filePath);
-
-            if ($layer !== null) {
-                $matchedLayer = $layer;
-                break;
-            }
-        }
-
+        $matchedLayer  = null;
         $matchedLayers = [];
 
         foreach ($this->resolvers as $resolver) {
+            if ($matchedLayer === null) {
+                $layer = $resolver->resolve($className, $filePath);
+
+                if ($layer !== null) {
+                    $matchedLayer = $layer;
+                }
+            }
+
             foreach ($resolver->resolveAll($className, $filePath) as $layer) {
                 if (! in_array($layer, $matchedLayers, true)) {
                     $matchedLayers[] = $layer;
