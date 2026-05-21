@@ -64,6 +64,7 @@ final class InitCommandTest extends TestCase
             "    ->withPresets(\n"
             . "        Preset::PSR1(),\n"
             . "        Preset::PSR12(),\n"
+            . "        Preset::PSR15(),\n"
             . "        Preset::PSR4(),\n"
             . "        Preset::DDD(),\n"
             . "        Preset::MVC()\n"
