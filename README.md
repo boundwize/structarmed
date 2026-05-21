@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-    Configurable PHP architecture guards: define your layers and rules, then keep them enforced
+    Configurable PHP architecture guards — define your layers and rules, then keep them enforced
 </p>
 
 [![Latest Version](https://img.shields.io/github/release/boundwize/structarmed.svg?style=flat-square)](https://github.com/boundwize/structarmed/releases)
