@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cache;
 
-use Composer\InstalledVersions;
 use Boundwize\StructArmed\Version;
+use Composer\InstalledVersions;
 
 use function array_map;
 use function file_get_contents;
