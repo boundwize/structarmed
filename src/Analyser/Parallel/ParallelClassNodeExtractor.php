@@ -132,10 +132,11 @@ final readonly class ParallelClassNodeExtractor
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
-                    $count = substr_count($data, "\n");
+                    $count           = substr_count($data, "\n");
+                    $workerFileCount = count($pending[$key]['files']);
                     for ($i = 0; $i < $count; $i++) {
                         $fileIdx = $pending[$key]['filesAdvanced'];
-                        if ($fileIdx < count($pending[$key]['files'])) {
+                        if ($fileIdx < $workerFileCount) {
                             $progressHandler?->advance($pending[$key]['files'][$fileIdx]);
                             $pending[$key]['filesAdvanced']++;
                         }
