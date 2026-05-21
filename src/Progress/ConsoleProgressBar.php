@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Progress;
 
+use Boundwize\StructArmed\Cli\ColorSupport;
+
 use function fflush;
 use function fprintf;
-use function getenv;
 use function max;
 use function microtime;
 use function min;
@@ -43,7 +44,7 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
         $this->stream   = $stream ?? STDERR;
         $this->width    = max(10, $width);
         $this->isTty    = $isTty ?? @stream_isatty($this->stream);
-        $this->useColor = $useColor ?? $this->detectColorSupport();
+        $this->useColor = $useColor ?? ColorSupport::detect($this->stream);
     }
 
     public function start(int $total): void
@@ -130,25 +131,8 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
         fflush($this->stream);
     }
 
-    private function detectColorSupport(): bool
-    {
-        if (getenv('NO_COLOR') !== false) {
-            return false;
-        }
-
-        if (getenv('FORCE_COLOR') !== false) {
-            return true;
-        }
-
-        return stream_isatty($this->stream);
-    }
-
     private function color(string $value, string $code): string
     {
-        if (! $this->useColor || $value === '') {
-            return $value;
-        }
-
-        return "\033[" . $code . 'm' . $value . "\033[0m";
+        return ColorSupport::wrap($value, $code, $this->useColor);
     }
 }

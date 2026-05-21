@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Report\Reports;
 
+use Boundwize\StructArmed\Cli\ColorSupport;
 use Boundwize\StructArmed\Report\ReportInterface;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
@@ -17,7 +18,8 @@ final class ConsoleReport implements ReportInterface
 {
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
-        $lines = [];
+        $useColor = ColorSupport::detect();
+        $lines    = [];
 
         $lines[] = '';
         $lines[] = 'StructArmed — Architecture Enforcement';
@@ -37,7 +39,7 @@ final class ConsoleReport implements ReportInterface
 
         foreach ($ruleViolationCollection as $violation) {
             $lines[] = '';
-            $lines[] = sprintf('✗  [%s]', $violation->ruleKey);
+            $lines[] = sprintf('%s  [%s]', ColorSupport::wrap('✗', '91', $useColor), $violation->ruleKey);
             $lines[] = sprintf('   %s', $violation->message);
             $lines[] = sprintf('   → %s:%d', $violation->file, $violation->line);
 

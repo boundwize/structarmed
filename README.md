@@ -64,7 +64,7 @@ vendor/bin/structarmed analyse
 
 If violations are found, the output reports each one:
 
-<img width="498" height="214" alt="Image" src="https://github.com/user-attachments/assets/51368d3d-b5bc-4d09-8cbb-cd0b55fca370" />
+<img width="511" height="212" alt="Image" src="https://github.com/user-attachments/assets/3970a4cc-4e4a-4002-b282-e84aa9b2558e" />
 
 If everything passes, you get a clean summary:
 
