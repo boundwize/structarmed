@@ -352,6 +352,14 @@ vendor/bin/structarmed analyze --report=json
 vendor/bin/structarmed analyse --disable-parallel
 ```
 
+## CLI version commands
+
+```bash
+# Print the installed StructArmed version
+vendor/bin/structarmed --version
+vendor/bin/structarmed -V
+```
+
 ## Tips
 
 ### Rule key constants

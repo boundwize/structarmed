@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cache;
 
+use Boundwize\StructArmed\Version;
 use Composer\InstalledVersions;
 
 use function array_map;
@@ -68,10 +69,10 @@ final readonly class AnalysisCacheMetadataFactory
 
     public function composerGeneratedVersionHash(): string
     {
-        $version = InstalledVersions::isInstalled('boundwize/structarmed')
+        $version = InstalledVersions::isInstalled(Version::PACKAGE_NAME)
             ? [
-                'prettyVersion' => InstalledVersions::getPrettyVersion('boundwize/structarmed'),
-                'reference'     => InstalledVersions::getReference('boundwize/structarmed'),
+                'prettyVersion' => InstalledVersions::getPrettyVersion(Version::PACKAGE_NAME),
+                'reference'     => InstalledVersions::getReference(Version::PACKAGE_NAME),
             ]
             : InstalledVersions::getRootPackage();
 

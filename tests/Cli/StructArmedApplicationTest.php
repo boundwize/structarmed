@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Cli\InitCommand;
 use Boundwize\StructArmed\Cli\StructArmedApplication;
 use Boundwize\StructArmed\Cli\Usage;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Version;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -29,6 +30,7 @@ use function ob_start;
 use function random_bytes;
 use function rmdir;
 use function serialize;
+use function sprintf;
 use function str_replace;
 use function sys_get_temp_dir;
 use function tempnam;
@@ -39,6 +41,7 @@ use function unlink;
 #[CoversClass(InitCommand::class)]
 #[CoversClass(StructArmedApplication::class)]
 #[CoversClass(Usage::class)]
+#[CoversClass(Version::class)]
 #[CoversClass(Baseline::class)]
 final class StructArmedApplicationTest extends TestCase
 {
@@ -47,8 +50,20 @@ final class StructArmedApplicationTest extends TestCase
         [$exitCode, $output] = $this->runApplication(['structarmed']);
 
         $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('structarmed --version', $output);
         $this->assertStringContainsString('structarmed init', $output);
         $this->assertStringContainsString('structarmed analyse|analyze', $output);
+    }
+
+    public function testApplicationPrintsVersion(): void
+    {
+        [$exitCode, $output] = $this->runApplication(['structarmed', '--version']);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(
+            sprintf("StructArmed %s\n", Version::current()),
+            $output
+        );
     }
 
     public function testApplicationRejectsUnknownCommand(): void

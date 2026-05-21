@@ -7,10 +7,12 @@ namespace Boundwize\StructArmed\Report\Reports;
 use Boundwize\StructArmed\Cli\ColorSupport;
 use Boundwize\StructArmed\Report\ReportInterface;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Version;
 
 use function implode;
 use function sprintf;
 use function str_repeat;
+use function strlen;
 
 use const PHP_EOL;
 
@@ -18,12 +20,14 @@ final class ConsoleReport implements ReportInterface
 {
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
-        $useColor = ColorSupport::detect();
-        $lines    = [];
+        $useColor  = ColorSupport::detect();
+        $lines     = [];
+        $heading   = sprintf('StructArmed %s — Architecture Enforcement', Version::current());
+        $lineWidth = strlen($heading);
 
         $lines[] = '';
-        $lines[] = 'StructArmed — Architecture Enforcement';
-        $lines[] = str_repeat('=', 42);
+        $lines[] = $heading;
+        $lines[] = str_repeat('=', $lineWidth);
 
         if ($ruleViolationCollection->isEmpty()) {
             $lines[] = '';
@@ -35,7 +39,7 @@ final class ConsoleReport implements ReportInterface
 
         $lines[] = '';
         $lines[] = sprintf('Found %d violation(s):', $ruleViolationCollection->count());
-        $lines[] = str_repeat('─', 42);
+        $lines[] = str_repeat('─', $lineWidth);
 
         foreach ($ruleViolationCollection as $violation) {
             $lines[] = '';
@@ -49,7 +53,7 @@ final class ConsoleReport implements ReportInterface
         }
 
         $lines[] = '';
-        $lines[] = str_repeat('─', 42);
+        $lines[] = str_repeat('─', $lineWidth);
         $lines[] = sprintf(
             '%d violation(s) found  •  %.2fs',
             $ruleViolationCollection->count(),
