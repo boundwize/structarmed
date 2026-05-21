@@ -24,6 +24,10 @@ final class ColorSupport
             return true;
         }
 
+        if (getenv('GITHUB_ACTIONS') !== false) {
+            return true;
+        }
+
         return stream_isatty($stream ?? STDOUT);
     }
 

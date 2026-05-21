@@ -48,6 +48,24 @@ final class ColorSupportTest extends TestCase
         );
     }
 
+    public function testDetectReturnsTrueOnGithubActions(): void
+    {
+        $this->withEnvironment(
+            noColor: null,
+            forceColor: null,
+            callback: function (): void {
+                $previousGithubActions = getenv('GITHUB_ACTIONS');
+                putenv('GITHUB_ACTIONS=true');
+
+                try {
+                    $this->assertTrue(ColorSupport::detect());
+                } finally {
+                    putenv($previousGithubActions === false ? 'GITHUB_ACTIONS' : 'GITHUB_ACTIONS=' . $previousGithubActions);
+                }
+            }
+        );
+    }
+
     public function testDetectFallsBackToStreamIsatty(): void
     {
         $this->withEnvironment(
