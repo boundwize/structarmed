@@ -8,7 +8,6 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-use function preg_match;
 use function sprintf;
 
 final readonly class MustBeFinalRule implements RuleInterface
@@ -30,7 +29,7 @@ final readonly class MustBeFinalRule implements RuleInterface
         }
 
         if ($this->classNamePattern !== null) {
-            return (bool) preg_match($this->classNamePattern, $classNode->className);
+            return $classNode->nameMatches($this->classNamePattern, isFullName: true);
         }
 
         return true;

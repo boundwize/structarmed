@@ -35,6 +35,8 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->nameStartsWith('Create'));
         $this->assertTrue($classNode->nameEndsWith('Handler'));
         $this->assertTrue($classNode->nameMatches('/Order/'));
+        $this->assertFalse($classNode->nameMatches('/^App\\\\Domain\\\\CreateOrderHandler$/'));
+        $this->assertTrue($classNode->nameMatches('/^App\\\\Domain\\\\CreateOrderHandler$/', isFullName: true));
     }
 
     public function testIsClassReturnsFalseForInterfacesAndTraits(): void

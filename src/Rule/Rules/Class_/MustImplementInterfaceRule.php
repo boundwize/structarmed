@@ -10,17 +10,18 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MustBeInterfaceRule implements RuleInterface
+final readonly class MustImplementInterfaceRule implements RuleInterface
 {
     public function __construct(
         private string $layer,
+        private string $interface,
         private ?string $classNamePattern = null,
     ) {
     }
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        if (! $classNode->isInLayer($this->layer)) {
+        if (! $classNode->isClass() || ! $classNode->isInLayer($this->layer)) {
             return false;
         }
 
@@ -33,14 +34,15 @@ final readonly class MustBeInterfaceRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ($classNode->isInterface) {
+        if ($classNode->implementsInterface($this->interface)) {
             return null;
         }
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must be an interface',
-                $classNode->className
+                'Class [%s] must implement interface [%s]',
+                $classNode->className,
+                $this->interface
             ),
             file:      $classNode->file,
             line:      $classNode->line,

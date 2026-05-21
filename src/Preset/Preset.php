@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
+use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 
@@ -19,6 +20,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
  *   ->withPreset(Preset::PSR1())
  *   ->withPreset(Preset::PSR4())
  *   ->withPreset(Preset::PSR12())
+ *   ->withPreset(Preset::PSR15())
  *   ->withPresets(Preset::DDD(), Preset::MVC())
  */
 final class Preset
@@ -52,6 +54,17 @@ final class Preset
         ?array $sourcePaths = null,
     ): Psr12Preset {
         return new Psr12Preset(
+            sourcePaths: $sourcePaths,
+        );
+    }
+
+    /**
+     * @param list<string>|null $sourcePaths
+     */
+    public static function PSR15(
+        ?array $sourcePaths = null,
+    ): Psr15Preset {
+        return new Psr15Preset(
             sourcePaths: $sourcePaths,
         );
     }

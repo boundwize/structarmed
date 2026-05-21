@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
+use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MvcPreset::class)]
 #[CoversClass(Psr1Preset::class)]
 #[CoversClass(Psr12Preset::class)]
+#[CoversClass(Psr15Preset::class)]
 #[CoversClass(Psr4Preset::class)]
 final class PresetTest extends TestCase
 {
@@ -95,6 +97,26 @@ final class PresetTest extends TestCase
         $this->assertSame(['Source' => []], $architecture->getLayers());
         $this->assertArrayHasKey(
             Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
+            $architecture->getRules()
+        );
+    }
+
+    public function testPsr15PresetRegistersSourceLayerAndRules(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR15(
+            sourcePaths: ['src/', 'tests/'],
+        )->apply($architecture);
+
+        $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
+        $this->assertCount(2, $architecture->getRules());
+        $this->assertArrayHasKey(
+            Psr15Preset::MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            Psr15Preset::HANDLER_MUST_IMPLEMENT_REQUEST_HANDLER_INTERFACE,
             $architecture->getRules()
         );
     }
