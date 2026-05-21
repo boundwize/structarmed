@@ -64,11 +64,11 @@ vendor/bin/structarmed analyse
 
 If violations are found, the output reports each one:
 
-<img width="498" height="214" alt="Image" src="https://github.com/user-attachments/assets/51368d3d-b5bc-4d09-8cbb-cd0b55fca370" />
+<img width="535" height="214" alt="Image" src="https://github.com/user-attachments/assets/6ea98442-2dfe-4d30-81f5-9408148b6653" />
 
 If everything passes, you get a clean summary:
 
-<img width="535" height="214" alt="Image" src="https://github.com/user-attachments/assets/6ea98442-2dfe-4d30-81f5-9408148b6653" />
+<img width="460" height="93" alt="Image" src="https://github.com/user-attachments/assets/aeb81a6a-20eb-40be-b68b-889b0349ac37" />
 
 ## Configuration
 
