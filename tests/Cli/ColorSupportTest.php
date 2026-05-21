@@ -60,7 +60,11 @@ final class ColorSupportTest extends TestCase
                 try {
                     $this->assertTrue(ColorSupport::detect());
                 } finally {
-                    putenv($previousGithubActions === false ? 'GITHUB_ACTIONS' : 'GITHUB_ACTIONS=' . $previousGithubActions);
+                    putenv(
+                        $previousGithubActions === false
+                            ? 'GITHUB_ACTIONS'
+                            : 'GITHUB_ACTIONS=' . $previousGithubActions
+                    );
                 }
             }
         );
