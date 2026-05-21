@@ -8,7 +8,7 @@ use Composer\InstalledVersions;
 
 final class Version
 {
-    private const PACKAGE_NAME = 'boundwize/structarmed';
+    public const PACKAGE_NAME = 'boundwize/structarmed';
 
     public static function current(): string
     {
