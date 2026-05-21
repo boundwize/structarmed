@@ -15,7 +15,6 @@ use function file_get_contents;
 use function file_put_contents;
 use function fwrite;
 use function is_array;
-use function is_resource;
 use function serialize;
 use function sprintf;
 use function unserialize;
@@ -46,18 +45,11 @@ final readonly class ClassNodeWorker
             $layerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
 
             $stream = $outputStream ?? STDOUT;
-            if (! is_resource($stream)) {
-                throw new WorkerFailedException('Invalid worker output stream.');
-            }
 
             $progressHandler = new class ($stream) implements ProgressHandlerInterface {
-                /** @var resource */
-                private readonly mixed $stream;
-
                 /** @param resource $stream */
-                public function __construct(mixed $stream)
+                public function __construct(private readonly mixed $stream)
                 {
-                    $this->stream = $stream;
                 }
 
                 public function start(int $total): void
