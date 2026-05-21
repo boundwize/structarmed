@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-    Configurable PHP architecture guards - define your layers and rules, then keep them enforced
+    Configurable PHP architecture guards: define your layers and rules, then keep them enforced
 </p>
 
 [![Latest Version](https://img.shields.io/github/release/boundwize/structarmed.svg?style=flat-square)](https://github.com/boundwize/structarmed/releases)
@@ -43,7 +43,7 @@ vendor/bin/structarmed init --preset=psr4
 # enforce basic coding standard (tags, StudlyCaps, camelCase)
 vendor/bin/structarmed init --preset=psr1
 
-# extends PSR-1: require explicit visibility on all members
+# PSR-12 extends PSR-1: require explicit visibility on all members
 vendor/bin/structarmed init --preset=psr12
 
 # thin controllers, model/view/service layer rules
@@ -56,7 +56,7 @@ vendor/bin/structarmed init --preset=ddd
 vendor/bin/structarmed init --preset=all
 ```
 
-Generates a `structarmed.php` in your project root. Edit it to match your structure, then run:
+This generates a `structarmed.php` in your project root. Edit it to match your structure, then run:
 
 ```bash
 vendor/bin/structarmed analyse
@@ -93,7 +93,7 @@ return Architecture::define()
 
 ### Cache directory
 
-StructArmed stores analysis cache in the system temp directory by default. You can configure a project cache directory:
+StructArmed stores its analysis cache in the system temp directory by default. You can configure a project cache directory:
 
 ```php
 <?php
@@ -150,10 +150,10 @@ return Architecture::define()
 ```
 
 Inside `skip()`, string entries skip files or directories unless they match a registered rule key, keyed entries
-skip paths for one specific rule, and rule key constants skip that rule entirely. You can also use
+skip paths for a specific rule, and rule key constants skip that rule entirely. You can also use
 `skipPath()` / `skipPaths()` and `skipRule()` / `skipRules()` when you prefer the explicit methods.
 
-Use `replaceRule()` to swap a preset rule's configuration — it throws `RuleNotFoundException` if the key does not exist, so a typo is caught immediately. Use `rule()` to add new custom rules; it can also overwrite an existing key, but silently, with no verification that the target exists.
+Use `replaceRule()` to swap a preset rule's configuration — it throws `RuleNotFoundException` if the key does not exist, so a typo is caught immediately. Use `rule()` to add new custom rules; it can also overwrite an existing key silently, without verifying that the target exists.
 
 ## Layer resolution
 
@@ -347,7 +347,7 @@ vendor/bin/structarmed analyze --config=path/to/structarmed.php
 vendor/bin/structarmed analyse --report=json
 vendor/bin/structarmed analyze --report=json
 
-# structarmed is running parallel by default
+# StructArmed runs in parallel by default
 # to disable parallel processing (e.g. when debugging worker issues), pass `--disable-parallel`:
 vendor/bin/structarmed analyse --disable-parallel
 ```
