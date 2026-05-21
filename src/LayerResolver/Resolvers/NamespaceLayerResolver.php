@@ -27,7 +27,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
     /** @var array<string, list<string>> */
     private array $normalisedLayers;
 
-    private NamespaceLayerResolverCache $matchedLayersByPath;
+    private NamespaceLayerResolverCache $namespaceLayerResolverCache;
 
     /**
      * @param array<string, string|list<string>> $layers  Map of layer name → path prefixes
@@ -46,8 +46,8 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
             }
         }
 
-        $this->normalisedLayers    = $normalisedLayers;
-        $this->matchedLayersByPath = new NamespaceLayerResolverCache();
+        $this->normalisedLayers            = $normalisedLayers;
+        $this->namespaceLayerResolverCache = new NamespaceLayerResolverCache();
     }
 
     public function resolve(string $className, string $filePath): ?string
@@ -70,7 +70,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
     {
         $normalised = $this->normalisePath($filePath);
 
-        $matches = $this->matchedLayersByPath->get($normalised);
+        $matches = $this->namespaceLayerResolverCache->get($normalised);
 
         if ($matches !== null) {
             return $matches;
@@ -105,7 +105,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
             'matchedLayers' => $matchedLayers,
         ];
 
-        $this->matchedLayersByPath->set($normalised, $matches);
+        $this->namespaceLayerResolverCache->set($normalised, $matches);
 
         return $matches;
     }
