@@ -39,7 +39,8 @@ final readonly class PhpFileFinder
     public function files(string $basePath, array $skipPaths = []): array
     {
         $files          = [];
-        $normalisedBase = rtrim(str_replace('\\', '/', realpath($basePath) ?: $basePath), '/');
+        $normalisedBase = $this->normalisePath($basePath, true);
+        $skipMatchers   = $this->compileSkipMatchers($normalisedBase, $skipPaths);
 
         foreach ($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath) as $sourcePath) {
             $fullPath = rtrim($basePath, '/') . '/' . ltrim($sourcePath, '/');
@@ -51,12 +52,12 @@ final readonly class PhpFileFinder
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveCallbackFilterIterator(
                     new RecursiveDirectoryIterator($fullPath, FilesystemIterator::SKIP_DOTS),
-                    function (SplFileInfo $file) use ($normalisedBase, $skipPaths): bool {
+                    function (SplFileInfo $file) use ($normalisedBase, $skipMatchers): bool {
                         if (! $file->isDir() && $file->getExtension() !== 'php') {
                             return false;
                         }
 
-                        return ! $this->isSkipped($file->getPathname(), $normalisedBase, $skipPaths);
+                        return ! $this->isSkipped($file->getPathname(), $normalisedBase, $skipMatchers);
                     }
                 )
             );
@@ -76,36 +77,71 @@ final readonly class PhpFileFinder
 
     /**
      * @param list<string> $skipPaths
+     * @return list<array{absolutePath: string|null, baseRelativePath: string, pattern: string}>
      */
-    private function isSkipped(string $filePath, string $normalisedBase, array $skipPaths): bool
+    private function compileSkipMatchers(string $normalisedBase, array $skipPaths): array
     {
-        if ($skipPaths === []) {
+        $skipMatchers = [];
+
+        foreach ($skipPaths as $skipPath) {
+            $baseRelativePath = rtrim(str_replace('\\', '/', ltrim($skipPath, '/')), '/');
+            $fullSkipPath     = $baseRelativePath === '' ? $normalisedBase : $normalisedBase . '/' . $baseRelativePath;
+
+            $skipMatchers[] = [
+                'absolutePath'     => realpath($skipPath) !== false ? $this->normalisePath($skipPath, true) : null,
+                'baseRelativePath' => $this->normalisePath($fullSkipPath, true),
+                'pattern'          => rtrim(str_replace('\\', '/', $skipPath), '/'),
+            ];
+        }
+
+        return $skipMatchers;
+    }
+
+    /**
+     * @param list<array{absolutePath: string|null, baseRelativePath: string, pattern: string}> $skipMatchers
+     */
+    private function isSkipped(string $filePath, string $normalisedBase, array $skipMatchers): bool
+    {
+        if ($skipMatchers === []) {
             return false;
         }
 
-        $normalisedFile = rtrim(str_replace('\\', '/', realpath($filePath) ?: $filePath), '/');
+        $normalisedFile = $this->normalisePath($filePath, true);
+        $relativePath   = substr($normalisedFile, strlen($normalisedBase) + 1);
 
-        $relativePath = substr($normalisedFile, strlen($normalisedBase) + 1);
-
-        foreach ($skipPaths as $skipPath) {
-            $normalisedSkip = rtrim(str_replace('\\', '/', realpath($skipPath) ?: $skipPath), '/');
-
-            if ($normalisedFile === $normalisedSkip || str_starts_with($normalisedFile, $normalisedSkip . '/')) {
+        foreach ($skipMatchers as $skipMatcher) {
+            if (
+                $skipMatcher['absolutePath'] !== null
+                && (
+                    $normalisedFile === $skipMatcher['absolutePath']
+                    || str_starts_with($normalisedFile, $skipMatcher['absolutePath'] . '/')
+                )
+            ) {
                 return true;
             }
 
-            $fullSkipPath = $normalisedBase . '/' . ltrim(rtrim(str_replace('\\', '/', $skipPath), '/'), '/');
-            $fullSkipPath = rtrim(str_replace('\\', '/', realpath($fullSkipPath) ?: $fullSkipPath), '/');
-            if ($normalisedFile === $fullSkipPath || str_starts_with($normalisedFile, $fullSkipPath . '/')) {
+            if (
+                $normalisedFile === $skipMatcher['baseRelativePath']
+                || str_starts_with($normalisedFile, $skipMatcher['baseRelativePath'] . '/')
+            ) {
                 return true;
             }
 
-            $rawSkip = rtrim(str_replace('\\', '/', $skipPath), '/');
-            if (fnmatch($rawSkip, $normalisedFile) || fnmatch($rawSkip, $relativePath)) {
+            if (
+                fnmatch($skipMatcher['pattern'], $normalisedFile)
+                || fnmatch($skipMatcher['pattern'], $relativePath)
+            ) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function normalisePath(string $path, bool $resolve = false): string
+    {
+        $normalisedPath = $resolve ? (realpath($path) ?: $path) : $path;
+
+        return rtrim(str_replace('\\', '/', $normalisedPath), '/');
     }
 }
