@@ -40,49 +40,54 @@ final readonly class ChainLayerResolver implements LayerResolverInterface
 
     public function resolve(string $className, string $filePath): ?string
     {
-        $key    = $className . "\0" . $filePath;
-        $cached = $this->chainLayerResolverCache->getLayer($key);
+        return $this->resolveMatches($className, $filePath)['matchedLayer'];
+    }
 
-        if ($cached !== false) {
-            return $cached;
+    public function resolveAll(string $className, string $filePath): array
+    {
+        return $this->resolveMatches($className, $filePath)['matchedLayers'];
+    }
+
+    /**
+     * @return array{matchedLayer: string|null, matchedLayers: list<string>}
+     */
+    private function resolveMatches(string $className, string $filePath): array
+    {
+        $key     = $className . "\0" . $filePath;
+        $matches = $this->chainLayerResolverCache->get($key);
+
+        if ($matches !== null) {
+            return $matches;
         }
+
+        $matchedLayer = null;
 
         foreach ($this->resolvers as $resolver) {
             $layer = $resolver->resolve($className, $filePath);
 
             if ($layer !== null) {
-                $this->chainLayerResolverCache->setLayer($key, $layer);
-
-                return $layer;
+                $matchedLayer = $layer;
+                break;
             }
         }
 
-        $this->chainLayerResolverCache->setLayer($key, null);
-
-        return null;
-    }
-
-    public function resolveAll(string $className, string $filePath): array
-    {
-        $key    = $className . "\0" . $filePath;
-        $cached = $this->chainLayerResolverCache->getLayers($key);
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        $layers = [];
+        $matchedLayers = [];
 
         foreach ($this->resolvers as $resolver) {
             foreach ($resolver->resolveAll($className, $filePath) as $layer) {
-                if (! in_array($layer, $layers, true)) {
-                    $layers[] = $layer;
+                if (! in_array($layer, $matchedLayers, true)) {
+                    $matchedLayers[] = $layer;
                 }
             }
         }
 
-        $this->chainLayerResolverCache->setLayers($key, $layers);
+        $matches = [
+            'matchedLayer'  => $matchedLayer,
+            'matchedLayers' => $matchedLayers,
+        ];
 
-        return $layers;
+        $this->chainLayerResolverCache->set($key, $matches);
+
+        return $matches;
     }
 }

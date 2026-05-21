@@ -4,42 +4,27 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\LayerResolver;
 
-use function array_key_exists;
-
 /**
  * @internal
  */
 final class ChainLayerResolverCache
 {
-    /** @var array<string, string|null> */
-    private array $layerByKey = [];
+    /** @var array<string, array{matchedLayer: string|null, matchedLayers: list<string>}> */
+    private array $matchesByKey = [];
 
-    /** @var array<string, list<string>> */
-    private array $layersByKey = [];
-
-    public function getLayer(string $key): string|false|null
+    /**
+     * @return array{matchedLayer: string|null, matchedLayers: list<string>}|null
+     */
+    public function get(string $key): ?array
     {
-        return array_key_exists($key, $this->layerByKey) ? $this->layerByKey[$key] : false;
-    }
-
-    public function setLayer(string $key, ?string $layer): void
-    {
-        $this->layerByKey[$key] = $layer;
+        return $this->matchesByKey[$key] ?? null;
     }
 
     /**
-     * @return list<string>|null  null = cache miss
+     * @param array{matchedLayer: string|null, matchedLayers: list<string>} $matches
      */
-    public function getLayers(string $key): ?array
+    public function set(string $key, array $matches): void
     {
-        return $this->layersByKey[$key] ?? null;
-    }
-
-    /**
-     * @param list<string> $layers
-     */
-    public function setLayers(string $key, array $layers): void
-    {
-        $this->layersByKey[$key] = $layers;
+        $this->matchesByKey[$key] = $matches;
     }
 }
