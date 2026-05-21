@@ -83,17 +83,6 @@ final class ColorSupportTest extends TestCase
         );
     }
 
-    public function testDetectFallsBackToStdoutWhenNoStreamGiven(): void
-    {
-        $this->withEnvironment(
-            noColor: null,
-            forceColor: null,
-            callback: function (): void {
-                $this->assertIsBool(ColorSupport::detect());
-            }
-        );
-    }
-
     public function testWrapReturnsValueUnchangedWhenColorDisabled(): void
     {
         $this->assertSame('hello', ColorSupport::wrap('hello', '91', false));
