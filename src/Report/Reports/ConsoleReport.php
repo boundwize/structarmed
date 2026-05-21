@@ -22,7 +22,6 @@ final class ConsoleReport implements ReportInterface
     {
         $useColor  = ColorSupport::detect();
         $lines     = [];
-        $lines     = [];
         $heading   = sprintf('StructArmed %s — Architecture Enforcement', Version::current());
         $lineWidth = strlen($heading);
 
