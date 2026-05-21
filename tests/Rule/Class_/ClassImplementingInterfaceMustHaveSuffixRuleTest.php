@@ -17,13 +17,13 @@ final class ClassImplementingInterfaceMustHaveSuffixRuleTest extends TestCase
 
     public function testPassesWhenClassImplementingInterfaceHasSuffix(): void
     {
-        $rule = new ClassImplementingInterfaceMustHaveSuffixRule(
+        $classImplementingInterfaceMustHaveSuffixRule = new ClassImplementingInterfaceMustHaveSuffixRule(
             layer: 'Source',
             interface: self::MIDDLEWARE_INTERFACE,
             suffix: 'Middleware'
         );
 
-        $violation = $rule->evaluate($this->makeNode(
+        $violation = $classImplementingInterfaceMustHaveSuffixRule->evaluate($this->makeNode(
             className: 'App\\Http\\AuthMiddleware',
             implements: [self::MIDDLEWARE_INTERFACE]
         ));
@@ -33,13 +33,13 @@ final class ClassImplementingInterfaceMustHaveSuffixRuleTest extends TestCase
 
     public function testViolatesWhenClassImplementingInterfaceIsMissingSuffix(): void
     {
-        $rule = new ClassImplementingInterfaceMustHaveSuffixRule(
+        $classImplementingInterfaceMustHaveSuffixRule = new ClassImplementingInterfaceMustHaveSuffixRule(
             layer: 'Source',
             interface: self::MIDDLEWARE_INTERFACE,
             suffix: 'Middleware'
         );
 
-        $violation = $rule->evaluate($this->makeNode(
+        $violation = $classImplementingInterfaceMustHaveSuffixRule->evaluate($this->makeNode(
             className: 'App\\Http\\Auth',
             implements: [self::MIDDLEWARE_INTERFACE]
         ));
@@ -50,26 +50,26 @@ final class ClassImplementingInterfaceMustHaveSuffixRuleTest extends TestCase
 
     public function testAppliesOnlyToClassesInLayerImplementingInterface(): void
     {
-        $rule = new ClassImplementingInterfaceMustHaveSuffixRule(
+        $classImplementingInterfaceMustHaveSuffixRule = new ClassImplementingInterfaceMustHaveSuffixRule(
             layer: 'Source',
             interface: self::MIDDLEWARE_INTERFACE,
             suffix: 'Middleware'
         );
 
-        $this->assertTrue($rule->appliesTo($this->makeNode(
+        $this->assertTrue($classImplementingInterfaceMustHaveSuffixRule->appliesTo($this->makeNode(
             className: 'App\\Http\\AuthMiddleware',
             implements: [self::MIDDLEWARE_INTERFACE]
         )));
-        $this->assertFalse($rule->appliesTo($this->makeNode(
+        $this->assertFalse($classImplementingInterfaceMustHaveSuffixRule->appliesTo($this->makeNode(
             className: 'App\\Http\\AuthMiddleware',
             implements: [],
         )));
-        $this->assertFalse($rule->appliesTo($this->makeNode(
+        $this->assertFalse($classImplementingInterfaceMustHaveSuffixRule->appliesTo($this->makeNode(
             className: 'App\\Http\\AuthMiddleware',
-            layer: 'Tests',
-            implements: [self::MIDDLEWARE_INTERFACE]
+            implements: [self::MIDDLEWARE_INTERFACE],
+            layer: 'Tests'
         )));
-        $this->assertFalse($rule->appliesTo($this->makeNode(
+        $this->assertFalse($classImplementingInterfaceMustHaveSuffixRule->appliesTo($this->makeNode(
             className: 'App\\Http\\AuthMiddleware',
             implements: [self::MIDDLEWARE_INTERFACE],
             isInterface: true
