@@ -20,6 +20,7 @@ use function file_get_contents;
 use function file_put_contents;
 use function glob;
 use function hash;
+use function hash_file;
 use function is_array;
 use function is_bool;
 use function is_dir;
@@ -648,7 +649,7 @@ final readonly class AnalysisResultCache
         return [
             'namespace' => $namespace,
             'file'      => $file,
-            'hash'      => hash('xxh128', (string) file_get_contents($file)),
+            'hash'      => (string) hash_file('xxh128', $file),
         ];
     }
 
