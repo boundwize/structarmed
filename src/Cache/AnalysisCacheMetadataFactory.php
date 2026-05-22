@@ -8,8 +8,8 @@ use Boundwize\StructArmed\Version;
 use Composer\InstalledVersions;
 
 use function array_map;
-use function file_get_contents;
 use function hash;
+use function hash_file;
 use function json_encode;
 use function sort;
 
@@ -53,7 +53,7 @@ final readonly class AnalysisCacheMetadataFactory
 
     public function fileHash(string $path): string
     {
-        return hash('xxh128', (string) file_get_contents($path));
+        return (string) hash_file('xxh128', $path);
     }
 
     /**
@@ -63,7 +63,7 @@ final readonly class AnalysisCacheMetadataFactory
     {
         return hash('xxh128', json_encode(array_map(static fn(string $file): array => [
             'file' => $file,
-            'hash' => hash('xxh128', (string) file_get_contents($file)),
+            'hash' => (string) hash_file('xxh128', $file),
         ], $files), JSON_THROW_ON_ERROR));
     }
 
