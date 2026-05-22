@@ -116,6 +116,7 @@ final readonly class Analyser
             $progressHandler,
             $layers,
             $layerPatterns,
+            $chainLayerResolver,
             $analyserOptions ?? AnalyserOptions::parallel()
         );
 
@@ -369,6 +370,7 @@ final readonly class Analyser
         ?ProgressHandlerInterface $progressHandler,
         array $layers,
         array $layerPatterns,
+        ChainLayerResolver $chainLayerResolver,
         ?AnalyserOptions $analyserOptions = null
     ): array {
         $classNodes   = [];
@@ -406,8 +408,7 @@ final readonly class Analyser
                 $this->analysisResultCache?->getCacheDirectory(),
             ))->extract($filesToParse, $progressHandler);
         } else {
-            $layerResolver    = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
-            $parsedClassNodes = (new ClassNodeExtractor($layerResolver))->extract($filesToParse, $progressHandler);
+            $parsedClassNodes = (new ClassNodeExtractor($chainLayerResolver))->extract($filesToParse, $progressHandler);
         }
 
         $classNodesByFile = array_fill_keys($filesToParse, []);
