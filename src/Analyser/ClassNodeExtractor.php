@@ -32,7 +32,7 @@ final readonly class ClassNodeExtractor
     public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
     {
         $classCollector = new ClassCollector($this->layerResolver);
-        $traverser = new NodeTraverser(new NameResolver(), $classCollector);
+        $traverser      = new NodeTraverser(new NameResolver(), $classCollector);
 
         foreach ($files as $file) {
             try {
