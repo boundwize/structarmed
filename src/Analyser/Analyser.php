@@ -135,6 +135,9 @@ final readonly class Analyser
             ];
         $dependencyMap              = $classDependencyMaps['dependencies'];
         $inheritanceDependencyMap   = $classDependencyMaps['inheritanceDependencies'];
+        $resolvedDependencyMap      = $hasRuleset
+            ? $this->resolvedDependenciesByClass($dependencyMap, $inheritanceDependencyMap)
+            : [];
 
         foreach ($classNodes as $classNode) {
             foreach ($classRules as $key => $rule) {
@@ -187,11 +190,7 @@ final readonly class Analyser
             }
 
             $skippedDepsForClass = $classViolationSkips[$classNode->className] ?? [];
-            $dependencies        = $this->dependenciesForClass(
-                $classNode->className,
-                $dependencyMap,
-                $inheritanceDependencyMap
-            );
+            $dependencies        = $resolvedDependencyMap[$classNode->className] ?? [];
 
             foreach ($dependencies as $dependency) {
                 if (in_array($dependency, $skippedDepsForClass, true)) {
@@ -302,61 +301,69 @@ final readonly class Analyser
     /**
      * @param array<string, list<string>> $dependencyMap
      * @param array<string, list<string>> $inheritanceDependencyMap
-     * @return list<string>
+     * @return array<string, list<string>>
      */
-    private function dependenciesForClass(
-        string $className,
+    private function resolvedDependenciesByClass(
         array $dependencyMap,
         array $inheritanceDependencyMap
     ): array {
-        $dependencies = [
-            ...$dependencyMap[$className] ?? [],
-            ...$this->dependenciesForInheritanceDependencies(
-                $inheritanceDependencyMap[$className] ?? [],
+        $resolvedDependencyMap = [];
+
+        foreach (array_keys($dependencyMap + $inheritanceDependencyMap) as $className) {
+            $resolvedDependencyMap[$className] = $this->resolveDependenciesForClass(
+                $className,
                 $dependencyMap,
                 $inheritanceDependencyMap,
-                [$className => true]
-            ),
-        ];
+                $resolvedDependencyMap,
+            );
+        }
 
-        return array_values(array_unique($dependencies));
+        return $resolvedDependencyMap;
     }
 
     /**
-     * @param list<string>                $dependencies
      * @param array<string, list<string>> $dependencyMap
      * @param array<string, list<string>> $inheritanceDependencyMap
-     * @param array<string, true>         $seen
+     * @param array<string, list<string>> $resolvedDependencyMap
+     * @param array<string, true> $seen
      * @return list<string>
      */
-    private function dependenciesForInheritanceDependencies(
-        array $dependencies,
+    private function resolveDependenciesForClass(
+        string $className,
         array $dependencyMap,
         array $inheritanceDependencyMap,
-        array $seen
+        array &$resolvedDependencyMap,
+        array $seen = []
     ): array {
-        $resolvedDependencies = [];
+        if (isset($resolvedDependencyMap[$className])) {
+            return $resolvedDependencyMap[$className];
+        }
 
-        foreach ($dependencies as $dependency) {
+        if (isset($seen[$className])) {
+            return [];
+        }
+
+        $resolvedDependencies = $dependencyMap[$className] ?? [];
+        $seen[$className]     = true;
+
+        foreach ($inheritanceDependencyMap[$className] ?? [] as $dependency) {
             $resolvedDependencies[] = $dependency;
-
-            if (isset($seen[$dependency])) {
-                continue;
-            }
-
-            $resolvedDependencies = [
+            $resolvedDependencies   = [
                 ...$resolvedDependencies,
                 ...$dependencyMap[$dependency] ?? [],
-                ...$this->dependenciesForInheritanceDependencies(
-                    $inheritanceDependencyMap[$dependency] ?? [],
+                ...$this->resolveDependenciesForClass(
+                    $dependency,
                     $dependencyMap,
                     $inheritanceDependencyMap,
-                    $seen + [$dependency => true]
+                    $resolvedDependencyMap,
+                    $seen,
                 ),
             ];
         }
 
-        return array_values(array_unique($resolvedDependencies));
+        $resolvedDependencyMap[$className] = array_values(array_unique($resolvedDependencies));
+
+        return $resolvedDependencyMap[$className];
     }
 
     /**
