@@ -12,7 +12,6 @@ use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
 
-use function array_values;
 use function file_get_contents;
 
 final readonly class ClassNodeExtractor
@@ -52,6 +51,6 @@ final readonly class ClassNodeExtractor
             }
         }
 
-        return array_values($classCollector->getNodes());
+        return $classCollector->getNodes();
     }
 }
