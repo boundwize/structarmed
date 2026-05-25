@@ -80,6 +80,35 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testStoresViolationCollectionWithInvalidUtf8Text(): void
+    {
+        $cacheDirectory          = $this->createTempDirectory();
+        $analysisResultCache     = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $metadata                = ['configHash' => 'same', 'filesHash' => 'same'];
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add(new RuleViolation(
+            message:   "Invalid byte \xB1",
+            file:      __FILE__,
+            line:      10,
+            className: self::class,
+            layer:     'Domain',
+            ruleKey:   'rule',
+        ));
+
+        try {
+            $analysisResultCache->store('key', $metadata, $ruleViolationCollection);
+            $loaded = $analysisResultCache->load('key', $metadata);
+
+            $this->assertInstanceOf(RuleViolationCollection::class, $loaded);
+            $loadedViolations = $loaded->toArray();
+
+            $this->assertIsString($loadedViolations[0]['message']);
+            $this->assertStringContainsString("\xEF\xBF\xBD", $loadedViolations[0]['message']);
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testMissesWhenMetadataChanges(): void
     {
         $cacheDirectory          = $this->createTempDirectory();
@@ -485,6 +514,42 @@ final class AnalysisResultCacheTest extends TestCase
             $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
 
             $this->assertEquals($classNodes, $loaded);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testStoresClassNodesWithInvalidUtf8Text(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $classNodes          = [
+            new ClassNode(
+                className:   "App\\Invalid\xB1Name",
+                file:        $sourceFile,
+                line:        1,
+                layer:       'Source',
+                extends:     null,
+                isAbstract:  false,
+                isFinal:     true,
+                isInterface: false,
+                isReadonly:  false,
+            ),
+        ];
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertStringContainsString("\xEF\xBF\xBD", $loaded[0]->className);
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -1406,6 +1471,22 @@ final class AnalysisResultCacheTest extends TestCase
 
             $this->removeTempDirectory($directory);
         }
+    }
+
+    public function testMetadataKeyHandlesInvalidUtf8Text(): void
+    {
+        $metadata = [
+            'version'                      => 1,
+            'basePath'                     => "/tmp/project\xB1",
+            'configPath'                   => "/tmp/project\xB1/structarmed.php",
+            'composerGeneratedVersionHash' => 'same',
+            'scanPaths'                    => ["src\xB1"],
+        ];
+
+        $this->assertMatchesRegularExpression(
+            '/^[a-f0-9]{32}$/',
+            (new AnalysisCacheMetadataFactory())->key($metadata)
+        );
     }
 
     public function testMetadataIncludesComposerGeneratedVersionHash(): void

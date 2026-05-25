@@ -38,6 +38,7 @@ use function strval;
 use function sys_get_temp_dir;
 use function unlink;
 
+use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_PRETTY_PRINT;
 use const JSON_THROW_ON_ERROR;
 
@@ -102,7 +103,7 @@ final readonly class AnalysisResultCache
         file_put_contents($this->path($key), json_encode([
             'metadata'   => $metadata,
             'violations' => $ruleViolationCollection->toArray(),
-        ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+        ], JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 
     public function clear(): void
@@ -248,7 +249,7 @@ final readonly class AnalysisResultCache
         file_put_contents($this->path($this->classNodesKey($file, $namespace)), json_encode([
             'metadata' => $this->fileMetadata($file, $namespace),
             'nodes'    => array_map($this->classNodeToArray(...), $classNodes),
-        ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+        ], JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 
     /**

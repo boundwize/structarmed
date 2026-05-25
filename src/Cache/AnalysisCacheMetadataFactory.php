@@ -13,6 +13,7 @@ use function hash_file;
 use function json_encode;
 use function sort;
 
+use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_THROW_ON_ERROR;
 
 final readonly class AnalysisCacheMetadataFactory
@@ -48,7 +49,7 @@ final readonly class AnalysisCacheMetadataFactory
             'configPath'                   => $metadata['configPath'] ?? null,
             'composerGeneratedVersionHash' => $metadata['composerGeneratedVersionHash'] ?? null,
             'scanPaths'                    => $metadata['scanPaths'] ?? [],
-        ], JSON_THROW_ON_ERROR));
+        ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 
     public function fileHash(string $path): string
@@ -64,7 +65,7 @@ final readonly class AnalysisCacheMetadataFactory
         return hash('xxh128', json_encode(array_map(static fn(string $file): array => [
             'file' => $file,
             'hash' => (string) hash_file('xxh128', $file),
-        ], $files), JSON_THROW_ON_ERROR));
+        ], $files), JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 
     public function composerGeneratedVersionHash(): string
@@ -76,6 +77,6 @@ final readonly class AnalysisCacheMetadataFactory
             ]
             : InstalledVersions::getRootPackage();
 
-        return hash('xxh128', json_encode($version, JSON_THROW_ON_ERROR));
+        return hash('xxh128', json_encode($version, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 }
