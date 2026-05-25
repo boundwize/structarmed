@@ -6,6 +6,14 @@ namespace Boundwize\StructArmed\Baseline;
 
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use PhpParser\Node;
+use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Scalar\Int_;
+use PhpParser\Node\Stmt\Return_;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitorAbstract;
+use PhpParser\ParserFactory;
+use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
 use function array_flip;
@@ -83,10 +91,77 @@ final readonly class Baseline
         $content = "<?php\n\n"
             . "declare(strict_types=1);\n\n"
             . 'return ' . var_export($violations, true) . ";\n";
+        $content = $this->prettyPrintContent($content);
 
         if (file_put_contents($path, $content) === false) {
             throw new RuntimeException(sprintf('Could not write baseline file [%s].', $baselinePath));
         }
+    }
+
+    private function prettyPrintContent(string $content): string
+    {
+        $statements = (new ParserFactory())->createForNewestSupportedVersion()->parse($content);
+
+        if ($statements === null) {
+            throw new RuntimeException('Could not parse generated baseline content.');
+        }
+
+        $statements = (new NodeTraverser(new class extends NodeVisitorAbstract {
+            public function enterNode(Node $node): null
+            {
+                if (! $node instanceof Array_) {
+                    return null;
+                }
+
+                $node->setAttribute('kind', Array_::KIND_SHORT);
+
+                if (! $this->isListArray($node)) {
+                    return null;
+                }
+
+                foreach ($node->items as $item) {
+                    $item->key = null;
+                }
+
+                return null;
+            }
+
+            private function isListArray(Array_ $array): bool
+            {
+                foreach ($array->items as $index => $item) {
+                    if (! $item->key instanceof Int_ || $item->key->value !== $index) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }))->traverse($statements);
+
+        foreach ($statements as $statement) {
+            if ($statement instanceof Return_ && $statement->expr instanceof Array_) {
+                return "<?php\n\n"
+                    . "declare(strict_types=1);\n\n"
+                    . 'return ' . $this->prettyPrintArray($statement->expr) . ";\n";
+            }
+        }
+
+        throw new RuntimeException('Generated baseline content must return an array.');
+    }
+
+    private function prettyPrintArray(Array_ $array): string
+    {
+        return (new class (['shortArraySyntax' => true]) extends Standard {
+            // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
+            protected function pExpr_Array(Array_ $node): string
+            {
+                if ($node->items === []) {
+                    return '[]';
+                }
+
+                return '[' . $this->pCommaSeparatedMultiline($node->items, true) . $this->nl . ']';
+            }
+        })->prettyPrintExpr($array);
     }
 
     /**
