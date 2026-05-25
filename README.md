@@ -402,5 +402,5 @@ StructArmed {version} — Architecture Enforcement
 ```
 
 > [!IMPORTANT]
-> Baseline entries are matched against future analysis results — existing violations stay quiet while new ones still fail the run.
+> Baseline entries are matched against future analysis results. Existing violations stay quiet while new ones still fail the run.
 > Treat the baseline as a migration aid for legacy findings, not a way to silence issues you can fix now.
