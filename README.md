@@ -390,7 +390,7 @@ return Architecture::define()
     ->withPreset(Preset::PSR4());
 ```
 
-Running `vendor/bin/structarmed analyse` will now pass:
+Running `vendor/bin/structarmed analyse` will now pass ✅:
 
 ```bash
 vendor/bin/structarmed analyse
