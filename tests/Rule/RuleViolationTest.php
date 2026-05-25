@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 
 use function iterator_to_array;
 use function json_decode;
+use function json_encode;
 
 #[CoversClass(RuleViolation::class)]
 #[CoversClass(RuleViolationCollection::class)]
@@ -63,6 +64,7 @@ final class RuleViolationTest extends TestCase
         $this->assertCount(2, $collection);
         $this->assertSame([$ruleViolation], $collection->forLayer('Domain'));
         $this->assertSame([$app], $collection->forRule('app.rule'));
+        $this->assertSame(json_encode($collection->toArray()), $collection->toJson());
         $this->assertSame($collection->toArray(), json_decode($collection->toJson(), true));
         $this->assertSame([$ruleViolation, $app], iterator_to_array($collection));
     }
