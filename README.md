@@ -390,6 +390,17 @@ return Architecture::define()
     ->withPreset(Preset::PSR4());
 ```
 
-Baseline entries are matched against future analysis results, so existing violations stay quiet while new violations still fail the run.
+Running `vendor/bin/structarmed analyse` will now pass ✅:
 
-Do not use a baseline to hide issues you can fix now; treat it as a migration aid for legacy findings that should be reduced over time.
+```bash
+vendor/bin/structarmed analyse
+
+StructArmed {version} — Architecture Enforcement
+=================================================
+
+✅  No violations found. (0.01s)
+```
+
+> [!IMPORTANT]
+> Baseline entries are matched against future analysis results, so existing violations stay quiet while new ones still fail the run.
+> Treat the baseline as a migration aid for legacy findings, not a way to silence issues you can fix now.
