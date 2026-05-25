@@ -6,9 +6,18 @@ namespace Boundwize\StructArmed\Baseline;
 
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use PhpParser\Node;
+use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Scalar\Int_;
+use PhpParser\Node\Stmt\Return_;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitorAbstract;
+use PhpParser\ParserFactory;
+use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
 use function array_flip;
+use function assert;
 use function dirname;
 use function file_exists;
 use function file_put_contents;
@@ -80,13 +89,78 @@ final readonly class Baseline
             ];
         }
 
-        $content = "<?php\n\n"
-            . "declare(strict_types=1);\n\n"
-            . 'return ' . var_export($violations, true) . ";\n";
+        $header  = "<?php\n\n"
+            . "declare(strict_types=1);\n\n";
+        $content = $header . 'return ' . var_export($violations, true) . ";\n";
+        $content = $this->prettyPrintContent($header, $content);
 
         if (file_put_contents($path, $content) === false) {
             throw new RuntimeException(sprintf('Could not write baseline file [%s].', $baselinePath));
         }
+    }
+
+    private function prettyPrintContent(string $header, string $content): string
+    {
+        $statements = (new ParserFactory())->createForNewestSupportedVersion()->parse($content) ?? [];
+
+        $statements = (new NodeTraverser(new class extends NodeVisitorAbstract {
+            public function enterNode(Node $node): ?Node
+            {
+                if (! $node instanceof Array_) {
+                    return null;
+                }
+
+                if (! $this->isListArray($node)) {
+                    return $node;
+                }
+
+                foreach ($node->items as $item) {
+                    $item->key = null;
+                }
+
+                return $node;
+            }
+
+            private function isListArray(Array_ $array): bool
+            {
+                foreach ($array->items as $index => $item) {
+                    if (! $item->key instanceof Int_ || $item->key->value !== $index) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }))->traverse($statements);
+
+        $array = null;
+
+        foreach ($statements as $statement) {
+            if ($statement instanceof Return_ && $statement->expr instanceof Array_) {
+                $array = $statement->expr;
+
+                break;
+            }
+        }
+
+        assert($array instanceof Array_);
+
+        return $header . 'return ' . $this->prettyPrintArray($array) . ";\n";
+    }
+
+    private function prettyPrintArray(Array_ $array): string
+    {
+        return (new class () extends Standard {
+            // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
+            protected function pExpr_Array(Array_ $node): string
+            {
+                if ($node->items === []) {
+                    return '[]';
+                }
+
+                return '[' . $this->pCommaSeparatedMultiline($node->items, true) . $this->nl . ']';
+            }
+        })->prettyPrintExpr($array);
     }
 
     /**

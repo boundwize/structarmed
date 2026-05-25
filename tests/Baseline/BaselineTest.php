@@ -89,6 +89,41 @@ final class BaselineTest extends TestCase
         }
     }
 
+    public function testGenerateWritesPrettyPrintedShortArraySyntax(): void
+    {
+        $basePath                = $this->createTempDirectory();
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', '<?php');
+
+        $ruleViolationCollection->add($this->violation($basePath . '/src/Foo.php'));
+
+        try {
+            (new Baseline())->generate($ruleViolationCollection, 'baseline.php', $basePath);
+
+            $this->assertSame(<<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+return [
+    [
+        'rule' => 'source.must_be_final',
+        'message' => 'Foo must be final',
+        'file' => 'src/Foo.php',
+        'line' => 1,
+        'class' => 'App\Foo',
+        'layer' => 'Source',
+    ],
+];
+
+PHP, file_get_contents($basePath . '/baseline.php'));
+        } finally {
+            $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src']);
+        }
+    }
+
     public function testGenerateNormalisesBasePathViolationToEmptyFile(): void
     {
         $basePath                = $this->createTempDirectory();
