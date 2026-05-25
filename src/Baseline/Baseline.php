@@ -89,7 +89,7 @@ final readonly class Baseline
             ];
         }
 
-        $header = "<?php\n\n"
+        $header  = "<?php\n\n"
             . "declare(strict_types=1);\n\n";
         $content = $header . 'return ' . var_export($violations, true) . ";\n";
         $content = $this->prettyPrintContent($header, $content);
