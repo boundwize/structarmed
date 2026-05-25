@@ -64,7 +64,7 @@ final class ClassCollector extends NodeVisitorAbstract
         'GLOBALS',
     ];
 
-    /** @var ClassNode[] */
+    /** @var list<ClassNode> */
     private array $nodes = [];
 
     private string $currentFile = '';
@@ -91,7 +91,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->fileFunctions  = [];
     }
 
-    /** @return ClassNode[] */
+    /** @return list<ClassNode> */
     public function getNodes(): array
     {
         return $this->nodes;
