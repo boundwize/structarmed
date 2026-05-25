@@ -110,8 +110,6 @@ final readonly class Baseline
                     return null;
                 }
 
-                $node->setAttribute('kind', Array_::KIND_SHORT);
-
                 if (! $this->isListArray($node)) {
                     return $node;
                 }
@@ -152,7 +150,7 @@ final readonly class Baseline
 
     private function prettyPrintArray(Array_ $array): string
     {
-        return (new class (['shortArraySyntax' => true]) extends Standard {
+        return (new class () extends Standard {
             // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
             protected function pExpr_Array(Array_ $node): string
             {
