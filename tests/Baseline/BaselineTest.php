@@ -216,6 +216,48 @@ PHP);
         }
     }
 
+    public function testFilterDistinguishesInvalidUtf8Signatures(): void
+    {
+        $basePath                = $this->createTempDirectory();
+        $baseline                = $basePath . '/baseline.php';
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation($basePath . '/src/Foo.php', "Foo \xB1", 'App\Foo'));
+        $ruleViolationCollection->add($this->violation($basePath . '/src/Bar.php', "Bar \xB1", 'App\Bar'));
+
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', '<?php');
+        file_put_contents($basePath . '/src/Bar.php', '<?php');
+
+        try {
+            file_put_contents($baseline, <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+return [
+    [
+        'rule' => 'source.must_be_final',
+        'message' => "Foo \xB1",
+        'file' => 'src/Foo.php',
+        'line' => 1,
+        'class' => 'App\Foo',
+        'layer' => 'Source',
+    ],
+];
+PHP);
+
+            $filtered = (new Baseline())->filter($ruleViolationCollection, 'baseline.php', $basePath);
+
+            $this->assertCount(1, $filtered);
+
+            foreach ($filtered as $violation) {
+                $this->assertSame("Bar \xB1", $violation->message);
+            }
+        } finally {
+            $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src/Bar.php', 'src']);
+        }
+    }
+
     private function createTempDirectory(): string
     {
         $basePath = sys_get_temp_dir() . '/structarmed-baseline-' . bin2hex(random_bytes(6));

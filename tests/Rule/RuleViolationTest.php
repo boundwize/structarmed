@@ -67,6 +67,26 @@ final class RuleViolationTest extends TestCase
         $this->assertSame([$ruleViolation, $app], iterator_to_array($collection));
     }
 
+    public function testCollectionSerializesInvalidUtf8Text(): void
+    {
+        $collection = new RuleViolationCollection();
+        $collection->add(new RuleViolation(
+            message:   "Invalid byte \xB1",
+            file:      '/src/File.php',
+            line:      7,
+            className: 'App\\Domain\\File',
+            layer:     'Domain',
+            ruleKey:   'domain.rule',
+        ));
+
+        $data = json_decode($collection->toJson(), true);
+
+        $this->assertIsArray($data);
+        $this->assertIsArray($data[0]);
+        $this->assertIsString($data[0]['message']);
+        $this->assertStringContainsString("\xEF\xBF\xBD", $data[0]['message']);
+    }
+
     private function violation(string $ruleKey, string $layer): RuleViolation
     {
         return new RuleViolation(
