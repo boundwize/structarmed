@@ -17,6 +17,7 @@ use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
 use function array_flip;
+use function assert;
 use function dirname;
 use function file_exists;
 use function file_put_contents;
@@ -100,11 +101,7 @@ final readonly class Baseline
 
     private function prettyPrintContent(string $content): string
     {
-        $statements = (new ParserFactory())->createForNewestSupportedVersion()->parse($content);
-
-        if ($statements === null) {
-            throw new RuntimeException('Could not parse generated baseline content.');
-        }
+        $statements = (new ParserFactory())->createForNewestSupportedVersion()->parse($content) ?? [];
 
         $statements = (new NodeTraverser(new class extends NodeVisitorAbstract {
             public function enterNode(Node $node): ?Node
@@ -138,15 +135,21 @@ final readonly class Baseline
             }
         }))->traverse($statements);
 
+        $array = null;
+
         foreach ($statements as $statement) {
             if ($statement instanceof Return_ && $statement->expr instanceof Array_) {
-                return "<?php\n\n"
-                    . "declare(strict_types=1);\n\n"
-                    . 'return ' . $this->prettyPrintArray($statement->expr) . ";\n";
+                $array = $statement->expr;
+
+                break;
             }
         }
 
-        throw new RuntimeException('Generated baseline content must return an array.');
+        assert($array instanceof Array_);
+
+        return "<?php\n\n"
+            . "declare(strict_types=1);\n\n"
+            . 'return ' . $this->prettyPrintArray($array) . ";\n";
     }
 
     private function prettyPrintArray(Array_ $array): string
