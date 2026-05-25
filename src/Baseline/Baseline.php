@@ -89,17 +89,17 @@ final readonly class Baseline
             ];
         }
 
-        $content = "<?php\n\n"
-            . "declare(strict_types=1);\n\n"
-            . 'return ' . var_export($violations, true) . ";\n";
-        $content = $this->prettyPrintContent($content);
+        $header = "<?php\n\n"
+            . "declare(strict_types=1);\n\n";
+        $content = $header . 'return ' . var_export($violations, true) . ";\n";
+        $content = $this->prettyPrintContent($header, $content);
 
         if (file_put_contents($path, $content) === false) {
             throw new RuntimeException(sprintf('Could not write baseline file [%s].', $baselinePath));
         }
     }
 
-    private function prettyPrintContent(string $content): string
+    private function prettyPrintContent(string $header, string $content): string
     {
         $statements = (new ParserFactory())->createForNewestSupportedVersion()->parse($content) ?? [];
 
@@ -147,9 +147,7 @@ final readonly class Baseline
 
         assert($array instanceof Array_);
 
-        return "<?php\n\n"
-            . "declare(strict_types=1);\n\n"
-            . 'return ' . $this->prettyPrintArray($array) . ";\n";
+        return $header . 'return ' . $this->prettyPrintArray($array) . ";\n";
     }
 
     private function prettyPrintArray(Array_ $array): string
