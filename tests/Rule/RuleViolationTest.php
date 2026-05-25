@@ -69,8 +69,8 @@ final class RuleViolationTest extends TestCase
 
     public function testCollectionSerializesInvalidUtf8Text(): void
     {
-        $collection = new RuleViolationCollection();
-        $collection->add(new RuleViolation(
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add(new RuleViolation(
             message:   "Invalid byte \xB1",
             file:      '/src/File.php',
             line:      7,
@@ -79,7 +79,7 @@ final class RuleViolationTest extends TestCase
             ruleKey:   'domain.rule',
         ));
 
-        $data = json_decode($collection->toJson(), true);
+        $data = json_decode($ruleViolationCollection->toJson(), true);
 
         $this->assertIsArray($data);
         $this->assertIsArray($data[0]);
