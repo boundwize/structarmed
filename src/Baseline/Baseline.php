@@ -107,7 +107,7 @@ final readonly class Baseline
         }
 
         $statements = (new NodeTraverser(new class extends NodeVisitorAbstract {
-            public function enterNode(Node $node): null
+            public function enterNode(Node $node): ?Node
             {
                 if (! $node instanceof Array_) {
                     return null;
@@ -116,14 +116,14 @@ final readonly class Baseline
                 $node->setAttribute('kind', Array_::KIND_SHORT);
 
                 if (! $this->isListArray($node)) {
-                    return null;
+                    return $node;
                 }
 
                 foreach ($node->items as $item) {
                     $item->key = null;
                 }
 
-                return null;
+                return $node;
             }
 
             private function isListArray(Array_ $array): bool
