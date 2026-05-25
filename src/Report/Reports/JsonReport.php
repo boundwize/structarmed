@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
 use function json_encode;
 
+use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_PRETTY_PRINT;
 
 final class JsonReport implements ReportInterface
@@ -20,6 +21,6 @@ final class JsonReport implements ReportInterface
             'total'      => $ruleViolationCollection->count(),
             'passed'     => $ruleViolationCollection->isEmpty(),
             'elapsed'    => $elapsedSeconds,
-        ], JSON_PRETTY_PRINT) . "\n";
+        ], JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE) . "\n";
     }
 }

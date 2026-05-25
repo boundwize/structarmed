@@ -66,6 +66,27 @@ final class ReportTest extends TestCase
         $this->assertEqualsWithDelta(1.23, $data['elapsed'], PHP_FLOAT_EPSILON);
     }
 
+    public function testJsonReportRendersInvalidUtf8Text(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add(new RuleViolation(
+            message:   "Invalid byte \xB1",
+            file:      '/src/Order.php',
+            line:      10,
+            className: 'App\\Domain\\Order',
+            layer:     'Domain',
+            ruleKey:   'rule.key',
+        ));
+
+        $data = json_decode((new JsonReport())->render($ruleViolationCollection, 1.23), true);
+
+        $this->assertIsArray($data);
+        $this->assertIsArray($data['violations']);
+        $this->assertIsArray($data['violations'][0]);
+        $this->assertIsString($data['violations'][0]['message']);
+        $this->assertStringContainsString("\xEF\xBF\xBD", $data['violations'][0]['message']);
+    }
+
     private function violation(): RuleViolation
     {
         return new RuleViolation(

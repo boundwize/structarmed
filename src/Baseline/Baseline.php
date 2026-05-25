@@ -27,6 +27,7 @@ use function strlen;
 use function substr;
 use function var_export;
 
+use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
 
 final readonly class Baseline
@@ -130,7 +131,7 @@ final readonly class Baseline
             'line'    => $violation['line'] ?? 0,
             'class'   => $this->stringValue($violation['class'] ?? null),
             'layer'   => $violation['layer'] ?? null,
-        ], JSON_UNESCAPED_SLASHES);
+        ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     private function stringValue(mixed $value): string
@@ -151,7 +152,7 @@ final readonly class Baseline
             'line'    => $ruleViolation->line,
             'class'   => $ruleViolation->className,
             'layer'   => $ruleViolation->layer,
-        ], JSON_UNESCAPED_SLASHES);
+        ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     private function resolvePath(string $path, string $basePath): string
