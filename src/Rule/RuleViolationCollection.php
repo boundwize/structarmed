@@ -16,7 +16,6 @@ use function count;
 use function json_encode;
 
 use const JSON_INVALID_UTF8_SUBSTITUTE;
-use const JSON_PRETTY_PRINT;
 
 /**
  * @implements IteratorAggregate<int, RuleViolation>
@@ -91,6 +90,6 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
 
     public function toJson(): string
     {
-        return (string) json_encode($this->toArray(), JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
+        return (string) json_encode($this->toArray(), JSON_INVALID_UTF8_SUBSTITUTE);
     }
 }

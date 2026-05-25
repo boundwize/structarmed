@@ -73,6 +73,13 @@ final class AnalysisResultCacheTest extends TestCase
             $analysisResultCache->store('key', $metadata, $ruleViolationCollection);
             $loaded = $analysisResultCache->load('key', $metadata);
 
+            $this->assertSame(
+                json_encode([
+                    'metadata'   => $metadata,
+                    'violations' => $ruleViolationCollection->toArray(),
+                ], JSON_THROW_ON_ERROR),
+                file_get_contents($cacheDirectory . '/key.json')
+            );
             $this->assertInstanceOf(RuleViolationCollection::class, $loaded);
             $this->assertSame($ruleViolationCollection->toArray(), $loaded->toArray());
         } finally {
@@ -513,6 +520,10 @@ final class AnalysisResultCacheTest extends TestCase
 
             $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
 
+            $this->assertStringNotContainsString(
+                "\n",
+                (string) file_get_contents($this->firstJsonFile($cacheDirectory))
+            );
             $this->assertEquals($classNodes, $loaded);
         } finally {
             if (file_exists($sourceFile)) {
