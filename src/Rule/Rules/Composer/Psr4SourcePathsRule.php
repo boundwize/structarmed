@@ -51,6 +51,7 @@ final readonly class Psr4SourcePathsRule implements MultipleProjectRuleViolation
 
     /**
      * @return list<RuleViolation>
+     * @param string[] $skipPaths
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
