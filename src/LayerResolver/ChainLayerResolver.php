@@ -72,9 +72,9 @@ final readonly class ChainLayerResolver implements LayerResolverInterface
                 }
             }
 
-            foreach ($resolver->resolveAll($className, $filePath) as $layer) {
-                if (! in_array($layer, $matchedLayers, true)) {
-                    $matchedLayers[] = $layer;
+            foreach ($resolver->resolveAll($className, $filePath) as $singleLayer) {
+                if (! in_array($singleLayer, $matchedLayers, true)) {
+                    $matchedLayers[] = $singleLayer;
                 }
             }
         }
