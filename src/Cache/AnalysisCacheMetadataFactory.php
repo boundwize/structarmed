@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cache;
 
+use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Version;
 use Composer\InstalledVersions;
 
 use function array_map;
+use function file_exists;
 use function hash;
 use function hash_file;
+use function is_dir;
 use function json_encode;
+use function ltrim;
+use function rtrim;
 use function sort;
 
 use const JSON_INVALID_UTF8_SUBSTITUTE;
@@ -18,6 +23,13 @@ use const JSON_THROW_ON_ERROR;
 
 final readonly class AnalysisCacheMetadataFactory
 {
+    private const METADATA_VERSION = 2;
+
+    public function __construct(
+        private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
+    ) {
+    }
+
     /**
      * @param list<string> $scanPaths
      * @param list<string> $files
@@ -28,10 +40,12 @@ final readonly class AnalysisCacheMetadataFactory
         sort($files);
 
         return [
-            'version'                      => 1,
+            'version'                      => self::METADATA_VERSION,
             'basePath'                     => $basePath,
             'configPath'                   => $configPath,
             'configHash'                   => $this->fileHash($configPath),
+            'composerJsonHash'             => $this->optionalFileHash(rtrim($basePath, '/') . '/composer.json'),
+            'composerPsr4DirectoriesHash'  => $this->composerPsr4DirectoriesHash($basePath),
             'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash(),
             'scanPaths'                    => $scanPaths,
             'filesHash'                    => $this->filesHash($files),
@@ -47,6 +61,8 @@ final readonly class AnalysisCacheMetadataFactory
             'version'                      => $metadata['version'] ?? null,
             'basePath'                     => $metadata['basePath'] ?? null,
             'configPath'                   => $metadata['configPath'] ?? null,
+            'composerJsonHash'             => $metadata['composerJsonHash'] ?? null,
+            'composerPsr4DirectoriesHash'  => $metadata['composerPsr4DirectoriesHash'] ?? null,
             'composerGeneratedVersionHash' => $metadata['composerGeneratedVersionHash'] ?? null,
             'scanPaths'                    => $metadata['scanPaths'] ?? [],
         ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
@@ -55,6 +71,30 @@ final readonly class AnalysisCacheMetadataFactory
     public function fileHash(string $path): string
     {
         return (string) hash_file('xxh128', $path);
+    }
+
+    private function optionalFileHash(string $path): ?string
+    {
+        return file_exists($path) ? $this->fileHash($path) : null;
+    }
+
+    private function composerPsr4DirectoriesHash(string $basePath): string
+    {
+        $directories = [];
+
+        foreach ($this->psr4PathResolver->namespacePaths($basePath) as $namespace => $paths) {
+            foreach ($paths as $path) {
+                $directories[] = [
+                    'namespace'   => $namespace,
+                    'path'        => $path,
+                    'isDirectory' => is_dir(rtrim($basePath, '/') . '/' . ltrim($path, '/')),
+                ];
+            }
+        }
+
+        sort($directories);
+
+        return hash('xxh128', json_encode($directories, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 
     /**

@@ -1465,6 +1465,8 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertSame($config, $metadata['configPath']);
             $this->assertSame(['src'], $metadata['scanPaths']);
             $this->assertIsString($metadata['configHash']);
+            $this->assertNull($metadata['composerJsonHash']);
+            $this->assertIsString($metadata['composerPsr4DirectoriesHash']);
             $this->assertIsString($metadata['composerGeneratedVersionHash']);
             $this->assertIsString($metadata['filesHash']);
             $this->assertSame(
@@ -1498,6 +1500,109 @@ final class AnalysisResultCacheTest extends TestCase
             '/^[a-f0-9]{32}$/',
             (new AnalysisCacheMetadataFactory())->key($metadata)
         );
+    }
+
+    public function testMetadataChangesWhenComposerJsonChanges(): void
+    {
+        $directory = $this->createTempDirectory();
+        $config    = $directory . '/structarmed.php';
+        $source    = $directory . '/Example.php';
+        $composer  = $directory . '/composer.json';
+
+        file_put_contents($config, '<?php return null;');
+        file_put_contents($source, '<?php class Example {}');
+        file_put_contents($composer, '{"autoload":{"psr-4":{"App\\\\":"src/"}}}');
+
+        try {
+            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+            $metadataBefore               = $analysisCacheMetadataFactory->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+
+            file_put_contents($composer, '{"autoload":{"psr-4":{"App\\\\":"app/"}}}');
+
+            $metadataAfter = $analysisCacheMetadataFactory->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+
+            $this->assertNotSame($metadataBefore['composerJsonHash'], $metadataAfter['composerJsonHash']);
+            $this->assertNotSame(
+                $analysisCacheMetadataFactory->key($metadataBefore),
+                $analysisCacheMetadataFactory->key($metadataAfter)
+            );
+        } finally {
+            foreach ([$config, $source, $composer] as $file) {
+                if (file_exists($file)) {
+                    unlink($file);
+                }
+            }
+
+            $this->removeTempDirectory($directory);
+        }
+    }
+
+    public function testMetadataChangesWhenComposerPsr4DirectoryExistenceChanges(): void
+    {
+        $directory = $this->createTempDirectory();
+        $config    = $directory . '/structarmed.php';
+        $source    = $directory . '/Example.php';
+        $composer  = $directory . '/composer.json';
+
+        file_put_contents($config, '<?php return null;');
+        file_put_contents($source, '<?php class Example {}');
+        file_put_contents($composer, '{"autoload":{"psr-4":{"View\\\\":"resources/view/"}}}');
+
+        try {
+            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+            $metadataBefore               = $analysisCacheMetadataFactory->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+
+            mkdir($directory . '/resources');
+            mkdir($directory . '/resources/view');
+
+            $metadataAfter = $analysisCacheMetadataFactory->metadata(
+                $directory,
+                $config,
+                ['src'],
+                [$source]
+            );
+
+            $this->assertSame($metadataBefore['composerJsonHash'], $metadataAfter['composerJsonHash']);
+            $this->assertNotSame(
+                $metadataBefore['composerPsr4DirectoriesHash'],
+                $metadataAfter['composerPsr4DirectoriesHash']
+            );
+            $this->assertNotSame(
+                $analysisCacheMetadataFactory->key($metadataBefore),
+                $analysisCacheMetadataFactory->key($metadataAfter)
+            );
+        } finally {
+            foreach ([$config, $source, $composer] as $file) {
+                if (file_exists($file)) {
+                    unlink($file);
+                }
+            }
+
+            if (is_dir($directory . '/resources/view')) {
+                rmdir($directory . '/resources/view');
+            }
+
+            if (is_dir($directory . '/resources')) {
+                rmdir($directory . '/resources');
+            }
+
+            $this->removeTempDirectory($directory);
+        }
     }
 
     public function testMetadataIncludesComposerGeneratedVersionHash(): void

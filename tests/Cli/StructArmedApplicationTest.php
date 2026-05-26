@@ -383,6 +383,68 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandInvalidatesCacheWhenComposerPsr4DirectoryIsRemoved(): void
+    {
+        $basePath = $this->createProjectDirectory();
+        mkdir($basePath . '/resources');
+        mkdir($basePath . '/resources/view');
+
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/",
+            "view\\": "resources/view"
+        }
+    }
+}
+JSON);
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+    ->withPreset(Preset::PSR4());
+PHP);
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            rmdir($basePath . '/resources/view');
+
+            [$secondExitCode, $secondOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertStringContainsString('No violations found', $firstOutput);
+            $this->assertSame(1, $secondExitCode, $secondOutput);
+            $this->assertStringContainsString('PSR-4 directory path(s) [view\\ => resources/view]', $secondOutput);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandOnlyParsesNewFilesAfterCacheWarmup(): void
     {
         $basePath = $this->createProjectDirectory();
@@ -970,6 +1032,10 @@ PHP;
             unlink($basePath . '/structarmed-baseline.php');
         }
 
+        if (file_exists($basePath . '/composer.json')) {
+            unlink($basePath . '/composer.json');
+        }
+
         foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {
             unlink($cacheFile);
         }
@@ -984,6 +1050,14 @@ PHP;
 
         if (is_dir($basePath . '/src')) {
             rmdir($basePath . '/src');
+        }
+
+        if (is_dir($basePath . '/resources/view')) {
+            rmdir($basePath . '/resources/view');
+        }
+
+        if (is_dir($basePath . '/resources')) {
+            rmdir($basePath . '/resources');
         }
 
         if (is_dir($basePath . '/var/cache/structarmed')) {
