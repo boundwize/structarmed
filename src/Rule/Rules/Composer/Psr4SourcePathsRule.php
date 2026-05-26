@@ -10,9 +10,13 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function array_map;
+use function array_unique;
+use function array_values;
 use function file_exists;
 use function implode;
 use function in_array;
+use function is_dir;
+use function ltrim;
 use function rtrim;
 use function sprintf;
 use function str_replace;
@@ -61,28 +65,41 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
             );
         }
 
-        if ($this->sourcePaths === null) {
-            return null;
-        }
-
         $autoloadPaths = $this->psr4PathResolver->paths($basePath);
-        $missingPaths  = [];
+        $messages      = [];
 
-        foreach ($this->normalisePaths($this->sourcePaths) as $sourcePath) {
-            if (! in_array($sourcePath, $autoloadPaths, true)) {
-                $missingPaths[] = $sourcePath;
+        if ($this->sourcePaths !== null) {
+            $missingPaths = [];
+
+            foreach ($this->normalisePaths($this->sourcePaths) as $sourcePath) {
+                if (! in_array($sourcePath, $autoloadPaths, true)) {
+                    $missingPaths[] = $sourcePath;
+                }
+            }
+
+            if ($missingPaths !== []) {
+                $messages[] = sprintf(
+                    'PSR-4 source path(s) [%s] must exist in composer.json autoload or autoload-dev',
+                    implode(', ', $missingPaths)
+                );
             }
         }
 
-        if ($missingPaths === []) {
+        $missingDirectories = $this->missingComposerDirectories($basePath);
+
+        if ($missingDirectories !== []) {
+            $messages[] = sprintf(
+                'PSR-4 directory path(s) [%s] configured in composer.json autoload or autoload-dev must exist',
+                implode(', ', $missingDirectories)
+            );
+        }
+
+        if ($messages === []) {
             return null;
         }
 
         return $this->violation(
-            sprintf(
-                'PSR-4 source path(s) [%s] must exist in composer.json autoload or autoload-dev',
-                implode(', ', $missingPaths)
-            ),
+            implode('; ', $messages),
             $composerFile
         );
     }
@@ -97,6 +114,26 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
             static fn(string $path): string => rtrim(str_replace('\\', '/', trim($path)), '/'),
             $paths
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function missingComposerDirectories(string $basePath): array
+    {
+        $missingDirectories = [];
+
+        foreach ($this->psr4PathResolver->namespacePaths($basePath) as $namespace => $paths) {
+            foreach ($paths as $path) {
+                if (is_dir(rtrim($basePath, '/') . '/' . ltrim($path, '/'))) {
+                    continue;
+                }
+
+                $missingDirectories[] = $namespace === '' ? $path : $namespace . ' => ' . $path;
+            }
+        }
+
+        return array_values(array_unique($missingDirectories));
     }
 
     private function violation(string $message, string $file): RuleViolation

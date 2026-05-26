@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
+use function mkdir;
 
 #[CoversClass(Psr4SourcePathsRule::class)]
 final class Psr4SourcePathsRuleTest extends TestCase
@@ -33,7 +34,7 @@ final class Psr4SourcePathsRuleTest extends TestCase
         }
     }
 }
-JSON);
+JSON, ['src', 'tests']);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src', 'tests']);
 
@@ -61,6 +62,27 @@ JSON);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('tests', $violation->message);
+    }
+
+    public function testFailsWhenComposerPsr4DirectoryDoesNotExist(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "view\\": "directory/not/exists"
+        }
+    }
+}
+JSON);
+
+        $psr4SourcePathsRule = new Psr4SourcePathsRule(null);
+
+        $violation = $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define());
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('view\\ => directory/not/exists', $violation->message);
+        $this->assertStringContainsString('must exist', $violation->message);
     }
 
     public function testFailsWhenComposerJsonIsMissing(): void
@@ -98,7 +120,7 @@ JSON);
         }
     }
 }
-JSON);
+JSON, ['src', 'tests']);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/', 'tests/']);
 
@@ -121,7 +143,7 @@ JSON);
         }
     }
 }
-JSON);
+JSON, ['tests']);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['tests/']);
 
@@ -146,7 +168,7 @@ JSON);
         }
     }
 }
-JSON);
+JSON, ['app', 'tests', 'specs']);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(null);
 
@@ -164,10 +186,17 @@ JSON);
         $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($this->makeTempDir()));
     }
 
-    private function makeTempProject(string $composerJson): string
+    /**
+     * @param list<string> $directories
+     */
+    private function makeTempProject(string $composerJson, array $directories = []): string
     {
         $basePath = $this->makeTempDir();
         file_put_contents($basePath . '/composer.json', $composerJson);
+
+        foreach ($directories as $directory) {
+            mkdir($basePath . '/' . $directory, 0777, true);
+        }
 
         return $basePath;
     }
