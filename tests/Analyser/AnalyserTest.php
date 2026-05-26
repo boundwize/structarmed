@@ -813,6 +813,45 @@ final class AnalyserTest extends TestCase
                 PHP,
             'App\Database\Support\query',
         ];
+
+        yield 'grouped constant fetch' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use const App\Database\Config\{DEFAULT_TIMEOUT, RETRY_LIMIT};
+
+                final class Request
+                {
+                    public function timeout(): int
+                    {
+                        return DEFAULT_TIMEOUT + RETRY_LIMIT;
+                    }
+                }
+                PHP,
+            'App\Database\Config\DEFAULT_TIMEOUT',
+        ];
+
+        yield 'grouped function call' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use function App\Database\Support\{query, trace};
+
+                final class Request
+                {
+                    public function run(): void
+                    {
+                        query();
+                        trace();
+                    }
+                }
+                PHP,
+            'App\Database\Support\query',
+        ];
     }
 
     #[DataProvider('importedSymbolDependencyProvider')]
