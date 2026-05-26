@@ -21,6 +21,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function array_map;
+use function count;
 use function dirname;
 use function file_put_contents;
 use function is_dir;
@@ -772,7 +773,7 @@ final class AnalyserTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{string, list<string>}>
      */
     public static function importedSymbolDependencyProvider(): iterable
     {
@@ -792,7 +793,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'App\Database\Config\DEFAULT_TIMEOUT',
+            ['App\Database\Config\DEFAULT_TIMEOUT'],
         ];
 
         yield 'function call' => [
@@ -811,7 +812,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'App\Database\Support\query',
+            ['App\Database\Support\query'],
         ];
 
         yield 'grouped constant fetch' => [
@@ -830,7 +831,10 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'App\Database\Config\DEFAULT_TIMEOUT',
+            [
+                'App\Database\Config\DEFAULT_TIMEOUT',
+                'App\Database\Config\RETRY_LIMIT',
+            ],
         ];
 
         yield 'grouped function call' => [
@@ -850,14 +854,20 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'App\Database\Support\query',
+            [
+                'App\Database\Support\query',
+                'App\Database\Support\trace',
+            ],
         ];
     }
 
+    /**
+     * @param list<string> $dependencies
+     */
     #[DataProvider('importedSymbolDependencyProvider')]
     public function testAnalyserRulesetTreatsImportedConstantsAndFunctionsAsDependencies(
         string $sourceCode,
-        string $dependency
+        array $dependencies
     ): void {
         $basePath = $this->makeTempProject([
             'src/HTTP/Request.php' => $sourceCode,
@@ -874,9 +884,12 @@ final class AnalyserTest extends TestCase
 
         $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
 
-        $this->assertCount(1, $violations);
-        $this->assertStringContainsString($dependency, $violations[0]->message);
-        $this->assertStringContainsString('Database', $violations[0]->message);
+        $this->assertCount(count($dependencies), $violations);
+
+        foreach ($dependencies as $index => $dependency) {
+            $this->assertStringContainsString($dependency, $violations[$index]->message);
+            $this->assertStringContainsString('Database', $violations[$index]->message);
+        }
     }
 
     public function testAnalyserRulesetAllowsListedLayerDependency(): void
