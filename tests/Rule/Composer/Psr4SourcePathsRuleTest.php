@@ -70,7 +70,8 @@ JSON);
 {
     "autoload": {
         "psr-4": {
-            "view\\": "directory/not/exists"
+            "view\\": "directory/not/exists",
+            "view2\\": "directory/not/exists2"
         }
     }
 }
@@ -83,6 +84,14 @@ JSON);
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('view\\ => directory/not/exists', $violation->message);
         $this->assertStringContainsString('must exist', $violation->message);
+
+        $violations = $psr4SourcePathsRule->evaluateProjectAll($basePath, Architecture::define());
+
+        $this->assertCount(2, $violations);
+        $this->assertStringContainsString('view\\ => directory/not/exists', $violations[0]->message);
+        $this->assertStringContainsString('view2\\ => directory/not/exists2', $violations[1]->message);
+        $this->assertStringNotContainsString('directory/not/exists2', $violations[0]->message);
+        $this->assertStringNotContainsString('directory/not/exists, view2\\', $violations[0]->message);
     }
 
     public function testFailsWhenComposerJsonIsMissing(): void

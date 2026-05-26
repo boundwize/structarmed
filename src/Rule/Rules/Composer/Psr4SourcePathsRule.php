@@ -6,14 +6,13 @@ namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
-use Boundwize\StructArmed\Rule\ProjectRuleInterface;
+use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function array_map;
 use function array_unique;
 use function array_values;
 use function file_exists;
-use function implode;
 use function in_array;
 use function is_dir;
 use function ltrim;
@@ -22,7 +21,7 @@ use function sprintf;
 use function str_replace;
 use function trim;
 
-final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
+final readonly class Psr4SourcePathsRule implements MultipleProjectRuleViolationInterface
 {
     /**
      * @param list<string> $sourcePaths
@@ -47,26 +46,38 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
+        return $this->evaluateProjectAll($basePath, $architecture, $skipPaths)[0] ?? null;
+    }
+
+    /**
+     * @return list<RuleViolation>
+     */
+    public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
+    {
         $composerFile = rtrim($basePath, '/') . '/composer.json';
 
         if (! file_exists($composerFile)) {
-            return $this->violation(
-                'composer.json was not found',
-                $composerFile
-            );
+            return [
+                $this->violation(
+                    'composer.json was not found',
+                    $composerFile
+                ),
+            ];
         }
 
         $composer = $this->psr4PathResolver->composerConfig($basePath);
 
         if ($composer === null) {
-            return $this->violation(
-                'composer.json is not valid JSON',
-                $composerFile
-            );
+            return [
+                $this->violation(
+                    'composer.json is not valid JSON',
+                    $composerFile
+                ),
+            ];
         }
 
         $autoloadPaths = $this->psr4PathResolver->paths($basePath);
-        $messages      = [];
+        $violations    = [];
 
         if ($this->sourcePaths !== null) {
             $missingPaths = [];
@@ -77,31 +88,28 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
                 }
             }
 
-            if ($missingPaths !== []) {
-                $messages[] = sprintf(
-                    'PSR-4 source path(s) [%s] must exist in composer.json autoload or autoload-dev',
-                    implode(', ', $missingPaths)
+            foreach (array_values(array_unique($missingPaths)) as $missingPath) {
+                $violations[] = $this->violation(
+                    sprintf(
+                        'PSR-4 source path [%s] must exist in composer.json autoload or autoload-dev',
+                        $missingPath
+                    ),
+                    $composerFile
                 );
             }
         }
 
-        $missingDirectories = $this->missingComposerDirectories($basePath);
-
-        if ($missingDirectories !== []) {
-            $messages[] = sprintf(
-                'PSR-4 directory path(s) [%s] configured in composer.json autoload or autoload-dev must exist',
-                implode(', ', $missingDirectories)
+        foreach ($this->missingComposerDirectories($basePath) as $missingDirectory) {
+            $violations[] = $this->violation(
+                sprintf(
+                    'PSR-4 directory path [%s] configured in composer.json autoload or autoload-dev must exist',
+                    $missingDirectory
+                ),
+                $composerFile
             );
         }
 
-        if ($messages === []) {
-            return null;
-        }
-
-        return $this->violation(
-            implode('; ', $messages),
-            $composerFile
-        );
+        return $violations;
     }
 
     /**

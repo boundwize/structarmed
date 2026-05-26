@@ -439,7 +439,7 @@ PHP);
             $this->assertSame(0, $firstExitCode, $firstOutput);
             $this->assertStringContainsString('No violations found', $firstOutput);
             $this->assertSame(1, $secondExitCode, $secondOutput);
-            $this->assertStringContainsString('PSR-4 directory path(s) [view\\ => resources/view]', $secondOutput);
+            $this->assertStringContainsString('PSR-4 directory path [view\\ => resources/view]', $secondOutput);
         } finally {
             $this->removeTempDirectory($basePath);
         }
