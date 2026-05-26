@@ -30,13 +30,14 @@ use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\For_;
 use PhpParser\Node\Stmt\Foreach_;
 use PhpParser\Node\Stmt\Function_;
+use PhpParser\Node\Stmt\GroupUse;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Interface_;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\Node\Stmt\TraitUse;
+use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
-use PhpParser\Node\UseItem;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
@@ -99,8 +100,18 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function enterNode(Node $node): null
     {
-        if ($node instanceof UseItem) {
-            $this->fileUses[] = $node->name->toString();
+        if ($node instanceof Use_) {
+            foreach ($node->uses as $use) {
+                $this->fileUses[] = $use->name->toString();
+            }
+        }
+
+        if ($node instanceof GroupUse) {
+            $prefix = $node->prefix->toString();
+
+            foreach ($node->uses as $use) {
+                $this->fileUses[] = $prefix . '\\' . $use->name->toString();
+            }
         }
 
         if ($node instanceof Function_ && isset($node->namespacedName)) {

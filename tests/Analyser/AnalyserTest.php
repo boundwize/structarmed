@@ -17,9 +17,11 @@ use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function array_map;
+use function count;
 use function dirname;
 use function file_put_contents;
 use function is_dir;
@@ -768,6 +770,126 @@ final class AnalyserTest extends TestCase
         $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
         $this->assertCount(1, $violations);
         $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
+    /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function importedSymbolDependencyProvider(): iterable
+    {
+        yield 'constant fetch' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use const App\Database\Config\DEFAULT_TIMEOUT;
+
+                final class Request
+                {
+                    public function timeout(): int
+                    {
+                        return DEFAULT_TIMEOUT;
+                    }
+                }
+                PHP,
+            ['App\Database\Config\DEFAULT_TIMEOUT'],
+        ];
+
+        yield 'function call' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use function App\Database\Support\query;
+
+                final class Request
+                {
+                    public function run(): void
+                    {
+                        query();
+                    }
+                }
+                PHP,
+            ['App\Database\Support\query'],
+        ];
+
+        yield 'grouped constant fetch' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use const App\Database\Config\{DEFAULT_TIMEOUT, RETRY_LIMIT};
+
+                final class Request
+                {
+                    public function timeout(): int
+                    {
+                        return DEFAULT_TIMEOUT + RETRY_LIMIT;
+                    }
+                }
+                PHP,
+            [
+                'App\Database\Config\DEFAULT_TIMEOUT',
+                'App\Database\Config\RETRY_LIMIT',
+            ],
+        ];
+
+        yield 'grouped function call' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use function App\Database\Support\{query, trace};
+
+                final class Request
+                {
+                    public function run(): void
+                    {
+                        query();
+                        trace();
+                    }
+                }
+                PHP,
+            [
+                'App\Database\Support\query',
+                'App\Database\Support\trace',
+            ],
+        ];
+    }
+
+    /**
+     * @param list<string> $dependencies
+     */
+    #[DataProvider('importedSymbolDependencyProvider')]
+    public function testAnalyserRulesetTreatsImportedConstantsAndFunctionsAsDependencies(
+        string $sourceCode,
+        array $dependencies
+    ): void {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => $sourceCode,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+
+        $this->assertCount(count($dependencies), $violations);
+
+        foreach ($dependencies as $index => $dependency) {
+            $this->assertStringContainsString($dependency, $violations[$index]->message);
+            $this->assertStringContainsString('Database', $violations[$index]->message);
+        }
     }
 
     public function testAnalyserRulesetAllowsListedLayerDependency(): void
