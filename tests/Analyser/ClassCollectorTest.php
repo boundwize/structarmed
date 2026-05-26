@@ -11,6 +11,7 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function getcwd;
@@ -422,6 +423,109 @@ PHP;
 
         $this->assertContains('DateTime', $classNode->dependencies);
         $this->assertContains('App\Domain\Order', $classNode->dependencies);
+    }
+
+    /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function groupedImportDependencyProvider(): iterable
+    {
+        yield 'class imports' => [
+            <<<'PHP'
+<?php
+namespace App\Domain;
+
+use App\Infrastructure\{Bar, Baz};
+
+class Foo
+{
+    public function __construct(private Bar $bar, private Baz $baz)
+    {
+    }
+}
+PHP,
+            [
+                'App\Infrastructure\Bar',
+                'App\Infrastructure\Baz',
+            ],
+        ];
+
+        yield 'constant imports' => [
+            <<<'PHP'
+<?php
+namespace App\Domain;
+
+use const App\Infrastructure\Config\{FEATURE_ENABLED, OTHER_FLAG};
+
+class Foo
+{
+    public function isEnabled(): bool
+    {
+        return FEATURE_ENABLED && OTHER_FLAG;
+    }
+}
+PHP,
+            [
+                'App\Infrastructure\Config\FEATURE_ENABLED',
+                'App\Infrastructure\Config\OTHER_FLAG',
+            ],
+        ];
+
+        yield 'function imports' => [
+            <<<'PHP'
+<?php
+namespace App\Domain;
+
+use function App\Infrastructure\Support\{debug, trace};
+
+class Foo
+{
+    public function run(): void
+    {
+        debug();
+        trace();
+    }
+}
+PHP,
+            [
+                'App\Infrastructure\Support\debug',
+                'App\Infrastructure\Support\trace',
+            ],
+        ];
+    }
+
+    /**
+     * @param list<string> $expectedDependencies
+     */
+    #[DataProvider('groupedImportDependencyProvider')]
+    public function testCollectsGroupedImportedUsageAsDependenciesWithoutShortNames(
+        string $code,
+        array $expectedDependencies
+    ): void {
+        $classNode = $this->collect($code);
+
+        $this->assertSame($expectedDependencies, $classNode->dependencies);
+    }
+
+    public function testCollectsImportedConstantUsageAsDependency(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App\Domain;
+
+use const App\Infrastructure\Config\FEATURE_ENABLED;
+
+class Foo
+{
+    public function isEnabled(): bool
+    {
+        return FEATURE_ENABLED;
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertContains('App\Infrastructure\Config\FEATURE_ENABLED', $classNode->dependencies);
     }
 
     public function testCollectsFullyQualifiedDependencies(): void

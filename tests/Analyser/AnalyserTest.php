@@ -17,6 +17,7 @@ use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function array_map;
@@ -767,6 +768,75 @@ final class AnalyserTest extends TestCase
         $this->assertTrue($ruleViolationCollection->hasViolations());
         $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
         $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function importedSymbolDependencyProvider(): iterable
+    {
+        yield 'constant fetch' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use const App\Database\Config\DEFAULT_TIMEOUT;
+
+                final class Request
+                {
+                    public function timeout(): int
+                    {
+                        return DEFAULT_TIMEOUT;
+                    }
+                }
+                PHP,
+            'App\Database\Config\DEFAULT_TIMEOUT',
+        ];
+
+        yield 'function call' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use function App\Database\Support\query;
+
+                final class Request
+                {
+                    public function run(): void
+                    {
+                        query();
+                    }
+                }
+                PHP,
+            'App\Database\Support\query',
+        ];
+    }
+
+    #[DataProvider('importedSymbolDependencyProvider')]
+    public function testAnalyserRulesetTreatsImportedConstantsAndFunctionsAsDependencies(
+        string $sourceCode,
+        string $dependency
+    ): void {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => $sourceCode,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString($dependency, $violations[0]->message);
         $this->assertStringContainsString('Database', $violations[0]->message);
     }
 
