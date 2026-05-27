@@ -199,14 +199,15 @@ final class PresetTest extends TestCase
 
         $rules = $architecture->getRules();
 
-        // PSR-1 has 8 rules, PSR-12 adds 3 more — total must be 11, not 19 (8+8+3 if duplicated)
-        $this->assertCount(11, $rules);
+        // PSR-1 has 9 rules, PSR-12 adds 3 more — total must be 12, not 21 (9+9+3 if duplicated)
+        $this->assertCount(12, $rules);
 
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_UTF8_WITHOUT_BOM, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_FOLLOW_PSR4, $rules);
         $this->assertArrayHasKey(Psr1Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER, $rules);
+        $this->assertArrayHasKey(Psr1Preset::SOURCE_PATHS_MUST_EXIST_ON_DISK, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);

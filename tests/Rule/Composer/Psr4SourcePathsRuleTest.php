@@ -12,7 +12,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
-use function mkdir;
 
 #[CoversClass(Psr4SourcePathsRule::class)]
 final class Psr4SourcePathsRuleTest extends TestCase
@@ -34,7 +33,7 @@ final class Psr4SourcePathsRuleTest extends TestCase
         }
     }
 }
-JSON, ['src', 'tests']);
+JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src', 'tests']);
 
@@ -54,7 +53,7 @@ JSON, ['src', 'tests']);
         }
     }
 }
-JSON, ['src']);
+JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/', 'tests/']);
 
@@ -99,7 +98,7 @@ JSON, ['src']);
         }
     }
 }
-JSON, ['src', 'tests']);
+JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/', 'tests/']);
 
@@ -122,7 +121,7 @@ JSON, ['src', 'tests']);
         }
     }
 }
-JSON, ['tests']);
+JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['tests/']);
 
@@ -147,7 +146,7 @@ JSON, ['tests']);
         }
     }
 }
-JSON, ['app', 'tests', 'specs']);
+JSON);
 
         $psr4SourcePathsRule = new Psr4SourcePathsRule(null);
 
@@ -158,25 +157,6 @@ JSON, ['app', 'tests', 'specs']);
         $this->assertSame(['app', 'tests', 'specs'], $psr4SourcePathsRule->sourcePathsFor($basePath));
     }
 
-    public function testFailsWhenPsr4PathDirectoryDoesNotExistOnDisk(): void
-    {
-        $basePath = $this->makeTempProject(<<<'JSON'
-{
-    "autoload": {
-        "psr-4": {
-            "View\\": "directory/not/exists"
-        }
-    }
-}
-JSON);
-
-        $violation = (new Psr4SourcePathsRule(null))->evaluateProject($basePath, Architecture::define());
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('directory/not/exists', $violation->message);
-        $this->assertStringContainsString('do not exist on disk', $violation->message);
-    }
-
     public function testNormalisesExplicitSourcePaths(): void
     {
         $psr4SourcePathsRule = new Psr4SourcePathsRule([' src/ ', 'tests\\']);
@@ -184,17 +164,10 @@ JSON);
         $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($this->makeTempDir()));
     }
 
-    /**
-     * @param list<string> $dirs
-     */
-    private function makeTempProject(string $composerJson, array $dirs = []): string
+    private function makeTempProject(string $composerJson): string
     {
         $basePath = $this->makeTempDir();
         file_put_contents($basePath . '/composer.json', $composerJson);
-
-        foreach ($dirs as $dir) {
-            mkdir($basePath . '/' . $dir, 0777, true);
-        }
 
         return $basePath;
     }

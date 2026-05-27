@@ -9,36 +9,17 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-use function array_map;
 use function file_exists;
 use function implode;
-use function in_array;
+use function is_dir;
 use function rtrim;
 use function sprintf;
-use function str_replace;
-use function trim;
 
-final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
+final readonly class Psr4DirectoryExistsRule implements ProjectRuleInterface
 {
-    /**
-     * @param list<string> $sourcePaths
-     */
     public function __construct(
-        private ?array $sourcePaths,
         private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
     ) {
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function sourcePathsFor(string $basePath): array
-    {
-        if ($this->sourcePaths === null) {
-            return $this->psr4PathResolver->paths($basePath);
-        }
-
-        return $this->normalisePaths($this->sourcePaths);
     }
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
@@ -61,41 +42,24 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
             );
         }
 
-        if ($this->sourcePaths === null) {
-            return null;
-        }
+        $nonExistentPaths = [];
 
-        $autoloadPaths = $this->psr4PathResolver->paths($basePath);
-        $missingPaths  = [];
-
-        foreach ($this->normalisePaths($this->sourcePaths) as $sourcePath) {
-            if (! in_array($sourcePath, $autoloadPaths, true)) {
-                $missingPaths[] = $sourcePath;
+        foreach ($this->psr4PathResolver->paths($basePath) as $autoloadPath) {
+            if (! is_dir(rtrim($basePath, '/') . '/' . $autoloadPath)) {
+                $nonExistentPaths[] = $autoloadPath;
             }
         }
 
-        if ($missingPaths === []) {
+        if ($nonExistentPaths === []) {
             return null;
         }
 
         return $this->violation(
             sprintf(
-                'PSR-4 source path(s) [%s] must exist in composer.json autoload or autoload-dev',
-                implode(', ', $missingPaths)
+                'PSR-4 source path(s) [%s] declared in composer.json do not exist on disk',
+                implode(', ', $nonExistentPaths)
             ),
             $composerFile
-        );
-    }
-
-    /**
-     * @param list<string> $paths
-     * @return list<string>
-     */
-    private function normalisePaths(array $paths): array
-    {
-        return array_map(
-            static fn(string $path): string => rtrim(str_replace('\\', '/', trim($path)), '/'),
-            $paths
         );
     }
 

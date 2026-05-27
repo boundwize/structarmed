@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\ClassConstantNameMustBeUpperCaseRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustBeStudlyCapsRule;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4DirectoryExistsRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
@@ -28,6 +29,8 @@ final readonly class Psr1Preset implements PresetInterface
     public const CLASSES_MUST_FOLLOW_PSR4 = 'psr1.classes.must_follow_psr4';
 
     public const SOURCE_PATHS_MUST_BE_IN_COMPOSER = 'psr1.source_paths.must_be_in_composer';
+
+    public const SOURCE_PATHS_MUST_EXIST_ON_DISK = 'psr1.source_paths.must_exist_on_disk';
 
     public const CLASSES_MUST_BE_STUDLY_CAPS = 'psr1.classes.must_be_studly_caps';
 
@@ -54,6 +57,7 @@ final readonly class Psr1Preset implements PresetInterface
         );
         $architecture->rule(self::CLASSES_MUST_FOLLOW_PSR4, new Psr4NamespaceRule(self::SOURCE_LAYER));
         $architecture->rule(self::SOURCE_PATHS_MUST_BE_IN_COMPOSER, new Psr4SourcePathsRule($this->sourcePaths));
+        $architecture->rule(self::SOURCE_PATHS_MUST_EXIST_ON_DISK, new Psr4DirectoryExistsRule());
         $architecture->rule(self::CLASSES_MUST_BE_STUDLY_CAPS, new ClassNameMustBeStudlyCapsRule(self::SOURCE_LAYER));
         $architecture->rule(
             self::CLASS_CONSTANTS_MUST_BE_UPPER_CASE,
