@@ -13,6 +13,7 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 use function array_unique;
+use function array_values;
 use function fnmatch;
 use function is_dir;
 use function ltrim;
