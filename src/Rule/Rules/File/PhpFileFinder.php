@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Rules\File;
 
+use AppendIterator;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use FilesystemIterator;
 use RecursiveCallbackFilterIterator;
@@ -11,6 +12,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
+use function array_unique;
 use function fnmatch;
 use function is_dir;
 use function ltrim;
@@ -38,18 +40,19 @@ final readonly class PhpFileFinder
      */
     public function files(string $basePath, array $skipPaths = []): array
     {
-        $files          = [];
         $normalisedBase = $this->normalisePath($basePath, true);
         $skipMatchers   = $this->compileSkipMatchers($normalisedBase, $skipPaths);
+        $append         = new AppendIterator();
 
-        foreach ($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath) as $sourcePath) {
+        $sourcePaths = array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath));
+        foreach ($sourcePaths as $sourcePath) {
             $fullPath = rtrim($basePath, '/') . '/' . ltrim($sourcePath, '/');
 
             if (! is_dir($fullPath)) {
                 continue;
             }
 
-            $iterator = new RecursiveIteratorIterator(
+            $append->append(new RecursiveIteratorIterator(
                 new RecursiveCallbackFilterIterator(
                     new RecursiveDirectoryIterator($fullPath, FilesystemIterator::SKIP_DOTS),
                     function (SplFileInfo $file) use ($normalisedBase, $skipMatchers): bool {
@@ -62,15 +65,19 @@ final readonly class PhpFileFinder
                     }
                 ),
                 RecursiveIteratorIterator::LEAVES_ONLY
-            );
-
-            /** @var SplFileInfo $file */
-            foreach ($iterator as $file) {
-                $files[] = $file->getPathname();
-            }
+            ));
         }
 
-        return $files;
+        $files = [];
+
+        /** @var SplFileInfo $file */
+        foreach ($append as $file) {
+            $files[] = $file->getPathname();
+        }
+
+        // ensure nothing duplicated once more
+        // avoid inner directory provided by multiple source paths
+        return array_values(array_unique($files));
     }
 
     /**
