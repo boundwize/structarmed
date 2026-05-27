@@ -40,6 +40,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_FOLLOW_PSR4, $rules);
         $this->assertArrayHasKey(Psr1Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER, $rules);
+        $this->assertArrayHasKey(Psr1Preset::SOURCE_PATHS_MUST_EXIST_ON_DISK, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
@@ -61,6 +62,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_FOLLOW_PSR4, $rules);
         $this->assertArrayHasKey(Psr1Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER, $rules);
+        $this->assertArrayHasKey(Psr1Preset::SOURCE_PATHS_MUST_EXIST_ON_DISK, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
@@ -86,6 +88,10 @@ final class PresetTest extends TestCase
             Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
             $architecture->getRules()
         );
+        $this->assertArrayHasKey(
+            Psr4Preset::SOURCE_PATHS_MUST_EXIST_ON_DISK,
+            $architecture->getRules()
+        );
     }
 
     public function testPsr4PresetUsesComposerSourcePathsByDefault(): void
@@ -97,6 +103,10 @@ final class PresetTest extends TestCase
         $this->assertSame(['Source' => []], $architecture->getLayers());
         $this->assertArrayHasKey(
             Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            Psr4Preset::SOURCE_PATHS_MUST_EXIST_ON_DISK,
             $architecture->getRules()
         );
     }
