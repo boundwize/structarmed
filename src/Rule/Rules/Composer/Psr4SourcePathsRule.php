@@ -13,6 +13,7 @@ use function array_map;
 use function file_exists;
 use function implode;
 use function in_array;
+use function is_dir;
 use function rtrim;
 use function sprintf;
 use function str_replace;
@@ -61,12 +62,30 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
             );
         }
 
+        $autoloadPaths    = $this->psr4PathResolver->paths($basePath);
+        $nonExistentPaths = [];
+
+        foreach ($autoloadPaths as $autoloadPath) {
+            if (! is_dir(rtrim($basePath, '/') . '/' . $autoloadPath)) {
+                $nonExistentPaths[] = $autoloadPath;
+            }
+        }
+
+        if ($nonExistentPaths !== []) {
+            return $this->violation(
+                sprintf(
+                    'PSR-4 source path(s) [%s] declared in composer.json do not exist on disk',
+                    implode(', ', $nonExistentPaths)
+                ),
+                $composerFile
+            );
+        }
+
         if ($this->sourcePaths === null) {
             return null;
         }
 
-        $autoloadPaths = $this->psr4PathResolver->paths($basePath);
-        $missingPaths  = [];
+        $missingPaths = [];
 
         foreach ($this->normalisePaths($this->sourcePaths) as $sourcePath) {
             if (! in_array($sourcePath, $autoloadPaths, true)) {
