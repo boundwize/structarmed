@@ -53,21 +53,19 @@ final readonly class PhpFileFinder
                 new RecursiveCallbackFilterIterator(
                     new RecursiveDirectoryIterator($fullPath, FilesystemIterator::SKIP_DOTS),
                     function (SplFileInfo $file) use ($normalisedBase, $skipMatchers): bool {
-                        if (! $file->isDir() && $file->getExtension() !== 'php') {
+                        $isRealDirectory = $file->isDir() && ! $file->isLink();
+                        if (! $isRealDirectory && $file->getExtension() !== 'php') {
                             return false;
                         }
 
                         return ! $this->isSkipped($file->getPathname(), $normalisedBase, $skipMatchers);
                     }
-                )
+                ),
+                RecursiveIteratorIterator::LEAVES_ONLY
             );
 
             /** @var SplFileInfo $file */
             foreach ($iterator as $file) {
-                if (! $file->isFile()) {
-                    continue;
-                }
-
                 $files[] = $file->getPathname();
             }
         }

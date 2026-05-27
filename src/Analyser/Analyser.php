@@ -611,21 +611,19 @@ final readonly class Analyser
             new RecursiveCallbackFilterIterator(
                 new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
                 function (SplFileInfo $file) use ($skipPaths): bool {
-                    if (! $file->isDir() && $file->getExtension() !== 'php') {
+                    $isRealDirectory = $file->isDir() && ! $file->isLink();
+                    if (! $isRealDirectory && $file->getExtension() !== 'php') {
                         return false;
                     }
 
                     return ! $this->isSkipped($file->getPathname(), $skipPaths);
                 }
-            )
+            ),
+            RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            if (! $file->isFile()) {
-                continue;
-            }
-
             $realPath = $file->getRealPath();
 
             if ($realPath !== false) {
