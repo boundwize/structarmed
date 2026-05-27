@@ -624,11 +624,7 @@ final readonly class Analyser
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            $realPath = $file->getRealPath();
-
-            if ($realPath !== false) {
-                $files[] = $realPath;
-            }
+            $files[] = $file->getPathname();
         }
 
         return $files;
