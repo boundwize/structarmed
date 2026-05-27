@@ -8,9 +8,11 @@ use Boundwize\StructArmed\Version;
 use Composer\InstalledVersions;
 
 use function array_map;
+use function file_exists;
 use function hash;
 use function hash_file;
 use function json_encode;
+use function rtrim;
 use function sort;
 
 use const JSON_INVALID_UTF8_SUBSTITUTE;
@@ -33,6 +35,7 @@ final readonly class AnalysisCacheMetadataFactory
             'configPath'                   => $configPath,
             'configHash'                   => $this->fileHash($configPath),
             'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash(),
+            'composerHash'                 => $this->composerHash($basePath),
             'scanPaths'                    => $scanPaths,
             'filesHash'                    => $this->filesHash($files),
         ];
@@ -66,6 +69,13 @@ final readonly class AnalysisCacheMetadataFactory
             'file' => $file,
             'hash' => (string) hash_file('xxh128', $file),
         ], $files), JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+    }
+
+    private function composerHash(string $basePath): string
+    {
+        $composerFile = rtrim($basePath, '/') . '/composer.json';
+
+        return file_exists($composerFile) ? $this->fileHash($composerFile) : '';
     }
 
     public function composerGeneratedVersionHash(): string
