@@ -233,7 +233,7 @@ final readonly class ParallelClassNodeExtractor
     {
         $fileSizes = [];
         foreach ($files as $file) {
-            $fileSizes[$file] = filesize($file) ?: 0;
+            $fileSizes[$file] = @filesize($file) ?: 0;
         }
 
         arsort($fileSizes);
