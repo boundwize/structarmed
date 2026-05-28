@@ -10,7 +10,6 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
-use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
@@ -498,16 +497,22 @@ final readonly class Analyser
         $layers = $architecture->getLayers();
 
         foreach ($architecture->getRules() as $rule) {
-            if (
-                $rule instanceof Psr4SourcePathsRule
-                && ($layers[Psr4Preset::SOURCE_LAYER] ?? null) === []
-            ) {
-                $layers[Psr4Preset::SOURCE_LAYER] = $rule->sourcePathsFor($this->basePath);
+            if ($rule instanceof Psr4SourcePathsRule) {
+                foreach ($layers as $layerName => $layerPaths) {
+                    if ($layerPaths === []) {
+                        $layers[$layerName] = $rule->sourcePathsFor($this->basePath);
+                    }
+                }
             }
         }
 
-        if (($layers[Psr4Preset::SOURCE_LAYER] ?? null) === []) {
-            $layers[Psr4Preset::SOURCE_LAYER] = (new Psr4PathResolver())->paths($this->basePath);
+        $composerPaths = null;
+
+        foreach ($layers as $layerName => $layerPaths) {
+            if ($layerPaths === []) {
+                $composerPaths        ??= (new Psr4PathResolver())->paths($this->basePath);
+                $layers[$layerName]   = $composerPaths;
+            }
         }
 
         return $layers;
