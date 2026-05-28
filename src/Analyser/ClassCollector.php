@@ -11,8 +11,12 @@ use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\Empty_;
+use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\Exit_;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Include_;
+use PhpParser\Node\Expr\Isset_;
 use PhpParser\Node\Expr\Match_;
 use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Ternary;
@@ -28,6 +32,7 @@ use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Do_;
 use PhpParser\Node\Stmt\Echo_;
+use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\ElseIf_;
 use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\For_;
@@ -361,6 +366,31 @@ final class ClassCollector extends NodeVisitorAbstract
 
                 if ($node instanceof Print_) {
                     $this->languageConstructs[] = 'print';
+                }
+
+                if ($node instanceof Include_) {
+                    $this->languageConstructs[] = match ($node->type) {
+                        Include_::TYPE_REQUIRE      => 'require',
+                        Include_::TYPE_INCLUDE_ONCE => 'include_once',
+                        Include_::TYPE_REQUIRE_ONCE => 'require_once',
+                        default                     => 'include',
+                    };
+                }
+
+                if ($node instanceof Isset_) {
+                    $this->languageConstructs[] = 'isset';
+                }
+
+                if ($node instanceof Empty_) {
+                    $this->languageConstructs[] = 'empty';
+                }
+
+                if ($node instanceof Unset_) {
+                    $this->languageConstructs[] = 'unset';
+                }
+
+                if ($node instanceof Eval_) {
+                    $this->languageConstructs[] = 'eval';
                 }
 
                 if (

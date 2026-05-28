@@ -429,6 +429,66 @@ PHP;
         $this->assertNotContains('print', $classNode->functionCalls);
     }
 
+    public function testCollectsIncludeAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { include "file.php"; } }');
+
+        $this->assertContains('include', $classNode->languageConstructs);
+    }
+
+    public function testCollectsIncludeOnceAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { include_once "file.php"; } }');
+
+        $this->assertContains('include_once', $classNode->languageConstructs);
+    }
+
+    public function testCollectsRequireAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { require "file.php"; } }');
+
+        $this->assertContains('require', $classNode->languageConstructs);
+    }
+
+    public function testCollectsRequireOnceAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { require_once "file.php"; } }');
+
+        $this->assertContains('require_once', $classNode->languageConstructs);
+    }
+
+    public function testCollectsIssetAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { $x = isset($y); } }');
+
+        $this->assertContains('isset', $classNode->languageConstructs);
+        $this->assertNotContains('isset', $classNode->functionCalls);
+    }
+
+    public function testCollectsEmptyAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { $x = empty($y); } }');
+
+        $this->assertContains('empty', $classNode->languageConstructs);
+        $this->assertNotContains('empty', $classNode->functionCalls);
+    }
+
+    public function testCollectsUnsetAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { unset($x); } }');
+
+        $this->assertContains('unset', $classNode->languageConstructs);
+        $this->assertNotContains('unset', $classNode->functionCalls);
+    }
+
+    public function testCollectsEvalAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { eval("echo 1;"); } }');
+
+        $this->assertContains('eval', $classNode->languageConstructs);
+        $this->assertNotContains('eval', $classNode->functionCalls);
+    }
+
     public function testCalculatesCyclomaticComplexity(): void
     {
         $code      = <<<'PHP'
