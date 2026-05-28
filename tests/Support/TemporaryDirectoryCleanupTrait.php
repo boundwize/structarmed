@@ -10,8 +10,10 @@ use SplFileInfo;
 
 use function array_reverse;
 use function bin2hex;
+use function clearstatcache;
 use function is_dir;
 use function is_file;
+use function is_link;
 use function mkdir;
 use function random_bytes;
 use function rmdir;
@@ -82,23 +84,17 @@ trait TemporaryDirectoryCleanupTrait
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
             $pathname = $file->getPathname();
+            clearstatcache(true, $pathname);
 
-            if ($file->isDir() && $file->isLink()) {
-                DIRECTORY_SEPARATOR === '\\'
+            if (is_link($pathname)) {
+                DIRECTORY_SEPARATOR === '\\' && is_dir($pathname)
                     ? rmdir($pathname)
                     : unlink($pathname);
 
                 continue;
             }
 
-            if ($file->isDir()) {
-                rmdir($pathname);
-
-                continue;
-            }
-
-            // On Windows, directory symlinks may not be detected as dirs by SplFileInfo
-            if (DIRECTORY_SEPARATOR === '\\' && is_dir($pathname)) {
+            if (is_dir($pathname)) {
                 rmdir($pathname);
 
                 continue;
