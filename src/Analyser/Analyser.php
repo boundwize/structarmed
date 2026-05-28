@@ -15,7 +15,6 @@ use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
-use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use FilesystemIterator;
@@ -496,22 +495,9 @@ final readonly class Analyser
     {
         $layers = $architecture->getLayers();
 
-        foreach ($architecture->getRules() as $rule) {
-            if ($rule instanceof Psr4SourcePathsRule) {
-                foreach ($layers as $layerName => $layerPaths) {
-                    if ($layerPaths === []) {
-                        $layers[$layerName] = $rule->sourcePathsFor($this->basePath);
-                    }
-                }
-            }
-        }
-
-        $composerPaths = null;
-
         foreach ($layers as $layerName => $layerPaths) {
             if ($layerPaths === []) {
-                $composerPaths    ??= (new Psr4PathResolver())->paths($this->basePath);
-                $layers[$layerName] = $composerPaths;
+                $layers[$layerName] = (new Psr4PathResolver())->paths($this->basePath);
             }
         }
 
