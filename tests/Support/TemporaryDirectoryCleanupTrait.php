@@ -87,9 +87,13 @@ trait TemporaryDirectoryCleanupTrait
             clearstatcache(true, $pathname);
 
             if (is_link($pathname)) {
-                DIRECTORY_SEPARATOR === '\\' && is_dir($pathname)
-                    ? rmdir($pathname)
-                    : unlink($pathname);
+                if (DIRECTORY_SEPARATOR === '\\') {
+                    // is_dir() does not reliably follow NTFS symlinks on Windows;
+                    // rmdir() removes directory symlinks, unlink() removes file symlinks.
+                    @rmdir($pathname) || unlink($pathname);
+                } else {
+                    unlink($pathname);
+                }
 
                 continue;
             }
