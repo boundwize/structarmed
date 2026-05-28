@@ -8,23 +8,24 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
-use function array_chunk;
+use function array_fill;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
+use function array_search;
+use function arsort;
 use function assert;
-use function ceil;
 use function count;
 use function dirname;
 use function fclose;
 use function feof;
 use function file_put_contents;
+use function filesize;
 use function fread;
 use function is_array;
 use function is_dir;
 use function is_resource;
 use function is_string;
-use function max;
 use function min;
 use function mkdir;
 use function proc_close;
@@ -66,11 +67,10 @@ final readonly class ParallelClassNodeExtractor
 
         $totalFiles  = count($files);
         $workerCount = min($this->workerCount, $totalFiles);
-        $chunkSize   = (int) ceil($totalFiles / $workerCount);
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $processes   = [];
 
-        foreach (array_chunk($files, max(1, $chunkSize)) as $chunk) {
+        foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             [
                 'inputFile'  => $inputFile,
                 'outputFile' => $outputFile,
@@ -218,6 +218,37 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return $nodes;
+    }
+
+    /**
+     * Distributes files across worker buckets using the LPT (Longest Processing Time First) algorithm:
+     * sort files largest-first, then assign each file to the worker with the smallest total byte load so far.
+     * This minimises the gap between the slowest and fastest worker (makespan), giving near-optimal balance
+     * even when one file is much larger than the rest.
+     *
+     * @param list<string> $files
+     * @return list<list<string>>
+     */
+    private function buildWorkerBuckets(array $files, int $workerCount): array
+    {
+        $fileSizes = [];
+        foreach ($files as $file) {
+            $fileSizes[$file] = filesize($file) ?: 0;
+        }
+
+        arsort($fileSizes);
+
+        assert($workerCount > 0);
+        $buckets     = array_fill(0, $workerCount, []);
+        $bucketSizes = array_fill(0, $workerCount, 0);
+
+        foreach (array_keys($fileSizes) as $file) {
+            $minIdx                = (int) array_search(min($bucketSizes), $bucketSizes, true);
+            $buckets[$minIdx][]    = $file;
+            $bucketSizes[$minIdx] += $fileSizes[$file];
+        }
+
+        return $buckets;
     }
 
     /**
