@@ -208,6 +208,16 @@ PHP);
             '    ->withPreset(Preset::PSR1());',
         ];
 
+        yield 'psr12' => [
+            ['--preset=psr12'],
+            '    ->withPreset(Preset::PSR12());',
+        ];
+
+        yield 'psr15' => [
+            ['--preset=psr15'],
+            '    ->withPreset(Preset::PSR15());',
+        ];
+
         yield 'psr4' => [
             ['--preset=psr4'],
             '    ->withPreset(Preset::PSR4());',
