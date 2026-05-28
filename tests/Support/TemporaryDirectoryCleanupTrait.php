@@ -81,21 +81,30 @@ trait TemporaryDirectoryCleanupTrait
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
+            $pathname = $file->getPathname();
+
             if ($file->isDir() && $file->isLink()) {
                 DIRECTORY_SEPARATOR === '\\'
-                    ? rmdir($file->getPathname())
-                    : unlink($file->getPathname());
+                    ? rmdir($pathname)
+                    : unlink($pathname);
 
                 continue;
             }
 
-            if ($file->isDir() && ! $file->isLink()) {
-                rmdir($file->getPathname());
+            if ($file->isDir()) {
+                rmdir($pathname);
 
                 continue;
             }
 
-            unlink($file->getPathname());
+            // On Windows, directory symlinks may not be detected as dirs by SplFileInfo
+            if (DIRECTORY_SEPARATOR === '\\' && is_dir($pathname)) {
+                rmdir($pathname);
+
+                continue;
+            }
+
+            unlink($pathname);
         }
 
         rmdir($basePath);
