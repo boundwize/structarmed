@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
@@ -503,6 +504,10 @@ final readonly class Analyser
             ) {
                 $layers[Psr4Preset::SOURCE_LAYER] = $rule->sourcePathsFor($this->basePath);
             }
+        }
+
+        if (($layers[Psr4Preset::SOURCE_LAYER] ?? null) === []) {
+            $layers[Psr4Preset::SOURCE_LAYER] = (new Psr4PathResolver())->paths($this->basePath);
         }
 
         return $layers;

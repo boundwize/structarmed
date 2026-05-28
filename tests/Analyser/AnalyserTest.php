@@ -276,6 +276,22 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testAnalyserUsesComposerPsr4PathsForDefaultPsr15Preset(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"app/"}}}',
+            'app/Foo.php'   => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR15())
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
     public function testDddPresetResolvesConventionalLayersInsidePsr4SourceLayer(): void
     {
         $repositoryPath = 'src/Infrastructure/Persistence/Album/SQLAlbumRepository.php';
