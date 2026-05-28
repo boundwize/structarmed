@@ -90,7 +90,9 @@ trait TemporaryDirectoryCleanupTrait
                 if (DIRECTORY_SEPARATOR === '\\') {
                     // is_dir() does not reliably follow NTFS symlinks on Windows;
                     // rmdir() removes directory symlinks, unlink() removes file symlinks.
-                    @rmdir($pathname) || unlink($pathname);
+                    if (! @rmdir($pathname)) {
+                        unlink($pathname);
+                    }
                 } else {
                     unlink($pathname);
                 }
