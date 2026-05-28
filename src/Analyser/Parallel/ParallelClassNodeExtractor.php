@@ -17,10 +17,10 @@ use function arsort;
 use function assert;
 use function count;
 use function dirname;
-use function filesize;
 use function fclose;
 use function feof;
 use function file_put_contents;
+use function filesize;
 use function fread;
 use function is_array;
 use function is_dir;
@@ -242,8 +242,8 @@ final readonly class ParallelClassNodeExtractor
         $bucketSizes = array_fill(0, $workerCount, 0);
 
         foreach (array_keys($fileSizes) as $file) {
-            $minIdx               = (int) array_search(min($bucketSizes), $bucketSizes, true);
-            $buckets[$minIdx][]   = $file;
+            $minIdx                = (int) array_search(min($bucketSizes), $bucketSizes, true);
+            $buckets[$minIdx][]    = $file;
             $bucketSizes[$minIdx] += $fileSizes[$file];
         }
 
