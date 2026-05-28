@@ -510,8 +510,8 @@ final readonly class Analyser
 
         foreach ($layers as $layerName => $layerPaths) {
             if ($layerPaths === []) {
-                $composerPaths        ??= (new Psr4PathResolver())->paths($this->basePath);
-                $layers[$layerName]   = $composerPaths;
+                $composerPaths    ??= (new Psr4PathResolver())->paths($this->basePath);
+                $layers[$layerName] = $composerPaths;
             }
         }
 
