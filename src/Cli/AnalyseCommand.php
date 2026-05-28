@@ -167,7 +167,7 @@ final readonly class AnalyseCommand
 
         if (! $ruleViolationCollection instanceof RuleViolationCollection) {
             $analyserOptions         = isset($options['disable-parallel']) ? AnalyserOptions::sequential() : null;
-            $ruleViolationCollection = $analyser->analyse($architecture, $scanPaths, $progress, $analyserOptions);
+            $ruleViolationCollection = $analyser->analyse($architecture, $scanPaths, $progress, $analyserOptions, $files);
             $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
         }
 

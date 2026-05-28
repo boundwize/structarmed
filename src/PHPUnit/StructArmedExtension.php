@@ -67,7 +67,8 @@ final class StructArmedExtension implements Extension
 
             $ruleViolationCollection = $analyser->analyse(
                 $architecture,
-                progressHandler: $progressHandler
+                progressHandler: $progressHandler,
+                files: $files
             );
             $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
         }
