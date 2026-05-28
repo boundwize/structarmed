@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseLanguageConstructRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseSuperglobalsRule;
 use DateTime;
 use PDO;
@@ -204,12 +205,12 @@ final readonly class MvcPreset implements PresetInterface
 
         $architecture->rule(
             self::MODEL_NO_ECHO,
-            new MayNotCallFunctionRule(layer: 'Model', function: 'echo')
+            new MayNotUseLanguageConstructRule(layer: 'Model', construct: 'echo')
         );
 
         $architecture->rule(
             self::MODEL_NO_PRINT,
-            new MayNotCallFunctionRule(layer: 'Model', function: 'print')
+            new MayNotUseLanguageConstructRule(layer: 'Model', construct: 'print')
         );
 
         $architecture->rule(
@@ -272,7 +273,7 @@ final readonly class MvcPreset implements PresetInterface
 
         $architecture->rule(
             self::SERVICE_NO_ECHO,
-            new MayNotCallFunctionRule(layer: 'Service', function: 'echo')
+            new MayNotUseLanguageConstructRule(layer: 'Service', construct: 'echo')
         );
 
         $architecture->rule(
@@ -296,10 +297,17 @@ final readonly class MvcPreset implements PresetInterface
     private function applySafetyRules(Architecture $architecture): self
     {
         foreach (['Controller', 'Model', 'View', 'Service'] as $layer) {
-            foreach (['dd', 'dump', 'var_dump', 'print_r', 'var_export', 'die', 'exit'] as $fn) {
+            foreach (['dd', 'dump', 'var_dump', 'print_r', 'var_export'] as $fn) {
                 $architecture->rule(
                     sprintf('mvc.safety.%s_no_%s', strtolower($layer), $fn),
                     new MayNotCallFunctionRule(layer: $layer, function: $fn)
+                );
+            }
+
+            foreach (['die', 'exit'] as $construct) {
+                $architecture->rule(
+                    sprintf('mvc.safety.%s_no_%s', strtolower($layer), $construct),
+                    new MayNotUseLanguageConstructRule(layer: $layer, construct: $construct)
                 );
             }
         }

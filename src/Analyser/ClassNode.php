@@ -23,15 +23,16 @@ final readonly class ClassNode
     public array $layers;
 
     /**
-     * @param list<string>   $dependencies   Fully-qualified class names this class depends on
-     * @param string[]       $implements     Interface names this class implements
-     * @param string[]       $traits         Trait names this class uses
-     * @param MethodNode[]   $methods        Methods of this class
-     * @param ConstantNode[] $constants      Constants of this class
-     * @param PropertyNode[] $properties     Properties of this class
-     * @param string[]       $functionCalls  Functions called within this class
-     * @param string[]       $superglobals   Superglobals accessed ($_GET, $_POST, etc.)
-     * @param list<string>   $layers         All layer names this class belongs to; defaults to [$layer]
+     * @param list<string>   $dependencies        Fully-qualified class names this class depends on
+     * @param string[]       $implements          Interface names this class implements
+     * @param string[]       $traits              Trait names this class uses
+     * @param MethodNode[]   $methods             Methods of this class
+     * @param ConstantNode[] $constants           Constants of this class
+     * @param PropertyNode[] $properties          Properties of this class
+     * @param string[]       $functionCalls       Functions called within this class
+     * @param string[]       $superglobals        Superglobals accessed ($_GET, $_POST, etc.)
+     * @param string[]       $languageConstructs  Language constructs used (exit, die, etc.)
+     * @param list<string>   $layers              All layer names this class belongs to; defaults to [$layer]
      */
     public function __construct(
         public string $className,
@@ -52,6 +53,7 @@ final readonly class ClassNode
         public array $properties = [],
         public array $functionCalls = [],
         public array $superglobals = [],
+        public array $languageConstructs = [],
         array $layers = [],
         public bool $isEnum = false,
     ) {
@@ -124,6 +126,11 @@ final readonly class ClassNode
     public function callsFunction(string $function): bool
     {
         return in_array($function, $this->functionCalls, true);
+    }
+
+    public function usesLanguageConstruct(string $construct): bool
+    {
+        return in_array($construct, $this->languageConstructs, true);
     }
 
     public function accessesSuperglobals(): bool

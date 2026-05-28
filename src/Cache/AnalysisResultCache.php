@@ -316,26 +316,27 @@ final readonly class AnalysisResultCache
     private function classNodeToArray(ClassNode $classNode): array
     {
         return [
-            'className'     => $classNode->className,
-            'file'          => $classNode->file,
-            'line'          => $classNode->line,
-            'layer'         => $classNode->layer,
-            'extends'       => $classNode->extends,
-            'isAbstract'    => $classNode->isAbstract,
-            'isFinal'       => $classNode->isFinal,
-            'isInterface'   => $classNode->isInterface,
-            'isTrait'       => $classNode->isTrait,
-            'isEnum'        => $classNode->isEnum,
-            'isReadonly'    => $classNode->isReadonly,
-            'dependencies'  => $classNode->dependencies,
-            'implements'    => array_values($classNode->implements),
-            'traits'        => array_values($classNode->traits),
-            'methods'       => array_map($this->methodNodeToArray(...), $classNode->methods),
-            'constants'     => array_map($this->constantNodeToArray(...), $classNode->constants),
-            'properties'    => array_map($this->propertyNodeToArray(...), $classNode->properties),
-            'functionCalls' => array_values($classNode->functionCalls),
-            'superglobals'  => array_values($classNode->superglobals),
-            'layers'        => $classNode->layers,
+            'className'          => $classNode->className,
+            'file'               => $classNode->file,
+            'line'               => $classNode->line,
+            'layer'              => $classNode->layer,
+            'extends'            => $classNode->extends,
+            'isAbstract'         => $classNode->isAbstract,
+            'isFinal'            => $classNode->isFinal,
+            'isInterface'        => $classNode->isInterface,
+            'isTrait'            => $classNode->isTrait,
+            'isEnum'             => $classNode->isEnum,
+            'isReadonly'         => $classNode->isReadonly,
+            'dependencies'       => $classNode->dependencies,
+            'implements'         => array_values($classNode->implements),
+            'traits'             => array_values($classNode->traits),
+            'methods'            => array_map($this->methodNodeToArray(...), $classNode->methods),
+            'constants'          => array_map($this->constantNodeToArray(...), $classNode->constants),
+            'properties'         => array_map($this->propertyNodeToArray(...), $classNode->properties),
+            'functionCalls'      => array_values($classNode->functionCalls),
+            'superglobals'       => array_values($classNode->superglobals),
+            'languageConstructs' => array_values($classNode->languageConstructs),
+            'layers'             => $classNode->layers,
         ];
     }
 
@@ -348,26 +349,27 @@ final readonly class AnalysisResultCache
             return null;
         }
 
-        $className     = $node['className'] ?? null;
-        $file          = $node['file'] ?? null;
-        $line          = $node['line'] ?? null;
-        $layer         = $node['layer'] ?? null;
-        $extends       = $node['extends'] ?? null;
-        $isAbstract    = $node['isAbstract'] ?? null;
-        $isFinal       = $node['isFinal'] ?? null;
-        $isInterface   = $node['isInterface'] ?? null;
-        $isTrait       = $node['isTrait'] ?? null;
-        $isEnum        = $node['isEnum'] ?? null;
-        $isReadonly    = $node['isReadonly'] ?? null;
-        $dependencies  = $node['dependencies'] ?? null;
-        $implements    = $node['implements'] ?? null;
-        $traits        = $node['traits'] ?? [];
-        $rawMethods    = $node['methods'] ?? null;
-        $rawConstants  = $node['constants'] ?? null;
-        $rawProperties = $node['properties'] ?? null;
-        $functionCalls = $node['functionCalls'] ?? null;
-        $superglobals  = $node['superglobals'] ?? null;
-        $layers        = $node['layers'] ?? [];
+        $className          = $node['className'] ?? null;
+        $file               = $node['file'] ?? null;
+        $line               = $node['line'] ?? null;
+        $layer              = $node['layer'] ?? null;
+        $extends            = $node['extends'] ?? null;
+        $isAbstract         = $node['isAbstract'] ?? null;
+        $isFinal            = $node['isFinal'] ?? null;
+        $isInterface        = $node['isInterface'] ?? null;
+        $isTrait            = $node['isTrait'] ?? null;
+        $isEnum             = $node['isEnum'] ?? null;
+        $isReadonly         = $node['isReadonly'] ?? null;
+        $dependencies       = $node['dependencies'] ?? null;
+        $implements         = $node['implements'] ?? null;
+        $traits             = $node['traits'] ?? [];
+        $rawMethods         = $node['methods'] ?? null;
+        $rawConstants       = $node['constants'] ?? null;
+        $rawProperties      = $node['properties'] ?? null;
+        $functionCalls      = $node['functionCalls'] ?? null;
+        $superglobals       = $node['superglobals'] ?? null;
+        $languageConstructs = $node['languageConstructs'] ?? [];
+        $layers             = $node['layers'] ?? [];
 
         if (
             ! is_string($className)
@@ -389,6 +391,7 @@ final readonly class AnalysisResultCache
             || ! is_array($rawProperties)
             || ! $this->isStringArray($functionCalls)
             || ! $this->isStringArray($superglobals)
+            || ! $this->isStringArray($languageConstructs)
             || ! $this->isStringArray($layers)
         ) {
             return null;
@@ -459,9 +462,10 @@ final readonly class AnalysisResultCache
             methods:       $methods,
             constants:     $constants,
             properties:    $properties,
-            functionCalls: array_values($functionCalls),
-            superglobals:  array_values($superglobals),
-            layers:        array_values($layers),
+            functionCalls:      array_values($functionCalls),
+            superglobals:       array_values($superglobals),
+            languageConstructs: array_values($languageConstructs),
+            layers:             array_values($layers),
             isEnum:        $isEnum,
         );
     }

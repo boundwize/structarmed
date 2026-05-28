@@ -87,19 +87,20 @@ final class ClassNodeTest extends TestCase
     public function testDependencyInterfaceCallAndSuperglobalHelpers(): void
     {
         $classNode = new ClassNode(
-            className:     'App\\Domain\\OrderService',
-            file:          '/src/OrderService.php',
-            line:          5,
-            layer:         'Domain',
-            extends:       null,
-            isAbstract:    false,
-            isFinal:       false,
-            isInterface:   false,
-            isReadonly:    false,
-            dependencies:  ['App\\Infrastructure\\Clock'],
-            implements:    ['App\\Contracts\\OrderService'],
-            functionCalls: ['var_dump'],
-            superglobals:  ['$_SERVER'],
+            className:          'App\\Domain\\OrderService',
+            file:               '/src/OrderService.php',
+            line:               5,
+            layer:              'Domain',
+            extends:            null,
+            isAbstract:         false,
+            isFinal:            false,
+            isInterface:        false,
+            isReadonly:         false,
+            dependencies:       ['App\\Infrastructure\\Clock'],
+            implements:         ['App\\Contracts\\OrderService'],
+            functionCalls:      ['var_dump'],
+            superglobals:       ['$_SERVER'],
+            languageConstructs: ['exit'],
         );
 
         $this->assertTrue($classNode->dependsOn('App\\Infrastructure'));
@@ -107,6 +108,8 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\OrderService'));
         $this->assertTrue($classNode->callsFunction('var_dump'));
         $this->assertTrue($classNode->accessesSuperglobals());
+        $this->assertTrue($classNode->usesLanguageConstruct('exit'));
+        $this->assertFalse($classNode->usesLanguageConstruct('eval'));
     }
 
     public function testDependsOnMatchesExistingClassesExactly(): void
