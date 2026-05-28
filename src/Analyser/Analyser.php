@@ -112,7 +112,7 @@ final readonly class Analyser
         $layerPatterns      = $architecture->getLayerPatterns();
         $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
 
-        $files      = $files ?? $this->filesForAnalysis($architecture, $scanPaths);
+        $files    ??= $this->filesForAnalysis($architecture, $scanPaths);
         $classNodes = $this->collectClassNodes(
             $files,
             $progressHandler,
