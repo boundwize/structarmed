@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseLanguageConstructRule;
 use DateTime;
 use Exception;
 use JsonSerializable;
@@ -268,10 +269,17 @@ final readonly class DddPreset implements PresetInterface
                 new MaxMethodLengthRule(layer: $layer, maxLines: $this->maxMethodLength)
             );
 
-            foreach (['dd', 'dump', 'var_dump', 'print_r', 'die', 'exit'] as $fn) {
+            foreach (['dd', 'dump', 'var_dump', 'print_r'] as $fn) {
                 $architecture->rule(
                     sprintf('ddd.safety.%s_no_%s', strtolower($layer), $fn),
                     new MayNotCallFunctionRule(layer: $layer, function: $fn)
+                );
+            }
+
+            foreach (['die', 'exit', 'echo', 'print'] as $construct) {
+                $architecture->rule(
+                    sprintf('ddd.safety.%s_no_%s', strtolower($layer), $construct),
+                    new MayNotUseLanguageConstructRule(layer: $layer, construct: $construct)
                 );
             }
         }

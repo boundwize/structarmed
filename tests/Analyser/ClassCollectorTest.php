@@ -388,6 +388,47 @@ PHP;
         $this->assertContains('$_GET', $classNode->superglobals);
     }
 
+    public function testCollectsExitAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { exit(1); } }');
+
+        $this->assertContains('exit', $classNode->languageConstructs);
+        $this->assertNotContains('exit', $classNode->functionCalls);
+    }
+
+    public function testCollectsDieAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { die("error"); } }');
+
+        $this->assertContains('die', $classNode->languageConstructs);
+        $this->assertNotContains('die', $classNode->functionCalls);
+    }
+
+    public function testDeduplicatesLanguageConstructs(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function bar(): void { exit(0); exit(1); } }'
+        );
+
+        $this->assertSame(['exit'], $classNode->languageConstructs);
+    }
+
+    public function testCollectsEchoAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { echo "hello"; } }');
+
+        $this->assertContains('echo', $classNode->languageConstructs);
+        $this->assertNotContains('echo', $classNode->functionCalls);
+    }
+
+    public function testCollectsPrintAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): void { print "hello"; } }');
+
+        $this->assertContains('print', $classNode->languageConstructs);
+        $this->assertNotContains('print', $classNode->functionCalls);
+    }
+
     public function testCalculatesCyclomaticComplexity(): void
     {
         $code      = <<<'PHP'

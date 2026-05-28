@@ -11,8 +11,10 @@ use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\Exit_;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\Match_;
+use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
@@ -25,6 +27,7 @@ use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Do_;
+use PhpParser\Node\Stmt\Echo_;
 use PhpParser\Node\Stmt\ElseIf_;
 use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\For_;
@@ -161,28 +164,29 @@ final class ClassCollector extends NodeVisitorAbstract
         $properties = $this->collectProperties($classLike);
 
         $this->nodes[] = new ClassNode(
-            className:     $className,
-            file:          $this->currentFile,
-            line:          $classLike->getStartLine(),
-            layer:         $layer,
-            extends:       $classLike instanceof Class_ && $classLike->extends instanceof Name
-                               ? $classLike->extends->toString()
-                               : null,
-            isAbstract:    $classLike instanceof Class_ && $classLike->isAbstract(),
-            isFinal:       $classLike instanceof Class_ && $classLike->isFinal(),
-            isInterface:   $classLike instanceof Interface_,
-            isReadonly:    $classLike instanceof Class_ && $classLike->isReadonly(),
-            isTrait:       $classLike instanceof Trait_,
-            dependencies:  $analysis['dependencies'],
-            implements:    $implements,
-            traits:        $traits,
-            methods:       $methods,
-            constants:     $constants,
-            properties:    $properties,
-            functionCalls: $analysis['functionCalls'],
-            superglobals:  $analysis['superglobals'],
-            layers:        $layers,
-            isEnum:        $classLike instanceof Enum_,
+            className:          $className,
+            file:               $this->currentFile,
+            line:               $classLike->getStartLine(),
+            layer:              $layer,
+            extends:            $classLike instanceof Class_ && $classLike->extends instanceof Name
+                                    ? $classLike->extends->toString()
+                                    : null,
+            isAbstract:         $classLike instanceof Class_ && $classLike->isAbstract(),
+            isFinal:            $classLike instanceof Class_ && $classLike->isFinal(),
+            isInterface:        $classLike instanceof Interface_,
+            isReadonly:         $classLike instanceof Class_ && $classLike->isReadonly(),
+            isTrait:            $classLike instanceof Trait_,
+            dependencies:       $analysis['dependencies'],
+            implements:         $implements,
+            traits:             $traits,
+            methods:            $methods,
+            constants:          $constants,
+            properties:         $properties,
+            functionCalls:      $analysis['functionCalls'],
+            superglobals:       $analysis['superglobals'],
+            languageConstructs: $analysis['languageConstructs'],
+            layers:             $layers,
+            isEnum:             $classLike instanceof Enum_,
         );
     }
 
@@ -276,6 +280,7 @@ final class ClassCollector extends NodeVisitorAbstract
      *     dependencies: list<string>,
      *     functionCalls: string[],
      *     superglobals: string[],
+     *     languageConstructs: string[],
      *     complexityByMethodId: array<int, int>
      * }
      */
@@ -297,6 +302,9 @@ final class ClassCollector extends NodeVisitorAbstract
 
             /** @var string[] */
             public array $superglobals = [];
+
+            /** @var string[] */
+            public array $languageConstructs = [];
 
             /** @var array<int, int> */
             public array $complexityByMethodId = [];
@@ -339,6 +347,20 @@ final class ClassCollector extends NodeVisitorAbstract
                     && $node->name instanceof Name
                 ) {
                     $this->functionCalls[] = $this->resolveFunctionName($node->name);
+                }
+
+                if ($node instanceof Exit_) {
+                    $this->languageConstructs[] = $node->getAttribute('kind') === Exit_::KIND_DIE
+                        ? 'die'
+                        : 'exit';
+                }
+
+                if ($node instanceof Echo_) {
+                    $this->languageConstructs[] = 'echo';
+                }
+
+                if ($node instanceof Print_) {
+                    $this->languageConstructs[] = 'print';
                 }
 
                 if (
@@ -419,6 +441,7 @@ final class ClassCollector extends NodeVisitorAbstract
             'dependencies'         => array_values(array_unique(array_merge($this->fileUses, $visitor->dependencies))),
             'functionCalls'        => array_values(array_unique($visitor->functionCalls)),
             'superglobals'         => array_values(array_unique($visitor->superglobals)),
+            'languageConstructs'   => array_values(array_unique($visitor->languageConstructs)),
             'complexityByMethodId' => $visitor->complexityByMethodId,
         ];
     }
