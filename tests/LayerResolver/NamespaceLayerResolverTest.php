@@ -6,7 +6,6 @@ namespace Boundwize\StructArmed\Tests\LayerResolver;
 
 use App\Domain\Entities\Order;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
-use Boundwize\StructArmed\LayerResolver\ChainLayerResolverCache;
 use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Tests\ArchitectureTest;
@@ -16,7 +15,6 @@ use PHPUnit\Framework\TestCase;
 use function dirname;
 
 #[CoversClass(NamespaceLayerResolver::class)]
-#[CoversClass(ChainLayerResolverCache::class)]
 #[CoversClass(ChainLayerResolver::class)]
 
 final class NamespaceLayerResolverTest extends TestCase

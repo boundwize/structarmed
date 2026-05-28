@@ -7,19 +7,23 @@ namespace Boundwize\StructArmed\LayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 
+use function array_key_exists;
 use function in_array;
 
-final readonly class ChainLayerResolver implements LayerResolverInterface
+final class ChainLayerResolver implements LayerResolverInterface
 {
     /** @var LayerResolverInterface[] */
-    private array $resolvers;
+    private readonly array $resolvers;
 
-    private ChainLayerResolverCache $chainLayerResolverCache;
+    /** @var array<string, string|null> */
+    private array $resolveCachedLayer = [];
+
+    /** @var array<string, list<string>> */
+    private array $resolveAllCachedLayers = [];
 
     public function __construct(LayerResolverInterface ...$resolvers)
     {
-        $this->resolvers               = $resolvers;
-        $this->chainLayerResolverCache = new ChainLayerResolverCache();
+        $this->resolvers = $resolvers;
     }
 
     /**
@@ -40,38 +44,34 @@ final readonly class ChainLayerResolver implements LayerResolverInterface
 
     public function resolve(string $className, string $filePath): ?string
     {
-        return $this->resolveMatches($className, $filePath)['matchedLayer'];
+        $key = $className . "\0" . $filePath;
+
+        if (array_key_exists($key, $this->resolveCachedLayer)) {
+            return $this->resolveCachedLayer[$key];
+        }
+
+        foreach ($this->resolvers as $resolver) {
+            $layer = $resolver->resolve($className, $filePath);
+
+            if ($layer !== null) {
+                return $this->resolveCachedLayer[$key] = $layer;
+            }
+        }
+
+        return $this->resolveCachedLayer[$key] = null;
     }
 
     public function resolveAll(string $className, string $filePath): array
     {
-        return $this->resolveMatches($className, $filePath)['matchedLayers'];
-    }
+        $key = $className . "\0" . $filePath;
 
-    /**
-     * @return array{matchedLayer: string|null, matchedLayers: list<string>}
-     */
-    private function resolveMatches(string $className, string $filePath): array
-    {
-        $key     = $className . "\0" . $filePath;
-        $matches = $this->chainLayerResolverCache->get($key);
-
-        if ($matches !== null) {
-            return $matches;
+        if (array_key_exists($key, $this->resolveAllCachedLayers)) {
+            return $this->resolveAllCachedLayers[$key];
         }
 
-        $matchedLayer  = null;
         $matchedLayers = [];
 
         foreach ($this->resolvers as $resolver) {
-            if ($matchedLayer === null) {
-                $layer = $resolver->resolve($className, $filePath);
-
-                if ($layer !== null) {
-                    $matchedLayer = $layer;
-                }
-            }
-
             foreach ($resolver->resolveAll($className, $filePath) as $singleLayer) {
                 if (! in_array($singleLayer, $matchedLayers, true)) {
                     $matchedLayers[] = $singleLayer;
@@ -79,13 +79,6 @@ final readonly class ChainLayerResolver implements LayerResolverInterface
             }
         }
 
-        $matches = [
-            'matchedLayer'  => $matchedLayer,
-            'matchedLayers' => $matchedLayers,
-        ];
-
-        $this->chainLayerResolverCache->set($key, $matches);
-
-        return $matches;
+        return $this->resolveAllCachedLayers[$key] = $matchedLayers;
     }
 }
