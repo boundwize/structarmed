@@ -304,7 +304,7 @@ final readonly class MvcPreset implements PresetInterface
                 );
             }
 
-            foreach (['die', 'exit', 'echo', 'print'] as $construct) {
+            foreach (['die', 'exit'] as $construct) {
                 $architecture->rule(
                     sprintf('mvc.safety.%s_no_%s', strtolower($layer), $construct),
                     new MayNotUseLanguageConstructRule(layer: $layer, construct: $construct)
