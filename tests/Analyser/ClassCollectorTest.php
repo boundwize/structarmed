@@ -503,20 +503,6 @@ PHP;
         $this->assertContains('list', $classNode->languageConstructs);
     }
 
-    public function testCollectsErrorSuppressAsLanguageConstruct(): void
-    {
-        $classNode = $this->collect('<?php class Foo { public function bar(): void { $x = @file_get_contents("x"); } }');
-
-        $this->assertContains('@', $classNode->languageConstructs);
-    }
-
-    public function testCollectsBacktickAsLanguageConstruct(): void
-    {
-        $classNode = $this->collect('<?php class Foo { public function bar(): void { $x = `ls`; } }');
-
-        $this->assertContains('backtick', $classNode->languageConstructs);
-    }
-
     public function testCalculatesCyclomaticComplexity(): void
     {
         $code      = <<<'PHP'

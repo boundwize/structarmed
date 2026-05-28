@@ -12,7 +12,6 @@ use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
 use PhpParser\Node\Expr\Empty_;
-use PhpParser\Node\Expr\ErrorSuppress;
 use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\Exit_;
 use PhpParser\Node\Expr\FuncCall;
@@ -21,7 +20,6 @@ use PhpParser\Node\Expr\Isset_;
 use PhpParser\Node\Expr\List_;
 use PhpParser\Node\Expr\Match_;
 use PhpParser\Node\Expr\Print_;
-use PhpParser\Node\Expr\ShellExec;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
@@ -398,14 +396,6 @@ final class ClassCollector extends NodeVisitorAbstract
 
                 if ($node instanceof List_) {
                     $this->languageConstructs[] = 'list';
-                }
-
-                if ($node instanceof ErrorSuppress) {
-                    $this->languageConstructs[] = '@';
-                }
-
-                if ($node instanceof ShellExec) {
-                    $this->languageConstructs[] = 'backtick';
                 }
 
                 if (
