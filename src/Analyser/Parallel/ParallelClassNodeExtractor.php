@@ -238,6 +238,7 @@ final readonly class ParallelClassNodeExtractor
 
         arsort($fileSizes);
 
+        assert($workerCount > 0);
         $buckets     = array_fill(0, $workerCount, []);
         $bucketSizes = array_fill(0, $workerCount, 0);
 
