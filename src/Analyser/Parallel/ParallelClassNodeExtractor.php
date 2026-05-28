@@ -70,23 +70,7 @@ final readonly class ParallelClassNodeExtractor
         $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $processes   = [];
 
-        $fileSizes = [];
-        foreach ($files as $file) {
-            $fileSizes[$file] = filesize($file) ?: 0;
-        }
-
-        arsort($fileSizes);
-
-        $buckets     = array_fill(0, $workerCount, []);
-        $bucketSizes = array_fill(0, $workerCount, 0);
-
-        foreach (array_keys($fileSizes) as $file) {
-            $minIdx              = (int) array_search(min($bucketSizes), $bucketSizes, true);
-            $buckets[$minIdx][]  = $file;
-            $bucketSizes[$minIdx] += $fileSizes[$file];
-        }
-
-        foreach ($buckets as $chunk) {
+        foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             [
                 'inputFile'  => $inputFile,
                 'outputFile' => $outputFile,
@@ -234,6 +218,36 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return $nodes;
+    }
+
+    /**
+     * Distributes files across worker buckets using the LPT (Longest Processing Time First) algorithm:
+     * sort files largest-first, then assign each file to the worker with the smallest total byte load so far.
+     * This minimises the gap between the slowest and fastest worker (makespan), giving near-optimal balance
+     * even when one file is much larger than the rest.
+     *
+     * @param list<string> $files
+     * @return list<list<string>>
+     */
+    private function buildWorkerBuckets(array $files, int $workerCount): array
+    {
+        $fileSizes = [];
+        foreach ($files as $file) {
+            $fileSizes[$file] = filesize($file) ?: 0;
+        }
+
+        arsort($fileSizes);
+
+        $buckets     = array_fill(0, $workerCount, []);
+        $bucketSizes = array_fill(0, $workerCount, 0);
+
+        foreach (array_keys($fileSizes) as $file) {
+            $minIdx               = (int) array_search(min($bucketSizes), $bucketSizes, true);
+            $buckets[$minIdx][]   = $file;
+            $bucketSizes[$minIdx] += $fileSizes[$file];
+        }
+
+        return $buckets;
     }
 
     /**
