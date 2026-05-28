@@ -120,7 +120,8 @@ final class PresetTest extends TestCase
         )->apply($architecture);
 
         $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
-        $this->assertCount(4, $architecture->getRules());
+        $this->assertCount(5, $architecture->getRules());
+        $this->assertArrayHasKey(Psr15Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER, $architecture->getRules());
         $this->assertArrayHasKey(
             Psr15Preset::MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE,
             $architecture->getRules()
@@ -137,6 +138,16 @@ final class PresetTest extends TestCase
             Psr15Preset::REQUEST_HANDLER_INTERFACE_IMPLEMENTATION_MUST_HAVE_HANDLER_SUFFIX,
             $architecture->getRules()
         );
+    }
+
+    public function testPsr15PresetUsesComposerSourcePathsByDefault(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR15()->apply($architecture);
+
+        $this->assertSame(['Source' => []], $architecture->getLayers());
+        $this->assertArrayHasKey(Psr15Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER, $architecture->getRules());
     }
 
     public function testDddPresetRegistersAllDefaultRules(): void

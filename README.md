@@ -46,6 +46,9 @@ vendor/bin/structarmed init --preset=psr1
 # PSR-12 extends PSR-1: require explicit visibility on all members
 vendor/bin/structarmed init --preset=psr12
 
+# PSR-15 middleware/handler interface and suffix enforcement
+vendor/bin/structarmed init --preset=psr15
+
 # thin controllers, model/view/service layer rules
 vendor/bin/structarmed init --preset=mvc
 

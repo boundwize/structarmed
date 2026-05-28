@@ -84,6 +84,8 @@ PHP);
             'ddd' => '    ->withPreset(Preset::DDD());',
             'mvc' => '    ->withPreset(Preset::MVC());',
             'psr1' => '    ->withPreset(Preset::PSR1());',
+            'psr12' => '    ->withPreset(Preset::PSR12());',
+            'psr15' => '    ->withPreset(Preset::PSR15());',
             'psr4' => '    ->withPreset(Preset::PSR4());',
             'all' => "    ->withPresets(\n"
                 . "        Preset::PSR1(),\n"

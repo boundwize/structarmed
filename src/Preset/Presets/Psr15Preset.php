@@ -8,10 +8,13 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\ClassImplementingInterfaceMustHaveSuffixRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustImplementInterfaceRule;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 
 final readonly class Psr15Preset implements PresetInterface
 {
     public const SOURCE_LAYER = 'Source';
+
+    public const SOURCE_PATHS_MUST_BE_IN_COMPOSER = 'psr15.source_paths.must_be_in_composer';
 
     public const MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE =
         'psr15.middleware.must_implement_middleware_interface';
@@ -40,6 +43,7 @@ final readonly class Psr15Preset implements PresetInterface
     public function apply(Architecture $architecture): void
     {
         $architecture->layer(self::SOURCE_LAYER, $this->sourcePaths ?? []);
+        $architecture->rule(self::SOURCE_PATHS_MUST_BE_IN_COMPOSER, new Psr4SourcePathsRule($this->sourcePaths));
         $architecture->rule(
             self::MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE,
             new MustImplementInterfaceRule(
