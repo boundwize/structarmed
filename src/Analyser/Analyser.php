@@ -496,8 +496,9 @@ final readonly class Analyser
         $layers = $architecture->getLayers();
 
         foreach ($layers as $layerName => $layerPaths) {
-            if ($layerPaths === []) {
+            if ($layerName === 'Source' && $layerPaths === []) {
                 $layers[$layerName] = (new Psr4PathResolver())->paths($this->basePath);
+                break;
             }
         }
 
