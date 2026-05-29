@@ -229,6 +229,31 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
+    public function testAllowsShortPrefixNamespaceWhenFileAlsoMatchesLongerPrefix(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-overlapping-prefix');
+        mkdir($basePath . '/src/Legacy', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\'    => 'src/',
+                    'Legacy\\' => 'src/Legacy/',
+                ],
+            ],
+        ]));
+
+        $file = $basePath . '/src/Legacy/Foo.php';
+        file_put_contents($file, '<?php namespace App\Legacy; class Foo {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Legacy\\Foo', $file))
+        );
+    }
+
     private function makeNode(
         string $className,
         string $file,
