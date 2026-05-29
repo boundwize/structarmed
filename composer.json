@@ -51,7 +51,10 @@
     "autoload-dev": {
         "psr-4": {
             "Boundwize\\StructArmed\\Tests\\": "tests/"
-        }
+        },
+        "classmap": [
+            "tests/Fixtures/App"
+        ]
     },
     "minimum-stability": "dev",
     "prefer-stable": true,

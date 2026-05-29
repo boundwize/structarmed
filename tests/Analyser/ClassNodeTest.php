@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser;
 
+use App\Foo;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use DateTime;
@@ -147,6 +148,66 @@ final class ClassNodeTest extends TestCase
         );
 
         $this->assertFalse($classNode->dependsOn(self::class));
+    }
+
+    public function testDependsOnDoesNotTreatLoadedPsr4ClassAsNamespacePrefix(): void
+    {
+        $classNode = new ClassNode(
+            className:    'App\\Domain\\OrderService',
+            file:         '/src/OrderService.php',
+            line:         5,
+            layer:        'Domain',
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  false,
+            isReadonly:   false,
+            dependencies: [ClassNode::class . '\\NestedDependency'],
+        );
+
+        // ClassNode is a PSR-4 class already loaded in memory, so class_exists($name, false)
+        // returns true and dependsOn does not treat it as a namespace prefix
+        $this->assertFalse($classNode->dependsOn(ClassNode::class));
+    }
+
+    public function testDependsOnTreatsUnloadedPsr4NamespaceAsNamespacePrefix(): void
+    {
+        $classNode = new ClassNode(
+            className:    'App\\Domain\\OrderService',
+            file:         '/src/OrderService.php',
+            line:         5,
+            layer:        'Domain',
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  false,
+            isReadonly:   false,
+            dependencies: ['App\\Bar\\SomeService'],
+        );
+
+        // App\Bar is not registered anywhere, so class_exists returns false even with autoloading,
+        // and dependsOn treats it as a namespace prefix
+        $this->assertTrue($classNode->dependsOn('App\\Bar'));
+        $this->assertFalse($classNode->dependsOn('App\\Baz'));
+    }
+
+    public function testDependsOnDoesNotTreatLoadedAppFooClassAsNamespacePrefix(): void
+    {
+        $classNode = new ClassNode(
+            className:    'App\\Domain\\OrderService',
+            file:         '/src/OrderService.php',
+            line:         5,
+            layer:        'Domain',
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  false,
+            isReadonly:   false,
+            dependencies: ['App\\Foo\\SomeService'],
+        );
+
+        // App\Foo is registered via classmap; dependsOn triggers autoloading and treats it as a class
+        $this->assertFalse($classNode->dependsOn(Foo::class));
     }
 
     public function testDependsOnMatchesNamespaceBoundaries(): void

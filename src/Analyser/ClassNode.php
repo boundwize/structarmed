@@ -112,10 +112,10 @@ final readonly class ClassNode
 
     private function isLoadedClassLike(string $name, bool $isMayBeClassLike): bool
     {
-        return $isMayBeClassLike && (class_exists($name, false)
-            || interface_exists($name, false)
-            || trait_exists($name, false)
-            || enum_exists($name, false));
+        return $isMayBeClassLike && (class_exists($name, true)
+            || interface_exists($name, true)
+            || trait_exists($name, true)
+            || enum_exists($name, true));
     }
 
     public function implementsInterface(string $interface): bool
