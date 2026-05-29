@@ -9,8 +9,10 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
+use function array_column;
 use function dirname;
 use function file_exists;
+use function in_array;
 use function ltrim;
 use function preg_replace;
 use function realpath;
@@ -21,6 +23,7 @@ use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
+use function usort;
 
 final class Psr4NamespaceRule implements RuleInterface
 {
@@ -40,9 +43,9 @@ final class Psr4NamespaceRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        $expectedClassName = $this->expectedClassName($classNode->file);
+        $expectedClassNames = $this->expectedClassNames($classNode->file);
 
-        if ($expectedClassName === null || $classNode->className === $expectedClassName) {
+        if ($expectedClassNames === [] || in_array($classNode->className, $expectedClassNames, true)) {
             return null;
         }
 
@@ -50,7 +53,7 @@ final class Psr4NamespaceRule implements RuleInterface
             message:   sprintf(
                 'Class [%s] must match PSR-4 class [%s]',
                 $classNode->className,
-                $expectedClassName
+                $expectedClassNames[0]
             ),
             file:      $classNode->file,
             line:      $classNode->line,
@@ -59,15 +62,20 @@ final class Psr4NamespaceRule implements RuleInterface
         );
     }
 
-    private function expectedClassName(string $file): ?string
+    /**
+     * @return list<string>
+     */
+    private function expectedClassNames(string $file): array
     {
         $basePath = $this->basePathFor($file);
 
         if ($basePath === null) {
-            return null;
+            return [];
         }
 
         $file = $this->normalisePath($file);
+
+        $candidates = [];
 
         foreach ($this->mappingsFor($basePath) as $namespace => $paths) {
             foreach ($paths as $path) {
@@ -87,11 +95,13 @@ final class Psr4NamespaceRule implements RuleInterface
                 $relativeClass = (string) preg_replace('/\.class$/i', '', $relativeClass);
                 $relativeClass = str_replace('/', '\\', $relativeClass);
 
-                return $namespace . ltrim($relativeClass, '\\');
+                $candidates[] = ['length' => strlen($prefix), 'name' => $namespace . ltrim($relativeClass, '\\')];
             }
         }
 
-        return null;
+        usort($candidates, static fn(array $a, array $b): int => $b['length'] <=> $a['length']);
+
+        return array_column($candidates, 'name');
     }
 
     private function basePathFor(string $file): ?string

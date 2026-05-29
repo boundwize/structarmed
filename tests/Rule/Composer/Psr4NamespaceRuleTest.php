@@ -179,6 +179,111 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
+    public function testSelectsLongestPrefixMatchNotFirstDeclared(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-longest-prefix');
+        mkdir($basePath . '/src/legacy', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\'    => 'src/',
+                    'Legacy\\' => 'src/legacy/',
+                ],
+            ],
+        ]));
+
+        $file = $basePath . '/src/legacy/Thing.php';
+        file_put_contents($file, '<?php namespace Legacy; class Thing {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('Legacy\\Thing', $file))
+        );
+    }
+
+    public function testSelectsLongestPrefixMatchNotLastDeclared(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-longest-prefix-flipped');
+        mkdir($basePath . '/src/legacy', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'Legacy\\' => 'src/legacy/',
+                    'App\\'    => 'src/',
+                ],
+            ],
+        ]));
+
+        $file = $basePath . '/src/legacy/Thing.php';
+        file_put_contents($file, '<?php namespace Legacy; class Thing {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('Legacy\\Thing', $file))
+        );
+    }
+
+    public function testAllowsShortPrefixNamespaceWhenFileAlsoMatchesLongerPrefix(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-overlapping-prefix');
+        mkdir($basePath . '/src/Legacy', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\'    => 'src/',
+                    'Legacy\\' => 'src/Legacy/',
+                ],
+            ],
+        ]));
+
+        $file = $basePath . '/src/Legacy/Foo.php';
+        file_put_contents($file, '<?php namespace App\Legacy; class Foo {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Legacy\\Foo', $file))
+        );
+    }
+
+    public function testAllowsEitherNamespaceWhenTwoNamespacesMapToSameDirectory(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-same-length-prefix');
+        mkdir($basePath . '/src/Bar', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\' => 'src/',
+                    'Foo\\' => 'src/',
+                ],
+            ],
+        ]));
+
+        $file = $basePath . '/src/Bar/Baz.php';
+        file_put_contents($file, '<?php namespace App\Bar; class Baz {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Bar\\Baz', $file))
+        );
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('Foo\\Bar\\Baz', $file))
+        );
+    }
+
     private function makeNode(
         string $className,
         string $file,
