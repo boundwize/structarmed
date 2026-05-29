@@ -537,7 +537,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 isStatic:             $classMethod->isStatic(),
                 paramCount:           count($classMethod->params),
                 cyclomaticComplexity: $complexityByMethodId[spl_object_id($classMethod)] ?? 1,
-                lineCount:            ($classMethod->getEndLine() - $classMethod->getStartLine()) + 1,
+                lineCount:            $this->calculateMethodLineCount($classMethod),
                 hasExplicitVisibility: $this->hasExplicitVisibilityFlag($classMethod->flags),
                 line:                 $classMethod->getStartLine(),
             );
@@ -562,5 +562,15 @@ final class ClassCollector extends NodeVisitorAbstract
     private function hasExplicitVisibilityFlag(int $flags): bool
     {
         return ($flags & Modifiers::VISIBILITY_MASK) !== 0;
+    }
+
+    private function calculateMethodLineCount(ClassMethod $classMethod): int
+    {
+        if ($classMethod->stmts === null || $classMethod->stmts === []) {
+            return 0;
+        }
+
+        $lastIndex = count($classMethod->stmts) - 1;
+        return $classMethod->stmts[$lastIndex]->getEndLine() - $classMethod->stmts[0]->getStartLine() + 1;
     }
 }

@@ -502,7 +502,7 @@ final class AnalyserTest extends TestCase
 
         $architecture = Architecture::define()
             ->layer('Source', 'src/')
-            ->rule('source.max_method_length', new MaxMethodLengthRule('Source', 2));
+            ->rule('source.max_method_length', new MaxMethodLengthRule('Source', 1));
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
