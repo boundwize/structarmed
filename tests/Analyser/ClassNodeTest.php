@@ -208,6 +208,8 @@ final class ClassNodeTest extends TestCase
 
         // App\Foo is registered via classmap; dependsOn triggers autoloading and treats it as a class
         $this->assertFalse($classNode->dependsOn(Foo::class));
+        // trailing backslash forces namespace treatment regardless of classlike registration
+        $this->assertTrue($classNode->dependsOn('App\\Foo\\'));
     }
 
     public function testDependsOnMatchesNamespaceBoundaries(): void
