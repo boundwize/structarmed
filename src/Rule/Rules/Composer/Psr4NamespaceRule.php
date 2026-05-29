@@ -9,11 +9,10 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-use function array_values;
+use function array_column;
 use function dirname;
 use function file_exists;
 use function in_array;
-use function krsort;
 use function ltrim;
 use function preg_replace;
 use function realpath;
@@ -24,6 +23,7 @@ use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
+use function usort;
 
 final class Psr4NamespaceRule implements RuleInterface
 {
@@ -95,13 +95,13 @@ final class Psr4NamespaceRule implements RuleInterface
                 $relativeClass = (string) preg_replace('/\.class$/i', '', $relativeClass);
                 $relativeClass = str_replace('/', '\\', $relativeClass);
 
-                $candidates[strlen($prefix)] = $namespace . ltrim($relativeClass, '\\');
+                $candidates[] = ['length' => strlen($prefix), 'name' => $namespace . ltrim($relativeClass, '\\')];
             }
         }
 
-        krsort($candidates);
+        usort($candidates, static fn(array $a, array $b): int => $b['length'] <=> $a['length']);
 
-        return array_values($candidates);
+        return array_column($candidates, 'name');
     }
 
     private function basePathFor(string $file): ?string

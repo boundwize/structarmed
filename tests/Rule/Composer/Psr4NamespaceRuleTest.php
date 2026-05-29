@@ -254,6 +254,36 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
+    public function testAllowsEitherNamespaceWhenTwoNamespacesMapToSameDirectory(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-same-length-prefix');
+        mkdir($basePath . '/src/Bar', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\' => 'src/',
+                    'Foo\\' => 'src/',
+                ],
+            ],
+        ]));
+
+        $file = $basePath . '/src/Bar/Baz.php';
+        file_put_contents($file, '<?php namespace App\Bar; class Baz {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Bar\\Baz', $file))
+        );
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('Foo\\Bar\\Baz', $file))
+        );
+    }
+
     private function makeNode(
         string $className,
         string $file,
