@@ -8,14 +8,13 @@ use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
-use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
-use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use FilesystemIterator;
@@ -496,12 +495,10 @@ final readonly class Analyser
     {
         $layers = $architecture->getLayers();
 
-        foreach ($architecture->getRules() as $rule) {
-            if (
-                $rule instanceof Psr4SourcePathsRule
-                && ($layers[Psr4Preset::SOURCE_LAYER] ?? null) === []
-            ) {
-                $layers[Psr4Preset::SOURCE_LAYER] = $rule->sourcePathsFor($this->basePath);
+        foreach ($layers as $layerName => $layerPaths) {
+            if ($layerName === 'Source' && $layerPaths === []) {
+                $layers[$layerName] = (new Psr4PathResolver())->paths($this->basePath);
+                break;
             }
         }
 

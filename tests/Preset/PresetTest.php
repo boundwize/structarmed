@@ -139,6 +139,15 @@ final class PresetTest extends TestCase
         );
     }
 
+    public function testPsr15PresetUsesComposerSourcePathsByDefault(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR15()->apply($architecture);
+
+        $this->assertSame(['Source' => []], $architecture->getLayers());
+    }
+
     public function testDddPresetRegistersAllDefaultRules(): void
     {
         $architecture = Architecture::define();
