@@ -112,7 +112,6 @@ return [
         'rule' => 'source.must_be_final',
         'message' => 'Foo must be final',
         'file' => 'src/Foo.php',
-        'line' => 1,
         'class' => 'App\Foo',
         'layer' => 'Source',
     ],
@@ -164,7 +163,6 @@ return [
         'rule' => 'source.must_be_final',
         'message' => 'Foo must be final',
         'file' => 'src/Foo.php',
-        'line' => 1,
         'class' => 'App\Foo',
         'layer' => 'Source',
     ],
@@ -180,6 +178,48 @@ PHP);
             }
         } finally {
             $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src/Bar.php', 'src']);
+        }
+    }
+
+    public function testFilterStillMatchesAfterNewLineAddedToSourceFile(): void
+    {
+        $basePath                = $this->createTempDirectory();
+        $baseline                = $basePath . '/baseline.php';
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', '<?php');
+
+        $ruleViolationCollection->add($this->violation($basePath . '/src/Foo.php'));
+
+        file_put_contents($baseline, <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+return [
+    [
+        'rule' => 'source.must_be_final',
+        'message' => 'Foo must be final',
+        'file' => 'src/Foo.php',
+        'class' => 'App\Foo',
+        'layer' => 'Source',
+    ],
+];
+PHP);
+
+        try {
+            // Add a new line at the top of the source file, shifting the violation to line 2
+            file_put_contents($basePath . '/src/Foo.php', "\n<?php");
+
+            $collectionAfterNewLine = new RuleViolationCollection();
+            $collectionAfterNewLine->add(new RuleViolation('Foo must be final', $basePath . '/src/Foo.php', 2, 'App\Foo', 'Source', 'source.must_be_final'));
+
+            $filtered = (new Baseline())->filter($collectionAfterNewLine, 'baseline.php', $basePath);
+
+            $this->assertCount(0, $filtered);
+        } finally {
+            $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src']);
         }
     }
 
@@ -237,7 +277,6 @@ return [
         'rule' => [],
         'message' => [],
         'file' => [],
-        'line' => 0,
         'class' => [],
     ],
 ];
@@ -274,7 +313,6 @@ return [
         'rule' => 'source.must_be_final',
         'message' => "Foo \xB1",
         'file' => 'src/Foo.php',
-        'line' => 1,
         'class' => 'App\Foo',
         'layer' => 'Source',
     ],
