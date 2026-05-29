@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Cache;
 
+use App\Foo;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
@@ -657,7 +658,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         $classNodes = [
             new ClassNode(
-                className:   'App\Foo',
+                className:   Foo::class,
                 file:        $sourceFile,
                 line:        1,
                 layer:       'Source',
@@ -708,7 +709,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         $classNodes = [
             new ClassNode(
-                className:   'App\Foo',
+                className:   Foo::class,
                 file:        $sourceFile,
                 line:        1,
                 layer:       'Source',
@@ -751,7 +752,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         $classNodes = [
             new ClassNode(
-                className:   'App\Foo',
+                className:   Foo::class,
                 file:        $sourceFile,
                 line:        1,
                 layer:       'Source',
@@ -902,7 +903,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -929,7 +930,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'   => 'App\Foo',
+                        'className'   => Foo::class,
                         'file'        => __FILE__,
                         'line'        => 1,
                         'layer'       => null,
@@ -957,7 +958,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -985,7 +986,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1013,7 +1014,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1041,7 +1042,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1069,7 +1070,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1097,7 +1098,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1137,7 +1138,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1176,7 +1177,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1204,7 +1205,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1232,7 +1233,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1260,7 +1261,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1295,7 +1296,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1323,7 +1324,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1351,7 +1352,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1379,7 +1380,7 @@ final class AnalysisResultCacheTest extends TestCase
             [
                 'nodes' => [
                     [
-                        'className'     => 'App\Foo',
+                        'className'     => Foo::class,
                         'file'          => __FILE__,
                         'line'          => 1,
                         'layer'         => null,
@@ -1666,7 +1667,7 @@ final class AnalysisResultCacheTest extends TestCase
     private function makeClassNode(string $file): ClassNode
     {
         return new ClassNode(
-            className:     'App\Foo',
+            className:     Foo::class,
             file:          $file,
             line:          1,
             layer:         'Source',

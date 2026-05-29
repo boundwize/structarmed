@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests;
 
+use App\Foo;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\Preset;
@@ -230,10 +231,10 @@ final class ArchitectureTest extends TestCase
     public function testSkipClassViolationIsSingleDependency(): void
     {
         $architecture = Architecture::define()
-            ->skipClassViolation('App\\Foo', 'App\\Bar');
+            ->skipClassViolation(Foo::class, 'App\\Bar');
 
         $this->assertSame(
-            ['App\\Foo' => ['App\\Bar']],
+            [Foo::class => ['App\\Bar']],
             $architecture->getClassViolationSkips()
         );
     }
@@ -241,10 +242,10 @@ final class ArchitectureTest extends TestCase
     public function testSkipClassViolationIsMultipleDependencies(): void
     {
         $architecture = Architecture::define()
-            ->skipClassViolation('App\\Foo', ['App\\Bar', 'App\\Baz']);
+            ->skipClassViolation(Foo::class, ['App\\Bar', 'App\\Baz']);
 
         $this->assertSame(
-            ['App\\Foo' => ['App\\Bar', 'App\\Baz']],
+            [Foo::class => ['App\\Bar', 'App\\Baz']],
             $architecture->getClassViolationSkips()
         );
     }
@@ -252,13 +253,13 @@ final class ArchitectureTest extends TestCase
     public function testSkipClassViolationAccumulatesAcrossCalls(): void
     {
         $architecture = Architecture::define()
-            ->skipClassViolation('App\\Foo', 'App\\Bar')
-            ->skipClassViolation('App\\Foo', 'App\\Baz')
+            ->skipClassViolation(Foo::class, 'App\\Bar')
+            ->skipClassViolation(Foo::class, 'App\\Baz')
             ->skipClassViolation('App\\Qux', 'App\\Bar');
 
         $skips = $architecture->getClassViolationSkips();
 
-        $this->assertSame(['App\\Bar', 'App\\Baz'], $skips['App\\Foo']);
+        $this->assertSame(['App\\Bar', 'App\\Baz'], $skips[Foo::class]);
         $this->assertSame(['App\\Bar'], $skips['App\\Qux']);
     }
 

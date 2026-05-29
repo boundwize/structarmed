@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Baseline;
 
+use App\Foo;
 use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
@@ -218,7 +219,7 @@ PHP);
                     'Foo must be final',
                     $basePath . '/src/Foo.php',
                     2,
-                    'App\Foo',
+                    Foo::class,
                     'Source',
                     'source.must_be_final'
                 )
@@ -304,7 +305,7 @@ PHP);
         $basePath                = $this->createTempDirectory();
         $baseline                = $basePath . '/baseline.php';
         $ruleViolationCollection = new RuleViolationCollection();
-        $ruleViolationCollection->add($this->violation($basePath . '/src/Foo.php', "Foo \xB1", 'App\Foo'));
+        $ruleViolationCollection->add($this->violation($basePath . '/src/Foo.php', "Foo \xB1", Foo::class));
         $ruleViolationCollection->add($this->violation($basePath . '/src/Bar.php', "Bar \xB1", 'App\Bar'));
 
         mkdir($basePath . '/src');
@@ -373,7 +374,7 @@ PHP);
     private function violation(
         string $file,
         string $message = 'Foo must be final',
-        string $className = 'App\Foo'
+        string $className = Foo::class
     ): RuleViolation {
         return new RuleViolation($message, $file, 1, $className, 'Source', 'source.must_be_final');
     }
