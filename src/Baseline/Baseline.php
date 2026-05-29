@@ -83,7 +83,6 @@ final readonly class Baseline
                 'rule'    => $violation->ruleKey,
                 'message' => $violation->message,
                 'file'    => $this->relativePath($violation->file, $basePath),
-                'line'    => $violation->line,
                 'class'   => $violation->className,
                 'layer'   => $violation->layer,
             ];
@@ -202,7 +201,6 @@ final readonly class Baseline
             'rule'    => $this->stringValue($violation['rule'] ?? null),
             'message' => $this->stringValue($violation['message'] ?? null),
             'file'    => $this->relativePath($this->stringValue($violation['file'] ?? null), $basePath),
-            'line'    => $violation['line'] ?? 0,
             'class'   => $this->stringValue($violation['class'] ?? null),
             'layer'   => $violation['layer'] ?? null,
         ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -223,7 +221,6 @@ final readonly class Baseline
             'rule'    => $ruleViolation->ruleKey,
             'message' => $ruleViolation->message,
             'file'    => $this->relativePath($ruleViolation->file, $basePath),
-            'line'    => $ruleViolation->line,
             'class'   => $ruleViolation->className,
             'layer'   => $ruleViolation->layer,
         ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
