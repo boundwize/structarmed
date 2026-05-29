@@ -213,7 +213,16 @@ PHP);
             file_put_contents($basePath . '/src/Foo.php', "\n<?php");
 
             $collectionAfterNewLine = new RuleViolationCollection();
-            $collectionAfterNewLine->add(new RuleViolation('Foo must be final', $basePath . '/src/Foo.php', 2, 'App\Foo', 'Source', 'source.must_be_final'));
+            $collectionAfterNewLine->add(
+                new RuleViolation(
+                    'Foo must be final',
+                    $basePath . '/src/Foo.php',
+                    2,
+                    'App\Foo',
+                    'Source',
+                    'source.must_be_final'
+                )
+            );
 
             $filtered = (new Baseline())->filter($collectionAfterNewLine, 'baseline.php', $basePath);
 
