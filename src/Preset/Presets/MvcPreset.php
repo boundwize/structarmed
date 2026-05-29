@@ -17,6 +17,7 @@ use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseLanguageConstructRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseNamespaceRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseSuperglobalsRule;
 use DateTime;
 use PDO;
@@ -54,6 +55,8 @@ final readonly class MvcPreset implements PresetInterface
 
     public const CONTROLLER_NO_PDO = 'mvc.controller.no_pdo';
 
+    public const CONTROLLER_NO_DOCTRINE_ORM = 'mvc.controller.no_doctrine_orm';
+
     public const CONTROLLER_NO_SUPERGLOBALS = 'mvc.controller.no_superglobals';
 
     public const CONTROLLER_MUST_HAVE_RETURN_TYPES = 'mvc.controller.must_have_return_types';
@@ -77,6 +80,8 @@ final readonly class MvcPreset implements PresetInterface
     public const VIEW_MAX_COMPLEXITY = 'mvc.view.max_complexity';
 
     public const VIEW_NO_PDO = 'mvc.view.no_pdo';
+
+    public const VIEW_NO_DOCTRINE_ORM = 'mvc.view.no_doctrine_orm';
 
     public const VIEW_NO_HEADER = 'mvc.view.no_header';
 
@@ -184,6 +189,11 @@ final readonly class MvcPreset implements PresetInterface
         );
 
         $architecture->rule(
+            self::CONTROLLER_NO_DOCTRINE_ORM,
+            new MayNotUseNamespaceRule(layer: 'Controller', forbiddenNamespace: 'Doctrine\\ORM\\')
+        );
+
+        $architecture->rule(
             self::CONTROLLER_NO_SUPERGLOBALS,
             new MayNotUseSuperglobalsRule(layer: 'Controller')
         );
@@ -249,6 +259,11 @@ final readonly class MvcPreset implements PresetInterface
         $architecture->rule(
             self::VIEW_NO_PDO,
             new MayNotUseClassRule(layer: 'View', forbiddenClass: PDO::class)
+        );
+
+        $architecture->rule(
+            self::VIEW_NO_DOCTRINE_ORM,
+            new MayNotUseNamespaceRule(layer: 'View', forbiddenNamespace: 'Doctrine\\ORM\\')
         );
 
         $architecture->rule(

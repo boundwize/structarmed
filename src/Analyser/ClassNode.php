@@ -5,17 +5,13 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
-use function class_exists;
 use function end;
-use function enum_exists;
 use function explode;
 use function in_array;
-use function interface_exists;
 use function preg_match;
 use function rtrim;
 use function str_ends_with;
 use function str_starts_with;
-use function trait_exists;
 
 final readonly class ClassNode
 {
@@ -92,30 +88,22 @@ final readonly class ClassNode
         return (bool) preg_match($pattern, $isFullName ? $this->className : $this->shortName());
     }
 
-    public function dependsOn(string $classOrNamespace): bool
+    public function dependsOn(string $class): bool
     {
-        if (in_array($classOrNamespace, $this->dependencies, true)) {
-            return true;
-        }
+        return in_array($class, $this->dependencies, true);
+    }
 
-        $isMayBeClassLike = ! str_ends_with($classOrNamespace, '\\');
-        $namespace        = rtrim($classOrNamespace, '\\') . '\\';
+    public function dependsOnNamespace(string $namespace): bool
+    {
+        $prefix = rtrim($namespace, '\\') . '\\';
 
         foreach ($this->dependencies as $dependency) {
-            if (str_starts_with($dependency, $namespace)) {
-                return ! $this->isLoadedClassLike($classOrNamespace, $isMayBeClassLike);
+            if (str_starts_with($dependency, $prefix)) {
+                return true;
             }
         }
 
         return false;
-    }
-
-    private function isLoadedClassLike(string $name, bool $isMayBeClassLike): bool
-    {
-        return $isMayBeClassLike && (class_exists($name, true)
-            || interface_exists($name, true)
-            || trait_exists($name, true)
-            || enum_exists($name, true));
     }
 
     public function implementsInterface(string $interface): bool

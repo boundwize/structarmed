@@ -104,8 +104,8 @@ final class ClassNodeTest extends TestCase
             languageConstructs: ['exit'],
         );
 
-        $this->assertTrue($classNode->dependsOn('App\\Infrastructure'));
-        $this->assertFalse($classNode->dependsOn('App\\Application'));
+        $this->assertTrue($classNode->dependsOnNamespace('App\\Infrastructure'));
+        $this->assertFalse($classNode->dependsOnNamespace('App\\Application'));
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\OrderService'));
         $this->assertTrue($classNode->callsFunction('var_dump'));
         $this->assertTrue($classNode->accessesSuperglobals());
@@ -132,7 +132,7 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->dependsOn(DateTime::class));
     }
 
-    public function testDependsOnDoesNotTreatLoadedClassAsNamespacePrefix(): void
+    public function testDependsOnDoesNotMatchNamespacePrefix(): void
     {
         $classNode = new ClassNode(
             className:    'App\\Domain\\OrderService',
@@ -148,29 +148,10 @@ final class ClassNodeTest extends TestCase
         );
 
         $this->assertFalse($classNode->dependsOn(self::class));
+        $this->assertTrue($classNode->dependsOnNamespace(self::class));
     }
 
-    public function testDependsOnDoesNotTreatLoadedPsr4ClassAsNamespacePrefix(): void
-    {
-        $classNode = new ClassNode(
-            className:    'App\\Domain\\OrderService',
-            file:         '/src/OrderService.php',
-            line:         5,
-            layer:        'Domain',
-            extends:      null,
-            isAbstract:   false,
-            isFinal:      false,
-            isInterface:  false,
-            isReadonly:   false,
-            dependencies: [ClassNode::class . '\\NestedDependency'],
-        );
-
-        // ClassNode is a PSR-4 class already loaded in memory, so class_exists($name, false)
-        // returns true and dependsOn does not treat it as a namespace prefix
-        $this->assertFalse($classNode->dependsOn(ClassNode::class));
-    }
-
-    public function testDependsOnTreatsUnloadedPsr4NamespaceAsNamespacePrefix(): void
+    public function testDependsOnNamespaceMatchesPrefix(): void
     {
         $classNode = new ClassNode(
             className:    'App\\Domain\\OrderService',
@@ -185,13 +166,11 @@ final class ClassNodeTest extends TestCase
             dependencies: ['App\\Bar\\SomeService'],
         );
 
-        // App\Bar is not registered anywhere, so class_exists returns false even with autoloading,
-        // and dependsOn treats it as a namespace prefix
-        $this->assertTrue($classNode->dependsOn('App\\Bar'));
-        $this->assertFalse($classNode->dependsOn('App\\Baz'));
+        $this->assertTrue($classNode->dependsOnNamespace('App\\Bar'));
+        $this->assertFalse($classNode->dependsOnNamespace('App\\Baz'));
     }
 
-    public function testDependsOnDoesNotTreatLoadedAppFooClassAsNamespacePrefix(): void
+    public function testDependsOnNamespaceAcceptsTrailingBackslash(): void
     {
         $classNode = new ClassNode(
             className:    'App\\Domain\\OrderService',
@@ -206,13 +185,15 @@ final class ClassNodeTest extends TestCase
             dependencies: ['App\\Foo\\SomeService'],
         );
 
-        // App\Foo is registered via classmap; dependsOn triggers autoloading and treats it as a class
+        // both class and namespace App\Foo exists
+        $this->assertTrue($classNode->dependsOnNamespace('App\\Foo\\'));
+        $this->assertTrue($classNode->dependsOnNamespace(Foo::class));
+
+        // since class exists, dependsOn returns false since dependencies are ['App\\Foo\\SomeService']
         $this->assertFalse($classNode->dependsOn(Foo::class));
-        // trailing backslash forces namespace treatment regardless of classlike registration
-        $this->assertTrue($classNode->dependsOn('App\\Foo\\'));
     }
 
-    public function testDependsOnMatchesNamespaceBoundaries(): void
+    public function testDependsOnNamespaceMatchesNamespaceBoundaries(): void
     {
         $classNode = new ClassNode(
             className:    'App\\Domain\\OrderService',
@@ -227,8 +208,8 @@ final class ClassNodeTest extends TestCase
             dependencies: ['Vendor\\PackageExtra\\Service'],
         );
 
-        $this->assertTrue($classNode->dependsOn('Vendor\\PackageExtra'));
-        $this->assertFalse($classNode->dependsOn('Vendor\\Package'));
+        $this->assertTrue($classNode->dependsOnNamespace('Vendor\\PackageExtra'));
+        $this->assertFalse($classNode->dependsOnNamespace('Vendor\\Package'));
     }
 
     public function testConstructorParamCountReturnsConstructorParamsOrZero(): void
