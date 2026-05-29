@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser;
 
+use App\Foo;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use DateTime;
@@ -184,8 +185,12 @@ final class ClassNodeTest extends TestCase
             dependencies: ['App\\Foo\\SomeService'],
         );
 
+        // both class and namespace App\Foo exists
         $this->assertTrue($classNode->dependsOnNamespace('App\\Foo\\'));
-        $this->assertTrue($classNode->dependsOnNamespace('App\\Foo'));
+        $this->assertTrue($classNode->dependsOnNamespace(Foo::class));
+
+        // since class exists, dependsOn returns false since dependencies are ['App\\Foo\\SomeService']
+        $this->assertFalse($classNode->dependsOn(Foo::class));
     }
 
     public function testDependsOnNamespaceMatchesNamespaceBoundaries(): void

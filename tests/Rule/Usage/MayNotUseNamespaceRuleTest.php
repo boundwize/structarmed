@@ -32,18 +32,18 @@ final class MayNotUseNamespaceRuleTest extends TestCase
 
     public function testPassesWhenNoDepInForbiddenNamespace(): void
     {
-        $rule      = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
-        $classNode = $this->makeNode(['App\\Domain\\SomeService']);
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
+        $classNode              = $this->makeNode(['App\\Domain\\SomeService']);
 
-        $this->assertNull($rule->evaluate($classNode));
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseNamespaceRule->evaluate($classNode));
     }
 
     public function testViolatesWhenDepIsInForbiddenNamespace(): void
     {
-        $rule      = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
-        $classNode = $this->makeNode(['Doctrine\\ORM\\EntityManager']);
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
+        $classNode              = $this->makeNode(['Doctrine\\ORM\\EntityManager']);
 
-        $violation = $rule->evaluate($classNode);
+        $violation = $mayNotUseNamespaceRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('Doctrine\\ORM', $violation->message);
@@ -51,49 +51,49 @@ final class MayNotUseNamespaceRuleTest extends TestCase
 
     public function testViolatesWhenForbiddenNamespaceHasTrailingBackslash(): void
     {
-        $rule      = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM\\');
-        $classNode = $this->makeNode(['Doctrine\\ORM\\EntityRepository']);
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM\\');
+        $classNode              = $this->makeNode(['Doctrine\\ORM\\EntityRepository']);
 
-        $this->assertInstanceOf(RuleViolation::class, $rule->evaluate($classNode));
+        $this->assertInstanceOf(RuleViolation::class, $mayNotUseNamespaceRule->evaluate($classNode));
     }
 
     public function testPassesWhenDepOnlySharesNamespacePrefix(): void
     {
-        $rule      = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
-        $classNode = $this->makeNode(['Doctrine\\ORMExtra\\Something']);
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
+        $classNode              = $this->makeNode(['Doctrine\\ORMExtra\\Something']);
 
-        $this->assertNull($rule->evaluate($classNode));
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseNamespaceRule->evaluate($classNode));
     }
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $rule      = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
-        $classNode = $this->makeNode(['Doctrine\\ORM\\EntityManager'], layer: 'Infrastructure');
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
+        $classNode              = $this->makeNode(['Doctrine\\ORM\\EntityManager'], layer: 'Infrastructure');
 
-        $this->assertFalse($rule->appliesTo($classNode));
+        $this->assertFalse($mayNotUseNamespaceRule->appliesTo($classNode));
     }
 
     public function testAppliesToMatchingClassNamePattern(): void
     {
-        $rule      = new MayNotUseNamespaceRule(
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(
             layer: 'Domain',
             forbiddenNamespace: 'Doctrine\\ORM',
             classNamePattern: '/ValueObject$/'
         );
-        $classNode = $this->makeNode([]);
+        $classNode              = $this->makeNode([]);
 
-        $this->assertTrue($rule->appliesTo($classNode));
+        $this->assertTrue($mayNotUseNamespaceRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToNonMatchingClassNamePattern(): void
     {
-        $rule      = new MayNotUseNamespaceRule(
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(
             layer: 'Domain',
             forbiddenNamespace: 'Doctrine\\ORM',
             classNamePattern: '/Entity$/'
         );
-        $classNode = $this->makeNode([]);
+        $classNode              = $this->makeNode([]);
 
-        $this->assertFalse($rule->appliesTo($classNode));
+        $this->assertFalse($mayNotUseNamespaceRule->appliesTo($classNode));
     }
 }
