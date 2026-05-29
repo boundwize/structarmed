@@ -179,6 +179,31 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
+    public function testSelectsLongestPrefixMatchNotFirstDeclared(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-longest-prefix');
+        mkdir($basePath . '/src/legacy', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\'    => 'src/',
+                    'Legacy\\' => 'src/legacy/',
+                ],
+            ],
+        ]));
+
+        $file = $basePath . '/src/legacy/Thing.php';
+        file_put_contents($file, '<?php namespace Legacy; class Thing {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('Legacy\\Thing', $file))
+        );
+    }
+
     private function makeNode(
         string $className,
         string $file,

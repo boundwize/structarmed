@@ -69,6 +69,9 @@ final class Psr4NamespaceRule implements RuleInterface
 
         $file = $this->normalisePath($file);
 
+        $bestPrefix    = null;
+        $bestNamespace = null;
+
         foreach ($this->mappingsFor($basePath) as $namespace => $paths) {
             foreach ($paths as $path) {
                 $prefix = $this->normalisePath($basePath . '/' . $path);
@@ -77,21 +80,28 @@ final class Psr4NamespaceRule implements RuleInterface
                     continue;
                 }
 
-                $relativeClass = substr($file, strlen($prefix) + 1);
-
-                if (! str_ends_with($relativeClass, '.php')) {
-                    continue;
+                if ($bestPrefix === null || strlen($prefix) > strlen($bestPrefix)) {
+                    $bestPrefix    = $prefix;
+                    $bestNamespace = $namespace;
                 }
-
-                $relativeClass = substr($relativeClass, 0, -4);
-                $relativeClass = (string) preg_replace('/\.class$/i', '', $relativeClass);
-                $relativeClass = str_replace('/', '\\', $relativeClass);
-
-                return $namespace . ltrim($relativeClass, '\\');
             }
         }
 
-        return null;
+        if ($bestPrefix === null || $bestNamespace === null) {
+            return null;
+        }
+
+        $relativeClass = substr($file, strlen($bestPrefix) + 1);
+
+        if (! str_ends_with($relativeClass, '.php')) {
+            return null;
+        }
+
+        $relativeClass = substr($relativeClass, 0, -4);
+        $relativeClass = (string) preg_replace('/\.class$/i', '', $relativeClass);
+        $relativeClass = str_replace('/', '\\', $relativeClass);
+
+        return $bestNamespace . ltrim($relativeClass, '\\');
     }
 
     private function basePathFor(string $file): ?string
