@@ -32,8 +32,6 @@ final readonly class MvcPreset implements PresetInterface
     // -------------------------------------------------------------------------
 
     // Layer rules
-    public const CONTROLLER_NOT_DEPEND_VIEW = 'mvc.layer.controller_not_depend_view';
-
     public const MODEL_NOT_DEPEND_CONTROLLER = 'mvc.layer.model_not_depend_controller';
 
     public const MODEL_NOT_DEPEND_VIEW = 'mvc.layer.model_not_depend_view';
@@ -119,11 +117,6 @@ final readonly class MvcPreset implements PresetInterface
 
     private function applyLayerRules(Architecture $architecture): self
     {
-        $architecture->rule(
-            self::CONTROLLER_NOT_DEPEND_VIEW,
-            new MayNotDependOnRule(from: 'Controller', to: 'View', toPath: 'View')
-        );
-
         $architecture->rule(
             self::MODEL_NOT_DEPEND_CONTROLLER,
             new MayNotDependOnRule(from: 'Model', to: 'Controller', toPath: 'Controller')

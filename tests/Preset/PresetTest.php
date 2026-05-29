@@ -247,7 +247,6 @@ final class PresetTest extends TestCase
         )->apply($architecture);
 
         $rules = $architecture->getRules();
-        $this->assertArrayHasKey(MvcPreset::CONTROLLER_NOT_DEPEND_VIEW, $rules);
         $this->assertArrayHasKey(MvcPreset::CONTROLLER_NAME_MUST_END_WITH_CONTROLLER, $rules);
         $this->assertArrayHasKey(MvcPreset::CONTROLLER_MAX_COMPLEXITY, $rules);
         $this->assertArrayHasKey(MvcPreset::MODEL_NAME_MUST_NOT_START_WITH_MODEL, $rules);
