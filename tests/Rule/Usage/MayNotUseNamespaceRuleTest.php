@@ -85,6 +85,14 @@ final class MayNotUseNamespaceRuleTest extends TestCase
         $this->assertTrue($mayNotUseNamespaceRule->appliesTo($classNode));
     }
 
+    public function testAppliesToLayerWhenNoPatternConfigured(): void
+    {
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
+        $classNode              = $this->makeNode([]);
+
+        $this->assertTrue($mayNotUseNamespaceRule->appliesTo($classNode));
+    }
+
     public function testDoesNotApplyToNonMatchingClassNamePattern(): void
     {
         $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(
