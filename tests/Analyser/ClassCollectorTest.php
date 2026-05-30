@@ -120,7 +120,15 @@ final class ClassCollectorTest extends TestCase
 
     public function testCollectsUsedTraitsInEnum(): void
     {
-        $nodes    = $this->collectNodes('<?php trait HasLabel { public function label(): string { return $this->name; } } enum Status { use HasLabel; case Draft; case Published; }');
+        $nodes    = $this->collectNodes('
+        <?php
+        trait HasLabel {
+            public function label(): string { return $this->name; }
+        }
+        enum Status {
+            use HasLabel; case Draft; case Published;
+        }
+        ');
         $enumNode = $nodes[1];
 
         $this->assertTrue($enumNode->isEnum);
@@ -129,7 +137,16 @@ final class ClassCollectorTest extends TestCase
 
     public function testCollectsUsedTraitsInTrait(): void
     {
-        $nodes       = $this->collectNodes('<?php trait HasSlug { public function slug(): string { return strtolower($this->name()); } } trait HasName { use HasSlug; public function name(): string { return "Hello World"; } }');
+        $nodes       = $this->collectNodes('
+        <?php
+        trait HasSlug {
+            public function slug(): string { return strtolower($this->name()); }
+        }
+        trait HasName {
+            use HasSlug;
+            public function name(): string { return "Hello World"; }
+        }
+        ');
         $hasNameNode = $nodes[1];
 
         $this->assertTrue($hasNameNode->isTrait);
