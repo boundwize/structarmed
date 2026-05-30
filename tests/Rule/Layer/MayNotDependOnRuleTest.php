@@ -87,4 +87,23 @@ final class MayNotDependOnRuleTest extends TestCase
 
         $this->assertTrue($mayNotDependOnRule->appliesTo($classNode));
     }
+
+    public function testReportsMultipleViolationsWhenMultipleForbiddenDependencies(): void
+    {
+        $mayNotDependOnRule = new MayNotDependOnRule(
+            from:   'Domain',
+            to:     'Infrastructure',
+            toPath: 'Infrastructure'
+        );
+        $classNode          = $this->makeNode('Domain', [
+            'App\Infrastructure\A',
+            'App\Infrastructure\B',
+        ]);
+
+        $violations = $mayNotDependOnRule->evaluateAll($classNode);
+
+        $this->assertCount(2, $violations);
+        $this->assertStringContainsString('App\Infrastructure\A', $violations[0]->message);
+        $this->assertStringContainsString('App\Infrastructure\B', $violations[1]->message);
+    }
 }

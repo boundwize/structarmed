@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Layer;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
@@ -13,7 +13,7 @@ use function str_contains;
 use function str_replace;
 use function str_starts_with;
 
-final readonly class MayNotDependOnRule implements RuleInterface
+final readonly class MayNotDependOnRule implements MultipleRuleViolationInterface
 {
     private string $normalisedToPath;
 
@@ -32,6 +32,18 @@ final readonly class MayNotDependOnRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
+        $violations = $this->evaluateAll($classNode);
+
+        return $violations[0] ?? null;
+    }
+
+    /**
+     * @return RuleViolation[]
+     */
+    public function evaluateAll(ClassNode $classNode): array
+    {
+        $violations = [];
+
         foreach ($classNode->dependencies as $dependency) {
             $depPath = str_replace('\\', '/', $dependency);
 
@@ -39,7 +51,7 @@ final readonly class MayNotDependOnRule implements RuleInterface
                 str_contains($depPath . '/', '/' . $this->normalisedToPath . '/')
                 || str_starts_with($depPath . '/', $this->normalisedToPath . '/')
             ) {
-                return new RuleViolation(
+                $violations[] = new RuleViolation(
                     message:   sprintf(
                         'Class [%s] in layer [%s] must not depend on [%s] which belongs to layer [%s]',
                         $classNode->className,
@@ -55,6 +67,6 @@ final readonly class MayNotDependOnRule implements RuleInterface
             }
         }
 
-        return null;
+        return $violations;
     }
 }
