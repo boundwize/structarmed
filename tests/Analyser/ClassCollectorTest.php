@@ -118,6 +118,24 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame(['FirstTrait', 'SecondTrait'], $classNode->traits);
     }
 
+    public function testCollectsUsedTraitsInEnum(): void
+    {
+        $nodes    = $this->collectNodes('<?php trait HasLabel { public function label(): string { return $this->name; } } enum Status { use HasLabel; case Draft; case Published; }');
+        $enumNode = $nodes[1];
+
+        $this->assertTrue($enumNode->isEnum);
+        $this->assertSame(['HasLabel'], $enumNode->traits);
+    }
+
+    public function testCollectsUsedTraitsInTrait(): void
+    {
+        $nodes       = $this->collectNodes('<?php trait HasSlug { public function slug(): string { return strtolower($this->name()); } } trait HasName { use HasSlug; public function name(): string { return "Hello World"; } }');
+        $hasNameNode = $nodes[1];
+
+        $this->assertTrue($hasNameNode->isTrait);
+        $this->assertSame(['HasSlug'], $hasNameNode->traits);
+    }
+
     public function testCollectsMethodReturnType(): void
     {
         $classNode = $this->collect('<?php class Foo { public function bar(): string { return "x"; } }');

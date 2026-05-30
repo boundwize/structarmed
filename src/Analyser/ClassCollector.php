@@ -502,7 +502,11 @@ final class ClassCollector extends NodeVisitorAbstract
      */
     private function collectTraits(ClassLike $classLike): array
     {
-        if (! $classLike instanceof Class_) {
+        if (
+            ! $classLike instanceof Class_
+            && ! $classLike instanceof Enum_
+            && ! $classLike instanceof Trait_
+        ) {
             return [];
         }
 
