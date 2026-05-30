@@ -126,7 +126,8 @@ final class ClassCollectorTest extends TestCase
             public function label(): string { return $this->name; }
         }
         enum Status {
-            use HasLabel; case Draft; case Published;
+            use HasLabel;
+            case Draft; case Published;
         }
         ');
         $enumNode = $nodes[1];
