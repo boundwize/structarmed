@@ -1273,8 +1273,18 @@ final class AnalyserTest extends TestCase
     public function testMayNotDependOnRuleViolationIsDetectedViaAnalyser(): void
     {
         $basePath = $this->makeTempProject([
-            'src/Domain/Order.php'                               => '<?php namespace App\Domain; use App\Infrastructure\Persistence\OrderRepository; class Order { public function __construct(private OrderRepository $repo) {} }',
-            'src/Infrastructure/Persistence/OrderRepository.php' => '<?php namespace App\Infrastructure\Persistence; class OrderRepository {}',
+            'src/Domain/Order.php'
+        => '<?php
+namespace App\Domain;
+use App\Infrastructure\Persistence\OrderRepository;
+
+class Order {
+    public function __construct(private OrderRepository $repo) {}
+}
+',
+            'src/Infrastructure/Persistence/OrderRepository.php'
+        => '<?php namespace App\Infrastructure\Persistence; class OrderRepository {}
+',
         ]);
 
         $architecture = Architecture::define()

@@ -24,7 +24,6 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-use function array_column;
 use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
@@ -131,26 +130,29 @@ final readonly class Analyser
         $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
         $rulesetViolationCollection = new RuleViolationCollection();
         $hasRuleset                 = $ruleset !== [];
-        $classDependencyMaps        = $hasRuleset
+
+        /** @var array<string, LayerAwareRuleInterface> $layerAwareRules */
+        $layerAwareRules    = array_filter(
+            $classRules,
+            fn(RuleInterface $rule): bool => $rule instanceof LayerAwareRuleInterface
+        );
+        $hasLayerAwareRules = $layerAwareRules !== [];
+
+        $classDependencyMaps      = $hasRuleset || $hasLayerAwareRules
             ? $this->classDependencyMaps($classNodes)
             : [
                 'dependencies'            => [],
                 'inheritanceDependencies' => [],
+                'classLayerMap'           => [],
             ];
-        $dependencyMap              = $classDependencyMaps['dependencies'];
-        $inheritanceDependencyMap   = $classDependencyMaps['inheritanceDependencies'];
+        $dependencyMap            = $classDependencyMaps['dependencies'];
+        $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
 
-        /**
-         * @var array<string, LayerAwareRuleInterface> $layerAwareRules
-         */
-        $layerAwareRules = array_filter(
-            $classRules,
-            fn(RuleInterface $rule): bool => $rule instanceof LayerAwareRuleInterface
-        );
-
-        if ($layerAwareRules !== []) {
-            $classLayerMap = array_filter(array_column($classNodes, 'layer', 'className'));
-            array_walk($layerAwareRules, fn($rule) => $rule->injectClassLayerMap($classLayerMap));
+        if ($hasLayerAwareRules) {
+            array_walk(
+                $layerAwareRules,
+                fn($rule) => $rule->injectClassLayerMap($classDependencyMaps['classLayerMap'])
+            );
         }
 
         foreach ($classNodes as $classNode) {
@@ -287,13 +289,15 @@ final readonly class Analyser
      * @param list<ClassNode> $classNodes
      * @return array{
      *     dependencies: array<string, list<string>>,
-     *     inheritanceDependencies: array<string, list<string>>
+     *     inheritanceDependencies: array<string, list<string>>,
+     *     classLayerMap: array<string, string>
      * }
      */
     private function classDependencyMaps(array $classNodes): array
     {
         $dependencyMap            = [];
         $inheritanceDependencyMap = [];
+        $classLayerMap            = [];
 
         foreach ($classNodes as $classNode) {
             $dependencyMap[$classNode->className] = $classNode->dependencies;
@@ -308,11 +312,16 @@ final readonly class Analyser
             }
 
             $inheritanceDependencyMap[$classNode->className] = array_values(array_unique($dependencies));
+
+            if ($classNode->layer !== null) {
+                $classLayerMap[$classNode->className] = $classNode->layer;
+            }
         }
 
         return [
             'dependencies'            => $dependencyMap,
             'inheritanceDependencies' => $inheritanceDependencyMap,
+            'classLayerMap'           => $classLayerMap,
         ];
     }
 
