@@ -79,14 +79,16 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
 
     private function isInForbiddenLayer(string $dependency): bool
     {
+        // Priority 1: Use class layer map if available
         if ($this->classLayerMap !== null) {
             $depLayer = $this->classLayerMap[$dependency] ?? null;
 
-            if ($depLayer !== null) {
-                return $depLayer === $this->to;
+            if ($depLayer !== null && $depLayer === $this->to) {
+                return true;
             }
         }
 
+        // Priority 2: Fallback to path matching
         $depPath = str_replace('\\', '/', $dependency);
 
         return str_contains($depPath . '/', '/' . $this->normalisedToPath . '/')
