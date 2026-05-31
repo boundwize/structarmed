@@ -163,9 +163,12 @@ Use `replaceRule()` to swap a preset rule's configuration — it throws `RuleNot
 Each class is assigned a layer based on which registered `layer()` path its file falls under — no attributes needed on classes:
 
 ```php
-->layer('Domain',         'src/Domain/')        // files under src/Domain/         → layer 'Domain'
-->layer('Application',    'src/Application/')   // files under src/Application/    → layer 'Application'
-->layer('Infrastructure', 'src/Infrastructure/') // files under src/Infrastructure/ → layer 'Infrastructure'
+// files under src/Domain/         → layer 'Domain'
+->layer('Domain',         'src/Domain/')
+// files under src/Application/    → layer 'Application'
+->layer('Application',    'src/Application/')
+// files under src/Infrastructure/ → layer 'Infrastructure'
+->layer('Infrastructure', 'src/Infrastructure/')
 ```
 
 ### Layer patterns (namespace-based layers)
