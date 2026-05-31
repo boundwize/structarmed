@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Layer;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -105,5 +106,68 @@ final class MayNotDependOnRuleTest extends TestCase
         $this->assertCount(2, $violations);
         $this->assertStringContainsString('App\Infrastructure\A', $violations[0]->message);
         $this->assertStringContainsString('App\Infrastructure\B', $violations[1]->message);
+    }
+
+    public function testImplementsLayerAwareRuleInterface(): void
+    {
+        $this->assertInstanceOf(
+            LayerAwareRuleInterface::class,
+            new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure')
+        );
+    }
+
+    public function testViolatesUsingClassLayerMapWhenInjected(): void
+    {
+        $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
+        $mayNotDependOnRule->injectClassLayerMap([
+            'App\Infrastructure\Persistence\DoctrineOrderRepository' => 'Infrastructure',
+        ]);
+        $classNode = $this->makeNode('Domain', [
+            'App\Infrastructure\Persistence\DoctrineOrderRepository',
+        ]);
+
+        $violation = $mayNotDependOnRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('Infrastructure', $violation->message);
+    }
+
+    public function testPassesUsingClassLayerMapWhenDependencyNotInForbiddenLayer(): void
+    {
+        $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
+        $mayNotDependOnRule->injectClassLayerMap([
+            'App\Domain\Order' => 'Domain',
+        ]);
+        $classNode = $this->makeNode('Domain', [
+            'App\Domain\Order',
+        ]);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+    }
+
+    public function testClassLayerMapTakesPrecedenceOverToPath(): void
+    {
+        // toPath would match 'App\Infrastructure\A' but the map says it's in Domain — no violation
+        $mayNotDependOnRule = new MayNotDependOnRule(
+            from:   'Domain',
+            to:     'Infrastructure',
+            toPath: 'Infrastructure'
+        );
+        $mayNotDependOnRule->injectClassLayerMap([
+            'App\Infrastructure\A' => 'Domain',
+        ]);
+        $classNode = $this->makeNode('Domain', ['App\Infrastructure\A']);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+    }
+
+    public function testNoViolationWithoutToPathAndWithoutClassLayerMap(): void
+    {
+        $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
+        $classNode          = $this->makeNode('Domain', [
+            'App\Infrastructure\Persistence\DoctrineOrderRepository',
+        ]);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 }

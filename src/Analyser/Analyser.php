@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
@@ -136,6 +137,19 @@ final readonly class Analyser
             ];
         $dependencyMap              = $classDependencyMaps['dependencies'];
         $inheritanceDependencyMap   = $classDependencyMaps['inheritanceDependencies'];
+
+        /**
+         * @var array<string, LayerAwareRuleInterface> $layerAwareRules
+         */
+        $layerAwareRules = array_filter(
+            $classRules,
+            fn(RuleInterface $rule): bool => $rule instanceof LayerAwareRuleInterface
+        );
+
+        if ($layerAwareRules !== []) {
+            $classLayerMap = array_filter(array_column($classNodes, 'layer', 'className'));
+            array_walk($layerAwareRules, fn($rule) => $rule->injectClassLayerMap($classLayerMap));
+        }
 
         foreach ($classNodes as $classNode) {
             foreach ($classRules as $key => $rule) {

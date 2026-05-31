@@ -117,17 +117,17 @@ final readonly class DddPreset implements PresetInterface
     {
         $architecture->rule(
             self::DOMAIN_NOT_DEPEND_APPLICATION,
-            new MayNotDependOnRule(from: 'Domain', to: 'Application', toPath: 'Application')
+            new MayNotDependOnRule(from: 'Domain', to: 'Application')
         );
 
         $architecture->rule(
             self::DOMAIN_NOT_DEPEND_INFRASTRUCTURE,
-            new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure', toPath: 'Infrastructure')
+            new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure')
         );
 
         $architecture->rule(
             self::APPLICATION_NOT_DEPEND_INFRASTRUCTURE,
-            new MayNotDependOnRule(from: 'Application', to: 'Infrastructure', toPath: 'Infrastructure')
+            new MayNotDependOnRule(from: 'Application', to: 'Infrastructure')
         );
 
         return $this;
