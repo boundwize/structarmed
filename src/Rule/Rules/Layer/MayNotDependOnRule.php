@@ -83,8 +83,8 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
         if ($this->classLayerMap !== null) {
             $depLayer = $this->classLayerMap[$dependency] ?? null;
 
-            if ($depLayer !== null && $depLayer === $this->to) {
-                return true;
+            if ($depLayer !== null) {
+                return $depLayer === $this->to;
             }
         }
 

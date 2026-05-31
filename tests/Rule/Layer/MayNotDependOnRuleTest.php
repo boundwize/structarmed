@@ -145,20 +145,20 @@ final class MayNotDependOnRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 
-    public function testClassLayerMapDetectsViolationEvenWhenToPathWouldNotMatch(): void
+    public function testClassLayerMapTakesPrecedenceOverToPath(): void
     {
-        // path would not match 'something-unrelated', but map confirms the dep is in the forbidden layer
+        // path would match 'App\Infrastructure\A', but map says it's in Domain — no violation
         $mayNotDependOnRule = new MayNotDependOnRule(
             from:   'Domain',
             to:     'Infrastructure',
-            toPath: 'something-unrelated'
+            toPath: 'Infrastructure'
         );
         $mayNotDependOnRule->injectClassLayerMap([
-            'App\SomePackage\OrderRepository' => 'Infrastructure',
+            'App\Infrastructure\A' => 'Domain',
         ]);
-        $classNode = $this->makeNode('Domain', ['App\SomePackage\OrderRepository']);
+        $classNode = $this->makeNode('Domain', ['App\Infrastructure\A']);
 
-        $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 
     public function testViolatesUsingToAsPathFallbackWhenNoClassLayerMapMatch(): void
