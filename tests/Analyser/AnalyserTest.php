@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
@@ -1267,6 +1268,36 @@ final class AnalyserTest extends TestCase
         $this->assertStringContainsString('App\\Database\\QueryBuilder', $violations[0]->message);
         // The test file violation must be absent.
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+    }
+
+    public function testMayNotDependOnRuleViolationIsDetectedViaAnalyser(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Domain/Order.php'
+        => '<?php
+namespace App\Domain;
+use App\Infrastructure\Persistence\OrderRepository;
+
+class Order {
+    public function __construct(private OrderRepository $repo) {}
+}
+',
+            'src/Infrastructure/Persistence/OrderRepository.php'
+        => '<?php namespace App\Infrastructure\Persistence; class OrderRepository {}
+',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Infrastructure', 'src/Infrastructure/')
+            ->rule('domain.not_depend_infrastructure', new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure'));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $violations = $ruleViolationCollection->forRule('domain.not_depend_infrastructure');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Infrastructure', $violations[0]->message);
     }
 
     /** @param array<string, string> $files */

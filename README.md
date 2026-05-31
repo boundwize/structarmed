@@ -160,12 +160,12 @@ Use `replaceRule()` to swap a preset rule's configuration — it throws `RuleNot
 
 ## Layer resolution
 
-Layers are resolved by file path — no attributes needed on classes:
+Each class is assigned a layer based on which registered `layer()` path its file falls under — no attributes needed on classes:
 
-```
-src/Domain/     → 'Domain'
-src/Application/ → 'Application'
-src/Infrastructure/ → 'Infrastructure'
+```php
+->layer('Domain',         'src/Domain/')        // files under src/Domain/         → layer 'Domain'
+->layer('Application',    'src/Application/')   // files under src/Application/    → layer 'Application'
+->layer('Infrastructure', 'src/Infrastructure/') // files under src/Infrastructure/ → layer 'Infrastructure'
 ```
 
 ### Layer patterns (namespace-based layers)
