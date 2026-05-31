@@ -24,11 +24,13 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
+use function array_column;
 use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_unique;
 use function array_values;
+use function array_walk;
 use function count;
 use function fnmatch;
 use function getcwd;
