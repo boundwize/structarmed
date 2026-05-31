@@ -119,22 +119,22 @@ final readonly class MvcPreset implements PresetInterface
     {
         $architecture->rule(
             self::MODEL_NOT_DEPEND_CONTROLLER,
-            new MayNotDependOnRule(from: 'Model', to: 'Controller')
+            new MayNotDependOnRule(from: 'Model', to: 'Controller', toPath: 'Controller')
         );
 
         $architecture->rule(
             self::MODEL_NOT_DEPEND_VIEW,
-            new MayNotDependOnRule(from: 'Model', to: 'View')
+            new MayNotDependOnRule(from: 'Model', to: 'View', toPath: 'View')
         );
 
         $architecture->rule(
             self::VIEW_NOT_DEPEND_CONTROLLER,
-            new MayNotDependOnRule(from: 'View', to: 'Controller')
+            new MayNotDependOnRule(from: 'View', to: 'Controller', toPath: 'Controller')
         );
 
         $architecture->rule(
             self::VIEW_NOT_DEPEND_MODEL,
-            new MayNotDependOnRule(from: 'View', to: 'Model')
+            new MayNotDependOnRule(from: 'View', to: 'Model', toPath: 'Model')
         );
 
         return $this;
