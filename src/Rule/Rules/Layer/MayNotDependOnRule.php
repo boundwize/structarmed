@@ -24,9 +24,9 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
     public function __construct(
         private readonly string $from,
         private readonly string $to,
-        private readonly ?string $toPath = null,
+        ?string $toPath = null,
     ) {
-        $this->normalisedToPath = $toPath !== null ? str_replace('\\', '/', $toPath) : '';
+        $this->normalisedToPath = str_replace('\\', '/', $toPath ?? $to);
     }
 
     /** @param array<string, string> $classLayerMap */
@@ -85,10 +85,6 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
             if ($depLayer !== null) {
                 return $depLayer === $this->to;
             }
-        }
-
-        if ($this->toPath === null) {
-            return false;
         }
 
         $depPath = str_replace('\\', '/', $dependency);

@@ -161,13 +161,13 @@ final class MayNotDependOnRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 
-    public function testNoViolationWithoutToPathAndWithoutClassLayerMap(): void
+    public function testViolatesUsingToAsPathFallbackWhenNoClassLayerMapMatch(): void
     {
         $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
         $classNode          = $this->makeNode('Domain', [
             'App\Infrastructure\Persistence\DoctrineOrderRepository',
         ]);
 
-        $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+        $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 }
