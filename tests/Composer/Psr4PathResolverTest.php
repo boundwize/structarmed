@@ -61,12 +61,11 @@ JSON);
 
         $psr4PathResolver = new Psr4PathResolver();
 
-        $this->assertSame(['src', 'system', 'tests/system', '.', 'legacy'], $psr4PathResolver->paths($basePath));
+        $this->assertSame(['src', 'system', 'tests/system', 'legacy'], $psr4PathResolver->paths($basePath));
         $this->assertSame(
             [
                 'App\\'         => ['src'],
                 'CodeIgniter\\' => ['system', 'tests/system'],
-                'Root\\'        => ['.'],
                 ''              => ['legacy'],
             ],
             $psr4PathResolver->namespacePaths($basePath)
