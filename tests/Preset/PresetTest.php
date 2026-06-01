@@ -220,7 +220,6 @@ final class PresetTest extends TestCase
 
         $rules = $architecture->getRules();
 
-        // PSR-1 has 9 rules, PSR-12 adds 3 more — total must be 14, not 21 (9+9+3 if duplicated)
         $this->assertCount(14, $rules);
 
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
