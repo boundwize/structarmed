@@ -196,6 +196,17 @@ JSON);
         );
     }
 
+    public function testPassesWhenComposerJsonIsInvalid(): void
+    {
+        $this->assertSame(
+            [],
+            (new Psr4EmptyNamespacePrefixRule())->evaluateProjectAll(
+                $this->makeTempProject('{not json'),
+                Architecture::define()
+            )
+        );
+    }
+
     public function testPassesWhenComposerJsonIsMissing(): void
     {
         $this->assertSame(

@@ -235,6 +235,14 @@ JSON);
         $this->assertCount(1, $violations);
     }
 
+    public function testPassesWhenComposerJsonIsInvalid(): void
+    {
+        $this->assertSame(
+            [],
+            (new Psr4RootPathRule())->evaluateProjectAll($this->makeTempProject('{not json'), Architecture::define())
+        );
+    }
+
     public function testPassesWhenComposerJsonIsMissing(): void
     {
         $this->assertSame(
