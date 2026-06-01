@@ -12,6 +12,8 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclarePropertyVisibilityRule;
 
 final readonly class Psr12Preset implements PresetInterface
 {
+    use ResolvesSourceLayerNameTrait;
+
     public const METHODS_MUST_DECLARE_VISIBILITY = 'psr12.methods.must_declare_visibility';
 
     public const CONSTANTS_MUST_DECLARE_VISIBILITY = 'psr12.constants.must_declare_visibility';
@@ -29,8 +31,10 @@ final readonly class Psr12Preset implements PresetInterface
     public function apply(Architecture $architecture): void
     {
         $psr1Preset = new Psr1Preset($this->sourcePaths);
-        $layerName  = $psr1Preset->resolveLayerName($architecture);
         $psr1Preset->apply($architecture);
+
+        $layerName = $this->resolveLayerName($architecture);
+        $architecture->layer($layerName, $this->sourcePaths ?? []);
 
         $architecture->rule(
             self::METHODS_MUST_DECLARE_VISIBILITY,
