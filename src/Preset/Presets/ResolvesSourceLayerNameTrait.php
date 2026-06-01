@@ -6,7 +6,9 @@ namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
 
+use function array_map;
 use function implode;
+use function rtrim;
 use function sort;
 
 trait ResolvesSourceLayerNameTrait
@@ -15,14 +17,14 @@ trait ResolvesSourceLayerNameTrait
 
     public function resolveLayerName(Architecture $architecture): string
     {
-        $sourcePaths    = $this->sourcePaths ?? [];
+        $sourcePaths    = $this->normalizePaths($this->sourcePaths ?? []);
         $existingLayers = $architecture->getLayers();
 
         if (! isset($existingLayers[self::SOURCE_LAYER])) {
             return self::SOURCE_LAYER;
         }
 
-        $existing = (array) $existingLayers[self::SOURCE_LAYER];
+        $existing = $this->normalizePaths((array) $existingLayers[self::SOURCE_LAYER]);
 
         sort($existing);
         sort($sourcePaths);
@@ -32,5 +34,11 @@ trait ResolvesSourceLayerNameTrait
         }
 
         return self::SOURCE_LAYER . '[' . implode(',', $sourcePaths) . ']';
+    }
+
+    /** @param list<string> $paths */
+    private function normalizePaths(array $paths): array
+    {
+        return array_map(static fn (string $path) => rtrim($path, '/') . '/', $paths);
     }
 }
