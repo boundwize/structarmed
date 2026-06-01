@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4RootPathRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -133,6 +134,105 @@ JSON);
         $this->assertStringContainsString('"Symfony\\Component\\Form\\"', $violations[0]->message);
         $this->assertStringContainsString('""', $violations[0]->message);
         $this->assertStringContainsString('autoload', $violations[0]->message);
+    }
+
+    public function testEvaluateProjectReturnsNullWhenNoViolations(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}
+JSON);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4RootPathRule())->evaluateProject($basePath, Architecture::define())
+        );
+    }
+
+    public function testEvaluateProjectReturnsViolationWhenRootPathFound(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "": "./"
+        }
+    }
+}
+JSON);
+
+        $this->assertInstanceOf(
+            RuleViolation::class,
+            (new Psr4RootPathRule())->evaluateProject($basePath, Architecture::define())
+        );
+    }
+
+    public function testSkipsWhenAutoloadSectionIsNotArray(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": "invalid"
+}
+JSON);
+
+        $this->assertSame(
+            [],
+            (new Psr4RootPathRule())->evaluateProjectAll($basePath, Architecture::define())
+        );
+    }
+
+    public function testSkipsWhenPsr4SectionIsNotArray(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": "invalid"
+    }
+}
+JSON);
+
+        $this->assertSame(
+            [],
+            (new Psr4RootPathRule())->evaluateProjectAll($basePath, Architecture::define())
+        );
+    }
+
+    public function testSkipsNonStringNamespaceKeys(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": ["./"]
+    }
+}
+JSON);
+
+        $this->assertSame(
+            [],
+            (new Psr4RootPathRule())->evaluateProjectAll($basePath, Architecture::define())
+        );
+    }
+
+    public function testSkipsNonStringPathValues(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Root\\": [false, "."]
+        }
+    }
+}
+JSON);
+
+        $violations = (new Psr4RootPathRule())->evaluateProjectAll($basePath, Architecture::define());
+
+        $this->assertCount(1, $violations);
     }
 
     public function testPassesWhenComposerJsonIsMissing(): void

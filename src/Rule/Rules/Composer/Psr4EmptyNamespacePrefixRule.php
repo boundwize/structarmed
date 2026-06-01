@@ -9,15 +9,15 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
+use function array_keys;
 use function file_exists;
 use function is_array;
 use function is_string;
 use function rtrim;
 use function sprintf;
-use function str_replace;
 use function trim;
 
-final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInterface
+final readonly class Psr4EmptyNamespacePrefixRule implements MultipleProjectRuleViolationInterface
 {
     public function __construct(
         private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
@@ -62,36 +62,26 @@ final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInt
                 continue;
             }
 
-            foreach ($psr4 as $namespace => $pathConfig) {
+            foreach (array_keys($psr4) as $namespace) {
                 if (! is_string($namespace)) {
                     continue;
                 }
 
-                foreach ((array) $pathConfig as $path) {
-                    if (! is_string($path)) {
-                        continue;
-                    }
-
-                    $normalisedPath = rtrim(str_replace('\\', '/', trim($path)), '/');
-
-                    if ($normalisedPath !== '.' && $normalisedPath !== '') {
-                        continue;
-                    }
-
-                    $violations[] = new RuleViolation(
-                        message:   sprintf(
-                            'PSR-4 entry ["%s"] => ["%s"] in %s maps to the project root;'
-                                . ' declare a specific directory instead',
-                            $namespace,
-                            $path,
-                            $section
-                        ),
-                        file:      $composerFile,
-                        line:      1,
-                        className: '',
-                        layer:     'Source',
-                    );
+                if (trim($namespace, '\\') !== '') {
+                    continue;
                 }
+
+                $violations[] = new RuleViolation(
+                    message:   sprintf(
+                        'PSR-4 entry ["%s"] in %s has an empty namespace prefix; a valid prefix must end with "\\"',
+                        $namespace,
+                        $section
+                    ),
+                    file:      $composerFile,
+                    line:      1,
+                    className: '',
+                    layer:     'Source',
+                );
             }
         }
 
