@@ -10,6 +10,7 @@ use function array_map;
 use function implode;
 use function rtrim;
 use function sort;
+use function str_replace;
 
 trait ResolvesSourceLayerNameTrait
 {
@@ -42,6 +43,6 @@ trait ResolvesSourceLayerNameTrait
      */
     private function normalizePaths(array $paths): array
     {
-        return array_map(static fn (string $path) => rtrim($path, '/') . '/', $paths);
+        return array_map(static fn (string $path) => rtrim(str_replace('\\', '/', $path), '/') . '/', $paths);
     }
 }

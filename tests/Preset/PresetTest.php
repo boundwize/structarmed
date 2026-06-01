@@ -262,6 +262,19 @@ final class PresetTest extends TestCase
         $this->assertArrayNotHasKey('Source[src]', $layers);
     }
 
+    public function testSourceLayerIsReusedWhenSourcePathsMatchRegardlessOfSeparator(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR4(sourcePaths: ['src/'])->apply($architecture);
+        Preset::PSR1(sourcePaths: ['src\\'])->apply($architecture);
+
+        $layers = $architecture->getLayers();
+        $this->assertArrayHasKey('Source', $layers);
+        $this->assertArrayNotHasKey('Source[src/]', $layers);
+        $this->assertArrayNotHasKey('Source[src\\]', $layers);
+    }
+
     public function testSourceLayerIsReusedWhenSourcePathsAreTheSameRegardlessOfOrder(): void
     {
         $architecture = Architecture::define();
