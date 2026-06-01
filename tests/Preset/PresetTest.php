@@ -12,7 +12,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
-use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerName;
+use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerNameTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -23,7 +23,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Psr12Preset::class)]
 #[CoversClass(Psr15Preset::class)]
 #[CoversClass(Psr4Preset::class)]
-#[CoversClass(ResolvesSourceLayerName::class)]
+#[CoversClass(ResolvesSourceLayerNameTrait::class)]
 final class PresetTest extends TestCase
 {
     public function testPsr1PresetRegistersSourceLayerAndRules(): void

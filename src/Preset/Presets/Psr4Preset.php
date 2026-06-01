@@ -12,7 +12,7 @@ use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 
 final readonly class Psr4Preset implements PresetInterface
 {
-    use ResolvesSourceLayerName;
+    use ResolvesSourceLayerNameTrait;
 
     public const SOURCE_PATHS_MUST_BE_IN_COMPOSER = 'psr4.source_paths.must_be_in_composer';
 

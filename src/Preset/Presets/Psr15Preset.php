@@ -11,7 +11,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustImplementInterfaceRule;
 
 final readonly class Psr15Preset implements PresetInterface
 {
-    use ResolvesSourceLayerName;
+    use ResolvesSourceLayerNameTrait;
 
     public const MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE =
         'psr15.middleware.must_implement_middleware_interface';

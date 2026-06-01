@@ -18,7 +18,7 @@ use Boundwize\StructArmed\Rule\Rules\Method\MethodNameMustBeCamelCaseRule;
 
 final readonly class Psr1Preset implements PresetInterface
 {
-    use ResolvesSourceLayerName;
+    use ResolvesSourceLayerNameTrait;
 
     public const FILES_MUST_USE_VALID_TAGS = 'psr1.files.must_use_valid_tags';
 

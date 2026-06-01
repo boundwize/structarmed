@@ -8,7 +8,7 @@ use Boundwize\StructArmed\Architecture;
 
 use function implode;
 
-trait ResolvesSourceLayerName
+trait ResolvesSourceLayerNameTrait
 {
     public const SOURCE_LAYER = 'Source';
 
