@@ -43,6 +43,9 @@ trait ResolvesSourceLayerNameTrait
      */
     private function normalizePaths(array $paths): array
     {
-        return array_map(static fn (string $path) => rtrim(str_replace('\\', '/', $path), '/') . '/', $paths);
+        return array_map(
+            static fn (string $path): string => rtrim(str_replace('\\', '/', $path), '/') . '/',
+            $paths
+        );
     }
 }
