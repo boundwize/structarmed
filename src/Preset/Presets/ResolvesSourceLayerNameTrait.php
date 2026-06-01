@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 use Boundwize\StructArmed\Architecture;
 
 use function implode;
+use function sort;
 
 trait ResolvesSourceLayerNameTrait
 {
@@ -21,7 +22,12 @@ trait ResolvesSourceLayerNameTrait
             return self::SOURCE_LAYER;
         }
 
-        if ((array) $existingLayers[self::SOURCE_LAYER] === $sourcePaths) {
+        $existing = (array) $existingLayers[self::SOURCE_LAYER];
+
+        sort($existing);
+        sort($sourcePaths);
+
+        if ($existing === $sourcePaths) {
             return self::SOURCE_LAYER;
         }
 

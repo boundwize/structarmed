@@ -249,6 +249,31 @@ final class PresetTest extends TestCase
         $this->assertSame(['lib/'], $layers['Source[lib/]']);
     }
 
+    public function testSourceLayerIsReusedWhenSourcePathsAreTheSameRegardlessOfOrder(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR4(sourcePaths: ['lib/', 'src/'])->apply($architecture);
+        Preset::PSR1(sourcePaths: ['src/', 'lib/'])->apply($architecture);
+
+        $layers = $architecture->getLayers();
+        $this->assertArrayHasKey('Source', $layers);
+        $this->assertArrayNotHasKey('Source[lib/,src/]', $layers);
+        $this->assertArrayNotHasKey('Source[src/,lib/]', $layers);
+    }
+
+    public function testDisambiguatedSourceLayerNameIsSortedCanonically(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR4(sourcePaths: ['src/'])->apply($architecture);
+        Preset::PSR1(sourcePaths: ['tests/', 'lib/'])->apply($architecture);
+
+        $layers = $architecture->getLayers();
+        $this->assertArrayHasKey('Source[lib/,tests/]', $layers);
+        $this->assertArrayNotHasKey('Source[tests/,lib/]', $layers);
+    }
+
     public function testMvcPresetRegistersAllRules(): void
     {
         $architecture = Architecture::define();
