@@ -11,7 +11,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustImplementInterfaceRule;
 
 final readonly class Psr15Preset implements PresetInterface
 {
-    public const SOURCE_LAYER = 'Source';
+    use ResolvesSourceLayerName;
 
     public const MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE =
         'psr15.middleware.must_implement_middleware_interface';
@@ -39,11 +39,12 @@ final readonly class Psr15Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        $architecture->layer(self::SOURCE_LAYER, $this->sourcePaths ?? []);
+        $layerName = $this->resolveLayerName($architecture);
+        $architecture->layer($layerName, $this->sourcePaths ?? []);
         $architecture->rule(
             self::MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE,
             new MustImplementInterfaceRule(
-                layer: self::SOURCE_LAYER,
+                layer: $layerName,
                 interface: self::MIDDLEWARE_INTERFACE,
                 classNamePattern: '/Middleware$/'
             )
@@ -52,7 +53,7 @@ final readonly class Psr15Preset implements PresetInterface
         $architecture->rule(
             self::HANDLER_MUST_IMPLEMENT_REQUEST_HANDLER_INTERFACE,
             new MustImplementInterfaceRule(
-                layer: self::SOURCE_LAYER,
+                layer: $layerName,
                 interface: self::REQUEST_HANDLER_INTERFACE,
                 classNamePattern: '/Handler$/'
             )
@@ -61,7 +62,7 @@ final readonly class Psr15Preset implements PresetInterface
         $architecture->rule(
             self::MIDDLEWARE_INTERFACE_IMPLEMENTATION_MUST_HAVE_MIDDLEWARE_SUFFIX,
             new ClassImplementingInterfaceMustHaveSuffixRule(
-                layer: self::SOURCE_LAYER,
+                layer: $layerName,
                 interface: self::MIDDLEWARE_INTERFACE,
                 suffix: 'Middleware'
             )
@@ -70,7 +71,7 @@ final readonly class Psr15Preset implements PresetInterface
         $architecture->rule(
             self::REQUEST_HANDLER_INTERFACE_IMPLEMENTATION_MUST_HAVE_HANDLER_SUFFIX,
             new ClassImplementingInterfaceMustHaveSuffixRule(
-                layer: self::SOURCE_LAYER,
+                layer: $layerName,
                 interface: self::REQUEST_HANDLER_INTERFACE,
                 suffix: 'Handler'
             )

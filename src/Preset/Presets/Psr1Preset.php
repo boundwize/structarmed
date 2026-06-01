@@ -18,7 +18,7 @@ use Boundwize\StructArmed\Rule\Rules\Method\MethodNameMustBeCamelCaseRule;
 
 final readonly class Psr1Preset implements PresetInterface
 {
-    public const SOURCE_LAYER = 'Source';
+    use ResolvesSourceLayerName;
 
     public const FILES_MUST_USE_VALID_TAGS = 'psr1.files.must_use_valid_tags';
 
@@ -48,21 +48,23 @@ final readonly class Psr1Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        $architecture->layer(self::SOURCE_LAYER, $this->sourcePaths ?? []);
+        $layerName = $this->resolveLayerName($architecture);
+        $architecture->layer($layerName, $this->sourcePaths ?? []);
+
         $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($this->sourcePaths));
         $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($this->sourcePaths));
         $architecture->rule(
             self::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS,
             new Psr1SymbolsOrSideEffectsRule($this->sourcePaths)
         );
-        $architecture->rule(self::CLASSES_MUST_FOLLOW_PSR4, new Psr4NamespaceRule(self::SOURCE_LAYER));
+        $architecture->rule(self::CLASSES_MUST_FOLLOW_PSR4, new Psr4NamespaceRule($layerName));
         $architecture->rule(self::SOURCE_PATHS_MUST_BE_IN_COMPOSER, new Psr4SourcePathsRule($this->sourcePaths));
         $architecture->rule(self::SOURCE_PATHS_MUST_EXIST_ON_DISK, new Psr4DirectoryExistsRule());
-        $architecture->rule(self::CLASSES_MUST_BE_STUDLY_CAPS, new ClassNameMustBeStudlyCapsRule(self::SOURCE_LAYER));
+        $architecture->rule(self::CLASSES_MUST_BE_STUDLY_CAPS, new ClassNameMustBeStudlyCapsRule($layerName));
         $architecture->rule(
             self::CLASS_CONSTANTS_MUST_BE_UPPER_CASE,
-            new ClassConstantNameMustBeUpperCaseRule(self::SOURCE_LAYER)
+            new ClassConstantNameMustBeUpperCaseRule($layerName)
         );
-        $architecture->rule(self::METHODS_MUST_BE_CAMEL_CASE, new MethodNameMustBeCamelCaseRule(self::SOURCE_LAYER));
+        $architecture->rule(self::METHODS_MUST_BE_CAMEL_CASE, new MethodNameMustBeCamelCaseRule($layerName));
     }
 }

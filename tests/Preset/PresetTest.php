@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
+use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerName;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -22,6 +23,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Psr12Preset::class)]
 #[CoversClass(Psr15Preset::class)]
 #[CoversClass(Psr4Preset::class)]
+#[CoversClass(ResolvesSourceLayerName::class)]
 final class PresetTest extends TestCase
 {
     public function testPsr1PresetRegistersSourceLayerAndRules(): void
@@ -233,6 +235,18 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);
+    }
+
+    public function testSourceLayerNameIsDisambiguatedWhenPresetsHaveDifferentSourcePaths(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PSR4(sourcePaths: ['src/'])->apply($architecture);
+        Preset::PSR1(sourcePaths: ['lib/'])->apply($architecture);
+
+        $layers = $architecture->getLayers();
+        $this->assertArrayHasKey('Source[lib/]', $layers);
+        $this->assertSame(['lib/'], $layers['Source[lib/]']);
     }
 
     public function testMvcPresetRegistersAllRules(): void
