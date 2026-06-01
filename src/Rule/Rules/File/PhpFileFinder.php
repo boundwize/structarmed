@@ -19,19 +19,23 @@ use function is_dir;
 use function ltrim;
 use function realpath;
 use function rtrim;
+use function serialize;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
 
-final readonly class PhpFileFinder
+final class PhpFileFinder
 {
+    /** @var array<string, list<string>> */
+    private array $resolvedFiles = [];
+
     /**
      * @param list<string>|null $sourcePaths
      */
     public function __construct(
-        private ?array $sourcePaths = null,
-        private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
+        private readonly ?array $sourcePaths = null,
+        private readonly Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
     ) {
     }
 
@@ -41,6 +45,11 @@ final readonly class PhpFileFinder
      */
     public function files(string $basePath, array $skipPaths = []): array
     {
+        $cacheKey = serialize([$basePath, $this->sourcePaths, $skipPaths]);
+        if (isset($this->resolvedFiles[$cacheKey])) {
+            return $this->resolvedFiles[$cacheKey];
+        }
+
         $normalisedBase = $this->normalisePath($basePath, true);
         $skipMatchers   = $this->compileSkipMatchers($normalisedBase, $skipPaths);
         $append         = new AppendIterator();
@@ -78,7 +87,7 @@ final readonly class PhpFileFinder
 
         // ensure nothing duplicated once more
         // avoid inner directory provided by multiple source paths
-        return array_values(array_unique($files));
+        return $this->resolvedFiles[$cacheKey] = array_values(array_unique($files));
     }
 
     /**

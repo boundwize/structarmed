@@ -162,6 +162,26 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testPhpFileFinderMemoizesResultOnSubsequentCall(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<?php class Foo {}');
+
+            $phpFileFinder = new PhpFileFinder(['src/']);
+            $first         = $phpFileFinder->files($basePath);
+            $second        = $phpFileFinder->files($basePath);
+
+            $this->assertSame($first, $second);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testEvaluateProjectReturnsFirstViolation(): void
     {
         $basePath = $this->makeTempDir();
