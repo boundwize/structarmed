@@ -36,9 +36,12 @@ trait ResolvesSourceLayerNameTrait
         return self::SOURCE_LAYER . '[' . implode(',', $sourcePaths) . ']';
     }
 
-    /** @param list<string> $paths */
+    /**
+     * @param list<string> $paths
+     * @return list<string>
+     */
     private function normalizePaths(array $paths): array
     {
-        return array_map(static fn (string $path) => rtrim($path, '/') . '/', $paths);
+        return array_values(array_map(static fn (string $path) => rtrim($path, '/') . '/', $paths));
     }
 }
