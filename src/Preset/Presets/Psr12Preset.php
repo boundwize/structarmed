@@ -28,19 +28,21 @@ final readonly class Psr12Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        (new Psr1Preset($this->sourcePaths))->apply($architecture);
+        $psr1Preset = new Psr1Preset($this->sourcePaths);
+        $layerName  = $psr1Preset->resolveLayerName($architecture);
+        $psr1Preset->apply($architecture);
 
         $architecture->rule(
             self::METHODS_MUST_DECLARE_VISIBILITY,
-            new MustDeclareMethodVisibilityRule(Psr1Preset::SOURCE_LAYER)
+            new MustDeclareMethodVisibilityRule($layerName)
         );
         $architecture->rule(
             self::CONSTANTS_MUST_DECLARE_VISIBILITY,
-            new MustDeclareConstantVisibilityRule(Psr1Preset::SOURCE_LAYER)
+            new MustDeclareConstantVisibilityRule($layerName)
         );
         $architecture->rule(
             self::PROPERTIES_MUST_DECLARE_VISIBILITY,
-            new MustDeclarePropertyVisibilityRule(Psr1Preset::SOURCE_LAYER)
+            new MustDeclarePropertyVisibilityRule($layerName)
         );
     }
 }
