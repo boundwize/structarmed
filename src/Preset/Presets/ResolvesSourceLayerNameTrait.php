@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 use Boundwize\StructArmed\Architecture;
 
 use function array_map;
+use function array_values;
 use function implode;
 use function rtrim;
 use function sort;
