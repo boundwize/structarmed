@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4DirectoryExistsRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4RootPathRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 
 final readonly class Psr4Preset implements PresetInterface
@@ -19,6 +20,8 @@ final readonly class Psr4Preset implements PresetInterface
     public const SOURCE_PATHS_MUST_EXIST_ON_DISK = 'psr4.source_paths.must_exist_on_disk';
 
     public const CLASSES_MUST_MATCH_COMPOSER = 'psr4.classes.must_match_composer';
+
+    public const SOURCE_PATHS_MUST_NOT_BE_ROOT = 'psr4.source_paths.must_not_be_root';
 
     /**
      * @param list<string> $sourcePaths
@@ -42,5 +45,6 @@ final readonly class Psr4Preset implements PresetInterface
             new Psr4SourcePathsRule($this->sourcePaths)
         );
         $architecture->rule(self::SOURCE_PATHS_MUST_EXIST_ON_DISK, new Psr4DirectoryExistsRule());
+        $architecture->rule(self::SOURCE_PATHS_MUST_NOT_BE_ROOT, new Psr4RootPathRule());
     }
 }

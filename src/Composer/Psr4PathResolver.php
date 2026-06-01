@@ -160,7 +160,7 @@ final class Psr4PathResolver
         foreach ($paths as $path) {
             $path = rtrim(str_replace('\\', '/', trim($path)), '/');
 
-            if ($path !== '') {
+            if ($path !== '' && $path !== '.') {
                 $normalised[$path] = $path;
             }
         }
