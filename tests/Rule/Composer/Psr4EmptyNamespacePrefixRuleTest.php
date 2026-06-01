@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4EmptyNamespacePrefixRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -125,7 +126,8 @@ JSON);
 }
 JSON);
 
-        $this->assertNull(
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
             (new Psr4EmptyNamespacePrefixRule())->evaluateProject($basePath, Architecture::define())
         );
     }
@@ -142,7 +144,8 @@ JSON);
 }
 JSON);
 
-        $this->assertNotNull(
+        $this->assertInstanceOf(
+            RuleViolation::class,
             (new Psr4EmptyNamespacePrefixRule())->evaluateProject($basePath, Architecture::define())
         );
     }
