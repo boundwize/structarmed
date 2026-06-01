@@ -73,7 +73,8 @@ final readonly class Psr4EmptyNamespacePrefixRule implements MultipleProjectRule
 
                 $violations[] = new RuleViolation(
                     message:   sprintf(
-                        'PSR-4 entry ["%s"] in %s has an empty namespace prefix; declare a specific namespace prefix such as "App\\\\"',
+                        'PSR-4 entry ["%s"] in %s has an empty namespace prefix;'
+                            . ' declare a specific namespace prefix such as "App\\\\"',
                         $namespace,
                         $section
                     ),
