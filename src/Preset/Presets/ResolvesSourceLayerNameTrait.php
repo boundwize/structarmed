@@ -7,7 +7,6 @@ namespace Boundwize\StructArmed\Preset\Presets;
 use Boundwize\StructArmed\Architecture;
 
 use function array_map;
-use function array_values;
 use function implode;
 use function rtrim;
 use function sort;
@@ -43,6 +42,6 @@ trait ResolvesSourceLayerNameTrait
      */
     private function normalizePaths(array $paths): array
     {
-        return array_values(array_map(static fn (string $path) => rtrim($path, '/') . '/', $paths));
+        return array_map(static fn (string $path) => rtrim($path, '/') . '/', $paths);
     }
 }
