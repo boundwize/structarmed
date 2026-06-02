@@ -461,6 +461,7 @@ final readonly class Analyser
 
     /**
      * @param list<string> $scanPaths
+     * @param array<string, string|list<string>>|null $layers
      * @return list<string>
      */
     public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
