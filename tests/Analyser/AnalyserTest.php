@@ -434,6 +434,26 @@ final class AnalyserTest extends TestCase
         $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($files[0]));
     }
 
+    public function testFilesForAnalysisUsesPreResolvedLayersWhenProvided(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; final class Foo {}',
+            'src/Bar.php' => '<?php namespace App; final class Bar {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        $analyser       = new Analyser($basePath);
+        $resolvedLayers = ['Source' => ['src/']];
+
+        $filesWithLayers    = $analyser->filesForAnalysis($architecture, [], $resolvedLayers);
+        $filesWithoutLayers = $analyser->filesForAnalysis($architecture);
+
+        $this->assertCount(2, $filesWithoutLayers);
+        $this->assertSame($filesWithoutLayers, $filesWithLayers);
+    }
+
     public function testAnalyserReportsProgressOnlyForFilesMissingFromClassNodeCache(): void
     {
         $basePath            = $this->makeTempProject([
