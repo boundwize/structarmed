@@ -113,7 +113,7 @@ final readonly class Analyser
         $layerPatterns      = $architecture->getLayerPatterns();
         $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
 
-        $files    ??= $this->filesForAnalysis($architecture, $scanPaths);
+        $files    ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
         $classNodes = $this->collectClassNodes(
             $files,
             $progressHandler,
@@ -463,10 +463,10 @@ final readonly class Analyser
      * @param list<string> $scanPaths
      * @return list<string>
      */
-    public function filesForAnalysis(Architecture $architecture, array $scanPaths = []): array
+    public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
     {
         return $this->collectPhpFiles(
-            $this->resolveLayers($architecture),
+            $layers ?? $this->resolveLayers($architecture),
             $scanPaths,
             $architecture->getSkipPaths()
         );
