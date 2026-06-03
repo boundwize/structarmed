@@ -94,23 +94,6 @@ return Architecture::define()
 ->withPresets(Preset::PSR4(), Preset::PSR1(), Preset::PSR12(), Preset::PSR15(), Preset::MVC(), Preset::DDD())
 ```
 
-### Cache directory
-
-StructArmed stores its analysis cache in the system temp directory by default. You can configure a project cache directory:
-
-```php
-<?php
-
-use Boundwize\StructArmed\Architecture;
-use Boundwize\StructArmed\Preset\Preset;
-
-return Architecture::define()
-    ->cacheDirectory('var/cache/structarmed')
-    ->withPreset(Preset::PSR4());
-```
-
-Relative cache directories are resolved from the project root. `--config` also controls the cache directory used by `analyse` and `--clear-cache`.
-
 ### Custom layers and rules
 
 ```php
@@ -354,6 +337,23 @@ Run architecture checks as part of your test suite:
 ```
 
 Violations cause the test run to fail before any tests execute.
+
+## Cache directory
+
+StructArmed stores its analysis cache in the system temp directory by default. You can configure a project cache directory:
+
+```php
+<?php
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed')
+    ->withPreset(Preset::PSR4());
+```
+
+Relative cache directories are resolved from the project root. `--config` also controls the cache directory used by `analyse` and `--clear-cache`.
 
 ## CLI analyse commands
 
