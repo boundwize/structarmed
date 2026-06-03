@@ -210,6 +210,27 @@ Layers absent from the ruleset keys are not checked. Dependencies on external (n
 
 Same-layer dependencies are always allowed regardless of the ruleset.
 
+#### Inheriting allowed layers with `+LayerName`
+
+Use the `+` prefix to merge a layer's allowed dependencies into another layer's allowed list, instead of duplicating them by hand:
+
+```php
+->ruleset([
+    'API'        => ['Format'],
+    'Controller' => ['Validation'],
+    'RESTful'    => ['+API', '+Controller'],
+])
+```
+
+Each `+LayerName` entry expands to that layer itself plus all layers it is allowed to depend on:
+
+```diff
+-'RESTful' => ['API', 'Format', 'Controller', 'Validation'],
++'RESTful' => ['+API', '+Controller'],
+```
+
+When the allowed layers of `API` or `Controller` change, `RESTful` picks them up automatically. Unknown `+` references expand to nothing silently.
+
 ### Skipping class-level violations
 
 When a specific class-to-class dependency is a known exception, suppress it without disabling the whole layer rule:
