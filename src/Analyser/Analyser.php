@@ -27,6 +27,7 @@ use SplFileInfo;
 use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
+use function array_merge;
 use function array_unique;
 use function array_values;
 use function array_walk;
@@ -125,7 +126,7 @@ final readonly class Analyser
 
         // Evaluate declarative ruleset alongside class rules, but buffer its
         // violations so report ordering remains class rules before ruleset.
-        $ruleset                    = $architecture->getRuleset();
+        $ruleset                    = $this->expandRuleset($architecture->getRuleset());
         $classViolationSkips        = $architecture->getClassViolationSkips();
         $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
         $rulesetViolationCollection = new RuleViolationCollection();
@@ -253,6 +254,61 @@ final readonly class Analyser
         $ruleViolationCollection->merge($rulesetViolationCollection);
 
         return $ruleViolationCollection;
+    }
+
+    /**
+     * Expand `+LayerName` references in a ruleset into their concrete allowed layers.
+     *
+     * `+LayerName` means: include `LayerName` itself and all layers that `LayerName` is allowed to depend on.
+     * References to unknown layers expand to nothing. Circular references are skipped.
+     *
+     * @param array<string, list<string>> $ruleset
+     * @return array<string, list<string>>
+     */
+    private function expandRuleset(array $ruleset): array
+    {
+        $resolved = [];
+
+        foreach ($ruleset as $layer => $allowedLayers) {
+            $resolving        = [$layer => true];
+            $resolved[$layer] = $this->expandRulesetLayer($allowedLayers, $ruleset, $resolving);
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param list<string>                $allowedLayers
+     * @param array<string, list<string>> $ruleset
+     * @param array<string, true>         $resolving  Layers currently being expanded (circular-reference guard).
+     * @return list<string>
+     */
+    private function expandRulesetLayer(array $allowedLayers, array $ruleset, array $resolving): array
+    {
+        $expanded = [];
+
+        foreach ($allowedLayers as $allowedLayer) {
+            if (! str_starts_with($allowedLayer, '+')) {
+                $expanded[] = $allowedLayer;
+                continue;
+            }
+
+            $referencedLayer = substr($allowedLayer, 1);
+
+            if (isset($resolving[$referencedLayer])) {
+                continue;
+            }
+
+            // Include the referenced layer itself, then recursively its allowed layers.
+            $expanded[]        = $referencedLayer;
+            $referencedAllowed = $ruleset[$referencedLayer] ?? [];
+            $expanded          = array_merge(
+                $expanded,
+                $this->expandRulesetLayer($referencedAllowed, $ruleset, $resolving + [$referencedLayer => true])
+            );
+        }
+
+        return array_values(array_unique($expanded));
     }
 
     /**

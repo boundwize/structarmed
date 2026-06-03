@@ -1290,6 +1290,200 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
     }
 
+    public function testRulesetPlusLayerSyntaxExpandsAllowedLayers(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/RESTful/Resource.php' => <<<'PHP'
+                <?php
+
+                namespace App\RESTful;
+
+                use App\Format\JsonFormatter;
+                use App\Validation\Validator;
+
+                final class Resource
+                {
+                    public function __construct(
+                        private JsonFormatter $formatter,
+                        private Validator $validator,
+                    ) {}
+                }
+                PHP,
+        ]);
+
+        // RESTful uses +API and +Controller to inherit their allowed layers.
+        // API allows Format; Controller allows Validation — both should be permitted for RESTful.
+        $architecture = Architecture::define()
+            ->layerPattern('RESTful', '/^App\\\\RESTful\\\\.*$/')
+            ->layerPattern('Format', '/^App\\\\Format\\\\.*$/')
+            ->layerPattern('Validation', '/^App\\\\Validation\\\\.*$/')
+            ->layerPattern('API', '/^App\\\\API\\\\.*$/')
+            ->layerPattern('Controller', '/^App\\\\Controller\\\\.*$/')
+            ->ruleset([
+                'API'        => ['Format'],
+                'Controller' => ['Validation'],
+                'RESTful'    => ['+API', '+Controller'],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testRulesetPlusLayerSyntaxIncludesTargetLayerAndItsDependents(): void
+    {
+        // +API expands to: API (the layer itself) + Format (what API can depend on)
+        // +Controller expands to: Controller (the layer itself) + Validation (what Controller can depend on)
+        // So RESTful is allowed to depend on: API, Format, Controller, Validation
+        $basePath = $this->makeTempProject([
+            'src/API/Handler.php'          => '<?php namespace App\API; final class Handler {}',
+            'src/Format/JsonFormatter.php' => '<?php namespace App\Format; final class JsonFormatter {}',
+            'src/Controller/Base.php'      => '<?php namespace App\Controller; final class Base {}',
+            'src/Validation/Validator.php' => '<?php namespace App\Validation; final class Validator {}',
+            'src/RESTful/Resource.php'     => <<<'PHP'
+                <?php
+
+                namespace App\RESTful;
+
+                use App\API\Handler;
+                use App\Format\JsonFormatter;
+                use App\Controller\Base;
+                use App\Validation\Validator;
+
+                final class Resource
+                {
+                    public function __construct(
+                        private Handler $handler,
+                        private JsonFormatter $formatter,
+                        private Base $base,
+                        private Validator $validator,
+                    ) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('RESTful', '/^App\\\\RESTful\\\\.*$/')
+            ->layerPattern('API', '/^App\\\\API\\\\.*$/')
+            ->layerPattern('Format', '/^App\\\\Format\\\\.*$/')
+            ->layerPattern('Controller', '/^App\\\\Controller\\\\.*$/')
+            ->layerPattern('Validation', '/^App\\\\Validation\\\\.*$/')
+            ->ruleset([
+                'API'        => ['Format'],
+                'Controller' => ['Validation'],
+                'RESTful'    => ['+API', '+Controller'],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testRulesetPlusLayerSyntaxStillViolatesDisallowedLayers(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/RESTful/Resource.php' => <<<'PHP'
+                <?php
+
+                namespace App\RESTful;
+
+                use App\Database\QueryBuilder;
+
+                final class Resource
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('RESTful', '/^App\\\\RESTful\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->layerPattern('API', '/^App\\\\API\\\\.*$/')
+            ->ruleset([
+                'API'     => ['Format'],
+                'RESTful' => ['+API'], // Database not in API's allowed list
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.RESTful');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
+    public function testRulesetPlusLayerSyntaxIgnoresUnknownReference(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/RESTful/Resource.php' => <<<'PHP'
+                <?php
+
+                namespace App\RESTful;
+
+                use App\Database\QueryBuilder;
+
+                final class Resource
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('RESTful', '/^App\\\\RESTful\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'RESTful' => ['+NonExistentLayer'], // unknown layer expands to nothing
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.RESTful');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
+    public function testRulesetPlusLayerSyntaxHandlesCircularReference(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/A/ClassA.php' => <<<'PHP'
+                <?php
+
+                namespace App\A;
+
+                use App\B\ClassB;
+                use App\Database\QueryBuilder;
+
+                final class ClassA
+                {
+                    public function __construct(
+                        private ClassB $b,
+                        private QueryBuilder $qb,
+                    ) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('A', '/^App\\\\A\\\\.*$/')
+            ->layerPattern('B', '/^App\\\\B\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'A' => ['+B'], // +B expands to: B (the layer itself)
+                'B' => ['+A'], // circular: when expanding +A from inside B, A is guarded
+            ]);
+
+        // Must not hang or throw — circular refs are silently skipped.
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        // +B includes B itself → A may depend on B: no violation for ClassB.
+        // Database is not in the expanded allowed list → violation.
+        $violations = $ruleViolationCollection->forRule('ruleset.A');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
     public function testMayNotDependOnRuleViolationIsDetectedViaAnalyser(): void
     {
         $basePath = $this->makeTempProject([
