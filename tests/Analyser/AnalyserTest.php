@@ -716,6 +716,50 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testAnalyserSkipsAbsoluteSkipPath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'              => '<?php namespace App; class Foo {}',
+            'src/Fixtures/Ignored.php' => '<?php namespace App\Fixtures; class Ignored {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip([$basePath . '/src/Fixtures'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+        $this->assertStringEndsWith(
+            '/src/Foo.php',
+            $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
+        );
+    }
+
+    public function testAnalyserSkipsAbsoluteSkipPathWithDotDotSegment(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'              => '<?php namespace App; class Foo {}',
+            'src/Fixtures/Ignored.php' => '<?php namespace App\Fixtures; class Ignored {}',
+        ]);
+
+        // A `..` segment that the old fallback str_starts_with could not resolve —
+        // only a properly normalised (realpath-resolved) absolute skip path will match.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip([$basePath . '/src/../src/Fixtures'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+        $this->assertStringEndsWith(
+            '/src/Foo.php',
+            $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
+        );
+    }
+
     public function testAnalyserSkipsConfiguredPathsForSpecificRuleOnly(): void
     {
         $basePath = $this->makeTempProject([
