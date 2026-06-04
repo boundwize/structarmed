@@ -94,7 +94,7 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
      * @param list<string> $paths
      * @return list<string>
      */
-    private function normalisePaths(array $paths, string $basePath = ''): array
+    private function normalisePaths(array $paths, string $basePath): array
     {
         $normalisedBase = rtrim(str_replace('\\', '/', $basePath), '/');
 
