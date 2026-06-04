@@ -50,16 +50,19 @@ use function substr;
 
 use const ARRAY_FILTER_USE_BOTH;
 
-final readonly class Analyser
+final class Analyser
 {
-    private string $basePath;
+    private readonly string $basePath;
 
-    private string $normalisedBasePath;
+    private readonly string $normalisedBasePath;
+
+    /** @var array<string, string> */
+    private array $normalisedPaths = [];
 
     public function __construct(
         string $basePath = '',
-        private ?AnalysisResultCache $analysisResultCache = null,
-        private string $classNodeCacheNamespace = '',
+        private readonly ?AnalysisResultCache $analysisResultCache = null,
+        private readonly string $classNodeCacheNamespace = '',
     ) {
         $this->basePath           = $basePath !== '' ? $basePath : (string) getcwd();
         $this->normalisedBasePath = $this->normalisePath($this->basePath);
@@ -549,11 +552,7 @@ final readonly class Analyser
 
             if (is_file($fullPath)) {
                 if (str_ends_with($fullPath, '.php') && ! $this->isSkipped($fullPath, $skipPaths)) {
-                    $realPath = realpath($fullPath);
-
-                    if ($realPath !== false) {
-                        $files[] = $realPath;
-                    }
+                    $files[] = $fullPath;
                 }
 
                 continue;
@@ -623,14 +622,12 @@ final readonly class Analyser
             return false;
         }
 
-        $path         = $this->normalisePath($path);
-        $relativePath = $this->relativePath($path);
+        $normalisedPath = $this->normalisePath($path);
 
         foreach ($skipPaths as $skipPath) {
-            if (
-                $this->matchesSkipPath($relativePath, $skipPath)
-                || $this->matchesSkipPath($path, $skipPath)
-            ) {
+            $absoluteSkipPath = $this->toAbsoluteSkipPath($this->normaliseSkipPath($skipPath));
+
+            if ($this->matchesSkipPath($normalisedPath, $absoluteSkipPath)) {
                 return true;
             }
         }
@@ -638,30 +635,28 @@ final readonly class Analyser
         return false;
     }
 
-    private function matchesSkipPath(string $path, string $skipPath): bool
+    private function toAbsoluteSkipPath(string $normalisedSkipPath): string
     {
-        $skipPath = $this->normaliseSkipPath($skipPath);
-
-        if (fnmatch($skipPath, $path)) {
-            return true;
+        if (
+            str_starts_with($normalisedSkipPath, '/')
+            || (strlen($normalisedSkipPath) >= 2 && $normalisedSkipPath[1] === ':')
+        ) {
+            return $normalisedSkipPath;
         }
 
-        if (strpbrk($skipPath, '*?[') !== false) {
-            return false;
+        return $this->normalisedBasePath . '/' . $normalisedSkipPath;
+    }
+
+    private function matchesSkipPath(string $normalisedPath, string $absoluteSkipPath): bool
+    {
+        if (strpbrk($absoluteSkipPath, '*?[') !== false) {
+            return fnmatch($absoluteSkipPath, $normalisedPath);
         }
 
-        if (str_starts_with($skipPath, '/') || (strlen($skipPath) >= 2 && $skipPath[1] === ':')) {
-            $fullSkipPath = $this->normalisePath($skipPath);
-        } else {
-            $fullSkipPath = $this->normalisePath($this->normalisedBasePath . '/' . $skipPath);
-        }
+        $resolvedSkipPath = $this->normalisePath($absoluteSkipPath);
 
-        $normalisedPath = $this->normalisePath($path);
-
-        return $normalisedPath === $fullSkipPath
-            || str_starts_with($normalisedPath, $fullSkipPath . '/')
-            || $path === $skipPath
-            || str_starts_with($path, rtrim($skipPath, '/') . '/');
+        return $normalisedPath === $resolvedSkipPath
+            || str_starts_with($normalisedPath, $resolvedSkipPath . '/');
     }
 
     private function normaliseSkipPath(string $path): string
@@ -669,24 +664,9 @@ final readonly class Analyser
         return rtrim(str_replace('\\', '/', $path), '/');
     }
 
-    private function relativePath(string $path): string
-    {
-        $basePath = $this->normalisedBasePath;
-
-        if ($path === $basePath) {
-            return '';
-        }
-
-        if (str_starts_with($path, $basePath . '/')) {
-            return substr($path, strlen($basePath) + 1);
-        }
-
-        return $path;
-    }
-
     private function normalisePath(string $path): string
     {
-        return rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
+        return $this->normalisedPaths[$path] ??= rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
     }
 
     /**
