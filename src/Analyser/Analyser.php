@@ -540,7 +540,12 @@ final readonly class Analyser
         $files = [];
 
         foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
-            $fullPath = rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/');
+            $isAbsolute = str_starts_with($layerPath, '/') || (strlen($layerPath) >= 2 && $layerPath[1] === ':');
+            $fullPath   = $this->normalisePath(
+                $isAbsolute
+                    ? $layerPath
+                    : rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/')
+            );
 
             if (is_file($fullPath)) {
                 if (str_ends_with($fullPath, '.php') && ! $this->isSkipped($fullPath, $skipPaths)) {
