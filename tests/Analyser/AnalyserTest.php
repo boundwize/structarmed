@@ -434,6 +434,40 @@ final class AnalyserTest extends TestCase
         $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($files[0]));
     }
 
+    public function testFilesForAnalysisWithAbsoluteScanPath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'index.php'   => '<?php namespace App; final class Index {}',
+            'src/Foo.php' => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        $absoluteScanPath = $basePath . '/index.php';
+
+        $files = (new Analyser($basePath))->filesForAnalysis($architecture, [$absoluteScanPath]);
+
+        $this->assertCount(1, $files);
+        $this->assertStringEndsWith('/index.php', $this->normalisePath($files[0]));
+    }
+
+    public function testFilesForAnalysisWithRootRelativeScanPath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'index.php'   => '<?php namespace App; final class Index {}',
+            'src/Foo.php' => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        $files = (new Analyser($basePath))->filesForAnalysis($architecture, ['index.php']);
+
+        $this->assertCount(1, $files);
+        $this->assertStringEndsWith('/index.php', $this->normalisePath($files[0]));
+    }
+
     public function testFilesForAnalysisUsesPreResolvedLayersWhenProvided(): void
     {
         $basePath = $this->makeTempProject([

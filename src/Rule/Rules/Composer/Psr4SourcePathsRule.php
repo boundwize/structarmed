@@ -16,6 +16,9 @@ use function in_array;
 use function rtrim;
 use function sprintf;
 use function str_replace;
+use function str_starts_with;
+use function strlen;
+use function substr;
 use function trim;
 
 final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
@@ -38,7 +41,7 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
             return $this->psr4PathResolver->paths($basePath);
         }
 
-        return $this->normalisePaths($this->sourcePaths);
+        return $this->normalisePaths($this->sourcePaths, $basePath);
     }
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
@@ -68,7 +71,7 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
         $autoloadPaths = $this->psr4PathResolver->paths($basePath);
         $missingPaths  = [];
 
-        foreach ($this->normalisePaths($this->sourcePaths) as $sourcePath) {
+        foreach ($this->normalisePaths($this->sourcePaths, $basePath) as $sourcePath) {
             if (! in_array($sourcePath, $autoloadPaths, true)) {
                 $missingPaths[] = $sourcePath;
             }
@@ -91,10 +94,20 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
      * @param list<string> $paths
      * @return list<string>
      */
-    private function normalisePaths(array $paths): array
+    private function normalisePaths(array $paths, string $basePath): array
     {
+        $normalisedBase = rtrim(str_replace('\\', '/', $basePath), '/');
+
         return array_map(
-            static fn(string $path): string => rtrim(str_replace('\\', '/', trim($path)), '/'),
+            static function (string $path) use ($normalisedBase): string {
+                $path = rtrim(str_replace('\\', '/', trim($path)), '/');
+
+                if ($normalisedBase !== '' && str_starts_with($path, $normalisedBase . '/')) {
+                    return substr($path, strlen($normalisedBase) + 1);
+                }
+
+                return $path;
+            },
             $paths
         );
     }
