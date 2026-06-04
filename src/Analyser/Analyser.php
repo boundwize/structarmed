@@ -637,7 +637,10 @@ final class Analyser
 
     private function toAbsoluteSkipPath(string $normalisedSkipPath): string
     {
-        if (str_starts_with($normalisedSkipPath, '/') || (strlen($normalisedSkipPath) >= 2 && $normalisedSkipPath[1] === ':')) {
+        if (
+            str_starts_with($normalisedSkipPath, '/')
+            || (strlen($normalisedSkipPath) >= 2 && $normalisedSkipPath[1] === ':')
+        ) {
             return $normalisedSkipPath;
         }
 
