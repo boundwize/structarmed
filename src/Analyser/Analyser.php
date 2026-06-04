@@ -50,16 +50,19 @@ use function substr;
 
 use const ARRAY_FILTER_USE_BOTH;
 
-final readonly class Analyser
+final class Analyser
 {
-    private string $basePath;
+    private readonly string $basePath;
 
-    private string $normalisedBasePath;
+    private readonly string $normalisedBasePath;
+
+    /** @var array<string, string> */
+    private array $normalisedPaths = [];
 
     public function __construct(
         string $basePath = '',
-        private ?AnalysisResultCache $analysisResultCache = null,
-        private string $classNodeCacheNamespace = '',
+        private readonly ?AnalysisResultCache $analysisResultCache = null,
+        private readonly string $classNodeCacheNamespace = '',
     ) {
         $this->basePath           = $basePath !== '' ? $basePath : (string) getcwd();
         $this->normalisedBasePath = $this->normalisePath($this->basePath);
@@ -549,11 +552,7 @@ final readonly class Analyser
 
             if (is_file($fullPath)) {
                 if (str_ends_with($fullPath, '.php') && ! $this->isSkipped($fullPath, $skipPaths)) {
-                    $realPath = realpath($fullPath);
-
-                    if ($realPath !== false) {
-                        $files[] = $realPath;
-                    }
+                    $files[] = $fullPath;
                 }
 
                 continue;
@@ -656,10 +655,8 @@ final readonly class Analyser
             $fullSkipPath = $this->normalisePath($this->normalisedBasePath . '/' . $skipPath);
         }
 
-        $normalisedPath = $this->normalisePath($path);
-
-        return $normalisedPath === $fullSkipPath
-            || str_starts_with($normalisedPath, $fullSkipPath . '/')
+        return $path === $fullSkipPath
+            || str_starts_with($path, $fullSkipPath . '/')
             || $path === $skipPath
             || str_starts_with($path, rtrim($skipPath, '/') . '/');
     }
@@ -686,7 +683,7 @@ final readonly class Analyser
 
     private function normalisePath(string $path): string
     {
-        return rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
+        return $this->normalisedPaths[$path] ??= rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
     }
 
     /**
