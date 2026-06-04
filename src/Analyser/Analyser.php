@@ -693,7 +693,7 @@ final class Analyser
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            $files[] = $file->getPathname();
+            $files[] = $this->normalisePath($file->getPathname());
         }
 
         return $files;
