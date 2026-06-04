@@ -622,13 +622,17 @@ final class Analyser
             return false;
         }
 
-        $path         = $this->normalisePath($path);
-        $relativePath = $this->relativePath($path);
+        $normalisedPath = $this->normalisePath($path);
+        $relativePath   = $this->relativePath($normalisedPath);
 
         foreach ($skipPaths as $skipPath) {
+            $normalisedSkipPath = $this->normaliseSkipPath($skipPath);
+            $hasGlob            = strpbrk($normalisedSkipPath, '*?[') !== false;
+            $fullSkipPath       = $hasGlob ? '' : $this->resolveFullSkipPath($normalisedSkipPath);
+
             if (
-                $this->matchesSkipPath($relativePath, $skipPath)
-                || $this->matchesSkipPath($path, $skipPath)
+                $this->matchesSkipPath($relativePath, $normalisedSkipPath, $fullSkipPath, $hasGlob)
+                || $this->matchesSkipPath($normalisedPath, $normalisedSkipPath, $fullSkipPath, $hasGlob)
             ) {
                 return true;
             }
@@ -637,22 +641,21 @@ final class Analyser
         return false;
     }
 
-    private function matchesSkipPath(string $path, string $skipPath): bool
+    private function resolveFullSkipPath(string $normalisedSkipPath): string
     {
-        $skipPath = $this->normaliseSkipPath($skipPath);
+        return str_starts_with($normalisedSkipPath, '/') || (strlen($normalisedSkipPath) >= 2 && $normalisedSkipPath[1] === ':')
+            ? $this->normalisePath($normalisedSkipPath)
+            : $this->normalisePath($this->normalisedBasePath . '/' . $normalisedSkipPath);
+    }
 
+    private function matchesSkipPath(string $path, string $skipPath, string $fullSkipPath, bool $hasGlob): bool
+    {
         if (fnmatch($skipPath, $path)) {
             return true;
         }
 
-        if (strpbrk($skipPath, '*?[') !== false) {
+        if ($hasGlob) {
             return false;
-        }
-
-        if (str_starts_with($skipPath, '/') || (strlen($skipPath) >= 2 && $skipPath[1] === ':')) {
-            $fullSkipPath = $this->normalisePath($skipPath);
-        } else {
-            $fullSkipPath = $this->normalisePath($this->normalisedBasePath . '/' . $skipPath);
         }
 
         return $path === $fullSkipPath
