@@ -645,8 +645,11 @@ final readonly class Analyser
             return false;
         }
 
-        $fullSkipPath = rtrim($this->basePath, '/') . '/' . ltrim($skipPath, '/');
-        $fullSkipPath = $this->normalisePath($fullSkipPath);
+        if (str_starts_with($skipPath, '/') || (strlen($skipPath) >= 2 && $skipPath[1] === ':')) {
+            $fullSkipPath = $this->normalisePath($skipPath);
+        } else {
+            $fullSkipPath = $this->normalisePath($this->normalisedBasePath . '/' . $skipPath);
+        }
 
         $normalisedPath = $this->normalisePath($path);
 
