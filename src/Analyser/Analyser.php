@@ -623,17 +623,11 @@ final class Analyser
         }
 
         $normalisedPath = $this->normalisePath($path);
-        $relativePath   = $this->relativePath($normalisedPath);
 
         foreach ($skipPaths as $skipPath) {
-            $normalisedSkipPath = $this->normaliseSkipPath($skipPath);
-            $hasGlob            = strpbrk($normalisedSkipPath, '*?[') !== false;
-            $fullSkipPath       = $hasGlob ? '' : $this->resolveFullSkipPath($normalisedSkipPath);
+            $absoluteSkipPath = $this->toAbsoluteSkipPath($this->normaliseSkipPath($skipPath));
 
-            if (
-                $this->matchesSkipPath($relativePath, $normalisedSkipPath, $fullSkipPath, $hasGlob)
-                || $this->matchesSkipPath($normalisedPath, $normalisedSkipPath, $fullSkipPath, $hasGlob)
-            ) {
+            if ($this->matchesSkipPath($normalisedPath, $absoluteSkipPath)) {
                 return true;
             }
         }
@@ -641,47 +635,30 @@ final class Analyser
         return false;
     }
 
-    private function resolveFullSkipPath(string $normalisedSkipPath): string
+    private function toAbsoluteSkipPath(string $normalisedSkipPath): string
     {
-        return str_starts_with($normalisedSkipPath, '/') || (strlen($normalisedSkipPath) >= 2 && $normalisedSkipPath[1] === ':')
-            ? $this->normalisePath($normalisedSkipPath)
-            : $this->normalisePath($this->normalisedBasePath . '/' . $normalisedSkipPath);
+        if (str_starts_with($normalisedSkipPath, '/') || (strlen($normalisedSkipPath) >= 2 && $normalisedSkipPath[1] === ':')) {
+            return $normalisedSkipPath;
+        }
+
+        return $this->normalisedBasePath . '/' . $normalisedSkipPath;
     }
 
-    private function matchesSkipPath(string $path, string $skipPath, string $fullSkipPath, bool $hasGlob): bool
+    private function matchesSkipPath(string $normalisedPath, string $absoluteSkipPath): bool
     {
-        if (fnmatch($skipPath, $path)) {
-            return true;
+        if (strpbrk($absoluteSkipPath, '*?[') !== false) {
+            return fnmatch($absoluteSkipPath, $normalisedPath);
         }
 
-        if ($hasGlob) {
-            return false;
-        }
+        $resolvedSkipPath = $this->normalisePath($absoluteSkipPath);
 
-        return $path === $fullSkipPath
-            || str_starts_with($path, $fullSkipPath . '/')
-            || $path === $skipPath
-            || str_starts_with($path, rtrim($skipPath, '/') . '/');
+        return $normalisedPath === $resolvedSkipPath
+            || str_starts_with($normalisedPath, $resolvedSkipPath . '/');
     }
 
     private function normaliseSkipPath(string $path): string
     {
         return rtrim(str_replace('\\', '/', $path), '/');
-    }
-
-    private function relativePath(string $path): string
-    {
-        $basePath = $this->normalisedBasePath;
-
-        if ($path === $basePath) {
-            return '';
-        }
-
-        if (str_starts_with($path, $basePath . '/')) {
-            return substr($path, strlen($basePath) + 1);
-        }
-
-        return $path;
     }
 
     private function normalisePath(string $path): string
