@@ -437,8 +437,8 @@ final class AnalyserTest extends TestCase
     public function testFilesForAnalysisWithAbsoluteScanPath(): void
     {
         $basePath = $this->makeTempProject([
-            'index.php'    => '<?php namespace App; final class Index {}',
-            'src/Foo.php'  => '<?php namespace App; final class Foo {}',
+            'index.php'   => '<?php namespace App; final class Index {}',
+            'src/Foo.php' => '<?php namespace App; final class Foo {}',
         ]);
 
         $architecture = Architecture::define()
