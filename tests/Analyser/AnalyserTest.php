@@ -1640,37 +1640,39 @@ class Order {
     public function testAnalyserRulesetDetectsViolationWhenDependencyMatchesSecondaryForbiddenLayer(): void
     {
         $basePath = $this->makeTempProject([
-            'src/Domain/UserService.php' => <<<'PHP'
+            'src/HTTP/LoginController.php' => <<<'PHP'
                 <?php
 
-                namespace App\Domain;
+                namespace App\HTTP;
 
-                use App\Infrastructure\UserRepository;
+                use App\Auth\DatabaseUserStore;
 
-                final class UserService
+                final class LoginController
                 {
-                    public function __construct(private UserRepository $repo) {}
+                    public function __construct(private DatabaseUserStore $store) {}
                 }
                 PHP,
         ]);
 
-        // UserRepository matches both Infrastructure (primary) and Repository.
-        // Domain may depend on Infrastructure but not Repository.
-        // Only resolving the primary layer silently allows the violation.
+        // DatabaseUserStore matches both Auth (primary, allowed for HTTP) and Database
+        // (secondary, forbidden for HTTP). No file is needed for DatabaseUserStore:
+        // the ruleset path resolves dependency layers directly from the class name via
+        // layerPattern(), so the class does not need to be scanned. Only resolving the
+        // primary layer silently allows the violation.
         $architecture = Architecture::define()
-            ->layerPattern('Domain', '/^App\\\\Domain\\\\.*$/')
-            ->layerPattern('Infrastructure', '/^App\\\\Infrastructure\\\\.*$/')
-            ->layerPattern('Repository', '/Repository$/')
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Auth', '/^App\\\\Auth\\\\.*$/')
+            ->layerPattern('Database', '/Database/')
             ->ruleset([
-                'Domain' => ['Infrastructure'], // Repository is NOT in the allowed list
+                'HTTP' => ['Auth'], // Database is NOT in the allowed list
             ]);
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
         $this->assertTrue($ruleViolationCollection->hasViolations());
-        $violations = $ruleViolationCollection->forRule('ruleset.Domain');
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
         $this->assertCount(1, $violations);
-        $this->assertStringContainsString('Repository', $violations[0]->message);
+        $this->assertStringContainsString('Database', $violations[0]->message);
     }
 
     /** @param array<string, string> $files */
