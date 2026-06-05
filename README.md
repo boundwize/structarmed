@@ -180,6 +180,7 @@ An optional third argument excludes classes whose FQN matches one or more regexe
 Use a single exclude regex when one class or namespace branch should not belong to a broader layer. In this example, `App\HTTP\URI` matches the broad HTTP pattern, but it is excluded from `HTTP` and then registered as its own `URI` layer:
 
 ```php
+// HTTP layer: includes everything under App\HTTP\, except App\HTTP\URI
 ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/', '/^App\\\\HTTP\\\\URI$/')
 ->layerPattern('URI',  '/^App\\\\HTTP\\\\URI$/')
 ```

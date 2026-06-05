@@ -18,7 +18,7 @@ use function preg_match;
  * to the layer even when the primary pattern matches.
  *
  * Example:
- *   'HTTP' -> pattern '/^App\\HTTP\\.*$/', excludePattern '/(Exception|URI)/'
+ *   'HTTP' → pattern '/^App\\HTTP\\.*$/', excludePattern '/(Exception|URI)/'
  *   A class 'App\HTTP\Request' resolves to 'HTTP'.
  *   A class 'App\HTTP\URI'     does NOT resolve to 'HTTP' (excluded).
  */
