@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Rule;
 interface LayerAwareRuleInterface
 {
     /**
-     * @param array<string, string> $classLayerMap className → layer name
+     * @param array<string, string|list<string>> $classLayerMap className → layer name(s)
      */
     public function injectClassLayerMap(array $classLayerMap): void;
 }

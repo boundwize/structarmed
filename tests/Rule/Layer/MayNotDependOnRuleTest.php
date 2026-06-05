@@ -170,4 +170,31 @@ final class MayNotDependOnRuleTest extends TestCase
 
         $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
+
+    public function testViolatesWhenDependencyMatchesSecondaryLayerInClassLayerMap(): void
+    {
+        // UserRepository is stored under primary layer 'Infrastructure' but also matches 'Repository'.
+        // The rule forbids 'Repository'; the bug was that only the primary layer was checked.
+        $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Repository');
+        $mayNotDependOnRule->injectClassLayerMap([
+            'App\Infrastructure\UserRepository' => ['Infrastructure', 'Repository'],
+        ]);
+        $classNode = $this->makeNode('Domain', ['App\Infrastructure\UserRepository']);
+
+        $violation = $mayNotDependOnRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('Repository', $violation->message);
+    }
+
+    public function testPassesWhenDependencyOnlyMatchesPrimaryLayerNotForbidden(): void
+    {
+        $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Repository');
+        $mayNotDependOnRule->injectClassLayerMap([
+            'App\Infrastructure\Cache\RedisCache' => ['Infrastructure'],
+        ]);
+        $classNode = $this->makeNode('Domain', ['App\Infrastructure\Cache\RedisCache']);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+    }
 }
