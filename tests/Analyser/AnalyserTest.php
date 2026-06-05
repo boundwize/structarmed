@@ -1594,47 +1594,47 @@ class Order {
 
     public function testMayNotDependOnRuleDetectsViolationWhenDependencyMatchesSecondaryLayer(): void
     {
-        // DatabaseUserStore must be scanned so it gets a ClassNode with layers
-        // ['Auth', 'Database'] which is then stored in classLayerMap.
+        // AuthTokenStore must be scanned so it gets a ClassNode with layers
+        // ['Support', 'Auth'] which is then stored in classLayerMap.
         $basePath = $this->makeTempProject([
-            'src/HTTP/LoginController.php'   => <<<'PHP'
+            'src/HTTP/LoginController.php'     => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
 
-                use App\Auth\DatabaseUserStore;
+                use App\Support\AuthTokenStore;
 
                 final class LoginController
                 {
-                    public function __construct(private DatabaseUserStore $store) {}
+                    public function __construct(private AuthTokenStore $store) {}
                 }
                 PHP,
-            'src/Auth/DatabaseUserStore.php' => <<<'PHP'
+            'src/Support/AuthTokenStore.php'   => <<<'PHP'
                 <?php
 
-                namespace App\Auth;
+                namespace App\Support;
 
-                final class DatabaseUserStore {}
+                final class AuthTokenStore {}
                 PHP,
         ]);
 
-        // DatabaseUserStore matches both Auth (first registered) and Database.
-        // The rule forbids Database; only checking the primary layer misses the violation.
+        // AuthTokenStore matches both Support (primary, by namespace) and Auth (by class name).
+        // The rule forbids Auth; only checking the primary Support layer misses the violation.
         $architecture = Architecture::define()
             ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
-            ->layerPattern('Auth', '/^App\\\\Auth\\\\.*$/')
-            ->layerPattern('Database', '/Database/')
+            ->layerPattern('Support', '/^App\\\\Support\\\\.*$/')
+            ->layerPattern('Auth', '/Auth/')
             ->rule(
-                'http.not_depend_database',
-                new MayNotDependOnRule(from: 'HTTP', to: 'Database')
+                'http.not_depend_auth',
+                new MayNotDependOnRule(from: 'HTTP', to: 'Auth')
             );
 
         $ruleViolationCollection = (new Analyser($basePath))
             ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
 
-        $violations = $ruleViolationCollection->forRule('http.not_depend_database');
+        $violations = $ruleViolationCollection->forRule('http.not_depend_auth');
         $this->assertCount(1, $violations);
-        $this->assertStringContainsString('Database', $violations[0]->message);
+        $this->assertStringContainsString('Auth', $violations[0]->message);
     }
 
     public function testAnalyserRulesetDetectsViolationWhenDependencyMatchesSecondaryForbiddenLayer(): void
@@ -1645,26 +1645,26 @@ class Order {
 
                 namespace App\HTTP;
 
-                use App\Auth\DatabaseUserStore;
+                use App\Support\AuthTokenStore;
 
                 final class LoginController
                 {
-                    public function __construct(private DatabaseUserStore $store) {}
+                    public function __construct(private AuthTokenStore $store) {}
                 }
                 PHP,
         ]);
 
-        // DatabaseUserStore matches both Auth (primary, allowed for HTTP) and Database
-        // (secondary, forbidden for HTTP). No file is needed for DatabaseUserStore:
+        // AuthTokenStore matches both Support (primary, allowed for HTTP) and Auth
+        // (secondary, forbidden for HTTP). No file is needed for AuthTokenStore:
         // the ruleset path resolves dependency layers directly from the class name via
         // layerPattern(), so the class does not need to be scanned. Only resolving the
         // primary layer silently allows the violation.
         $architecture = Architecture::define()
             ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
-            ->layerPattern('Auth', '/^App\\\\Auth\\\\.*$/')
-            ->layerPattern('Database', '/Database/')
+            ->layerPattern('Support', '/^App\\\\Support\\\\.*$/')
+            ->layerPattern('Auth', '/Auth/')
             ->ruleset([
-                'HTTP' => ['Auth'], // Database is NOT in the allowed list
+                'HTTP' => ['Support'], // Auth is NOT in the allowed list
             ]);
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
@@ -1672,7 +1672,7 @@ class Order {
         $this->assertTrue($ruleViolationCollection->hasViolations());
         $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
         $this->assertCount(1, $violations);
-        $this->assertStringContainsString('Database', $violations[0]->message);
+        $this->assertStringContainsString('Auth', $violations[0]->message);
     }
 
     /** @param array<string, string> $files */
