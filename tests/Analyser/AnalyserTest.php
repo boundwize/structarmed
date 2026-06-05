@@ -1597,7 +1597,7 @@ class Order {
         // AuthTokenStore must be scanned so it gets a ClassNode with layers
         // ['Support', 'Auth'] which is then stored in classLayerMap.
         $basePath = $this->makeTempProject([
-            'src/HTTP/LoginController.php'     => <<<'PHP'
+            'src/HTTP/LoginController.php'   => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -1609,7 +1609,7 @@ class Order {
                     public function __construct(private AuthTokenStore $store) {}
                 }
                 PHP,
-            'src/Support/AuthTokenStore.php'   => <<<'PHP'
+            'src/Support/AuthTokenStore.php' => <<<'PHP'
                 <?php
 
                 namespace App\Support;
