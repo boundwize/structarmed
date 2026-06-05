@@ -1594,47 +1594,47 @@ class Order {
 
     public function testMayNotDependOnRuleDetectsViolationWhenDependencyMatchesSecondaryLayer(): void
     {
-        // UserRepository must be scanned so it gets a ClassNode with layers
-        // ['Infrastructure', 'Repository'] which is then stored in classLayerMap.
+        // DatabaseUserStore must be scanned so it gets a ClassNode with layers
+        // ['Auth', 'Database'] which is then stored in classLayerMap.
         $basePath = $this->makeTempProject([
-            'src/Domain/UserService.php'            => <<<'PHP'
+            'src/HTTP/LoginController.php'   => <<<'PHP'
                 <?php
 
-                namespace App\Domain;
+                namespace App\HTTP;
 
-                use App\Infrastructure\UserRepository;
+                use App\Auth\DatabaseUserStore;
 
-                final class UserService
+                final class LoginController
                 {
-                    public function __construct(private UserRepository $repo) {}
+                    public function __construct(private DatabaseUserStore $store) {}
                 }
                 PHP,
-            'src/Infrastructure/UserRepository.php' => <<<'PHP'
+            'src/Auth/DatabaseUserStore.php' => <<<'PHP'
                 <?php
 
-                namespace App\Infrastructure;
+                namespace App\Auth;
 
-                final class UserRepository {}
+                final class DatabaseUserStore {}
                 PHP,
         ]);
 
-        // UserRepository matches both Infrastructure (first registered) and Repository.
-        // The rule forbids Repository; only checking the primary layer misses the violation.
+        // DatabaseUserStore matches both Auth (first registered) and Database.
+        // The rule forbids Database; only checking the primary layer misses the violation.
         $architecture = Architecture::define()
-            ->layerPattern('Domain', '/^App\\\\Domain\\\\.*$/')
-            ->layerPattern('Infrastructure', '/^App\\\\Infrastructure\\\\.*$/')
-            ->layerPattern('Repository', '/Repository$/')
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Auth', '/^App\\\\Auth\\\\.*$/')
+            ->layerPattern('Database', '/Database/')
             ->rule(
-                'domain.not_depend_repository',
-                new MayNotDependOnRule(from: 'Domain', to: 'Repository')
+                'http.not_depend_database',
+                new MayNotDependOnRule(from: 'HTTP', to: 'Database')
             );
 
         $ruleViolationCollection = (new Analyser($basePath))
             ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
 
-        $violations = $ruleViolationCollection->forRule('domain.not_depend_repository');
+        $violations = $ruleViolationCollection->forRule('http.not_depend_database');
         $this->assertCount(1, $violations);
-        $this->assertStringContainsString('Repository', $violations[0]->message);
+        $this->assertStringContainsString('Database', $violations[0]->message);
     }
 
     public function testAnalyserRulesetDetectsViolationWhenDependencyMatchesSecondaryForbiddenLayer(): void
