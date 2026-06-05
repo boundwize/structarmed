@@ -14,7 +14,7 @@ use function preg_match;
  * Useful for codebases where architecture layers are expressed through namespaces
  * (or namespace sub-trees) rather than file-system paths.
  *
- * Supports an optional exclude pattern which prevents a class from being assigned
+ * Supports optional exclude patterns which prevent a class from being assigned
  * to the layer even when the primary pattern matches.
  *
  * Example:
@@ -25,7 +25,11 @@ use function preg_match;
 final readonly class ClassNameRegexLayerResolver implements LayerResolverInterface
 {
     /**
-     * @param array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns
+     * @param array<string, array<string, mixed>> $layerPatterns
+     * @phpstan-param array<string, array{
+     *     pattern: string|list<string>,
+     *     excludePattern: string|list<string|null>|null
+     * }> $layerPatterns
      *        Map of layer name → pattern config.
      */
     public function __construct(private array $layerPatterns)
@@ -35,11 +39,11 @@ final readonly class ClassNameRegexLayerResolver implements LayerResolverInterfa
     public function resolve(string $className, string $filePath): ?string
     {
         foreach ($this->layerPatterns as $layerName => $config) {
-            if (! (bool) preg_match($config['pattern'], $className)) {
+            if (! $this->matchesPattern($config['pattern'], $className)) {
                 continue;
             }
 
-            if ($config['excludePattern'] !== null && (bool) preg_match($config['excludePattern'], $className)) {
+            if ($config['excludePattern'] !== null && $this->matchesPattern($config['excludePattern'], $className)) {
                 continue;
             }
 
@@ -57,11 +61,11 @@ final readonly class ClassNameRegexLayerResolver implements LayerResolverInterfa
         $matched = [];
 
         foreach ($this->layerPatterns as $layerName => $config) {
-            if (! (bool) preg_match($config['pattern'], $className)) {
+            if (! $this->matchesPattern($config['pattern'], $className)) {
                 continue;
             }
 
-            if ($config['excludePattern'] !== null && (bool) preg_match($config['excludePattern'], $className)) {
+            if ($config['excludePattern'] !== null && $this->matchesPattern($config['excludePattern'], $className)) {
                 continue;
             }
 
@@ -69,5 +73,23 @@ final readonly class ClassNameRegexLayerResolver implements LayerResolverInterfa
         }
 
         return $matched;
+    }
+
+    /**
+     * @param string|list<string|null> $patterns
+     */
+    private function matchesPattern(string|array $patterns, string $className): bool
+    {
+        foreach ((array) $patterns as $pattern) {
+            if ($pattern === null) {
+                continue;
+            }
+
+            if ((bool) preg_match($pattern, $className)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

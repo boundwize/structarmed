@@ -447,7 +447,11 @@ final class Analyser
     /**
      * @param list<string> $files
      * @param array<string, string|list<string>> $layers
-     * @param array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns
+     * @param array<string, array<string, mixed>> $layerPatterns
+     * @phpstan-param array<string, array{
+     *     pattern: string|list<string>,
+     *     excludePattern: string|list<string|null>|null
+     * }> $layerPatterns
      * @return list<ClassNode>
      */
     private function collectClassNodes(

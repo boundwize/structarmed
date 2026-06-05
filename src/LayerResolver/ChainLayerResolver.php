@@ -28,7 +28,11 @@ final class ChainLayerResolver implements LayerResolverInterface
 
     /**
      * @param array<string, string|list<string>> $layers
-     * @param array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns
+     * @param array<string, array<string, mixed>> $layerPatterns
+     * @phpstan-param array<string, array{
+     *     pattern: string|list<string>,
+     *     excludePattern: string|list<string|null>|null
+     * }> $layerPatterns
      */
     public static function fromLayerConfig(array $layers, string $basePath, array $layerPatterns = []): self
     {

@@ -37,7 +37,12 @@ final readonly class ClassNodeWorker
             $basePath = $payload['basePath'];
             /** @var array<string, string|list<string>> $layers */
             $layers = $payload['layers'];
-            /** @var array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns */
+            /**
+             * @var array<string, array{
+             *     pattern: string|list<string>,
+             *     excludePattern: string|list<string|null>|null
+             * }> $layerPatterns
+             */
             $layerPatterns = $payload['layerPatterns'];
             /** @var list<string> $files */
             $files = $payload['files'];
