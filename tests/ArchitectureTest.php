@@ -204,6 +204,23 @@ final class ArchitectureTest extends TestCase
         $this->assertNull($patterns['HTTP']['excludePattern']);
     }
 
+    public function testLayerPatternAcceptsMultiplePatterns(): void
+    {
+        $architecture = Architecture::define()
+            ->layerPattern('Service', [
+                '/^App\\\\Service\\\\.*$/',
+                '/^App\\\\Application\\\\.*Service$/',
+            ]);
+
+        $patterns = $architecture->getLayerPatterns();
+
+        $this->assertSame([
+            '/^App\\\\Service\\\\.*$/',
+            '/^App\\\\Application\\\\.*Service$/',
+        ], $patterns['Service']['pattern']);
+        $this->assertNull($patterns['Service']['excludePattern']);
+    }
+
     public function testLayerPatternWithExcludePatternIsRegistered(): void
     {
         $architecture = Architecture::define()
@@ -213,6 +230,23 @@ final class ArchitectureTest extends TestCase
 
         $this->assertSame('/^App\\\\HTTP\\\\.*$/', $patterns['HTTP']['pattern']);
         $this->assertSame('/(Exception|URI)/', $patterns['HTTP']['excludePattern']);
+    }
+
+    public function testLayerPatternAcceptsMultipleExcludePatterns(): void
+    {
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/', [
+                '/Exception$/',
+                '/^App\\\\HTTP\\\\URI$/',
+            ]);
+
+        $patterns = $architecture->getLayerPatterns();
+
+        $this->assertSame('/^App\\\\HTTP\\\\.*$/', $patterns['HTTP']['pattern']);
+        $this->assertSame([
+            '/Exception$/',
+            '/^App\\\\HTTP\\\\URI$/',
+        ], $patterns['HTTP']['excludePattern']);
     }
 
     public function testRulesetIsRegistered(): void

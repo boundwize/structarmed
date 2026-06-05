@@ -34,6 +34,24 @@ final class ClassNameRegexLayerResolverTest extends TestCase
         $this->assertSame('HTTP', $classNameRegexLayerResolver->resolve('App\\HTTP\\Request', '/fake.php'));
     }
 
+    public function testResolvesLayerWhenAnyConfiguredPatternMatches(): void
+    {
+        $classNameRegexLayerResolver = new ClassNameRegexLayerResolver([
+            'Service' => [
+                'pattern'        => [
+                    '/^App\\\\Service\\\\.*$/',
+                    '/^App\\\\Application\\\\.*Service$/',
+                ],
+                'excludePattern' => null,
+            ],
+        ]);
+
+        $this->assertSame('Service', $classNameRegexLayerResolver->resolve(
+            'App\\Application\\CreateOrderService',
+            '/fake.php'
+        ));
+    }
+
     public function testExcludePatternPreventsMatch(): void
     {
         $classNameRegexLayerResolver = $this->makeResolver();
@@ -51,6 +69,36 @@ final class ClassNameRegexLayerResolverTest extends TestCase
         // Exception classes are excluded from the HTTP layer; since no other
         // pattern matches, the result is null.
         $this->assertNull($classNameRegexLayerResolver->resolve('App\\HTTP\\SomeException', '/fake.php'));
+    }
+
+    public function testExcludePatternsPreventMatchWhenAnyConfiguredPatternMatches(): void
+    {
+        $classNameRegexLayerResolver = new ClassNameRegexLayerResolver([
+            'HTTP' => [
+                'pattern'        => '/^App\\\\HTTP\\\\.*$/',
+                'excludePattern' => [
+                    '/Exception$/',
+                    '/^App\\\\HTTP\\\\URI$/',
+                ],
+            ],
+            'URI'  => ['pattern' => '/^App\\\\HTTP\\\\URI$/', 'excludePattern' => null],
+        ]);
+
+        $this->assertSame('URI', $classNameRegexLayerResolver->resolve('App\\HTTP\\URI', '/fake.php'));
+        $this->assertNull($classNameRegexLayerResolver->resolve('App\\HTTP\\SomeException', '/fake.php'));
+    }
+
+    public function testExcludePatternArrayWithNullEntryDoesNotExcludeLayer(): void
+    {
+        $classNameRegexLayerResolver = new ClassNameRegexLayerResolver([
+            'HTTP' => [
+                'pattern'        => '/^App\\\\HTTP\\\\.*$/',
+                'excludePattern' => [null],
+            ],
+        ]);
+
+        $this->assertSame('HTTP', $classNameRegexLayerResolver->resolve('App\\HTTP\\Request', '/fake.php'));
+        $this->assertSame(['HTTP'], $classNameRegexLayerResolver->resolveAll('App\\HTTP\\Request', '/fake.php'));
     }
 
     public function testReturnsNullForUnregisteredClass(): void
@@ -74,6 +122,25 @@ final class ClassNameRegexLayerResolverTest extends TestCase
         $this->assertContains('Core', $layers);
     }
 
+    public function testResolveAllMatchesLayerWhenAnyConfiguredPatternMatches(): void
+    {
+        $classNameRegexLayerResolver = new ClassNameRegexLayerResolver([
+            'Service' => [
+                'pattern'        => [
+                    '/^App\\\\Service\\\\.*$/',
+                    '/^App\\\\Application\\\\.*Service$/',
+                ],
+                'excludePattern' => null,
+            ],
+            'Core'    => ['pattern' => '/^App\\\\.*$/', 'excludePattern' => null],
+        ]);
+
+        $layers = $classNameRegexLayerResolver->resolveAll('App\\Application\\CreateOrderService', '/fake.php');
+
+        $this->assertContains('Service', $layers);
+        $this->assertContains('Core', $layers);
+    }
+
     public function testResolveAllReturnsEmptyArrayForUnregisteredClass(): void
     {
         $classNameRegexLayerResolver = $this->makeResolver();
@@ -86,6 +153,25 @@ final class ClassNameRegexLayerResolverTest extends TestCase
         $classNameRegexLayerResolver = $this->makeResolver();
 
         // 'App\HTTP\URI' matches the URI layer but is excluded from HTTP
+        $layers = $classNameRegexLayerResolver->resolveAll('App\\HTTP\\URI', '/fake.php');
+
+        $this->assertContains('URI', $layers);
+        $this->assertNotContains('HTTP', $layers);
+    }
+
+    public function testResolveAllExcludesLayersWhereAnyExcludePatternMatches(): void
+    {
+        $classNameRegexLayerResolver = new ClassNameRegexLayerResolver([
+            'HTTP' => [
+                'pattern'        => '/^App\\\\HTTP\\\\.*$/',
+                'excludePattern' => [
+                    '/Exception$/',
+                    '/^App\\\\HTTP\\\\URI$/',
+                ],
+            ],
+            'URI'  => ['pattern' => '/^App\\\\HTTP\\\\URI$/', 'excludePattern' => null],
+        ]);
+
         $layers = $classNameRegexLayerResolver->resolveAll('App\\HTTP\\URI', '/fake.php');
 
         $this->assertContains('URI', $layers);

@@ -60,7 +60,10 @@ final class Architecture
     /**
      * Layers resolved by class-name regex patterns rather than file-system paths.
      *
-     * @var array<string, array{pattern: string, excludePattern: string|null}>
+     * @var array<string, array{
+     *     pattern: string|list<string>,
+     *     excludePattern: string|list<string|null>|null
+     * }>
      */
     private array $layerPatterns = [];
 
@@ -116,17 +119,18 @@ final class Architecture
     }
 
     /**
-     * Define a layer by matching the fully-qualified class name against a regex pattern.
+     * Define a layer by matching the fully-qualified class name against one or more regex patterns.
      *
      * Use this when architecture layers are expressed through namespace conventions
      * rather than directory structure.
      *
-     * @param string      $name           Layer name.
-     * @param string      $pattern        Regex matched against the FQN (e.g. '/^App\\HTTP\\.*$/').
-     * @param string|null $excludePattern Optional regex; classes matching this are excluded
-     *                                    from the layer even when $pattern matches.
+     * @param string                   $name           Layer name.
+     * @param string|list<string>      $pattern        Regex matched against the FQN (e.g. '/^App\\HTTP\\.*$/').
+     * @param string|array|null $excludePattern Optional regex; classes matching this are excluded
+     *                                          from the layer even when $pattern matches.
+     * @phpstan-param string|list<string|null>|null $excludePattern
      */
-    public function layerPattern(string $name, string $pattern, ?string $excludePattern = null): self
+    public function layerPattern(string $name, string|array $pattern, string|array|null $excludePattern = null): self
     {
         $this->layerPatterns[$name] = [
             'pattern'        => $pattern,
@@ -328,7 +332,10 @@ final class Architecture
     }
 
     /**
-     * @return array<string, array{pattern: string, excludePattern: string|null}>
+     * @return array<string, array{
+     *     pattern: string|list<string>,
+     *     excludePattern: string|list<string|null>|null
+     * }>
      */
     public function getLayerPatterns(): array
     {

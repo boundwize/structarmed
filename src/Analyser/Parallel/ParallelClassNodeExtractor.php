@@ -44,7 +44,11 @@ final readonly class ParallelClassNodeExtractor
 {
     /**
      * @param array<string, string|list<string>> $layers
-     * @param array<string, array{pattern: string, excludePattern: string|null}> $layerPatterns
+     * @param array<string, array<string, mixed>> $layerPatterns
+     * @phpstan-param array<string, array{
+     *     pattern: string|list<string>,
+     *     excludePattern: string|list<string|null>|null
+     * }> $layerPatterns
      */
     public function __construct(
         private string $basePath,
