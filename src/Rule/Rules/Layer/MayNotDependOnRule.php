@@ -9,6 +9,8 @@ use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
+use function in_array;
+use function is_array;
 use function sprintf;
 use function str_contains;
 use function str_replace;
@@ -18,7 +20,7 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
 {
     private readonly string $normalisedToPath;
 
-    /** @var array<string, string>|null */
+    /** @var array<string, list<string>>|null */
     private ?array $classLayerMap = null;
 
     public function __construct(
@@ -29,10 +31,14 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
         $this->normalisedToPath = str_replace('\\', '/', $toPath ?? $to);
     }
 
-    /** @param array<string, string> $classLayerMap */
+    /** @param array<string, string|list<string>> $classLayerMap */
     public function injectClassLayerMap(array $classLayerMap): void
     {
-        $this->classLayerMap = $classLayerMap;
+        $this->classLayerMap = [];
+
+        foreach ($classLayerMap as $className => $layers) {
+            $this->classLayerMap[$className] = is_array($layers) ? $layers : [$layers];
+        }
     }
 
     public function appliesTo(ClassNode $classNode): bool
@@ -81,10 +87,10 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
     {
         // Priority 1: Use class layer map if available
         if ($this->classLayerMap !== null) {
-            $depLayer = $this->classLayerMap[$dependency] ?? null;
+            $depLayers = $this->classLayerMap[$dependency] ?? null;
 
-            if ($depLayer !== null) {
-                return $depLayer === $this->to;
+            if ($depLayers !== null) {
+                return in_array($this->to, $depLayers, true);
             }
         }
 

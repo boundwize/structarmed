@@ -221,19 +221,27 @@ final class Analyser
                     continue;
                 }
 
-                $depLayer = $chainLayerResolver->resolve($dependency, '');
+                $depLayers = $chainLayerResolver->resolveAll($dependency, '');
 
-                if ($depLayer === null) {
+                if ($depLayers === []) {
                     // External / unregistered dependency — not restricted.
                     continue;
                 }
 
-                if ($depLayer === $classNode->layer) {
-                    // Same-layer dependency — always allowed.
-                    continue;
+                $violatingLayer = null;
+
+                foreach ($depLayers as $depLayer) {
+                    if ($depLayer === $classNode->layer) {
+                        continue;
+                    }
+
+                    if (! in_array($depLayer, $allowedLayers, true)) {
+                        $violatingLayer = $depLayer;
+                        break;
+                    }
                 }
 
-                if (in_array($depLayer, $allowedLayers, true)) {
+                if ($violatingLayer === null) {
                     continue;
                 }
 
@@ -243,7 +251,7 @@ final class Analyser
                         $classNode->className,
                         $classNode->layer,
                         $dependency,
-                        $depLayer
+                        $violatingLayer
                     ),
                     file:      $classNode->file,
                     line:      $classNode->line,
@@ -349,7 +357,7 @@ final class Analyser
      * @return array{
      *     dependencies: array<string, list<string>>,
      *     inheritanceDependencies: array<string, list<string>>,
-     *     classLayerMap: array<string, string>
+     *     classLayerMap: array<string, list<string>>
      * }
      */
     private function classDependencyMaps(array $classNodes): array
@@ -372,8 +380,8 @@ final class Analyser
 
             $inheritanceDependencyMap[$classNode->className] = array_values(array_unique($dependencies));
 
-            if ($classNode->layer !== null) {
-                $classLayerMap[$classNode->className] = $classNode->layer;
+            if ($classNode->layers !== []) {
+                $classLayerMap[$classNode->className] = $classNode->layers;
             }
         }
 

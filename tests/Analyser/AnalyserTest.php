@@ -1592,6 +1592,89 @@ class Order {
         $this->assertStringContainsString('Infrastructure', $violations[0]->message);
     }
 
+    public function testMayNotDependOnRuleDetectsViolationWhenDependencyMatchesSecondaryLayer(): void
+    {
+        // UserRepository must be scanned so it gets a ClassNode with layers
+        // ['Infrastructure', 'Repository'] which is then stored in classLayerMap.
+        $basePath = $this->makeTempProject([
+            'src/Domain/UserService.php'            => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                use App\Infrastructure\UserRepository;
+
+                final class UserService
+                {
+                    public function __construct(private UserRepository $repo) {}
+                }
+                PHP,
+            'src/Infrastructure/UserRepository.php' => <<<'PHP'
+                <?php
+
+                namespace App\Infrastructure;
+
+                final class UserRepository {}
+                PHP,
+        ]);
+
+        // UserRepository matches both Infrastructure (first registered) and Repository.
+        // The rule forbids Repository; only checking the primary layer misses the violation.
+        $architecture = Architecture::define()
+            ->layerPattern('Domain', '/^App\\\\Domain\\\\.*$/')
+            ->layerPattern('Infrastructure', '/^App\\\\Infrastructure\\\\.*$/')
+            ->layerPattern('Repository', '/Repository$/')
+            ->rule(
+                'domain.not_depend_repository',
+                new MayNotDependOnRule(from: 'Domain', to: 'Repository')
+            );
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+
+        $violations = $ruleViolationCollection->forRule('domain.not_depend_repository');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Repository', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetDetectsViolationWhenDependencyMatchesSecondaryForbiddenLayer(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/LoginController.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Auth\DatabaseUserStore;
+
+                final class LoginController
+                {
+                    public function __construct(private DatabaseUserStore $store) {}
+                }
+                PHP,
+        ]);
+
+        // DatabaseUserStore matches both Auth (primary, allowed for HTTP) and Database
+        // (secondary, forbidden for HTTP). No file is needed for DatabaseUserStore:
+        // the ruleset path resolves dependency layers directly from the class name via
+        // layerPattern(), so the class does not need to be scanned. Only resolving the
+        // primary layer silently allows the violation.
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Auth', '/^App\\\\Auth\\\\.*$/')
+            ->layerPattern('Database', '/Database/')
+            ->ruleset([
+                'HTTP' => ['Auth'], // Database is NOT in the allowed list
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {
