@@ -6,6 +6,7 @@
         "dev",
         "architecture",
         "analysis",
+        "static analysis",
         "ddd",
         "mvc",
         "layer",
