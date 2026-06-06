@@ -233,16 +233,19 @@ final class Analyser
                     continue;
                 }
 
-                $violatingLayer = null;
+                $violatingLayer  = null;
+                $anyLayerAllowed = false;
 
                 foreach ($depLayers as $depLayer) {
-                    if (! in_array($depLayer, $allowedLayers, true)) {
-                        $violatingLayer = $depLayer;
+                    if (in_array($depLayer, $allowedLayers, true)) {
+                        $anyLayerAllowed = true;
                         break;
                     }
+
+                    $violatingLayer ??= $depLayer;
                 }
 
-                if ($violatingLayer === null) {
+                if ($anyLayerAllowed || $violatingLayer === null) {
                     continue;
                 }
 

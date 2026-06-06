@@ -1345,6 +1345,48 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetAllowsDependencyWhenAnyOfItsLayersIsAllowed(): void
+    {
+        // A dependency resolved to two layers [Formatter, Source] because Formatter
+        // is a specific sub-path layer and Source is an overlapping catch-all.
+        // Entity lists Formatter as allowed. Even though Source is not listed,
+        // the dependency must NOT be reported as a violation because at least one
+        // of the dependency's layers (Formatter) is explicitly allowed.
+        $basePath = $this->makeTempProject([
+            'src/Entity/User.php'             => <<<'PHP'
+                <?php
+
+                namespace App\Entity;
+
+                use App\Formatter\DateFormatter;
+
+                final class User
+                {
+                    public function __construct(private DateFormatter $formatter) {}
+                }
+                PHP,
+            'src/Formatter/DateFormatter.php' => <<<'PHP'
+                <?php
+
+                namespace App\Formatter;
+
+                final class DateFormatter {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layer('Entity', 'src/Entity/')
+            ->layer('Formatter', 'src/Formatter/')
+            ->ruleset([
+                'Entity' => ['Formatter'], // Formatter allowed, Source is NOT listed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     public function testAnalyserRulesetSkipsClassNodeWithNullLayer(): void
     {
         // A PHP file is scanned but the class inside it does not match any
