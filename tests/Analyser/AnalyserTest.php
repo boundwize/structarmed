@@ -1353,7 +1353,7 @@ final class AnalyserTest extends TestCase
         // the dependency must NOT be reported as a violation because at least one
         // of the dependency's layers (Formatter) is explicitly allowed.
         $basePath = $this->makeTempProject([
-            'src/System/Entity/User.php'         => <<<'PHP'
+            'src/System/Entity/User.php'             => <<<'PHP'
                 <?php
 
                 namespace App\System\Entity;
@@ -1559,7 +1559,8 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
     }
 
-    public function testAnalyserRulesetSkipPathsForRulesetSuppressesViolationsForMatchingFilesWithPathBasedLayers(): void
+    public function testAnalyserRulesetSkipPathsForRulesetSuppressesViolationsForMatchingFilesWithPathBasedLayers(
+    ): void
     {
         $basePath = $this->makeTempProject([
             'src/HTTP/Request.php'          => <<<'PHP'
