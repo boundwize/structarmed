@@ -148,6 +148,7 @@ final class Analyser
                 'dependencies'            => [],
                 'inheritanceDependencies' => [],
                 'classLayerMap'           => [],
+                'classPrimaryLayerMap'    => [],
             ];
         $dependencyMap            = $classDependencyMaps['dependencies'];
         $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
@@ -221,8 +222,10 @@ final class Analyser
                     continue;
                 }
 
-                $depLayers = $classDependencyMaps['classLayerMap'][$dependency]
-                    ?? $chainLayerResolver->resolveAll($dependency, '');
+                $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
+                $depLayers    = $primaryLayer !== null
+                    ? [$primaryLayer]
+                    : $chainLayerResolver->resolveAll($dependency, '');
 
                 if ($depLayers === []) {
                     // External / unregistered dependency — not restricted.
@@ -233,19 +236,16 @@ final class Analyser
                     continue;
                 }
 
-                $violatingLayer  = null;
-                $anyLayerAllowed = false;
+                $violatingLayer = null;
 
                 foreach ($depLayers as $depLayer) {
-                    if (in_array($depLayer, $allowedLayers, true)) {
-                        $anyLayerAllowed = true;
+                    if (! in_array($depLayer, $allowedLayers, true)) {
+                        $violatingLayer = $depLayer;
                         break;
                     }
-
-                    $violatingLayer ??= $depLayer;
                 }
 
-                if ($anyLayerAllowed || $violatingLayer === null) {
+                if ($violatingLayer === null) {
                     continue;
                 }
 
@@ -361,7 +361,8 @@ final class Analyser
      * @return array{
      *     dependencies: array<string, list<string>>,
      *     inheritanceDependencies: array<string, list<string>>,
-     *     classLayerMap: array<string, list<string>>
+     *     classLayerMap: array<string, list<string>>,
+     *     classPrimaryLayerMap: array<string, string>
      * }
      */
     private function classDependencyMaps(array $classNodes): array
@@ -369,6 +370,7 @@ final class Analyser
         $dependencyMap            = [];
         $inheritanceDependencyMap = [];
         $classLayerMap            = [];
+        $classPrimaryLayerMap     = [];
 
         foreach ($classNodes as $classNode) {
             $dependencyMap[$classNode->className] = $classNode->dependencies;
@@ -387,12 +389,17 @@ final class Analyser
             if ($classNode->layers !== []) {
                 $classLayerMap[$classNode->className] = $classNode->layers;
             }
+
+            if ($classNode->layer !== null) {
+                $classPrimaryLayerMap[$classNode->className] = $classNode->layer;
+            }
         }
 
         return [
             'dependencies'            => $dependencyMap,
             'inheritanceDependencies' => $inheritanceDependencyMap,
             'classLayerMap'           => $classLayerMap,
+            'classPrimaryLayerMap'    => $classPrimaryLayerMap,
         ];
     }
 
