@@ -2004,6 +2004,125 @@ class Order {
         $this->assertStringContainsString('Auth', $violations[0]->message);
     }
 
+    public function testAnalyserRulesetDetectsViolationForScannedDepWithRegexLayerInMixedConfig(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Validation/Validation.php' => <<<'PHP'
+                <?php
+
+                namespace App\Validation;
+
+                use App\View\RendererInterface;
+
+                final class Validation
+                {
+                    public function __construct(private RendererInterface $view) {}
+                }
+                PHP,
+            'src/View/RendererInterface.php' => <<<'PHP'
+                <?php
+
+                namespace App\View;
+
+                interface RendererInterface {}
+                PHP,
+        ]);
+
+        // RendererInterface is scanned and matches layerPattern 'View', but also lives under
+        // the path-based Source catch-all. The violation must be reported against layer 'View'.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layerPattern('Validation', '/^App\\\\Validation\\\\.*$/')
+            ->layerPattern('View', '/^App\\\\View\\\\.*$/')
+            ->ruleset([
+                'Validation' => [], // View is NOT allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.Validation');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('View', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetTreatsScannedDepWithOnlyPathLayerAsExternalInMixedConfig(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Validation/Validation.php' => <<<'PHP'
+                <?php
+
+                namespace App\Validation;
+
+                use App\Exceptions\InvalidArgumentException;
+
+                final class Validation
+                {
+                    public function __construct(private InvalidArgumentException $e) {}
+                }
+                PHP,
+            'src/Exceptions/InvalidArgumentException.php' => <<<'PHP'
+                <?php
+
+                namespace App\Exceptions;
+
+                final class InvalidArgumentException extends \InvalidArgumentException {}
+                PHP,
+        ]);
+
+        // InvalidArgumentException is scanned but matches no layerPattern — it only lands in
+        // the path-based Source catch-all, which is not an architectural boundary.
+        // It must be treated as an unrestricted external dependency (no violation).
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layerPattern('Validation', '/^App\\\\Validation\\\\.*$/')
+            ->ruleset([
+                'Validation' => [], // Source is not listed, but Source-only deps are unrestricted
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetSkipClassViolationSuppressesViolationForScannedDepInMixedConfig(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Validation/Validation.php' => <<<'PHP'
+                <?php
+
+                namespace App\Validation;
+
+                use App\View\RendererInterface;
+
+                final class Validation
+                {
+                    public function __construct(private RendererInterface $view) {}
+                }
+                PHP,
+            'src/View/RendererInterface.php' => <<<'PHP'
+                <?php
+
+                namespace App\View;
+
+                interface RendererInterface {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layerPattern('Validation', '/^App\\\\Validation\\\\.*$/')
+            ->layerPattern('View', '/^App\\\\View\\\\.*$/')
+            ->ruleset([
+                'Validation' => [],
+            ])
+            ->skipClassViolation('App\\Validation\\Validation', ['App\\View\\RendererInterface']);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {

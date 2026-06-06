@@ -224,7 +224,7 @@ final class Analyser
                 }
 
                 $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
-                $depLayers    = $primaryLayer !== null
+                $depLayers    = $primaryLayer !== null && $layerPatterns === []
                     ? ($classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer])
                     : $chainLayerResolver->resolveAll($dependency, '');
 
