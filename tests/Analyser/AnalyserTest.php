@@ -1387,6 +1387,47 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetAllowsDependencyWhenParentLayerIsAllowed(): void
+    {
+        // DateFormatter has primary layer Formatter, but also belongs to the System
+        // parent layer. The ruleset allows System for Entity. Even though Formatter is
+        // not listed, the dependency must be permitted because System is allowed and
+        // DateFormatter is within System.
+        $basePath = $this->makeTempProject([
+            'src/System/Entity/User.php'             => <<<'PHP'
+                <?php
+
+                namespace App\System\Entity;
+
+                use App\System\Formatter\DateFormatter;
+
+                final class User
+                {
+                    public function __construct(private DateFormatter $formatter) {}
+                }
+                PHP,
+            'src/System/Formatter/DateFormatter.php' => <<<'PHP'
+                <?php
+
+                namespace App\System\Formatter;
+
+                final class DateFormatter {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('System', 'src/System/')
+            ->layer('Entity', 'src/System/Entity/')
+            ->layer('Formatter', 'src/System/Formatter/')
+            ->ruleset([
+                'Entity' => ['System'], // Formatter is NOT listed, but System (its parent) is
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     public function testAnalyserRulesetAllowsDependencyOnUnclassifiedClassInSharedCatchAllLayer(): void
     {
         // Router is a sub-layer of System. RouterException depends on RuntimeException,

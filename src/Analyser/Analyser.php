@@ -225,7 +225,7 @@ final class Analyser
 
                 $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
                 $depLayers    = $primaryLayer !== null
-                    ? [$primaryLayer]
+                    ? ($classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer])
                     : $chainLayerResolver->resolveAll($dependency, '');
 
                 if ($depLayers === []) {
@@ -237,17 +237,27 @@ final class Analyser
                     continue;
                 }
 
-                $violatingLayer = null;
-
-                foreach ($depLayers as $depLayer) {
-                    if (! in_array($depLayer, $allowedLayers, true)) {
-                        $violatingLayer = $depLayer;
-                        break;
+                if ($primaryLayer !== null) {
+                    // Scanned dependency: permitted if any of its layers is explicitly allowed.
+                    if (array_intersect($allowedLayers, $depLayers) !== []) {
+                        continue;
                     }
-                }
 
-                if ($violatingLayer === null) {
-                    continue;
+                    $violatingLayer = $primaryLayer;
+                } else {
+                    // Unscanned/regex-resolved dependency: report the first non-allowed layer.
+                    $violatingLayer = null;
+
+                    foreach ($depLayers as $depLayer) {
+                        if (! in_array($depLayer, $allowedLayers, true)) {
+                            $violatingLayer = $depLayer;
+                            break;
+                        }
+                    }
+
+                    if ($violatingLayer === null) {
+                        continue;
+                    }
                 }
 
                 $rulesetViolationCollection->add(new RuleViolation(
