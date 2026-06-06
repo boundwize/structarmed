@@ -1428,12 +1428,13 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
-    public function testAnalyserRulesetAllowsDependencyOnUnclassifiedClassInSharedCatchAllLayer(): void
+    public function testAnalyserRulesetReportsViolationWhenDependencyPrimaryLayerIsOutsideSpecificLayer(): void
     {
         // Router is a sub-layer of System. RouterException depends on RuntimeException,
-        // which lives in src/System/Exceptions/ but has no specific sub-layer — its
-        // primary layer is System. Because Router is itself within System, RuntimeException
-        // is in the same parent-layer universe and must NOT be flagged as a violation.
+        // which lives in src/System/Exceptions/ with no specific sub-layer — its primary
+        // layer is System. Even though Router is within System, RuntimeException's primary
+        // layer (System) is outside Router, so this IS a violation when Router => [].
+        // To allow it, the user must explicitly list System in Router's allowed layers.
         $basePath = $this->makeTempProject([
             'src/System/Router/Exceptions/RouterException.php' => <<<'PHP'
                 <?php
@@ -1462,7 +1463,49 @@ final class AnalyserTest extends TestCase
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertFalse($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.Router');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('System', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetReportsViolationWhenDependencyPrimaryLayerIsParentOfSubLayer(): void
+    {
+        // Application covers src/, Router is a specific sub-layer inside it.
+        // RouterException depends on RuntimeException whose primary layer is Application
+        // (no specific sub-layer exists for it). Even though Router is within Application,
+        // RuntimeException is outside Router — a violation fires.
+        // To suppress it, Application must be listed in Router's allowed layers.
+        $basePath = $this->makeTempProject([
+            'src/Router/Exceptions/RouterException.php' => <<<'PHP'
+                <?php
+
+                namespace App\Router\Exceptions;
+
+                use App\Exceptions\RuntimeException;
+
+                final class RouterException extends RuntimeException {}
+                PHP,
+            'src/Exceptions/RuntimeException.php'       => <<<'PHP'
+                <?php
+
+                namespace App\Exceptions;
+
+                class RuntimeException extends \RuntimeException {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/')
+            ->layer('Router', 'src/Router/')
+            ->ruleset([
+                'Router' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.Router');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Application', $violations[0]->message);
     }
 
     public function testAnalyserRulesetSkipsClassNodeWithNullLayer(): void

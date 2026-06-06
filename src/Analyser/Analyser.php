@@ -233,7 +233,11 @@ final class Analyser
                     continue;
                 }
 
-                if (array_intersect($classNode->layers, $depLayers) !== []) {
+                $isSameLayer = $primaryLayer !== null
+                    ? $primaryLayer === $classNode->layer
+                    : in_array($classNode->layer, $depLayers, true);
+
+                if ($isSameLayer) {
                     continue;
                 }
 
