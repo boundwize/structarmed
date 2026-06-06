@@ -224,9 +224,18 @@ final class Analyser
                 }
 
                 $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
-                $depLayers    = $primaryLayer !== null && $layerPatterns === []
-                    ? ($classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer])
-                    : $chainLayerResolver->resolveAll($dependency, '');
+                $regexLayers  = $chainLayerResolver->resolveAll($dependency, '');
+
+                if ($primaryLayer !== null && $regexLayers === []) {
+                    // Scanned dep with no class-name-based (regex) layer match — path-only.
+                    // Skip if it only lands in the PSR4 Source catch-all inside a mixed config;
+                    // such deps are unclassified utilities, not architectural boundaries.
+                    $depLayers = $layerPatterns !== [] && str_starts_with($primaryLayer, 'Source')
+                        ? []
+                        : ($classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer]);
+                } else {
+                    $depLayers = $regexLayers;
+                }
 
                 if ($depLayers === []) {
                     // External / unregistered dependency — not restricted.
