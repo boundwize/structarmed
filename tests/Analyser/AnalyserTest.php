@@ -1559,8 +1559,7 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
     }
 
-    public function testAnalyserRulesetSkipPathsForRulesetSuppressesViolationsForMatchingFilesWithPathBasedLayers(
-    ): void
+    public function testAnalyserRulesetSkipPathsRulesetSuppressesViolationsForMatchingFilesWithPathBasedLayers(): void
     {
         $basePath = $this->makeTempProject([
             'src/HTTP/Request.php'          => <<<'PHP'
