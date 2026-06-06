@@ -81,15 +81,6 @@ final class Analyser
         ?array $files = null
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
-        // Identify PSR4 scan-scope layers: defined with empty paths, auto-expanded by resolveLayers().
-        // Deps whose only layer classification falls in a scan-scope layer are unclassified
-        // utilities (not architectural boundaries) and must be treated as external.
-        $scanScopeLayerNames = [];
-        foreach ($architecture->getLayers() as $scanScopeLayerName => $scanScopeLayerPaths) {
-            if ($scanScopeLayerPaths === []) {
-                $scanScopeLayerNames[] = $scanScopeLayerName;
-            }
-        }
 
         $layers          = $this->resolveLayers($architecture);
         $rules           = $architecture->getRules();
@@ -145,6 +136,7 @@ final class Analyser
         $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
         $rulesetViolationCollection = new RuleViolationCollection();
         $hasRuleset                 = $ruleset !== [];
+        $scanScopeLayerMap          = $hasRuleset ? $this->scanScopeLayerMap($architecture) : [];
 
         /** @var array<string, LayerAwareRuleInterface> $layerAwareRules */
         $layerAwareRules    = array_filter(
@@ -238,7 +230,7 @@ final class Analyser
 
                 if ($regexLayers !== []) {
                     $depLayers = $regexLayers;
-                } elseif ($primaryLayer !== null && ! in_array($primaryLayer, $scanScopeLayerNames, true)) {
+                } elseif ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
                     // Scanned dep in a specific path-based layer (not a PSR4 catch-all).
                     $depLayers = $classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer];
                 } else {
@@ -371,6 +363,26 @@ final class Analyser
         }
 
         return $keyMap;
+    }
+
+    /**
+     * Empty layer paths are PSR-4 scan scopes resolved from composer.json, not
+     * ruleset dependency layers. Classes found only through these layers are
+     * treated like external dependencies during ruleset checks.
+     *
+     * @return array<string, true>
+     */
+    private function scanScopeLayerMap(Architecture $architecture): array
+    {
+        $scanScopeLayerMap = [];
+
+        foreach ($architecture->getLayers() as $layerName => $layerPaths) {
+            if ($layerPaths === []) {
+                $scanScopeLayerMap[$layerName] = true;
+            }
+        }
+
+        return $scanScopeLayerMap;
     }
 
     /**
