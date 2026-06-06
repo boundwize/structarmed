@@ -2199,6 +2199,40 @@ class Order {
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.DataCaster'));
     }
 
+    public function testAnalyserRulesetIgnoresPsr4ScanScopeDependency(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'                                  => '{"autoload":{"psr-4":{"CodeIgniter\\\\":"system/"}}}',
+            'system/DataCaster/Exceptions/CastException.php' => <<<'PHP'
+            <?php
+
+            namespace CodeIgniter\DataCaster\Exceptions;
+
+            use CodeIgniter\Exceptions\RuntimeException;
+
+            final class CastException extends RuntimeException {}
+            PHP,
+            'system/Exceptions/RuntimeException.php'         => <<<'PHP'
+            <?php
+
+            namespace CodeIgniter\Exceptions;
+
+            class RuntimeException extends \RuntimeException {}
+            PHP,
+        ]);
+
+        $architecture = Architecture::define()
+        ->layer('Source', []) // scan scope, auto-expanded from composer
+        ->layerPattern('DataCaster', '/^CodeIgniter\\\\DataCaster\\\\.*$/')
+        ->ruleset([
+            'DataCaster' => [],
+        ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.DataCaster'));
+    }
+
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {
