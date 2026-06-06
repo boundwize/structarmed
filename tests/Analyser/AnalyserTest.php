@@ -2046,43 +2046,43 @@ class Order {
         $this->assertStringContainsString('View', $violations[0]->message);
     }
 
-    public function testAnalyserRulesetTreatsScannedDepWithOnlyPathLayerAsExternalInMixedConfig(): void
+    public function testAnalyserRulesetDetectsSourceLayerViolationInMixedConfig(): void
     {
         $basePath = $this->makeTempProject([
-            'src/Validation/Validation.php'               => <<<'PHP'
+            'src/Controller/HomeController.php' => <<<'PHP'
                 <?php
 
-                namespace App\Validation;
+                namespace App\Controller;
 
-                use App\Exceptions\InvalidArgumentException;
+                use App\Util\Helper;
 
-                final class Validation
+                final class HomeController
                 {
-                    public function __construct(private InvalidArgumentException $e) {}
+                    public function __construct(private Helper $helper) {}
                 }
                 PHP,
-            'src/Exceptions/InvalidArgumentException.php' => <<<'PHP'
+            'src/Util/Helper.php'               => <<<'PHP'
                 <?php
 
-                namespace App\Exceptions;
+                namespace App\Util;
 
-                final class InvalidArgumentException extends \InvalidArgumentException {}
+                final class Helper {}
                 PHP,
         ]);
 
-        // InvalidArgumentException is scanned but matches no layerPattern — it only lands in
-        // the path-based Source catch-all, which is not an architectural boundary.
-        // It must be treated as an unrestricted external dependency (no violation).
+        // Helper lands only in the path-based Source layer; it is still a registered layer
+        // and must be enforced by the ruleset just like any other layer.
         $architecture = Architecture::define()
             ->layer('Source', 'src/')
-            ->layerPattern('Validation', '/^App\\\\Validation\\\\.*$/')
+            ->layer('Controller', 'src/Controller/')
+            ->layerPattern('Vendor', '/^Vendor\\\\/')
             ->ruleset([
-                'Validation' => [], // Source is not listed, but Source-only deps are unrestricted
+                'Controller' => [],
             ]);
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
-        $this->assertFalse($ruleViolationCollection->hasViolations());
+        $this->assertCount(1, $ruleViolationCollection->forRule('ruleset.Controller'));
     }
 
     public function testAnalyserRulesetSkipClassViolationSuppressesViolationForScannedDepInMixedConfig(): void
