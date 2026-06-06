@@ -2123,6 +2123,45 @@ class Order {
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetDetectsPathBasedLayerViolationWhenLayerPatternsAlsoExist(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'          => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $qb) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', 'src/HTTP/')
+            ->layer('Database', 'src/Database/')
+            ->layerPattern('Vendor', '/^Vendor\\\\/')
+            ->ruleset([
+                'HTTP' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\HTTP\\Request', $violations[0]->className);
+    }
+
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {
