@@ -1309,24 +1309,24 @@ final class AnalyserTest extends TestCase
 
     public function testAnalyserRulesetAllowsSameLayerDependenciesWhenLayerOverlapsWithCatchAll(): void
     {
-        // When a broad catch-all layer (Source → src/) overlaps with a specific layer
-        // (Files → src/Files/), a dependency within the same specific layer is resolved
-        // to both layers. It must NOT be reported as a violation just because the catch-all
-        // is not listed in the allowed layers.
+        // When a parent layer (System → src/System/) overlaps with a specific sub-layer
+        // (Files → src/System/Files/), a dependency within the same specific layer is
+        // resolved to both layers. It must NOT be reported as a violation just because
+        // the parent layer is not listed in the allowed layers.
         $basePath = $this->makeTempProject([
-            'src/Files/File.php'     => <<<'PHP'
+            'src/System/Files/File.php'     => <<<'PHP'
                 <?php
 
-                namespace App\Files;
+                namespace App\System\Files;
 
                 final class File {}
                 PHP,
-            'src/Files/FileInfo.php' => <<<'PHP'
+            'src/System/Files/FileInfo.php' => <<<'PHP'
                 <?php
 
-                namespace App\Files;
+                namespace App\System\Files;
 
-                use App\Files\File;
+                use App\System\Files\File;
 
                 final class FileInfo
                 {
@@ -1336,8 +1336,8 @@ final class AnalyserTest extends TestCase
         ]);
 
         $architecture = Architecture::define()
-            ->layer('Source', 'src/')
-            ->layer('Files', 'src/Files/')
+            ->layer('System', 'src/System/')
+            ->layer('Files', 'src/System/Files/')
             ->ruleset(['Files' => []]); // nothing allowed except same-layer
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
@@ -1347,39 +1347,39 @@ final class AnalyserTest extends TestCase
 
     public function testAnalyserRulesetAllowsDependencyWhenAnyOfItsLayersIsAllowed(): void
     {
-        // A dependency resolved to two layers [Formatter, Source] because Formatter
-        // is a specific sub-path layer and Source is an overlapping catch-all.
-        // Entity lists Formatter as allowed. Even though Source is not listed,
+        // A dependency resolved to two layers [Formatter, System] because Formatter
+        // is a specific sub-path layer inside the System parent layer.
+        // Entity lists Formatter as allowed. Even though System is not listed,
         // the dependency must NOT be reported as a violation because at least one
         // of the dependency's layers (Formatter) is explicitly allowed.
         $basePath = $this->makeTempProject([
-            'src/Entity/User.php'             => <<<'PHP'
+            'src/System/Entity/User.php'         => <<<'PHP'
                 <?php
 
-                namespace App\Entity;
+                namespace App\System\Entity;
 
-                use App\Formatter\DateFormatter;
+                use App\System\Formatter\DateFormatter;
 
                 final class User
                 {
                     public function __construct(private DateFormatter $formatter) {}
                 }
                 PHP,
-            'src/Formatter/DateFormatter.php' => <<<'PHP'
+            'src/System/Formatter/DateFormatter.php' => <<<'PHP'
                 <?php
 
-                namespace App\Formatter;
+                namespace App\System\Formatter;
 
                 final class DateFormatter {}
                 PHP,
         ]);
 
         $architecture = Architecture::define()
-            ->layer('Source', 'src/')
-            ->layer('Entity', 'src/Entity/')
-            ->layer('Formatter', 'src/Formatter/')
+            ->layer('System', 'src/System/')
+            ->layer('Entity', 'src/System/Entity/')
+            ->layer('Formatter', 'src/System/Formatter/')
             ->ruleset([
-                'Entity' => ['Formatter'], // Formatter allowed, Source is NOT listed
+                'Entity' => ['Formatter'], // Formatter allowed, System parent is NOT listed
             ]);
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
@@ -1389,35 +1389,34 @@ final class AnalyserTest extends TestCase
 
     public function testAnalyserRulesetAllowsDependencyOnUnclassifiedClassInSharedCatchAllLayer(): void
     {
-        // Router is a sub-layer of Source (system/ catch-all). RouterException
-        // depends on RuntimeException, which lives in system/Exceptions/ but has
-        // no specific Exceptions layer — its primary layer is Source.
-        // Because both Router and RuntimeException belong to Source, the dependency
-        // is within the same catch-all universe and must NOT be a violation.
+        // Router is a sub-layer of System. RouterException depends on RuntimeException,
+        // which lives in src/System/Exceptions/ but has no specific sub-layer — its
+        // primary layer is System. Because Router is itself within System, RuntimeException
+        // is in the same parent-layer universe and must NOT be flagged as a violation.
         $basePath = $this->makeTempProject([
-            'src/Router/Exceptions/RouterException.php'   => <<<'PHP'
+            'src/System/Router/Exceptions/RouterException.php' => <<<'PHP'
                 <?php
 
-                namespace App\Router\Exceptions;
+                namespace App\System\Router\Exceptions;
 
-                use App\Exceptions\RuntimeException;
+                use App\System\Exceptions\RuntimeException;
 
                 final class RouterException extends RuntimeException {}
                 PHP,
-            'src/Exceptions/RuntimeException.php'         => <<<'PHP'
+            'src/System/Exceptions/RuntimeException.php'       => <<<'PHP'
                 <?php
 
-                namespace App\Exceptions;
+                namespace App\System\Exceptions;
 
                 class RuntimeException extends \RuntimeException {}
                 PHP,
         ]);
 
         $architecture = Architecture::define()
-            ->layer('Source', 'src/')
-            ->layer('Router', 'src/Router/')
+            ->layer('System', 'src/System/')
+            ->layer('Router', 'src/System/Router/')
             ->ruleset([
-                'Router' => [], // nothing explicitly allowed — but Source catch-all must not block intra-Source deps
+                'Router' => [],
             ]);
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
