@@ -1307,6 +1307,44 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetAllowsSameLayerDependenciesWhenLayerOverlapsWithCatchAll(): void
+    {
+        // When a broad catch-all layer (Source → src/) overlaps with a specific layer
+        // (Files → src/Files/), a dependency within the same specific layer is resolved
+        // to both layers. It must NOT be reported as a violation just because the catch-all
+        // is not listed in the allowed layers.
+        $basePath = $this->makeTempProject([
+            'src/Files/File.php'     => <<<'PHP'
+                <?php
+
+                namespace App\Files;
+
+                final class File {}
+                PHP,
+            'src/Files/FileInfo.php' => <<<'PHP'
+                <?php
+
+                namespace App\Files;
+
+                use App\Files\File;
+
+                final class FileInfo
+                {
+                    public function __construct(private File $file) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layer('Files', 'src/Files/')
+            ->ruleset(['Files' => []]); // nothing allowed except same-layer
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     public function testAnalyserRulesetSkipsClassNodeWithNullLayer(): void
     {
         // A PHP file is scanned but the class inside it does not match any

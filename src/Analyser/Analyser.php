@@ -229,13 +229,13 @@ final class Analyser
                     continue;
                 }
 
+                if (in_array($classNode->layer, $depLayers, true)) {
+                    continue;
+                }
+
                 $violatingLayer = null;
 
                 foreach ($depLayers as $depLayer) {
-                    if ($depLayer === $classNode->layer) {
-                        continue;
-                    }
-
                     if (! in_array($depLayer, $allowedLayers, true)) {
                         $violatingLayer = $depLayer;
                         break;
