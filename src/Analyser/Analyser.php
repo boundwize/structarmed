@@ -26,6 +26,7 @@ use SplFileInfo;
 
 use function array_fill_keys;
 use function array_filter;
+use function array_intersect;
 use function array_key_exists;
 use function array_merge;
 use function array_unique;
@@ -80,11 +81,21 @@ final class Analyser
         ?array $files = null
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
-        $layers                  = $this->resolveLayers($architecture);
-        $rules                   = $architecture->getRules();
-        $ruleSkipPaths           = $architecture->getRuleSkipPaths();
-        $skippedRuleKeys         = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
-        $classRules              = $this->classRules($rules, $skippedRuleKeys);
+        // Identify PSR4 scan-scope layers: defined with empty paths, auto-expanded by resolveLayers().
+        // Deps whose only layer classification falls in a scan-scope layer are unclassified
+        // utilities (not architectural boundaries) and must be treated as external.
+        $scanScopeLayerNames = [];
+        foreach ($architecture->getLayers() as $scanScopeLayerName => $scanScopeLayerPaths) {
+            if ($scanScopeLayerPaths === []) {
+                $scanScopeLayerNames[] = $scanScopeLayerName;
+            }
+        }
+
+        $layers          = $this->resolveLayers($architecture);
+        $rules           = $architecture->getRules();
+        $ruleSkipPaths   = $architecture->getRuleSkipPaths();
+        $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
+        $classRules      = $this->classRules($rules, $skippedRuleKeys);
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -148,6 +159,7 @@ final class Analyser
                 'dependencies'            => [],
                 'inheritanceDependencies' => [],
                 'classLayerMap'           => [],
+                'classPrimaryLayerMap'    => [],
             ];
         $dependencyMap            = $classDependencyMaps['dependencies'];
         $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
@@ -221,28 +233,52 @@ final class Analyser
                     continue;
                 }
 
-                $depLayers = $chainLayerResolver->resolveAll($dependency, '');
+                $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
+                $regexLayers  = $chainLayerResolver->resolveAll($dependency, '');
+
+                if ($regexLayers !== []) {
+                    $depLayers = $regexLayers;
+                } elseif ($primaryLayer !== null && ! in_array($primaryLayer, $scanScopeLayerNames, true)) {
+                    // Scanned dep in a specific path-based layer (not a PSR4 catch-all).
+                    $depLayers = $classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer];
+                } else {
+                    $depLayers = [];
+                }
 
                 if ($depLayers === []) {
                     // External / unregistered dependency — not restricted.
                     continue;
                 }
 
-                $violatingLayer = null;
+                $isSameLayer = $primaryLayer !== null
+                    ? $primaryLayer === $classNode->layer
+                    : in_array($classNode->layer, $depLayers, true);
 
-                foreach ($depLayers as $depLayer) {
-                    if ($depLayer === $classNode->layer) {
+                if ($isSameLayer) {
+                    continue;
+                }
+
+                if ($primaryLayer !== null) {
+                    // Scanned dependency: permitted if any of its layers is explicitly allowed.
+                    if (array_intersect($allowedLayers, $depLayers) !== []) {
                         continue;
                     }
 
-                    if (! in_array($depLayer, $allowedLayers, true)) {
-                        $violatingLayer = $depLayer;
-                        break;
-                    }
-                }
+                    $violatingLayer = $primaryLayer;
+                } else {
+                    // Unscanned/regex-resolved dependency: report the first non-allowed layer.
+                    $violatingLayer = null;
 
-                if ($violatingLayer === null) {
-                    continue;
+                    foreach ($depLayers as $depLayer) {
+                        if (! in_array($depLayer, $allowedLayers, true)) {
+                            $violatingLayer = $depLayer;
+                            break;
+                        }
+                    }
+
+                    if ($violatingLayer === null) {
+                        continue;
+                    }
                 }
 
                 $rulesetViolationCollection->add(new RuleViolation(
@@ -357,7 +393,8 @@ final class Analyser
      * @return array{
      *     dependencies: array<string, list<string>>,
      *     inheritanceDependencies: array<string, list<string>>,
-     *     classLayerMap: array<string, list<string>>
+     *     classLayerMap: array<string, list<string>>,
+     *     classPrimaryLayerMap: array<string, string>
      * }
      */
     private function classDependencyMaps(array $classNodes): array
@@ -365,6 +402,7 @@ final class Analyser
         $dependencyMap            = [];
         $inheritanceDependencyMap = [];
         $classLayerMap            = [];
+        $classPrimaryLayerMap     = [];
 
         foreach ($classNodes as $classNode) {
             $dependencyMap[$classNode->className] = $classNode->dependencies;
@@ -383,12 +421,17 @@ final class Analyser
             if ($classNode->layers !== []) {
                 $classLayerMap[$classNode->className] = $classNode->layers;
             }
+
+            if ($classNode->layer !== null) {
+                $classPrimaryLayerMap[$classNode->className] = $classNode->layer;
+            }
         }
 
         return [
             'dependencies'            => $dependencyMap,
             'inheritanceDependencies' => $inheritanceDependencyMap,
             'classLayerMap'           => $classLayerMap,
+            'classPrimaryLayerMap'    => $classPrimaryLayerMap,
         ];
     }
 
@@ -705,7 +748,7 @@ final class Analyser
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            $files[] = $file->getPathname();
+            $files[] = $this->normalisePath($file->getPathname());
         }
 
         return $files;

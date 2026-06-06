@@ -887,6 +887,45 @@ final class AnalyserTest extends TestCase
         $this->assertStringContainsString('Database', $violations[0]->message);
     }
 
+    public function testAnalyserEvaluatesRulesetAndDetectsLayerViolationWithPathBasedLayers(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'          => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', 'src/HTTP/')
+            ->layer('Database', 'src/Database/')
+            ->ruleset([
+                'HTTP' => [], // Database NOT allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
     /**
      * @return iterable<string, array{string, list<string>}>
      */
@@ -1091,6 +1130,41 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetSkipClassViolationSuppressesViolationWithPathBasedLayers(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'          => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', 'src/HTTP/')
+            ->layer('Database', 'src/Database/')
+            ->ruleset(['HTTP' => []])
+            ->skipClassViolation('App\\HTTP\\Request', 'App\\Database\\QueryBuilder');
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+    }
+
     public function testAnalyserRulesetReportsTransitiveSameLayerDependencyViolations(): void
     {
         $basePath = $this->makeTempProject([
@@ -1233,6 +1307,207 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetAllowsSameLayerDependenciesWhenLayerOverlapsWithCatchAll(): void
+    {
+        // When a parent layer (System → src/System/) overlaps with a specific sub-layer
+        // (Files → src/System/Files/), a dependency within the same specific layer is
+        // resolved to both layers. It must NOT be reported as a violation just because
+        // the parent layer is not listed in the allowed layers.
+        $basePath = $this->makeTempProject([
+            'src/System/Files/File.php'     => <<<'PHP'
+                <?php
+
+                namespace App\System\Files;
+
+                final class File {}
+                PHP,
+            'src/System/Files/FileInfo.php' => <<<'PHP'
+                <?php
+
+                namespace App\System\Files;
+
+                use App\System\Files\File;
+
+                final class FileInfo
+                {
+                    public function __construct(private File $file) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('System', 'src/System/')
+            ->layer('Files', 'src/System/Files/')
+            ->ruleset(['Files' => []]); // nothing allowed except same-layer
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetAllowsDependencyWhenAnyOfItsLayersIsAllowed(): void
+    {
+        // A dependency resolved to two layers [Formatter, System] because Formatter
+        // is a specific sub-path layer inside the System parent layer.
+        // Entity lists Formatter as allowed. Even though System is not listed,
+        // the dependency must NOT be reported as a violation because at least one
+        // of the dependency's layers (Formatter) is explicitly allowed.
+        $basePath = $this->makeTempProject([
+            'src/System/Entity/User.php'             => <<<'PHP'
+                <?php
+
+                namespace App\System\Entity;
+
+                use App\System\Formatter\DateFormatter;
+
+                final class User
+                {
+                    public function __construct(private DateFormatter $formatter) {}
+                }
+                PHP,
+            'src/System/Formatter/DateFormatter.php' => <<<'PHP'
+                <?php
+
+                namespace App\System\Formatter;
+
+                final class DateFormatter {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('System', 'src/System/')
+            ->layer('Entity', 'src/System/Entity/')
+            ->layer('Formatter', 'src/System/Formatter/')
+            ->ruleset([
+                'Entity' => ['Formatter'], // Formatter allowed, System parent is NOT listed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetAllowsDependencyWhenParentLayerIsAllowed(): void
+    {
+        // DateFormatter has primary layer Formatter, but also belongs to the System
+        // parent layer. The ruleset allows System for Entity. Even though Formatter is
+        // not listed, the dependency must be permitted because System is allowed and
+        // DateFormatter is within System.
+        $basePath = $this->makeTempProject([
+            'src/System/Entity/User.php'             => <<<'PHP'
+                <?php
+
+                namespace App\System\Entity;
+
+                use App\System\Formatter\DateFormatter;
+
+                final class User
+                {
+                    public function __construct(private DateFormatter $formatter) {}
+                }
+                PHP,
+            'src/System/Formatter/DateFormatter.php' => <<<'PHP'
+                <?php
+
+                namespace App\System\Formatter;
+
+                final class DateFormatter {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('System', 'src/System/')
+            ->layer('Entity', 'src/System/Entity/')
+            ->layer('Formatter', 'src/System/Formatter/')
+            ->ruleset([
+                'Entity' => ['System'], // Formatter is NOT listed, but System (its parent) is
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetReportsViolationWhenDependencyPrimaryLayerIsOutsideSpecificLayer(): void
+    {
+        // Router is a sub-layer of System. RouterException depends on RuntimeException,
+        // which lives in src/System/Exceptions/ with no specific sub-layer — its primary
+        // layer is System. Even though Router is within System, RuntimeException's primary
+        // layer (System) is outside Router, so this IS a violation when Router => [].
+        // To allow it, the user must explicitly list System in Router's allowed layers.
+        $basePath = $this->makeTempProject([
+            'src/System/Router/Exceptions/RouterException.php' => <<<'PHP'
+                <?php
+
+                namespace App\System\Router\Exceptions;
+
+                use App\System\Exceptions\RuntimeException;
+
+                final class RouterException extends RuntimeException {}
+                PHP,
+            'src/System/Exceptions/RuntimeException.php'       => <<<'PHP'
+                <?php
+
+                namespace App\System\Exceptions;
+
+                class RuntimeException extends \RuntimeException {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('System', 'src/System/')
+            ->layer('Router', 'src/System/Router/')
+            ->ruleset([
+                'Router' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.Router');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('System', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetReportsViolationWhenDependencyPrimaryLayerIsParentOfSubLayer(): void
+    {
+        // Application covers src/, Router is a specific sub-layer inside it.
+        // RouterException depends on RuntimeException whose primary layer is Application
+        // (no specific sub-layer exists for it). Even though Router is within Application,
+        // RuntimeException is outside Router — a violation fires.
+        // To suppress it, Application must be listed in Router's allowed layers.
+        $basePath = $this->makeTempProject([
+            'src/Router/Exceptions/RouterException.php' => <<<'PHP'
+                <?php
+
+                namespace App\Router\Exceptions;
+
+                use App\Exceptions\RuntimeException;
+
+                final class RouterException extends RuntimeException {}
+                PHP,
+            'src/Exceptions/RuntimeException.php'       => <<<'PHP'
+                <?php
+
+                namespace App\Exceptions;
+
+                class RuntimeException extends \RuntimeException {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/')
+            ->layer('Router', 'src/Router/')
+            ->ruleset([
+                'Router' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.Router');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Application', $violations[0]->message);
+    }
+
     public function testAnalyserRulesetSkipsClassNodeWithNullLayer(): void
     {
         // A PHP file is scanned but the class inside it does not match any
@@ -1365,6 +1640,60 @@ final class AnalyserTest extends TestCase
         // The violation is from the production class, not the test class.
         $this->assertStringContainsString('App\\Database\\QueryBuilder', $violations[0]->message);
         // The test file violation must be absent.
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+    }
+
+    public function testAnalyserRulesetSkipPathsRulesetSuppressesViolationsForMatchingFilesWithPathBasedLayers(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'          => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class Request {}
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                use App\HTTP\Request;
+
+                final class QueryBuilder
+                {
+                    public function __construct(private Request $request) {}
+                }
+                PHP,
+            'tests/HTTP/RequestTest.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class RequestTest
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', ['src/HTTP/', 'tests/HTTP/'])
+            ->layer('Database', 'src/Database/')
+            ->ruleset([
+                'HTTP'     => [], // Database NOT allowed
+                'Database' => [], // HTTP NOT allowed
+            ])
+            ->skipPathsForRuleset(['*tests*']);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.Database');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('App\\Database\\QueryBuilder', $violations[0]->message);
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
     }
 
@@ -1673,6 +2002,235 @@ class Order {
         $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
         $this->assertCount(1, $violations);
         $this->assertStringContainsString('Auth', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetDetectsViolationForScannedDepWithRegexLayerInMixedConfig(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Validation/Validation.php'  => <<<'PHP'
+                <?php
+
+                namespace App\Validation;
+
+                use App\View\RendererInterface;
+
+                final class Validation
+                {
+                    public function __construct(private RendererInterface $view) {}
+                }
+                PHP,
+            'src/View/RendererInterface.php' => <<<'PHP'
+                <?php
+
+                namespace App\View;
+
+                interface RendererInterface {}
+                PHP,
+        ]);
+
+        // RendererInterface is scanned and matches layerPattern 'View', but also lives under
+        // the path-based Source catch-all. The violation must be reported against layer 'View'.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layerPattern('Validation', '/^App\\\\Validation\\\\.*$/')
+            ->layerPattern('View', '/^App\\\\View\\\\.*$/')
+            ->ruleset([
+                'Validation' => [], // View is NOT allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.Validation');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('View', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetDetectsSourceLayerViolationInMixedConfig(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Controller/HomeController.php' => <<<'PHP'
+                <?php
+
+                namespace App\Controller;
+
+                use App\Util\Helper;
+
+                final class HomeController
+                {
+                    public function __construct(private Helper $helper) {}
+                }
+                PHP,
+            'src/Util/Helper.php'               => <<<'PHP'
+                <?php
+
+                namespace App\Util;
+
+                final class Helper {}
+                PHP,
+        ]);
+
+        // Helper lands only in the path-based Source layer; it is still a registered layer
+        // and must be enforced by the ruleset just like any other layer.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layer('Controller', 'src/Controller/')
+            ->layerPattern('Vendor', '/^Vendor\\\\/')
+            ->ruleset([
+                'Controller' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('ruleset.Controller'));
+    }
+
+    public function testAnalyserRulesetSkipClassViolationSuppressesViolationForScannedDepInMixedConfig(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Validation/Validation.php'  => <<<'PHP'
+                <?php
+
+                namespace App\Validation;
+
+                use App\View\RendererInterface;
+
+                final class Validation
+                {
+                    public function __construct(private RendererInterface $view) {}
+                }
+                PHP,
+            'src/View/RendererInterface.php' => <<<'PHP'
+                <?php
+
+                namespace App\View;
+
+                interface RendererInterface {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layerPattern('Validation', '/^App\\\\Validation\\\\.*$/')
+            ->layerPattern('View', '/^App\\\\View\\\\.*$/')
+            ->ruleset([
+                'Validation' => [],
+            ])
+            ->skipClassViolation('App\\Validation\\Validation', ['App\\View\\RendererInterface']);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserRulesetDetectsPathBasedLayerViolationWhenLayerPatternsAlsoExist(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'          => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $qb) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', 'src/HTTP/')
+            ->layer('Database', 'src/Database/')
+            ->layerPattern('Vendor', '/^Vendor\\\\/')
+            ->ruleset([
+                'HTTP' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\HTTP\\Request', $violations[0]->className);
+    }
+
+    public function testAnalyserRulesetTreatsPsr4ScanScopeDepAsExternalInMixedConfig(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'                                  => '{"autoload":{"psr-4":{"CodeIgniter\\\\":"system/"}}}',
+            'system/DataCaster/Exceptions/CastException.php' => <<<'PHP'
+                <?php
+
+                namespace CodeIgniter\DataCaster\Exceptions;
+
+                use CodeIgniter\Exceptions\RuntimeException;
+
+                final class CastException extends RuntimeException {}
+                PHP,
+            'system/Exceptions/RuntimeException.php'         => <<<'PHP'
+                <?php
+
+                namespace CodeIgniter\Exceptions;
+
+                class RuntimeException extends \RuntimeException {}
+                PHP,
+        ]);
+
+        // Source layer was defined with empty paths — it is a PSR4 scan-scope catch-all
+        // (auto-expanded from composer.json). RuntimeException lands only in Source with no
+        // regex match, so it must be treated as an unclassified external dependency (no violation).
+        $architecture = Architecture::define()
+            ->layer('Source', [])
+            ->layerPattern('DataCaster', '/^CodeIgniter\\\\DataCaster\\\\.*$/')
+            ->ruleset([
+                'DataCaster' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.DataCaster'));
+    }
+
+    public function testAnalyserRulesetIgnoresPsr4ScanScopeDependency(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'                                  => '{"autoload":{"psr-4":{"CodeIgniter\\\\":"system/"}}}',
+            'system/DataCaster/Exceptions/CastException.php' => <<<'PHP'
+            <?php
+
+            namespace CodeIgniter\DataCaster\Exceptions;
+
+            use CodeIgniter\Exceptions\RuntimeException;
+
+            final class CastException extends RuntimeException {}
+            PHP,
+            'system/Exceptions/RuntimeException.php'         => <<<'PHP'
+            <?php
+
+            namespace CodeIgniter\Exceptions;
+
+            class RuntimeException extends \RuntimeException {}
+            PHP,
+        ]);
+
+        $architecture = Architecture::define()
+        ->layer('Source', []) // scan scope, auto-expanded from composer
+        ->layerPattern('DataCaster', '/^CodeIgniter\\\\DataCaster\\\\.*$/')
+        ->ruleset([
+            'DataCaster' => [],
+        ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.DataCaster'));
     }
 
     /** @param array<string, string> $files */
