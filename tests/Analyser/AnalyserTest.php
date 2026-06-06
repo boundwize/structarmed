@@ -887,6 +887,45 @@ final class AnalyserTest extends TestCase
         $this->assertStringContainsString('Database', $violations[0]->message);
     }
 
+    public function testAnalyserEvaluatesRulesetAndDetectsLayerViolationWithPathBasedLayers(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'          => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', 'src/HTTP/')
+            ->layer('Database', 'src/Database/')
+            ->ruleset([
+                'HTTP' => [], // Database NOT allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Database', $violations[0]->message);
+    }
+
     /**
      * @return iterable<string, array{string, list<string>}>
      */

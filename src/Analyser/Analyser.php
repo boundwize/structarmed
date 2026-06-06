@@ -221,7 +221,8 @@ final class Analyser
                     continue;
                 }
 
-                $depLayers = $chainLayerResolver->resolveAll($dependency, '');
+                $depLayers = $classDependencyMaps['classLayerMap'][$dependency]
+                    ?? $chainLayerResolver->resolveAll($dependency, '');
 
                 if ($depLayers === []) {
                     // External / unregistered dependency — not restricted.
