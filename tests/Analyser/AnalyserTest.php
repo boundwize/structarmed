@@ -2007,7 +2007,7 @@ class Order {
     public function testAnalyserRulesetDetectsViolationForScannedDepWithRegexLayerInMixedConfig(): void
     {
         $basePath = $this->makeTempProject([
-            'src/Validation/Validation.php' => <<<'PHP'
+            'src/Validation/Validation.php'  => <<<'PHP'
                 <?php
 
                 namespace App\Validation;
@@ -2049,7 +2049,7 @@ class Order {
     public function testAnalyserRulesetTreatsScannedDepWithOnlyPathLayerAsExternalInMixedConfig(): void
     {
         $basePath = $this->makeTempProject([
-            'src/Validation/Validation.php' => <<<'PHP'
+            'src/Validation/Validation.php'               => <<<'PHP'
                 <?php
 
                 namespace App\Validation;
@@ -2088,7 +2088,7 @@ class Order {
     public function testAnalyserRulesetSkipClassViolationSuppressesViolationForScannedDepInMixedConfig(): void
     {
         $basePath = $this->makeTempProject([
-            'src/Validation/Validation.php' => <<<'PHP'
+            'src/Validation/Validation.php'  => <<<'PHP'
                 <?php
 
                 namespace App\Validation;
