@@ -2162,6 +2162,43 @@ class Order {
         $this->assertSame('App\\HTTP\\Request', $violations[0]->className);
     }
 
+    public function testAnalyserRulesetTreatsPsr4ScanScopeDepAsExternalInMixedConfig(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'                                  => '{"autoload":{"psr-4":{"CodeIgniter\\\\":"system/"}}}',
+            'system/DataCaster/Exceptions/CastException.php' => <<<'PHP'
+                <?php
+
+                namespace CodeIgniter\DataCaster\Exceptions;
+
+                use CodeIgniter\Exceptions\RuntimeException;
+
+                final class CastException extends RuntimeException {}
+                PHP,
+            'system/Exceptions/RuntimeException.php'         => <<<'PHP'
+                <?php
+
+                namespace CodeIgniter\Exceptions;
+
+                class RuntimeException extends \RuntimeException {}
+                PHP,
+        ]);
+
+        // Source layer was defined with empty paths — it is a PSR4 scan-scope catch-all
+        // (auto-expanded from composer.json). RuntimeException lands only in Source with no
+        // regex match, so it must be treated as an unclassified external dependency (no violation).
+        $architecture = Architecture::define()
+            ->layer('Source', [])
+            ->layerPattern('DataCaster', '/^CodeIgniter\\\\DataCaster\\\\.*$/')
+            ->ruleset([
+                'DataCaster' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.DataCaster'));
+    }
+
     /** @param array<string, string> $files */
     private function makeTempProject(array $files): string
     {

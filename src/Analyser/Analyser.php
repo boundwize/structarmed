@@ -81,6 +81,16 @@ final class Analyser
         ?array $files = null
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
+        // Identify PSR4 scan-scope layers: defined with empty paths, auto-expanded by resolveLayers().
+        // Deps whose only layer classification falls in a scan-scope layer are unclassified
+        // utilities (not architectural boundaries) and must be treated as external.
+        $scanScopeLayerNames = [];
+        foreach ($architecture->getLayers() as $scanScopeLayerName => $scanScopeLayerPaths) {
+            if ($scanScopeLayerPaths === []) {
+                $scanScopeLayerNames[] = $scanScopeLayerName;
+            }
+        }
+
         $layers                  = $this->resolveLayers($architecture);
         $rules                   = $architecture->getRules();
         $ruleSkipPaths           = $architecture->getRuleSkipPaths();
@@ -226,11 +236,13 @@ final class Analyser
                 $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
                 $regexLayers  = $chainLayerResolver->resolveAll($dependency, '');
 
-                if ($primaryLayer !== null && $regexLayers === []) {
-                    // Scanned dep with only path-based layer classification; use classLayerMap.
+                if ($regexLayers !== []) {
+                    $depLayers = $regexLayers;
+                } elseif ($primaryLayer !== null && ! in_array($primaryLayer, $scanScopeLayerNames, true)) {
+                    // Scanned dep in a specific path-based layer (not a PSR4 catch-all).
                     $depLayers = $classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer];
                 } else {
-                    $depLayers = $regexLayers;
+                    $depLayers = [];
                 }
 
                 if ($depLayers === []) {
