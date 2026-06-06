@@ -1442,6 +1442,60 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
     }
 
+    public function testAnalyserRulesetSkipPathsForRulesetSuppressesViolationsForMatchingFilesWithPathBasedLayers(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php'          => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class Request {}
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                use App\HTTP\Request;
+
+                final class QueryBuilder
+                {
+                    public function __construct(private Request $request) {}
+                }
+                PHP,
+            'tests/HTTP/RequestTest.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class RequestTest
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', ['src/HTTP/', 'tests/HTTP/'])
+            ->layer('Database', 'src/Database/')
+            ->ruleset([
+                'HTTP'     => [], // Database NOT allowed
+                'Database' => [], // HTTP NOT allowed
+            ])
+            ->skipPathsForRuleset(['*tests*']);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertTrue($ruleViolationCollection->hasViolations());
+        $violations = $ruleViolationCollection->forRule('ruleset.Database');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('App\\Database\\QueryBuilder', $violations[0]->message);
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+    }
+
     public function testRulesetPlusLayerSyntaxExpandsAllowedLayers(): void
     {
         $basePath = $this->makeTempProject([
