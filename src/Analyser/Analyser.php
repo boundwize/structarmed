@@ -26,6 +26,7 @@ use SplFileInfo;
 
 use function array_fill_keys;
 use function array_filter;
+use function array_intersect;
 use function array_key_exists;
 use function array_merge;
 use function array_unique;
@@ -232,7 +233,7 @@ final class Analyser
                     continue;
                 }
 
-                if (in_array($classNode->layer, $depLayers, true)) {
+                if (array_intersect($classNode->layers, $depLayers) !== []) {
                     continue;
                 }
 

@@ -1387,6 +1387,44 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetAllowsDependencyOnUnclassifiedClassInSharedCatchAllLayer(): void
+    {
+        // Router is a sub-layer of Source (system/ catch-all). RouterException
+        // depends on RuntimeException, which lives in system/Exceptions/ but has
+        // no specific Exceptions layer — its primary layer is Source.
+        // Because both Router and RuntimeException belong to Source, the dependency
+        // is within the same catch-all universe and must NOT be a violation.
+        $basePath = $this->makeTempProject([
+            'src/Router/Exceptions/RouterException.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Router\Exceptions;
+
+                use App\Exceptions\RuntimeException;
+
+                final class RouterException extends RuntimeException {}
+                PHP,
+            'src/Exceptions/RuntimeException.php'         => <<<'PHP'
+                <?php
+
+                namespace App\Exceptions;
+
+                class RuntimeException extends \RuntimeException {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layer('Router', 'src/Router/')
+            ->ruleset([
+                'Router' => [], // nothing explicitly allowed — but Source catch-all must not block intra-Source deps
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     public function testAnalyserRulesetSkipsClassNodeWithNullLayer(): void
     {
         // A PHP file is scanned but the class inside it does not match any
