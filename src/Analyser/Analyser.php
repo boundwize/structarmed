@@ -91,11 +91,11 @@ final class Analyser
             }
         }
 
-        $layers                  = $this->resolveLayers($architecture);
-        $rules                   = $architecture->getRules();
-        $ruleSkipPaths           = $architecture->getRuleSkipPaths();
-        $skippedRuleKeys         = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
-        $classRules              = $this->classRules($rules, $skippedRuleKeys);
+        $layers          = $this->resolveLayers($architecture);
+        $rules           = $architecture->getRules();
+        $ruleSkipPaths   = $architecture->getRuleSkipPaths();
+        $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
+        $classRules      = $this->classRules($rules, $skippedRuleKeys);
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
