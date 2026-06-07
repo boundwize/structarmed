@@ -91,6 +91,100 @@ figure.highlight code {
   width: 1180px;
 }
 
+.rule-table {
+  display: block;
+  margin: 1rem 0 1.5rem;
+  border: 0;
+  box-shadow: none;
+}
+
+.rule-table thead {
+  display: none;
+}
+
+.rule-table tbody {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rule-table tr {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 1.3fr);
+  gap: 0.75rem 1rem;
+  padding: 1rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.rule-table td {
+  display: block;
+  padding: 0;
+  border: 0;
+  vertical-align: top;
+}
+
+.rule-table td::before {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: #6e7781;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.rule-table td:nth-child(1)::before {
+  content: "Rule";
+}
+
+.rule-table td:nth-child(2) {
+  grid-column: 1 / -1;
+  order: 3;
+}
+
+.rule-table td:nth-child(2)::before {
+  content: "Constructor";
+}
+
+.rule-table td:nth-child(3) {
+  order: 2;
+}
+
+.rule-table td:nth-child(3)::before {
+  content: "Checks";
+}
+
+.rule-table code {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rule-table td:nth-child(1) code {
+  font-weight: 700;
+}
+
+.rule-table td:nth-child(2) code {
+  display: block;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #d8dee4;
+  border-radius: 6px;
+  background: #f6f8fa;
+}
+
+@media (max-width: 50rem) {
+  .rule-table tr {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-table td:nth-child(2) {
+    grid-column: auto;
+  }
+}
+
 .sa-copy-code-fallback {
   position: absolute;
   top: 0.55rem;
