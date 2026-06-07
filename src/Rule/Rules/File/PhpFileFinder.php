@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\File;
 
 use AppendIterator;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
+use Boundwize\StructArmed\Tool\Path;
 use FilesystemIterator;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
@@ -47,7 +48,7 @@ final readonly class PhpFileFinder
 
         $sourcePaths = array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath));
         foreach ($sourcePaths as $sourcePath) {
-            $isAbsolute = str_starts_with($sourcePath, '/') || (strlen($sourcePath) >= 2 && $sourcePath[1] === ':');
+            $isAbsolute = Path::isAbsolute($sourcePath);
             $fullPath   = $isAbsolute
                 ? $sourcePath
                 : rtrim($basePath, '/') . '/' . ltrim($sourcePath, '/');
