@@ -39,4 +39,4 @@ All checks must pass before a PR will be merged. CI runs against PHP 8.2, 8.3, a
 2. Define public constants for every rule key
 3. Add a factory method to `src/Preset/Preset.php`
 4. Add tests in `tests/Preset/`
-5. Document in README
+5. Document it in `docs/`
