@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Tool;
+namespace Boundwize\StructArmed\Tests\Util;
 
-use Boundwize\StructArmed\Tool\Path;
+use Boundwize\StructArmed\Util\Path;
 use Iterator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;

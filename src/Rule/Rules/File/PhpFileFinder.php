@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\File;
 
 use AppendIterator;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
-use Boundwize\StructArmed\Tool\Path;
+use Boundwize\StructArmed\Util\Path;
 use FilesystemIterator;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
