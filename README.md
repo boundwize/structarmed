@@ -31,20 +31,15 @@ The full documentation now lives in [docs/](docs/index.md) and is ready for GitH
 - Documentation site: <https://boundwize.github.io/structarmed/>
 - Local entry point: [docs/index.md](docs/index.md)
 
-## Installation
-
-```bash
-composer require --dev boundwize/structarmed
-```
-
 ## Quick Start
 
 ```bash
+composer require --dev boundwize/structarmed
 vendor/bin/structarmed init --preset=psr4
 vendor/bin/structarmed analyse
 ```
 
-See the [quick start guide](docs/quick-start.md) for every preset, the [configuration guide](docs/configuration.md) for project setup, and [custom rules and presets](docs/custom-rules-and-presets.md) for extension points.
+Continue with the [documentation](docs/index.md) for presets, configuration, reports, and extension points.
 
 ## Contributing
 

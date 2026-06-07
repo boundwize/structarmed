@@ -10,6 +10,10 @@ nav_order: 1
 
 StructArmed is a configurable PHP architecture guard. Define your layers and rules, then run the analyser to catch boundary violations before they become project conventions.
 
+<figure class="doc-screenshot">
+    <img alt="StructArmed violation output" src="{{ '/assets/structarmed-showoff.png' | relative_url }}">
+</figure>
+
 ## Contents
 {: .no_toc }
 
@@ -23,21 +27,6 @@ StructArmed is a configurable PHP architecture guard. Define your layers and rul
 - Tune, override, or skip individual preset rules in native PHP code.
 - Catch boundary violations during local development and CI.
 
-## Install
-
-```bash
-composer require --dev boundwize/structarmed
-```
-
-## Run Your First Check
-
-```bash
-vendor/bin/structarmed init --preset=psr4
-vendor/bin/structarmed analyse
-```
-
-The `init` command writes `structarmed.php` to your project root. Edit that file to match your architecture, then run `analyse` whenever you want to enforce it.
-
 ## Where To Go Next
 
 - [Quick Start](quick-start/) covers installation, initialization, and the available starter presets.
@@ -47,4 +36,5 @@ The `init` command writes `structarmed.php` to your project root. Edit that file
 - [Presets](presets/) lists the included PSR, MVC, and DDD presets.
 - [CLI](cli/) documents analyse, report, version, and baseline commands.
 - [PHPUnit Extension](phpunit-extension/) explains how to fail your test suite on architecture violations.
-- [Cache and Baselines](cache-and-baselines/) covers cache directories and legacy-project adoption.
+- [Cache](cache/) covers analysis cache configuration.
+- [Baselines](baselines/) covers legacy-project adoption without hiding new violations.

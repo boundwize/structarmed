@@ -1,35 +1,18 @@
 ---
-title: Cache And Baselines
+title: Baselines
 layout: default
-nav_order: 9
+nav_order: 10
 ---
 
-# Cache And Baselines
+# Baselines
 
-Configure analysis caching and adopt StructArmed gradually in existing projects.
+Use a baseline to adopt StructArmed gradually in an existing project without hiding new violations.
 
 ## Contents
 {: .no_toc }
 
 1. TOC
 {:toc}
-
-## Cache Directory
-
-StructArmed stores its analysis cache in the system temp directory by default. You can configure a project cache directory.
-
-```php
-<?php
-
-use Boundwize\StructArmed\Architecture;
-use Boundwize\StructArmed\Preset\Preset;
-
-return Architecture::define()
-    ->cacheDirectory('var/cache/structarmed')
-    ->withPreset(Preset::PSR4());
-```
-
-Relative cache directories are resolved from the project root. `--config` also controls the cache directory used by `analyse` and `--clear-cache`.
 
 ## Adopting Existing Projects
 
@@ -60,3 +43,9 @@ No violations found. (0.01s)
 
 {: .important }
 Baseline entries are matched against future analysis results, so existing violations stay quiet while new ones still fail the run. Treat the baseline as a migration aid for legacy findings, not as a way to silence issues you can fix now.
+
+## When To Use A Baseline
+
+Use a baseline when a legacy project has known architecture violations that cannot be fixed in one pass.
+
+Do not use a baseline to silence new problems that can be fixed immediately.
