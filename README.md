@@ -21,7 +21,7 @@
 StructArmed turns architecture decisions into executable checks. Start with presets for PSR, MVC, or DDD projects, then tune or extend the rules in native PHP.
 
 <p align="center">
-    <img src="./docs/assets/structarmed-showoff.png" />
+    <img src="./docs/assets/structarmed-showoff.png" alt="StructArmed violation output">
 </p>
 
 ## Documentation

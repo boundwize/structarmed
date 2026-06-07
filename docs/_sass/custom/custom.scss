@@ -28,6 +28,22 @@ figure.highlight code {
   line-height: inherit;
 }
 
+.doc-screenshot {
+  margin: 1rem 0 1.5rem;
+  overflow-x: auto;
+}
+
+.doc-screenshot img {
+  display: block;
+  max-width: none;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.doc-screenshot--wide img {
+  width: 1180px;
+}
+
 .sa-copy-code-fallback {
   position: absolute;
   top: 0.55rem;
