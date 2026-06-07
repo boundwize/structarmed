@@ -1,5 +1,7 @@
 ---
-title: Home
+title: StructArmed
+nav_title: Home
+description: Define layers, presets, and rules in PHP, then catch architecture violations before they become project conventions.
 layout: default
 nav_order: 1
 ---
