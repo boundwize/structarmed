@@ -165,37 +165,6 @@ return Architecture::define()
     ->layerPattern('Router', '/^App\\\\Router\\\\.*$/');
 ```
 
-You can also assign a layer using multiple regexes:
-
-```php
-return Architecture::define()
-    ->layerPattern('Service', [
-        '/^App\\\\Service\\\\.*$/',
-        '/^App\\\\Application\\\\.*Service$/',
-    ]);
-```
-
-An optional third argument excludes classes whose FQN matches one or more regexes, even when the layer pattern matches.
-
-Use a single exclude regex when one class or namespace branch should not belong to a broader layer. In this example, `App\HTTP\URI` matches the broad HTTP pattern, but it is excluded from `HTTP` and then registered as its own `URI` layer:
-
-```php
-// HTTP layer: includes everything under App\HTTP\, except App\HTTP\URI
-->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/', '/^App\\\\HTTP\\\\URI$/')
-->layerPattern('URI',  '/^App\\\\HTTP\\\\URI$/')
-```
-
-Use an array of exclude regexes when several different class-name patterns should be omitted from the same broad layer. Each regex is checked independently, and a class is excluded as soon as it matches any one of them:
-
-```php
-->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/', [
-    '/Exception$/',
-    '/^App\\\\HTTP\\\\URI$/',
-])
-```
-
-With the configuration above, classes such as `App\HTTP\Request` still resolve to `HTTP`, while `App\HTTP\RequestException` and `App\HTTP\URI` do not.
-
 ### Declarative ruleset
 
 Once layers are defined (via `layer()` or `layerPattern()`), declare which layers each layer is allowed to depend on. Any dependency that resolves to a layer not in the allowed list is a violation:
@@ -236,6 +205,37 @@ Each `+LayerName` entry expands to that layer itself plus all layers it is allow
 ```
 
 When the allowed layers of `API` or `Controller` change, `RESTful` picks them up automatically. Unknown `+` references expand to nothing silently.
+
+You can also assign a layer using multiple regexes:
+
+```php
+return Architecture::define()
+    ->layerPattern('Service', [
+        '/^App\\\\Service\\\\.*$/',
+        '/^App\\\\Application\\\\.*Service$/',
+    ]);
+```
+
+An optional third argument excludes classes whose FQN matches one or more regexes, even when the layer pattern matches.
+
+Use a single exclude regex when one class or namespace branch should not belong to a broader layer. In this example, `App\HTTP\URI` matches the broad HTTP pattern, but it is excluded from `HTTP` and then registered as its own `URI` layer:
+
+```php
+// HTTP layer: includes everything under App\HTTP\, except App\HTTP\URI
+->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/', '/^App\\\\HTTP\\\\URI$/')
+->layerPattern('URI',  '/^App\\\\HTTP\\\\URI$/')
+```
+
+Use an array of exclude regexes when several different class-name patterns should be omitted from the same broad layer. Each regex is checked independently, and a class is excluded as soon as it matches any one of them:
+
+```php
+->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/', [
+    '/Exception$/',
+    '/^App\\\\HTTP\\\\URI$/',
+])
+```
+
+With the configuration above, classes such as `App\HTTP\Request` still resolve to `HTTP`, while `App\HTTP\RequestException` and `App\HTTP\URI` do not.
 
 ### Skipping class-level violations
 
