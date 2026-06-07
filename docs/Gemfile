@@ -1,0 +1,5 @@
+source "https://rubygems.org"
+
+# Used by GitHub Pages branch deployment. Local preview uses Gemfile.local.
+gem "github-pages", group: :jekyll_plugins
+gem "jekyll-remote-theme", group: :jekyll_plugins
