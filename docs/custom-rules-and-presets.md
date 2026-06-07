@@ -1,7 +1,7 @@
 ---
 title: Custom Rules And Presets
 layout: default
-nav_order: 5
+nav_order: 6
 ---
 
 # Custom Rules And Presets
@@ -39,6 +39,8 @@ return Architecture::define()
 ```
 
 `rule()` can overwrite an existing key silently. Use `replaceRule()` when you want StructArmed to verify that the target rule already exists.
+
+See [Available Rules](../available-rules/) when you want to reuse one of StructArmed's built-in rule classes before writing your own.
 
 ## Rule Keys
 

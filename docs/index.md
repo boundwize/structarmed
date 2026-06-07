@@ -34,6 +34,7 @@ StructArmed is a configurable PHP architecture guard. Define your layers and rul
 - [Quick Start](quick-start/) covers installation, initialization, and the available starter presets.
 - [Configuration](configuration/) shows how to define custom layers, skips, and preset rule replacements.
 - [Layers and Rulesets](layers-and-rulesets/) explains path-based layers, namespace-based layers, and dependency rules.
+- [Available Rules](available-rules/) lists every built-in rule class you can register, replace, or reuse.
 - [Custom Rules And Presets](custom-rules-and-presets/) covers project-specific checks and reusable architecture presets.
 - [Presets](presets/) lists the included PSR, MVC, and DDD presets.
 - [CLI](cli/) documents analyse, report, version, and baseline commands.
