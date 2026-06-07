@@ -24,13 +24,6 @@ StructArmed turns architecture decisions into executable checks. Start with pres
     <img src="./docs/assets/structarmed-showoff.png" alt="StructArmed violation">
 </p>
 
-## Documentation
-
-The full documentation now lives in [docs/](docs/index.md) and is ready for GitHub Pages with the `just-the-docs` template.
-
-- Documentation site: <https://boundwize.github.io/structarmed/>
-- Local entry point: [docs/index.md](docs/index.md)
-
 ## Quick Start
 
 ```bash
@@ -39,7 +32,12 @@ vendor/bin/structarmed init --preset=psr4
 vendor/bin/structarmed analyse
 ```
 
-Continue with the [documentation](docs/index.md) for presets, configuration, reports, and extension points.
+## Documentation
+
+The full documentation now lives in [docs/](docs/index.md) and is ready for GitHub Pages with the `just-the-docs` template.
+
+- Documentation site: <https://boundwize.github.io/structarmed/>
+- Local entry point: [docs/index.md](docs/index.md)
 
 ## Contributing
 
