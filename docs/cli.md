@@ -62,12 +62,6 @@ StructArmed runs in parallel by default. Disable parallel processing when debugg
 vendor/bin/structarmed analyse --disable-parallel
 ```
 
-## Baseline Generation
-
-```bash
-vendor/bin/structarmed analyse --generate-baseline=structarmed-baseline.php
-```
-
 ## Version Commands
 
 ```bash

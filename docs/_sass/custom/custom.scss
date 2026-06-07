@@ -5,6 +5,7 @@ code {
 div.highlighter-rouge,
 figure.highlight {
   margin: 1rem 0 1.25rem;
+  position: relative;
 }
 
 div.highlight,
@@ -14,12 +15,66 @@ figure.highlight {
   border-radius: 6px;
 }
 
+div.highlighter-rouge pre,
 div.highlight pre.highlight,
 figure.highlight pre {
   margin: 0;
-  padding: 1rem;
+  padding: 0.72rem 2.75rem 0.72rem 1rem;
   background: transparent;
-  line-height: 1.55;
+  line-height: 1.45;
+  min-height: 0;
+}
+
+div.highlighter-rouge code,
+div.highlight code,
+figure.highlight code {
+  line-height: inherit;
+}
+
+.sa-copy-code-button {
+  position: absolute;
+  top: 0.58rem;
+  right: 0.58rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sa-copy-code-button::before,
+.sa-copy-code-button::after {
+  position: absolute;
+  content: "";
+  width: 0.62rem;
+  height: 0.78rem;
+  border: 1.5px solid #6e7781;
+  border-radius: 2px;
+}
+
+.sa-copy-code-button::before {
+  top: 0.43rem;
+  left: 0.45rem;
+  background: #f8fafc;
+}
+
+.sa-copy-code-button::after {
+  top: 0.32rem;
+  left: 0.62rem;
+  background: #f8fafc;
+}
+
+.sa-copy-code-button:hover,
+.sa-copy-code-button:focus-visible {
+  border-color: #d0d7de;
+  background: #ffffff;
+}
+
+.sa-copy-code-button.is-copied::before,
+.sa-copy-code-button.is-copied::after {
+  border-color: #1a7f37;
 }
 
 .highlight .c,

@@ -13,7 +13,7 @@ search_enabled: true
 heading_anchors: true
 back_to_top: true
 back_to_top_text: Back to top
-enable_copy_code_button: true
+enable_copy_code_button: false
 
 aux_links:
   GitHub:
