@@ -47,7 +47,10 @@ final readonly class PhpFileFinder
 
         $sourcePaths = array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath));
         foreach ($sourcePaths as $sourcePath) {
-            $fullPath = rtrim($basePath, '/') . '/' . ltrim($sourcePath, '/');
+            $isAbsolute = str_starts_with($sourcePath, '/') || (strlen($sourcePath) >= 2 && $sourcePath[1] === ':');
+            $fullPath   = $isAbsolute
+                ? $sourcePath
+                : rtrim($basePath, '/') . '/' . ltrim($sourcePath, '/');
 
             if (! is_dir($fullPath)) {
                 continue;

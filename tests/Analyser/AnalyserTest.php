@@ -246,6 +246,24 @@ final class AnalyserTest extends TestCase
         $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($violations[0]->file));
     }
 
+    public function testAnalyserPsr1RuleFindsViolationsWithAbsoluteSourcePath(): void
+    {
+        $srcPath = $this->makeTempProject([
+            'Foo.php' => "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n",
+        ]);
+
+        $unrelatedBase = $this->makeTemporaryDirectory('structarmed-unrelated');
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR1(sourcePaths: [$srcPath]));
+
+        $ruleViolationCollection = (new Analyser($unrelatedBase))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS);
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/Foo.php', $this->normalisePath($violations[0]->file));
+    }
+
     public function testAnalyserContinuesWhenProjectRulePasses(): void
     {
         $basePath = $this->makeTempProject([
