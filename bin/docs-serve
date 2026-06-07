@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+find_ruby() {
+  local candidate
+  local candidates=()
+
+  if [[ -n "${DOCS_RUBY:-}" ]]; then
+    candidates+=("$DOCS_RUBY")
+  fi
+
+  while IFS= read -r candidate; do
+    candidates+=("$candidate")
+  done < <(type -P -a ruby 2>/dev/null || true)
+
+  candidates+=(
+    "/opt/homebrew/opt/ruby/bin/ruby"
+    "/usr/local/opt/ruby/bin/ruby"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "$candidate" ]] && "$candidate" -e 'exit Gem::Version.new(RUBY_VERSION) >= Gem::Version.new("3.1.0") ? 0 : 1' >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+if ! RUBY_BIN="$(find_ruby)"; then
+  current_ruby="$(ruby -e 'print RUBY_VERSION' 2>/dev/null || printf 'not found')"
+  cat >&2 <<MSG
+Ruby 3.1.0+ is required to preview the docs locally. Current Ruby: ${current_ruby}
+
+No Docker is needed. Install a modern Ruby with Homebrew:
+
+  brew install ruby
+
+Then add it to your shell PATH:
+
+  echo 'export PATH="/opt/homebrew/opt/ruby/bin:\$PATH"' >> ~/.zprofile
+  export PATH="/opt/homebrew/opt/ruby/bin:\$PATH"
+
+If Ruby is installed somewhere else, run:
+
+  DOCS_RUBY=/path/to/ruby composer docs:serve
+MSG
+  exit 1
+fi
+
+export PATH="$(dirname "$RUBY_BIN"):$PATH"
+
+export BUNDLE_GEMFILE="$ROOT/docs/Gemfile.local"
+export BUNDLE_PATH="$ROOT/docs/vendor/bundle"
+export BUNDLE_APP_CONFIG="$ROOT/docs/.bundle"
+
+if ! "$RUBY_BIN" -S bundle -v >/dev/null 2>&1; then
+  echo "Bundler is not available for $("$RUBY_BIN" -e 'print RUBY_VERSION'). Install it with:" >&2
+  echo "  \"$RUBY_BIN\" -S gem install bundler" >&2
+  exit 1
+fi
+
+if ! "$RUBY_BIN" -S bundle check >/dev/null 2>&1; then
+  echo "Installing documentation gems into docs/vendor/bundle..."
+  "$RUBY_BIN" -S bundle install
+fi
+
+exec "$RUBY_BIN" -S bundle exec jekyll serve \
+  --source "$ROOT/docs" \
+  --destination "$ROOT/docs/_site" \
+  --config "$ROOT/docs/_config.yml,$ROOT/docs/_config.local.yml" \
+  --baseurl "/structarmed" \
+  --livereload \
+  "$@"

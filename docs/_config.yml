@@ -33,4 +33,8 @@ callouts:
 exclude:
   - Gemfile
   - Gemfile.lock
+  - Gemfile.local
+  - Gemfile.local.lock
+  - _config.local.yml
   - vendor
+  - .bundle

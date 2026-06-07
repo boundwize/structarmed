@@ -41,8 +41,9 @@ The `init` command writes `structarmed.php` to your project root. Edit that file
 ## Where To Go Next
 
 - [Quick Start](quick-start/) covers installation, initialization, and the available starter presets.
-- [Configuration](configuration/) shows how to define custom layers, skips, rule replacements, and custom presets.
+- [Configuration](configuration/) shows how to define custom layers, skips, and preset rule replacements.
 - [Layers and Rulesets](layers-and-rulesets/) explains path-based layers, namespace-based layers, and dependency rules.
+- [Custom Rules And Presets](custom-rules-and-presets/) covers project-specific checks and reusable architecture presets.
 - [Presets](presets/) lists the included PSR, MVC, and DDD presets.
 - [CLI](cli/) documents analyse, report, version, and baseline commands.
 - [PHPUnit Extension](phpunit-extension/) explains how to fail your test suite on architecture violations.

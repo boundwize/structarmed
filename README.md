@@ -40,7 +40,7 @@ vendor/bin/structarmed init --preset=psr4
 vendor/bin/structarmed analyse
 ```
 
-See the [quick start guide](docs/quick-start.md) for every preset and the [configuration guide](docs/configuration.md) for custom layers, rules, skips, and presets.
+See the [quick start guide](docs/quick-start.md) for every preset, the [configuration guide](docs/configuration.md) for project setup, and [custom rules and presets](docs/custom-rules-and-presets.md) for extension points.
 
 ## Contributing
 
