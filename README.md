@@ -26,7 +26,6 @@ The full documentation now lives in [docs/](docs/index.md) and is ready for GitH
 
 - Documentation site: <https://boundwize.github.io/structarmed/>
 - Local entry point: [docs/index.md](docs/index.md)
-- GitHub Pages workflow: [.github/workflows/pages.yml](.github/workflows/pages.yml)
 
 ## Installation
 
