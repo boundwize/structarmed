@@ -20,6 +20,10 @@
 
 StructArmed turns architecture decisions into executable checks. Start with presets for PSR, MVC, or DDD projects, then tune or extend the rules in native PHP.
 
+<p align="center">
+    <img src="./docs/assets/structarmed-showoff.png" />
+</p>
+
 ## Documentation
 
 The full documentation now lives in [docs/](docs/index.md) and is ready for GitHub Pages with the `just-the-docs` template.
