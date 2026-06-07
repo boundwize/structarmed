@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Baseline;
 
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Tool\Path;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Scalar\Int_;
@@ -26,7 +27,6 @@ use function is_dir;
 use function is_scalar;
 use function json_encode;
 use function ltrim;
-use function preg_match;
 use function realpath;
 use function rtrim;
 use function sprintf;
@@ -228,9 +228,7 @@ final readonly class Baseline
 
     private function resolvePath(string $path, string $basePath): string
     {
-        $normalisedPath = str_replace('\\', '/', $path);
-
-        if (str_starts_with($normalisedPath, '/') || preg_match('/^[A-Za-z]:\//', $normalisedPath) === 1) {
+        if (Path::isAbsolute($path)) {
             return $path;
         }
 

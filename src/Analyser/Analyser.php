@@ -18,6 +18,7 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Tool\Path;
 use FilesystemIterator;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
@@ -45,7 +46,6 @@ use function sprintf;
 use function str_ends_with;
 use function str_replace;
 use function str_starts_with;
-use function strlen;
 use function strpbrk;
 use function substr;
 
@@ -610,7 +610,7 @@ final class Analyser
         $files = [];
 
         foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
-            $isAbsolute = str_starts_with($layerPath, '/') || (strlen($layerPath) >= 2 && $layerPath[1] === ':');
+            $isAbsolute = Path::isAbsolute($layerPath);
             $fullPath   = $this->normalisePath(
                 $isAbsolute
                     ? $layerPath
@@ -704,10 +704,7 @@ final class Analyser
 
     private function toAbsoluteSkipPath(string $normalisedSkipPath): string
     {
-        if (
-            str_starts_with($normalisedSkipPath, '/')
-            || (strlen($normalisedSkipPath) >= 2 && $normalisedSkipPath[1] === ':')
-        ) {
+        if (Path::isAbsolute($normalisedSkipPath)) {
             return $normalisedSkipPath;
         }
 
