@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tool;
+namespace Boundwize\StructArmed\Util;
 
 use function str_replace;
 use function str_starts_with;

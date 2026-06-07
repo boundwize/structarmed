@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Baseline;
 
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
-use Boundwize\StructArmed\Tool\Path;
+use Boundwize\StructArmed\Util\Path;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Scalar\Int_;
