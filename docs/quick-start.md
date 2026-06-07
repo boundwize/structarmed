@@ -64,11 +64,11 @@ vendor/bin/structarmed analyze
 
 If violations are found, StructArmed reports each one:
 
-<img width="511" height="212" alt="StructArmed violation output" src="https://github.com/user-attachments/assets/3970a4cc-4e4a-4002-b282-e84aa9b2558e" />
+<img width="511" height="212" alt="StructArmed violation output" src="./assets/structarmed-showoff.png" />
 
 If everything passes, StructArmed prints a clean summary:
 
-<img width="460" height="93" alt="StructArmed clean analysis output" src="https://github.com/user-attachments/assets/aeb81a6a-20eb-40be-b68b-889b0349ac37" />
+<img width="460" height="93" alt="StructArmed clean analysis output" src="./assets/no-violation.png" />
 
 ## Default Configuration
 
