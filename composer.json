@@ -64,6 +64,7 @@
         "cs-fix": "phpcbf",
         "phpstan": "phpstan",
         "rector": "rector process --dry-run",
+        "docs:serve": "bin/docs-serve",
         "test": "phpunit",
         "structarmed": "php bin/structarmed analyze"
     },

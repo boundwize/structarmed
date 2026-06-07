@@ -1,0 +1,51 @@
+title: StructArmed
+description: Configurable PHP architecture guards for PHP projects.
+url: "https://boundwize.github.io"
+baseurl: "/structarmed"
+repository: boundwize/structarmed
+twitter:
+  card: summary_large_image
+defaults:
+  - scope:
+      path: ""
+    values:
+      image:
+        path: /assets/og-image.png
+        width: 1280
+        height: 640
+        alt: StructArmed social preview
+
+remote_theme: just-the-docs/just-the-docs
+plugins:
+  - jekyll-remote-theme
+permalink: pretty
+
+search_enabled: true
+heading_anchors: true
+back_to_top: true
+back_to_top_text: Back to top
+enable_copy_code_button: true
+favicon_ico: "/assets/images/favicon-32x32.png"
+
+aux_links:
+  GitHub:
+    - https://github.com/boundwize/structarmed
+  Packagist:
+    - https://packagist.org/packages/boundwize/structarmed
+
+callouts:
+  important:
+    title: Important
+    color: yellow
+  note:
+    title: Note
+    color: blue
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - Gemfile.local
+  - Gemfile.local.lock
+  - _config.local.yml
+  - vendor
+  - .bundle

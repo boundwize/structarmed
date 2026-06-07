@@ -1,0 +1,222 @@
+:root {
+  --sa-sidebar-width: 13rem;
+  --sa-content-width: 62rem;
+  --sa-layout-width: 75rem;
+  --sa-sidebar-offset-width: var(--sa-sidebar-width);
+}
+
+@media (min-width: 50rem) {
+  .side-bar {
+    width: var(--sa-sidebar-offset-width);
+    min-width: var(--sa-sidebar-width);
+  }
+
+  .side-bar + .main {
+    margin-left: var(--sa-sidebar-offset-width);
+  }
+
+  .main {
+    max-width: var(--sa-content-width);
+  }
+
+  .site-nav,
+  .site-header,
+  .site-footer {
+    width: var(--sa-sidebar-width);
+  }
+
+  .nav-list .nav-list-item .nav-list-link {
+    padding-right: 0.75rem;
+    padding-left: 1rem;
+  }
+
+  .site-title {
+    padding-right: 0.75rem;
+    padding-left: 1rem;
+  }
+}
+
+@media (min-width: 75rem) {
+  :root {
+    --sa-sidebar-offset-width: max(
+      var(--sa-sidebar-width),
+      calc((100% - var(--sa-layout-width)) / 2 + var(--sa-sidebar-width))
+    );
+  }
+}
+
+code {
+  border-radius: 4px;
+}
+
+div.highlighter-rouge,
+figure.highlight {
+  margin: 1rem 0 1.25rem;
+  position: relative;
+}
+
+div.highlight,
+figure.highlight {
+  background: #f8fafc;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+div.highlight pre.highlight,
+figure.highlight pre {
+  margin: 0;
+  padding: 1rem;
+  background: transparent;
+  line-height: 1.55;
+}
+
+div.highlight code,
+figure.highlight code {
+  line-height: inherit;
+}
+
+.doc-screenshot {
+  margin: 1rem 0 1.5rem;
+  overflow-x: auto;
+}
+
+.doc-screenshot img {
+  display: block;
+  max-width: none;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.doc-screenshot--wide img {
+  width: 1180px;
+}
+
+.sa-copy-code-fallback {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #57606a;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.sa-copy-code-fallback:hover,
+.sa-copy-code-fallback:focus-visible {
+  color: #24292f;
+  border-color: #8c959f;
+}
+
+.sa-copy-code-fallback.is-copied {
+  color: #1a7f37;
+  border-color: #1a7f37;
+}
+
+.highlight .c,
+.highlight .c1,
+.highlight .cm,
+.highlight .cp {
+  color: #6e7781;
+  font-style: italic;
+}
+
+.highlight .k,
+.highlight .kd,
+.highlight .kn,
+.highlight .kp,
+.highlight .kr,
+.highlight .kt {
+  color: #cf222e;
+  font-weight: 600;
+}
+
+.highlight .nc,
+.highlight .nn,
+.highlight .nf {
+  color: #8250df;
+  font-weight: 600;
+}
+
+.highlight .na,
+.highlight .nb,
+.highlight .no,
+.highlight .nv,
+.highlight .vc,
+.highlight .vg,
+.highlight .vi {
+  color: #953800;
+}
+
+.highlight .s,
+.highlight .s1,
+.highlight .s2,
+.highlight .se,
+.highlight .sh,
+.highlight .si,
+.highlight .sx {
+  color: #0a3069;
+}
+
+.highlight .m,
+.highlight .mi,
+.highlight .mf,
+.highlight .mh {
+  color: #0550ae;
+}
+
+.highlight .o,
+.highlight .ow,
+.highlight .p {
+  color: #24292f;
+}
+
+.language-diff .highlight,
+div.language-diff div.highlight,
+figure.highlight pre code.language-diff {
+  background: #ffffff;
+}
+
+.language-diff .highlight pre,
+div.language-diff pre.highlight {
+  padding: 0.75rem 0;
+}
+
+.language-diff .gd,
+.language-diff .gi,
+.language-diff .gu,
+.language-diff .gh,
+.language-diff code span.gd,
+.language-diff code span.gi,
+.language-diff code span.gu,
+.language-diff code span.gh {
+  display: block;
+  padding: 0.125rem 1rem;
+}
+
+.language-diff .gd,
+.language-diff code span.gd,
+.highlight .gd {
+  background: #ffebe9;
+  color: #82071e;
+}
+
+.language-diff .gi,
+.language-diff code span.gi,
+.highlight .gi {
+  background: #dafbe1;
+  color: #116329;
+}
+
+.language-diff .gu,
+.language-diff .gh,
+.language-diff code span.gu,
+.language-diff code span.gh,
+.highlight .gu,
+.highlight .gh {
+  background: #ddf4ff;
+  color: #0550ae;
+}
