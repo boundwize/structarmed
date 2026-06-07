@@ -64,7 +64,7 @@ vendor/bin/structarmed analyze
 
 If violations are found, StructArmed reports each one:
 
-<figure class="doc-screenshot doc-screenshot--wide">
+<figure class="doc-screenshot">
     <img alt="StructArmed violation output" src="{{ '/assets/structarmed-showoff.png' | relative_url }}">
 </figure>
 
