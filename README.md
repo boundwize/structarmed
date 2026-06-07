@@ -206,6 +206,8 @@ Each `+LayerName` entry expands to that layer itself plus all layers it is allow
 
 When the allowed layers of `API` or `Controller` change, `RESTful` picks them up automatically. Unknown `+` references expand to nothing silently.
 
+### Advanced layer patterns
+
 You can also assign a layer using multiple regexes:
 
 ```php
