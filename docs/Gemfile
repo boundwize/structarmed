@@ -1,5 +1,11 @@
 source "https://rubygems.org"
 
 # Used by GitHub Pages branch deployment. Local preview uses Gemfile.local.
-gem "github-pages", group: :jekyll_plugins
+gem "github-pages", ">= 232", group: :jekyll_plugins
 gem "jekyll-remote-theme", group: :jekyll_plugins
+
+# GitHub Pages currently runs on Ruby 3.3, where some libraries used by
+# older Jekyll/Kramdown stacks no longer load these from stdlib implicitly.
+gem "base64"
+gem "bigdecimal"
+gem "rexml"
