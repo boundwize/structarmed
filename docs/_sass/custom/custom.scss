@@ -5,6 +5,7 @@ code {
 div.highlighter-rouge,
 figure.highlight {
   margin: 1rem 0 1.25rem;
+  position: relative;
 }
 
 div.highlight,
@@ -25,6 +26,31 @@ figure.highlight pre {
 div.highlight code,
 figure.highlight code {
   line-height: inherit;
+}
+
+.sa-copy-code-fallback {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #57606a;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.sa-copy-code-fallback:hover,
+.sa-copy-code-fallback:focus-visible {
+  color: #24292f;
+  border-color: #8c959f;
+}
+
+.sa-copy-code-fallback.is-copied {
+  color: #1a7f37;
+  border-color: #1a7f37;
 }
 
 .highlight .c,
