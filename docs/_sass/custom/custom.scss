@@ -94,18 +94,24 @@ div.language-diff pre.highlight {
 .language-diff .gd,
 .language-diff .gi,
 .language-diff .gu,
-.language-diff .gh {
+.language-diff .gh,
+.language-diff code span.gd,
+.language-diff code span.gi,
+.language-diff code span.gu,
+.language-diff code span.gh {
   display: block;
   padding: 0.125rem 1rem;
 }
 
 .language-diff .gd,
+.language-diff code span.gd,
 .highlight .gd {
   background: #ffebe9;
   color: #82071e;
 }
 
 .language-diff .gi,
+.language-diff code span.gi,
 .highlight .gi {
   background: #dafbe1;
   color: #116329;
@@ -113,6 +119,8 @@ div.language-diff pre.highlight {
 
 .language-diff .gu,
 .language-diff .gh,
+.language-diff code span.gu,
+.language-diff code span.gh,
 .highlight .gu,
 .highlight .gh {
   background: #ddf4ff;
