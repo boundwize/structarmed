@@ -12,11 +12,12 @@ final class Path
 {
     public static function isAbsolute(string $path): bool
     {
-        if (str_starts_with($path, '/')) {
+        $normalised = str_replace('\\', '/', $path);
+
+        if (str_starts_with($normalised, '/')) {
             return true;
         }
 
-        $normalised = str_replace('\\', '/', $path);
         return strlen($normalised) >= 3 && $normalised[1] === ':' && $normalised[2] === '/';
     }
 }

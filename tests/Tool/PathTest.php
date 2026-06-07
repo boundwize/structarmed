@@ -24,6 +24,7 @@ final class PathTest extends TestCase
         yield 'relative' => ['relative/path', false];
         yield 'windows drive-relative' => ['C:relative', false];
         yield 'dot-relative' => ['./relative', false];
+        yield 'windows UNC path' => ['\\\\server\\share\\project', true];
     }
 
     #[DataProvider('provideIsAbsolute')]
