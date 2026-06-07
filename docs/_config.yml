@@ -3,13 +3,17 @@ description: Configurable PHP architecture guards for PHP projects.
 url: "https://boundwize.github.io"
 baseurl: "/structarmed"
 repository: boundwize/structarmed
-image:
-  path: /assets/og-image.png
-  width: 1280
-  height: 640
-  alt: StructArmed social preview
 twitter:
   card: summary_large_image
+defaults:
+  - scope:
+      path: ""
+    values:
+      image:
+        path: /assets/og-image.png
+        width: 1280
+        height: 640
+        alt: StructArmed social preview
 
 remote_theme: just-the-docs/just-the-docs
 plugins:
