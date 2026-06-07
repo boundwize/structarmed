@@ -300,6 +300,27 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
+    public function testAbsoluteSourcePathIsNotPrefixedWithBasePath(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?php\nini_set('memory_limit', '1G');\nclass Foo {}\n");
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule([$basePath . '/src']))->evaluateProjectAll(
+                '/some/unrelated/base',
+                Architecture::define()
+            );
+
+            $this->assertCount(1, $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     private function makeTempDir(): string
     {
         $path = sys_get_temp_dir() . '/structarmed-psr1-' . bin2hex(random_bytes(6));
