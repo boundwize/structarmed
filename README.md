@@ -21,7 +21,7 @@
 StructArmed turns architecture decisions into executable checks. Start with presets for PSR, MVC, or DDD projects, then tune or extend the rules in native PHP.
 
 <p align="center">
-    <img src="./docs/assets/structarmed-showoff.png" alt="StructArmed violation">
+    <img src="./docs/assets/structarmed-showoff-editable.svg" alt="StructArmed violation">
 </p>
 
 ## Quick Start
@@ -37,7 +37,7 @@ vendor/bin/structarmed analyse
 Documentation is available online, with source files kept in this repository:
 
 - Documentation site: <https://boundwize.github.io/structarmed/>
-- Documentation source: [docs/](docs/index.md)
+- Documentation source: [docs/](docs/index.md) for local edits and GitHub Pages publishing.
 
 ## Contributing
 
