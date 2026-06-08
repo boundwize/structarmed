@@ -82,13 +82,23 @@ figure.highlight code {
 
 .doc-screenshot img {
   display: block;
-  max-width: none;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1180px;
+  height: auto;
   border: 1px solid #d0d7de;
   border-radius: 6px;
 }
 
 .doc-screenshot--wide img {
   width: 1180px;
+  max-width: none;
+}
+
+@media (max-width: 50rem) {
+  .doc-screenshot img {
+    width: 760px;
+  }
 }
 
 .rule-table {
