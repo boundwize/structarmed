@@ -5,6 +5,7 @@ nav_order: 10
 ---
 
 # Cache
+{: .no_toc }
 
 Configure where StructArmed stores analysis cache data.
 

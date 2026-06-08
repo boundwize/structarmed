@@ -5,6 +5,7 @@ nav_order: 7
 ---
 
 # Presets
+{: .no_toc }
 
 StructArmed ships with presets for common PHP standards and architecture styles.
 

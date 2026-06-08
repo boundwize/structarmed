@@ -5,6 +5,7 @@ nav_order: 9
 ---
 
 # PHPUnit Extension
+{: .no_toc }
 
 Run architecture checks as part of your test suite.
 

@@ -5,6 +5,7 @@ nav_order: 3
 ---
 
 # Configuration
+{: .no_toc }
 
 StructArmed configuration is PHP code. Define layers, apply presets, skip known exceptions, and tune preset rules.
 

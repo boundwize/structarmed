@@ -101,6 +101,62 @@ figure.highlight code {
   }
 }
 
+#markdown-toc {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0 2rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: toc;
+}
+
+#markdown-toc li {
+  margin: 0;
+}
+
+#markdown-toc li::before {
+  display: none;
+  content: none;
+}
+
+#markdown-toc > li {
+  counter-increment: toc;
+}
+
+#markdown-toc a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  text-decoration: none;
+}
+
+#markdown-toc > li > a::before {
+  content: counter(toc);
+  min-width: 1.35rem;
+  color: #6e7781;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+#markdown-toc ol {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.35rem 0 0.25rem 1.95rem;
+  padding: 0;
+  list-style: none;
+}
+
+#markdown-toc ol a::before {
+  content: "";
+  width: 0.35rem;
+  height: 0.35rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #8c959f;
+  transform: translateY(-0.12rem);
+}
+
 .rule-table {
   display: block;
   margin: 1rem 0 1.5rem;
