@@ -54,8 +54,13 @@ jobs:
       - name: Run Rector (dry-run)
         run: composer rector
 
-      - name: Run tests
+      - name: Run tests with coverage
+        if: matrix.php-versions == '8.2' && matrix.operating-system == 'ubuntu-latest'
         run: composer test -- --coverage-clover coverage.xml
+
+      - name: Run tests
+        if: matrix.php-versions != '8.2' || matrix.operating-system != 'ubuntu-latest'
+        run: composer test
 
       - name: Upload coverage to Codecov
         if: matrix.php-versions == '8.2' && matrix.operating-system == 'ubuntu-latest'
