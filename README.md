@@ -34,10 +34,10 @@ vendor/bin/structarmed analyse
 
 ## Documentation
 
-The full documentation now lives in [docs/](docs/index.md) and is ready for GitHub Pages with the `just-the-docs` template.
+Documentation is available online, with source files kept in this repository:
 
 - Documentation site: <https://boundwize.github.io/structarmed/>
-- Local entry point: [docs/index.md](docs/index.md)
+- Documentation source: [docs/](docs/index.md)
 
 ## Contributing
 
