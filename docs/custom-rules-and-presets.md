@@ -5,6 +5,7 @@ nav_order: 6
 ---
 
 # Custom Rules And Presets
+{: .no_toc }
 
 Use custom rules when a project needs an architecture check that is not covered by a preset. Use custom presets when you want to package layers and rules so they can be reused across projects.
 

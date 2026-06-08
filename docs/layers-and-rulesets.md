@@ -5,6 +5,7 @@ nav_order: 4
 ---
 
 # Layers And Rulesets
+{: .no_toc }
 
 Layers tell StructArmed where classes belong. Rulesets tell StructArmed which layer dependencies are allowed.
 

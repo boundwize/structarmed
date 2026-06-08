@@ -5,6 +5,7 @@ nav_order: 8
 ---
 
 # CLI
+{: .no_toc }
 
 StructArmed provides commands for initialization, analysis, reports, baselines, and version output.
 

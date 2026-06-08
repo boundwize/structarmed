@@ -5,6 +5,7 @@ nav_order: 2
 ---
 
 # Quick Start
+{: .no_toc }
 
 Install StructArmed as a development dependency, initialize a preset, then run the analyser.
 
@@ -65,13 +66,13 @@ vendor/bin/structarmed analyze
 If violations are found, StructArmed reports each one:
 
 <figure class="doc-screenshot">
-    <img alt="StructArmed violation output" src="{{ '/assets/structarmed-showoff.png' | relative_url }}">
+    <img alt="StructArmed violation output" src="{{ '/assets/structarmed-showoff.svg' | relative_url }}">
 </figure>
 
 If everything passes, StructArmed prints a clean summary:
 
 <figure class="doc-screenshot">
-    <img alt="StructArmed clean analysis output" src="{{ '/assets/no-violation.png' | relative_url }}">
+    <img alt="StructArmed clean analysis output" src="{{ '/assets/no-violation.svg' | relative_url }}">
 </figure>
 
 ## Default Configuration

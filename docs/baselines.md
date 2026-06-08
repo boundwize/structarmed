@@ -5,6 +5,7 @@ nav_order: 11
 ---
 
 # Baselines
+{: .no_toc }
 
 Use a baseline to adopt StructArmed gradually in an existing project without hiding new violations.
 

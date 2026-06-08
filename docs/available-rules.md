@@ -5,6 +5,7 @@ nav_order: 5
 ---
 
 # Available Rules
+{: .no_toc }
 
 StructArmed ships rule classes you can register directly in `structarmed.php`, replace inside presets, or reuse from custom presets.
 
