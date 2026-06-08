@@ -1,0 +1,45 @@
+{%- assign docs_pages = site.html_pages
+      | where_exp: "item", "item.title != nil"
+      | where_exp: "item", "item.parent == nil"
+      | where_exp: "item", "item.nav_exclude != true" -%}
+{%- include components/nav/sorted.html pages=docs_pages -%}
+
+{%- assign previous_doc = nil -%}
+{%- assign next_doc = nil -%}
+{%- assign current_doc_found = false -%}
+
+{%- for docs_page in nav_sorted -%}
+  {%- if current_doc_found -%}
+    {%- assign next_doc = docs_page -%}
+    {%- break -%}
+  {%- endif -%}
+
+  {%- if docs_page.url == page.url -%}
+    {%- assign current_doc_found = true -%}
+  {%- else -%}
+    {%- assign previous_doc = docs_page -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{%- if current_doc_found -%}
+  {%- if previous_doc or next_doc -%}
+    <nav class="sa-page-nav" aria-label="Page navigation">
+      <div class="sa-page-nav__slot sa-page-nav__slot--prev">
+        {%- if previous_doc -%}
+          <a class="sa-page-nav__link" href="{{ previous_doc.url | relative_url }}">
+            <span class="sa-page-nav__eyebrow">&larr; Prev</span>
+            <span class="sa-page-nav__title">{{ previous_doc.nav_title | default: previous_doc.title }}</span>
+          </a>
+        {%- endif -%}
+      </div>
+      <div class="sa-page-nav__slot sa-page-nav__slot--next">
+        {%- if next_doc -%}
+          <a class="sa-page-nav__link" href="{{ next_doc.url | relative_url }}">
+            <span class="sa-page-nav__eyebrow">Next &rarr;</span>
+            <span class="sa-page-nav__title">{{ next_doc.nav_title | default: next_doc.title }}</span>
+          </a>
+        {%- endif -%}
+      </div>
+    </nav>
+  {%- endif -%}
+{%- endif -%}
