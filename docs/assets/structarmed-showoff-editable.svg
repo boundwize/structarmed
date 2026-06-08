@@ -1,0 +1,47 @@
+<svg width="1180" height="250" viewBox="0 0 1180 250" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100%" height="100%" fill="#1e1e1e" rx="8" ry="8" />
+    <style>
+        .text { font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, 'Courier New', monospace; font-size: 14px; fill: #cccccc; white-space: pre; }
+        .prompt { fill: #00afaf; font-weight: bold; }
+        .dir { fill: #ffffff; }
+        .cmd { fill: #cccccc; }
+        .header { fill: #cccccc; font-weight: bold; }
+        .error { fill: #ff5555; }
+        .version { fill: #cccccc; }
+    </style>
+    
+    <g transform="translate(16, 24)">
+        <!-- Line 1: Prompt and Command -->
+        <text x="0" y="0" class="text"><tspan class="prompt">➜  </tspan><tspan class="dir">prj-ddd </tspan><tspan class="cmd">vendor/bin/structarmed analyze</tspan></text>
+
+        <!-- Line 3: Title and Version -->
+        <text x="0" y="35" class="text header">StructArmed <tspan class="version">0.12.5</tspan> — Architecture Enforcement</text>
+
+        <!-- Line 4: Separator -->
+        <text x="0" y="49" class="text">===============================================</text>
+
+        <!-- Line 6: Found violations -->
+        <text x="0" y="80" class="text">Found 1 violation(s):</text>
+
+        <!-- Line 7: Separator -->
+        <text x="0" y="94" class="text">───────────────────────────────────────────────</text>
+
+        <!-- Line 9: Error Code -->
+        <text x="0" y="122" class="text"><tspan class="error">✗</tspan>  [ddd.layer.domain_not_depend_infrastructure]</text>
+
+        <!-- Line 10: Error Detail -->
+        <text x="0" y="140" class="text">   Class [Domain\Album] in layer [Domain] must not depend on [Infrastructure\SQLAlbumRepository] which belongs to layer [Infrastructure]</text>
+
+        <!-- Line 11: File Path -->
+        <text x="0" y="158" class="text">   → /Users/samsonasik/www/prj-ddd/src/Domain/Album.php:5</text>
+
+        <!-- Line 12: Layer -->
+        <text x="0" y="176" class="text">   Layer: Domain</text>
+
+        <!-- Line 14: Separator -->
+        <text x="0" y="193" class="text">───────────────────────────────────────────────</text>
+
+        <!-- Line 15: Summary -->
+        <text x="0" y="207" class="text">1 violation(s) found  •  0.00s</text>
+    </g>
+</svg>
