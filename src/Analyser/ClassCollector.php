@@ -87,25 +87,17 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var string[] */
     private array $fileFunctions = [];
 
-    /**
-     * @var array<int, array{
-     *     dependencies: list<string>,
-     *     functionCallNames: list<Name>,
-     *     superglobals: string[],
-     *     languageConstructs: string[],
-     *     complexityByMethodId: array<int, int>
-     * }>
-     */
+    /** @var array<int, ClassLikeAnalysis> */
     private array $classLikeAnalysis = [];
 
-    /** @var list<int> */
-    private array $activeClassLikeIds = [];
+    /** @var list<ClassLikeAnalysis> */
+    private array $activeClassLikeAnalyses = [];
 
     /** @var list<int> */
     private array $activeMethodIds = [];
 
-    /** @var array<int, int> */
-    private array $methodClassLikeIds = [];
+    /** @var array<int, ClassLikeAnalysis> */
+    private array $methodClassLikeAnalyses = [];
 
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
@@ -114,14 +106,14 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function setCurrentFile(string $file): void
     {
-        $this->currentFile        = $file;
-        $this->fileUses           = [];
-        $this->fileClassLikes     = [];
-        $this->fileFunctions      = [];
-        $this->classLikeAnalysis  = [];
-        $this->activeClassLikeIds = [];
-        $this->activeMethodIds    = [];
-        $this->methodClassLikeIds = [];
+        $this->currentFile             = $file;
+        $this->fileUses                = [];
+        $this->fileClassLikes          = [];
+        $this->fileFunctions           = [];
+        $this->classLikeAnalysis       = [];
+        $this->activeClassLikeAnalyses = [];
+        $this->activeMethodIds         = [];
+        $this->methodClassLikeAnalyses = [];
     }
 
     /** @return list<ClassNode> */
@@ -178,7 +170,7 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         $this->fileClassLikes[] = $node;
-        array_pop($this->activeClassLikeIds);
+        array_pop($this->activeClassLikeAnalyses);
 
         return null;
     }
@@ -190,11 +182,11 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->collectClassLike($fileClassLike);
         }
 
-        $this->fileClassLikes     = [];
-        $this->classLikeAnalysis  = [];
-        $this->activeClassLikeIds = [];
-        $this->activeMethodIds    = [];
-        $this->methodClassLikeIds = [];
+        $this->fileClassLikes          = [];
+        $this->classLikeAnalysis       = [];
+        $this->activeClassLikeAnalyses = [];
+        $this->activeMethodIds         = [];
+        $this->methodClassLikeAnalyses = [];
 
         return null;
     }
@@ -202,18 +194,13 @@ final class ClassCollector extends NodeVisitorAbstract
     private function startClassLikeAnalysis(ClassLike $classLike): void
     {
         $classLikeId = spl_object_id($classLike);
+        $analysis    = new ClassLikeAnalysis();
 
-        $this->classLikeAnalysis[$classLikeId] = [
-            'dependencies'         => [],
-            'functionCallNames'    => [],
-            'superglobals'         => [],
-            'languageConstructs'   => [],
-            'complexityByMethodId' => [],
-        ];
-        $this->activeClassLikeIds[]            = $classLikeId;
+        $this->classLikeAnalysis[$classLikeId] = $analysis;
+        $this->activeClassLikeAnalyses[]       = $analysis;
 
         foreach ($classLike->getMethods() as $classMethod) {
-            $this->methodClassLikeIds[spl_object_id($classMethod)] = $classLikeId;
+            $this->methodClassLikeAnalyses[spl_object_id($classMethod)] = $analysis;
         }
     }
 
@@ -221,20 +208,20 @@ final class ClassCollector extends NodeVisitorAbstract
     {
         $methodId = spl_object_id($classMethod);
 
-        if (! isset($this->methodClassLikeIds[$methodId])) {
+        $analysis = $this->methodClassLikeAnalyses[$methodId] ?? null;
+
+        if (! $analysis instanceof ClassLikeAnalysis) {
             return;
         }
 
-        $classLikeId = $this->methodClassLikeIds[$methodId];
-
         $this->activeMethodIds[] = $methodId;
 
-        $this->classLikeAnalysis[$classLikeId]['complexityByMethodId'][$methodId] = 1;
+        $analysis->complexityByMethodId[$methodId] = 1;
     }
 
     private function finishMethodAnalysis(ClassMethod $classMethod): void
     {
-        if (! isset($this->methodClassLikeIds[spl_object_id($classMethod)])) {
+        if (! isset($this->methodClassLikeAnalyses[spl_object_id($classMethod)])) {
             return;
         }
 
@@ -243,7 +230,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function collectNodeAnalysis(Node $node): void
     {
-        if ($this->activeClassLikeIds === []) {
+        if ($this->activeClassLikeAnalyses === []) {
             return;
         }
 
@@ -316,38 +303,36 @@ final class ClassCollector extends NodeVisitorAbstract
 
         if ($this->activeMethodIds !== [] && $this->isComplexityBranch($node)) {
             foreach ($this->activeMethodIds as $activeMethodId) {
-                $classLikeId = $this->methodClassLikeIds[$activeMethodId];
-
-                $this->classLikeAnalysis[$classLikeId]['complexityByMethodId'][$activeMethodId]++;
+                $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
             }
         }
     }
 
     private function addDependency(string $dependency): void
     {
-        foreach ($this->activeClassLikeIds as $classLikeId) {
-            $this->classLikeAnalysis[$classLikeId]['dependencies'][] = $dependency;
+        foreach ($this->activeClassLikeAnalyses as $analysis) {
+            $analysis->dependencies[] = $dependency;
         }
     }
 
     private function addFunctionCallName(Name $functionCallName): void
     {
-        foreach ($this->activeClassLikeIds as $classLikeId) {
-            $this->classLikeAnalysis[$classLikeId]['functionCallNames'][] = $functionCallName;
+        foreach ($this->activeClassLikeAnalyses as $analysis) {
+            $analysis->functionCallNames[] = $functionCallName;
         }
     }
 
     private function addSuperglobal(string $superglobal): void
     {
-        foreach ($this->activeClassLikeIds as $classLikeId) {
-            $this->classLikeAnalysis[$classLikeId]['superglobals'][] = $superglobal;
+        foreach ($this->activeClassLikeAnalyses as $analysis) {
+            $analysis->superglobals[] = $superglobal;
         }
     }
 
     private function addLanguageConstruct(string $languageConstruct): void
     {
-        foreach ($this->activeClassLikeIds as $classLikeId) {
-            $this->classLikeAnalysis[$classLikeId]['languageConstructs'][] = $languageConstruct;
+        foreach ($this->activeClassLikeAnalyses as $analysis) {
+            $analysis->languageConstructs[] = $languageConstruct;
         }
     }
 
@@ -486,28 +471,22 @@ final class ClassCollector extends NodeVisitorAbstract
      */
     private function collectClassLikeAnalysis(ClassLike $classLike): array
     {
-        $analysis      = $this->classLikeAnalysis[spl_object_id($classLike)] ?? [
-            'dependencies'         => [],
-            'functionCallNames'    => [],
-            'superglobals'         => [],
-            'languageConstructs'   => [],
-            'complexityByMethodId' => [],
-        ];
+        $analysis      = $this->classLikeAnalysis[spl_object_id($classLike)] ?? new ClassLikeAnalysis();
         $functionCalls = [];
 
-        foreach ($analysis['functionCallNames'] as $functionCallName) {
+        foreach ($analysis->functionCallNames as $functionCallName) {
             $functionCalls[] = $this->resolveFunctionName($functionCallName);
         }
 
         return [
             'dependencies'         => array_values(array_unique(array_merge(
                 $this->fileUses,
-                $analysis['dependencies']
+                $analysis->dependencies
             ))),
             'functionCalls'        => array_values(array_unique($functionCalls)),
-            'superglobals'         => array_values(array_unique($analysis['superglobals'])),
-            'languageConstructs'   => array_values(array_unique($analysis['languageConstructs'])),
-            'complexityByMethodId' => $analysis['complexityByMethodId'],
+            'superglobals'         => array_values(array_unique($analysis->superglobals)),
+            'languageConstructs'   => array_values(array_unique($analysis->languageConstructs)),
+            'complexityByMethodId' => $analysis->complexityByMethodId,
         ];
     }
 
