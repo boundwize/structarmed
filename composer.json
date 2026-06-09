@@ -34,7 +34,7 @@
     },
     "require-dev": {
         "laminas/laminas-coding-standard": "^3.1",
-        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^11.5",
         "rector/rector": "dev-main"
     },
