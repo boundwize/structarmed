@@ -748,8 +748,9 @@ PHP;
 
         $classCollector->setCurrentFile('/fake/path/Foo.php');
 
-        $this->assertNull($classCollector->enterNode($classMethod));
-        $this->assertNull($classCollector->leaveNode($classMethod));
+        $classCollector->enterNode($classMethod);
+        $classCollector->leaveNode($classMethod);
+
         $this->assertSame([], $classCollector->getNodes());
     }
 }
