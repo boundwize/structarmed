@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\ClassCollector;
+use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
@@ -17,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 use function getcwd;
 
 #[CoversClass(ClassCollector::class)]
+#[CoversClass(ClassLikeAnalysis::class)]
 final class ClassCollectorTest extends TestCase
 {
     private function collect(string $code): ClassNode
@@ -734,5 +737,20 @@ PHP;
         $this->assertNotContains('false', $classNode->dependencies);
         $this->assertNotContains('null', $classNode->dependencies);
         $this->assertContains('DateTimeImmutable', $classNode->dependencies);
+    }
+
+    public function testIgnoresClassMethodNodesOutsideTrackedClassLike(): void
+    {
+        $cwd                    = getcwd();
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], $cwd !== false ? $cwd : '');
+        $classCollector         = new ClassCollector($namespaceLayerResolver);
+        $classMethod            = new ClassMethod('orphan');
+
+        $classCollector->setCurrentFile('/fake/path/Foo.php');
+
+        $classCollector->enterNode($classMethod);
+        $classCollector->leaveNode($classMethod);
+
+        $this->assertSame([], $classCollector->getNodes());
     }
 }
