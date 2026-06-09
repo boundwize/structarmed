@@ -47,7 +47,6 @@ use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
-use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
 
 use function array_merge;
@@ -88,6 +87,26 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var string[] */
     private array $fileFunctions = [];
 
+    /**
+     * @var array<int, array{
+     *     dependencies: list<string>,
+     *     functionCallNames: list<Name>,
+     *     superglobals: string[],
+     *     languageConstructs: string[],
+     *     complexityByMethodId: array<int, int>
+     * }>
+     */
+    private array $classLikeAnalysis = [];
+
+    /** @var list<int> */
+    private array $activeClassLikeIds = [];
+
+    /** @var list<int> */
+    private array $activeMethodIds = [];
+
+    /** @var array<int, int> */
+    private array $methodClassLikeIds = [];
+
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
@@ -95,10 +114,14 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function setCurrentFile(string $file): void
     {
-        $this->currentFile    = $file;
-        $this->fileUses       = [];
-        $this->fileClassLikes = [];
-        $this->fileFunctions  = [];
+        $this->currentFile        = $file;
+        $this->fileUses           = [];
+        $this->fileClassLikes     = [];
+        $this->fileFunctions      = [];
+        $this->classLikeAnalysis  = [];
+        $this->activeClassLikeIds = [];
+        $this->activeMethodIds    = [];
+        $this->methodClassLikeIds = [];
     }
 
     /** @return list<ClassNode> */
@@ -127,11 +150,25 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->fileFunctions[] = $node->namespacedName->toString();
         }
 
+        if ($node instanceof ClassLike && $node->name instanceof Identifier) {
+            $this->startClassLikeAnalysis($node);
+        }
+
+        if ($node instanceof ClassMethod) {
+            $this->startMethodAnalysis($node);
+        }
+
+        $this->collectNodeAnalysis($node);
+
         return null;
     }
 
     public function leaveNode(Node $node): null
     {
+        if ($node instanceof ClassMethod) {
+            $this->finishMethodAnalysis($node);
+        }
+
         if (! $node instanceof ClassLike) {
             return null;
         }
@@ -141,6 +178,7 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         $this->fileClassLikes[] = $node;
+        array_pop($this->activeClassLikeIds);
 
         return null;
     }
@@ -152,9 +190,165 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->collectClassLike($fileClassLike);
         }
 
-        $this->fileClassLikes = [];
+        $this->fileClassLikes     = [];
+        $this->classLikeAnalysis  = [];
+        $this->activeClassLikeIds = [];
+        $this->activeMethodIds    = [];
+        $this->methodClassLikeIds = [];
 
         return null;
+    }
+
+    private function startClassLikeAnalysis(ClassLike $classLike): void
+    {
+        $classLikeId = spl_object_id($classLike);
+
+        $this->classLikeAnalysis[$classLikeId] = [
+            'dependencies'         => [],
+            'functionCallNames'    => [],
+            'superglobals'         => [],
+            'languageConstructs'   => [],
+            'complexityByMethodId' => [],
+        ];
+        $this->activeClassLikeIds[]            = $classLikeId;
+
+        foreach ($classLike->getMethods() as $classMethod) {
+            $this->methodClassLikeIds[spl_object_id($classMethod)] = $classLikeId;
+        }
+    }
+
+    private function startMethodAnalysis(ClassMethod $classMethod): void
+    {
+        $methodId = spl_object_id($classMethod);
+
+        if (! isset($this->methodClassLikeIds[$methodId])) {
+            return;
+        }
+
+        $classLikeId = $this->methodClassLikeIds[$methodId];
+
+        $this->activeMethodIds[] = $methodId;
+
+        $this->classLikeAnalysis[$classLikeId]['complexityByMethodId'][$methodId] = 1;
+    }
+
+    private function finishMethodAnalysis(ClassMethod $classMethod): void
+    {
+        if (! isset($this->methodClassLikeIds[spl_object_id($classMethod)])) {
+            return;
+        }
+
+        array_pop($this->activeMethodIds);
+    }
+
+    private function collectNodeAnalysis(Node $node): void
+    {
+        if ($this->activeClassLikeIds === []) {
+            return;
+        }
+
+        if ($node instanceof FullyQualified) {
+            $name = $node->toString();
+            if (! in_array(strtolower($name), ['true', 'false', 'null'], true)) {
+                $this->addDependency($name);
+            }
+        }
+
+        if (
+            $node instanceof FuncCall
+            && $node->name instanceof Name
+        ) {
+            $this->addFunctionCallName($node->name);
+        }
+
+        if ($node instanceof Exit_) {
+            $this->addLanguageConstruct(
+                $node->getAttribute('kind') === Exit_::KIND_DIE
+                    ? 'die'
+                    : 'exit'
+            );
+        }
+
+        if ($node instanceof Echo_) {
+            $this->addLanguageConstruct('echo');
+        }
+
+        if ($node instanceof Print_) {
+            $this->addLanguageConstruct('print');
+        }
+
+        if ($node instanceof Include_) {
+            $this->addLanguageConstruct(match ($node->type) {
+                Include_::TYPE_REQUIRE      => 'require',
+                Include_::TYPE_INCLUDE_ONCE => 'include_once',
+                Include_::TYPE_REQUIRE_ONCE => 'require_once',
+                default                     => 'include',
+            });
+        }
+
+        if ($node instanceof Isset_) {
+            $this->addLanguageConstruct('isset');
+        }
+
+        if ($node instanceof Empty_) {
+            $this->addLanguageConstruct('empty');
+        }
+
+        if ($node instanceof Unset_) {
+            $this->addLanguageConstruct('unset');
+        }
+
+        if ($node instanceof Eval_) {
+            $this->addLanguageConstruct('eval');
+        }
+
+        if ($node instanceof List_) {
+            $this->addLanguageConstruct('list');
+        }
+
+        if (
+            $node instanceof Variable
+            && is_string($node->name)
+            && in_array($node->name, self::SUPERGLOBALS, true)
+        ) {
+            $this->addSuperglobal('$' . $node->name);
+        }
+
+        if ($this->activeMethodIds !== [] && $this->isComplexityBranch($node)) {
+            foreach ($this->activeMethodIds as $activeMethodId) {
+                $classLikeId = $this->methodClassLikeIds[$activeMethodId];
+
+                $this->classLikeAnalysis[$classLikeId]['complexityByMethodId'][$activeMethodId]++;
+            }
+        }
+    }
+
+    private function addDependency(string $dependency): void
+    {
+        foreach ($this->activeClassLikeIds as $classLikeId) {
+            $this->classLikeAnalysis[$classLikeId]['dependencies'][] = $dependency;
+        }
+    }
+
+    private function addFunctionCallName(Name $functionCallName): void
+    {
+        foreach ($this->activeClassLikeIds as $classLikeId) {
+            $this->classLikeAnalysis[$classLikeId]['functionCallNames'][] = $functionCallName;
+        }
+    }
+
+    private function addSuperglobal(string $superglobal): void
+    {
+        foreach ($this->activeClassLikeIds as $classLikeId) {
+            $this->classLikeAnalysis[$classLikeId]['superglobals'][] = $superglobal;
+        }
+    }
+
+    private function addLanguageConstruct(string $languageConstruct): void
+    {
+        foreach ($this->activeClassLikeIds as $classLikeId) {
+            $this->classLikeAnalysis[$classLikeId]['languageConstructs'][] = $languageConstruct;
+        }
     }
 
     private function collectClassLike(ClassLike $classLike): void
@@ -292,193 +486,67 @@ final class ClassCollector extends NodeVisitorAbstract
      */
     private function collectClassLikeAnalysis(ClassLike $classLike): array
     {
-        $methodIds = [];
+        $analysis      = $this->classLikeAnalysis[spl_object_id($classLike)] ?? [
+            'dependencies'         => [],
+            'functionCallNames'    => [],
+            'superglobals'         => [],
+            'languageConstructs'   => [],
+            'complexityByMethodId' => [],
+        ];
+        $functionCalls = [];
 
-        foreach ($classLike->getMethods() as $classMethod) {
-            $methodIds[spl_object_id($classMethod)] = true;
+        foreach ($analysis['functionCallNames'] as $functionCallName) {
+            $functionCalls[] = $this->resolveFunctionName($functionCallName);
         }
 
-        $nodeTraverser = new NodeTraverser();
-        $visitor       = new class ($this->fileFunctions, $methodIds, self::SUPERGLOBALS) extends NodeVisitorAbstract {
-            /** @var string[] */
-            public array $dependencies = [];
-
-            /** @var string[] */
-            public array $functionCalls = [];
-
-            /** @var string[] */
-            public array $superglobals = [];
-
-            /** @var string[] */
-            public array $languageConstructs = [];
-
-            /** @var array<int, int> */
-            public array $complexityByMethodId = [];
-
-            /** @var list<int> */
-            private array $activeMethodIds = [];
-
-            /**
-             * @param string[]         $fileFunctions
-             * @param array<int, true> $methodIds
-             * @param string[]         $superglobalNames
-             */
-            public function __construct(
-                private readonly array $fileFunctions,
-                private readonly array $methodIds,
-                private readonly array $superglobalNames,
-            ) {
-            }
-
-            public function enterNode(Node $node): null
-            {
-                if ($node instanceof ClassMethod) {
-                    $methodId = spl_object_id($node);
-
-                    if (isset($this->methodIds[$methodId])) {
-                        $this->activeMethodIds[]               = $methodId;
-                        $this->complexityByMethodId[$methodId] = 1;
-                    }
-                }
-
-                if ($node instanceof FullyQualified) {
-                    $name = $node->toString();
-                    if (! in_array(strtolower($name), ['true', 'false', 'null'], true)) {
-                        $this->dependencies[] = $name;
-                    }
-                }
-
-                if (
-                    $node instanceof FuncCall
-                    && $node->name instanceof Name
-                ) {
-                    $this->functionCalls[] = $this->resolveFunctionName($node->name);
-                }
-
-                if ($node instanceof Exit_) {
-                    $this->languageConstructs[] = $node->getAttribute('kind') === Exit_::KIND_DIE
-                        ? 'die'
-                        : 'exit';
-                }
-
-                if ($node instanceof Echo_) {
-                    $this->languageConstructs[] = 'echo';
-                }
-
-                if ($node instanceof Print_) {
-                    $this->languageConstructs[] = 'print';
-                }
-
-                if ($node instanceof Include_) {
-                    $this->languageConstructs[] = match ($node->type) {
-                        Include_::TYPE_REQUIRE      => 'require',
-                        Include_::TYPE_INCLUDE_ONCE => 'include_once',
-                        Include_::TYPE_REQUIRE_ONCE => 'require_once',
-                        default                     => 'include',
-                    };
-                }
-
-                if ($node instanceof Isset_) {
-                    $this->languageConstructs[] = 'isset';
-                }
-
-                if ($node instanceof Empty_) {
-                    $this->languageConstructs[] = 'empty';
-                }
-
-                if ($node instanceof Unset_) {
-                    $this->languageConstructs[] = 'unset';
-                }
-
-                if ($node instanceof Eval_) {
-                    $this->languageConstructs[] = 'eval';
-                }
-
-                if ($node instanceof List_) {
-                    $this->languageConstructs[] = 'list';
-                }
-
-                if (
-                    $node instanceof Variable
-                    && is_string($node->name)
-                    && in_array($node->name, $this->superglobalNames, true)
-                ) {
-                    $this->superglobals[] = '$' . $node->name;
-                }
-
-                if ($this->activeMethodIds !== [] && $this->isComplexityBranch($node)) {
-                    foreach ($this->activeMethodIds as $activeMethodId) {
-                        $this->complexityByMethodId[$activeMethodId]++;
-                    }
-                }
-
-                return null;
-            }
-
-            public function leaveNode(Node $node): null
-            {
-                if (! $node instanceof ClassMethod) {
-                    return null;
-                }
-
-                $methodId = spl_object_id($node);
-
-                if (isset($this->methodIds[$methodId])) {
-                    array_pop($this->activeMethodIds);
-                }
-
-                return null;
-            }
-
-            private function resolveFunctionName(Name $name): string
-            {
-                $functionName = $name->toString();
-
-                if ($name instanceof FullyQualified) {
-                    return $functionName;
-                }
-
-                $namespacedName = $name->getAttribute('namespacedName');
-
-                if (
-                    $namespacedName instanceof Name
-                    && in_array($namespacedName->toString(), $this->fileFunctions, true)
-                ) {
-                    return $namespacedName->toString();
-                }
-
-                return $functionName;
-            }
-
-            private function isComplexityBranch(Node $node): bool
-            {
-                return $node instanceof If_
-                    || $node instanceof ElseIf_
-                    || $node instanceof For_
-                    || $node instanceof Foreach_
-                    || $node instanceof While_
-                    || $node instanceof Do_
-                    || $node instanceof Case_
-                    || $node instanceof Catch_
-                    || $node instanceof Ternary
-                    || $node instanceof BooleanAnd
-                    || $node instanceof BooleanOr
-                    || $node instanceof LogicalAnd
-                    || $node instanceof LogicalOr
-                    || $node instanceof Match_;
-            }
-        };
-
-        $nodeTraverser->addVisitor($visitor);
-        $nodeTraverser->traverse([$classLike]);
-
         return [
-            'dependencies'         => array_values(array_unique(array_merge($this->fileUses, $visitor->dependencies))),
-            'functionCalls'        => array_values(array_unique($visitor->functionCalls)),
-            'superglobals'         => array_values(array_unique($visitor->superglobals)),
-            'languageConstructs'   => array_values(array_unique($visitor->languageConstructs)),
-            'complexityByMethodId' => $visitor->complexityByMethodId,
+            'dependencies'         => array_values(array_unique(array_merge(
+                $this->fileUses,
+                $analysis['dependencies']
+            ))),
+            'functionCalls'        => array_values(array_unique($functionCalls)),
+            'superglobals'         => array_values(array_unique($analysis['superglobals'])),
+            'languageConstructs'   => array_values(array_unique($analysis['languageConstructs'])),
+            'complexityByMethodId' => $analysis['complexityByMethodId'],
         ];
+    }
+
+    private function resolveFunctionName(Name $name): string
+    {
+        $functionName = $name->toString();
+
+        if ($name instanceof FullyQualified) {
+            return $functionName;
+        }
+
+        $namespacedName = $name->getAttribute('namespacedName');
+
+        if (
+            $namespacedName instanceof Name
+            && in_array($namespacedName->toString(), $this->fileFunctions, true)
+        ) {
+            return $namespacedName->toString();
+        }
+
+        return $functionName;
+    }
+
+    private function isComplexityBranch(Node $node): bool
+    {
+        return $node instanceof If_
+            || $node instanceof ElseIf_
+            || $node instanceof For_
+            || $node instanceof Foreach_
+            || $node instanceof While_
+            || $node instanceof Do_
+            || $node instanceof Case_
+            || $node instanceof Catch_
+            || $node instanceof Ternary
+            || $node instanceof BooleanAnd
+            || $node instanceof BooleanOr
+            || $node instanceof LogicalAnd
+            || $node instanceof LogicalOr
+            || $node instanceof Match_;
     }
 
     /**
