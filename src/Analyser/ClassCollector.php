@@ -193,14 +193,14 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function startClassLikeAnalysis(ClassLike $classLike): void
     {
-        $classLikeId = spl_object_id($classLike);
-        $analysis    = new ClassLikeAnalysis();
+        $classLikeId       = spl_object_id($classLike);
+        $classLikeAnalysis = new ClassLikeAnalysis();
 
-        $this->classLikeAnalysis[$classLikeId] = $analysis;
-        $this->activeClassLikeAnalyses[]       = $analysis;
+        $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
+        $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
 
         foreach ($classLike->getMethods() as $classMethod) {
-            $this->methodClassLikeAnalyses[spl_object_id($classMethod)] = $analysis;
+            $this->methodClassLikeAnalyses[spl_object_id($classMethod)] = $classLikeAnalysis;
         }
     }
 
@@ -310,29 +310,29 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function addDependency(string $dependency): void
     {
-        foreach ($this->activeClassLikeAnalyses as $analysis) {
-            $analysis->dependencies[] = $dependency;
+        foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
+            $activeClassLikeAnalysis->dependencies[] = $dependency;
         }
     }
 
     private function addFunctionCallName(Name $functionCallName): void
     {
-        foreach ($this->activeClassLikeAnalyses as $analysis) {
-            $analysis->functionCallNames[] = $functionCallName;
+        foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
+            $activeClassLikeAnalysis->functionCallNames[] = $functionCallName;
         }
     }
 
     private function addSuperglobal(string $superglobal): void
     {
-        foreach ($this->activeClassLikeAnalyses as $analysis) {
-            $analysis->superglobals[] = $superglobal;
+        foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
+            $activeClassLikeAnalysis->superglobals[] = $superglobal;
         }
     }
 
     private function addLanguageConstruct(string $languageConstruct): void
     {
-        foreach ($this->activeClassLikeAnalyses as $analysis) {
-            $analysis->languageConstructs[] = $languageConstruct;
+        foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
+            $activeClassLikeAnalysis->languageConstructs[] = $languageConstruct;
         }
     }
 
