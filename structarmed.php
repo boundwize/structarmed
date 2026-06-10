@@ -7,6 +7,41 @@ use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 
 return Architecture::define()
+    ->layer('Analyser', 'src/Analyser/')
+    ->layer('Baseline', 'src/Baseline/')
+    ->layer('Cache', 'src/Cache/')
+    ->layer('Cli', 'src/Cli/')
+    ->layer('Composer', 'src/Composer/')
+    ->layer('Config', 'src/Config/')
+    ->layer('Core', [
+        'src/Architecture.php',
+        'src/Version.php',
+    ])
+    ->layer('Exception', 'src/Exception/')
+    ->layer('LayerResolver', 'src/LayerResolver/')
+    ->layer('PHPUnit', 'src/PHPUnit/')
+    ->layer('Preset', 'src/Preset/')
+    ->layer('Progress', 'src/Progress/')
+    ->layer('Report', 'src/Report/')
+    ->layer('Rule', 'src/Rule/')
+    ->layer('Util', 'src/Util/')
+    ->ruleset([
+        'Analyser'      => ['Cache', 'Composer', 'Core', 'LayerResolver', 'Progress', 'Rule', 'Util'],
+        'Baseline'      => ['Core', 'Rule', 'Util'],
+        'Cache'         => ['Analyser', 'Core', 'Rule'],
+        'Cli'           => ['Analyser', 'Baseline', 'Cache', 'Config', 'Core', 'Progress', 'Report', 'Rule'],
+        'Composer'      => [],
+        'Config'        => ['Core'],
+        'Core'          => ['Exception', 'Preset', 'Rule'],
+        'Exception'     => [],
+        'LayerResolver' => [],
+        'PHPUnit'       => ['Analyser', 'Baseline', 'Cache', 'Config', 'Exception', 'Progress', 'Report', 'Rule'],
+        'Preset'        => ['Core', 'Rule'],
+        'Progress'      => ['Cli'],
+        'Report'        => ['Cli', 'Core', 'Rule'],
+        'Rule'          => ['Analyser', 'Composer', 'Core', 'Util'],
+        'Util'          => [],
+    ])
     ->skip([
         'tests/Fixtures/',
         Psr1Preset::METHODS_MUST_BE_CAMEL_CASE                   => [
