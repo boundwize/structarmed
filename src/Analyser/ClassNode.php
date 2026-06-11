@@ -29,6 +29,7 @@ final readonly class ClassNode
      * @param string[]       $superglobals        Superglobals accessed ($_GET, $_POST, etc.)
      * @param string[]       $languageConstructs  Language constructs used (exit, die, etc.)
      * @param list<string>   $layers              All layer names this class belongs to; defaults to [$layer]
+     * @param string[]       $interfaceExtends    Interface names this interface extends
      */
     public function __construct(
         public string $className,
@@ -52,6 +53,7 @@ final readonly class ClassNode
         public array $languageConstructs = [],
         array $layers = [],
         public bool $isEnum = false,
+        public array $interfaceExtends = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
@@ -109,6 +111,11 @@ final readonly class ClassNode
     public function implementsInterface(string $interface): bool
     {
         return in_array($interface, $this->implements, true);
+    }
+
+    public function extendsInterface(string $interface): bool
+    {
+        return in_array($interface, $this->interfaceExtends, true);
     }
 
     public function callsFunction(string $function): bool

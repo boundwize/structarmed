@@ -648,6 +648,100 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testClassNodesPreserveInterfaceExtends(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Middleware.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php interface Middleware extends BaseMiddleware {}');
+
+        $classNodes = [
+            new ClassNode(
+                className:        'App\Middleware',
+                file:             $sourceFile,
+                line:             1,
+                layer:            'Source',
+                extends:          null,
+                isAbstract:       false,
+                isFinal:          false,
+                isInterface:      true,
+                isReadonly:       false,
+                interfaceExtends: ['App\BaseMiddleware'],
+            ),
+        ];
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertSame(['App\BaseMiddleware'], $loaded[0]->interfaceExtends);
+            $this->assertEquals($classNodes, $loaded);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClassNodesLoadOldCachePayloadWithoutInterfaceExtends(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $this->writeCachePayload($cacheDirectory, [
+                'metadata' => [
+                    'namespace' => 'config',
+                    'file'      => $sourceFile,
+                    'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
+                ],
+                'nodes'    => [
+                    [
+                        'className'          => Foo::class,
+                        'file'               => $sourceFile,
+                        'line'               => 1,
+                        'layer'              => 'Source',
+                        'extends'            => null,
+                        'isAbstract'         => false,
+                        'isFinal'            => true,
+                        'isInterface'        => false,
+                        'isTrait'            => false,
+                        'isEnum'             => false,
+                        'isReadonly'         => false,
+                        'dependencies'       => [],
+                        'implements'         => [],
+                        'traits'             => [],
+                        'methods'            => [],
+                        'constants'          => [],
+                        'properties'         => [],
+                        'functionCalls'      => [],
+                        'superglobals'       => [],
+                        'languageConstructs' => [],
+                        'layers'             => [],
+                    ],
+                ],
+            ], 'class-nodes-' . hash('xxh128', "config\0" . $sourceFile) . '.json');
+
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertSame([], $loaded[0]->interfaceExtends);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testClassNodesPreserveMethodExplicitVisibility(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
@@ -978,6 +1072,36 @@ final class AnalysisResultCacheTest extends TestCase
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'node has invalid interfaceExtends field' => [
+            [
+                'nodes' => [
+                    [
+                        'className'          => Foo::class,
+                        'file'               => __FILE__,
+                        'line'               => 1,
+                        'layer'              => null,
+                        'extends'            => null,
+                        'isAbstract'         => false,
+                        'isFinal'            => true,
+                        'isInterface'        => false,
+                        'isTrait'            => false,
+                        'isEnum'             => false,
+                        'isReadonly'         => false,
+                        'dependencies'       => [],
+                        'implements'         => [],
+                        'interfaceExtends'   => [10],
+                        'traits'             => [],
+                        'constants'          => [],
+                        'properties'         => [],
+                        'methods'            => [],
+                        'functionCalls'      => [],
+                        'superglobals'       => [],
+                        'languageConstructs' => [],
+                        'layers'             => [],
                     ],
                 ],
             ],

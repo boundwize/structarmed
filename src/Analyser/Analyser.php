@@ -418,7 +418,10 @@ final class Analyser
 
         foreach ($classNodes as $classNode) {
             $dependencyMap[$classNode->className] = $classNode->dependencies;
-            $dependencies                         = $classNode->implements;
+            $dependencies                         = [
+                ...$classNode->implements,
+                ...$classNode->interfaceExtends,
+            ];
 
             if ($classNode->extends !== null) {
                 $dependencies[] = $classNode->extends;

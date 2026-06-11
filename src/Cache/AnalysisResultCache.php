@@ -329,6 +329,7 @@ final readonly class AnalysisResultCache
             'isReadonly'         => $classNode->isReadonly,
             'dependencies'       => $classNode->dependencies,
             'implements'         => array_values($classNode->implements),
+            'interfaceExtends'   => array_values($classNode->interfaceExtends),
             'traits'             => array_values($classNode->traits),
             'methods'            => array_map($this->methodNodeToArray(...), $classNode->methods),
             'constants'          => array_map($this->constantNodeToArray(...), $classNode->constants),
@@ -362,6 +363,7 @@ final readonly class AnalysisResultCache
         $isReadonly         = $node['isReadonly'] ?? null;
         $dependencies       = $node['dependencies'] ?? null;
         $implements         = $node['implements'] ?? null;
+        $interfaceExtends   = $node['interfaceExtends'] ?? [];
         $traits             = $node['traits'] ?? [];
         $rawMethods         = $node['methods'] ?? null;
         $rawConstants       = $node['constants'] ?? null;
@@ -385,6 +387,7 @@ final readonly class AnalysisResultCache
             || ! is_bool($isReadonly)
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($implements)
+            || ! $this->isStringArray($interfaceExtends)
             || ! $this->isStringArray($traits)
             || ! is_array($rawMethods)
             || ! is_array($rawConstants)
@@ -446,27 +449,28 @@ final readonly class AnalysisResultCache
         }
 
         return new ClassNode(
-            className:     $className,
-            file:          $file,
-            line:          $line,
-            layer:         $layer,
-            extends:       $extends,
-            isAbstract:    $isAbstract,
-            isFinal:       $isFinal,
-            isInterface:   $isInterface,
-            isReadonly:    $isReadonly,
-            isTrait:       $isTrait,
-            dependencies:  array_values($dependencies),
-            implements:    array_values($implements),
-            traits:        array_values($traits),
-            methods:       $methods,
-            constants:     $constants,
-            properties:    $properties,
+            className:          $className,
+            file:               $file,
+            line:               $line,
+            layer:              $layer,
+            extends:            $extends,
+            isAbstract:         $isAbstract,
+            isFinal:            $isFinal,
+            isInterface:        $isInterface,
+            isReadonly:         $isReadonly,
+            isTrait:            $isTrait,
+            dependencies:       array_values($dependencies),
+            implements:         array_values($implements),
+            traits:             array_values($traits),
+            methods:            $methods,
+            constants:          $constants,
+            properties:         $properties,
             functionCalls:      array_values($functionCalls),
             superglobals:       array_values($superglobals),
             languageConstructs: array_values($languageConstructs),
             layers:             array_values($layers),
-            isEnum:        $isEnum,
+            isEnum:             $isEnum,
+            interfaceExtends:   array_values($interfaceExtends),
         );
     }
 

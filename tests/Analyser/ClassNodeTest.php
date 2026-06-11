@@ -102,11 +102,13 @@ final class ClassNodeTest extends TestCase
             functionCalls:      ['var_dump'],
             superglobals:       ['$_SERVER'],
             languageConstructs: ['exit'],
+            interfaceExtends:   ['App\\Contracts\\BaseOrderService'],
         );
 
         $this->assertTrue($classNode->dependsOnNamespace('App\\Infrastructure'));
         $this->assertFalse($classNode->dependsOnNamespace('App\\Application'));
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\OrderService'));
+        $this->assertTrue($classNode->extendsInterface('App\\Contracts\\BaseOrderService'));
         $this->assertTrue($classNode->callsFunction('var_dump'));
         $this->assertTrue($classNode->accessesSuperglobals());
         $this->assertTrue($classNode->usesLanguageConstruct('exit'));
