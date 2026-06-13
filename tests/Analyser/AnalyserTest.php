@@ -1444,6 +1444,75 @@ final class AnalyserTest extends TestCase
         $this->assertStringContainsString('App\\Pager\\PagerInterface', $violations[0]->message);
     }
 
+    public function testAnalyserRulesetReportsInheritedDependenciesFromSharedParent(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/BaseController.php'   => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                abstract class BaseController
+                {
+                    public function __construct(protected QueryBuilder $db) {}
+                }
+                PHP,
+            'src/HTTP/CreateController.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class CreateController extends BaseController
+                {
+                }
+                PHP,
+            'src/HTTP/EditController.php'   => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class EditController extends BaseController
+                {
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $classes    = array_map(
+            static fn(RuleViolation $ruleViolation): string => $ruleViolation->className,
+            $violations
+        );
+        sort($classes);
+
+        $this->assertSame([
+            'App\\HTTP\\BaseController',
+            'App\\HTTP\\CreateController',
+            'App\\HTTP\\EditController',
+        ], $classes);
+
+        foreach ($violations as $violation) {
+            $this->assertStringContainsString('App\\Database\\QueryBuilder', $violation->message);
+        }
+    }
+
     public function testAnalyserRulesetStopsResolvingCyclicInheritanceDependencies(): void
     {
         $basePath = $this->makeTempProject([
