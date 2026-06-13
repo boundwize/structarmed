@@ -1513,6 +1513,74 @@ final class AnalyserTest extends TestCase
         }
     }
 
+    public function testAnalyserRulesetKeepsInheritedDependencyViolationOrderWhenResultsAreReused(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/BaseController.php'   => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\Connection;
+                use App\Database\QueryBuilder;
+
+                abstract class BaseController
+                {
+                    public function __construct(
+                        protected Connection $connection,
+                        protected QueryBuilder $queryBuilder,
+                    ) {}
+                }
+                PHP,
+            'src/HTTP/FirstController.php'  => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class FirstController extends BaseController
+                {
+                }
+                PHP,
+            'src/HTTP/SecondController.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class SecondController extends BaseController
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            ['src/'],
+            null,
+            AnalyserOptions::sequential(),
+            [
+                $basePath . '/src/HTTP/BaseController.php',
+                $basePath . '/src/HTTP/FirstController.php',
+                $basePath . '/src/HTTP/SecondController.php',
+            ]
+        );
+
+        $secondControllerViolations = [];
+        foreach ($ruleViolationCollection->forRule('ruleset.HTTP') as $ruleViolation) {
+            if ($ruleViolation->className === 'App\\HTTP\\SecondController') {
+                $secondControllerViolations[] = $ruleViolation;
+            }
+        }
+
+        $this->assertCount(2, $secondControllerViolations);
+        $this->assertStringContainsString('App\\Database\\Connection', $secondControllerViolations[0]->message);
+        $this->assertStringContainsString('App\\Database\\QueryBuilder', $secondControllerViolations[1]->message);
+    }
+
     public function testAnalyserRulesetStopsResolvingCyclicInheritanceDependencies(): void
     {
         $basePath = $this->makeTempProject([
