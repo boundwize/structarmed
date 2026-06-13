@@ -574,10 +574,7 @@ final class Analyser
         array $seen,
         bool &$cycleDetected
     ): array {
-        if (
-            isset($parentClassCache[$className])
-            && $this->cachedParentsCanBeUsed($parentClassCache[$className], $seen)
-        ) {
+        if (isset($parentClassCache[$className])) {
             return $parentClassCache[$className];
         }
 
@@ -631,10 +628,7 @@ final class Analyser
         array $seen,
         bool &$cycleDetected
     ): array {
-        if (
-            isset($parentInterfaceCache[$className])
-            && $this->cachedParentsCanBeUsed($parentInterfaceCache[$className], $seen)
-        ) {
+        if (isset($parentInterfaceCache[$className])) {
             return $parentInterfaceCache[$className];
         }
 
@@ -694,22 +688,6 @@ final class Analyser
 
         return $parentInterfaces;
     }
-
-    /**
-     * @param list<string>        $cachedParents
-     * @param array<string, true> $seen
-     */
-    private function cachedParentsCanBeUsed(array $cachedParents, array $seen): bool
-    {
-        foreach ($cachedParents as $cachedParent) {
-            if (isset($seen[$cachedParent])) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     /**
      * @param list<string> $files
      * @param array<string, string|list<string>> $layers

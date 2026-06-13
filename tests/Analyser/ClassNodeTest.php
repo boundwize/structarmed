@@ -120,6 +120,29 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->usesLanguageConstruct('eval'));
     }
 
+    public function testSetRecursiveParents(): void
+    {
+        $classNode = new ClassNode(
+            className:   'App\\Domain\\OrderService',
+            file:        '/src/OrderService.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     false,
+            isInterface: false,
+            isReadonly:  false,
+        );
+
+        $classNode->setRecursiveParents(
+            ['App\\Support\\BaseOrderService'],
+            ['App\\Contracts\\OrderService'],
+        );
+
+        $this->assertSame(['App\\Support\\BaseOrderService'], $classNode->parentClasses);
+        $this->assertSame(['App\\Contracts\\OrderService'], $classNode->parentInterfaces);
+    }
+
     public function testDependsOnMatchesExistingClassesExactly(): void
     {
         $classNode = new ClassNode(

@@ -1401,6 +1401,37 @@ final class AnalyserTest extends TestCase
         $this->assertSame(['App\\HTTP\\First', 'App\\HTTP\\Second'], $classes);
     }
 
+    public function testAnalyserStopsResolvingCyclicInterfaceParents(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Contracts/First.php'  => <<<'PHP'
+                <?php
+
+                namespace App\Contracts;
+
+                interface First extends Second
+                {
+                }
+                PHP,
+            'src/Contracts/Second.php' => <<<'PHP'
+                <?php
+
+                namespace App\Contracts;
+
+                interface Second extends First
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     public function testAnalyserRulesetAllowsSameLayerDependencies(): void
     {
         $basePath = $this->makeTempProject([
