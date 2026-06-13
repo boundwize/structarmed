@@ -29,6 +29,7 @@ use function array_fill_keys;
 use function array_filter;
 use function array_intersect;
 use function array_key_exists;
+use function array_keys;
 use function array_merge;
 use function array_unique;
 use function array_values;
@@ -526,13 +527,19 @@ final class Analyser
             $parentClassMap[$classNode->className]     = $classNode->extends !== null
                 ? [$classNode->extends]
                 : [];
-            $parentInterfaceMap[$classNode->className] = array_values(array_unique([
-                ...$classNode->implements,
-                ...$classNode->interfaceExtends,
-            ]));
+            $parentInterfaceMap[$classNode->className] = $classNode->interfaceExtends !== []
+                ? array_values(array_unique([...$classNode->implements, ...$classNode->interfaceExtends]))
+                : $classNode->implements;
         }
 
         foreach ($classNodes as $classNode) {
+            if (
+                $parentClassMap[$classNode->className] === []
+                && $parentInterfaceMap[$classNode->className] === []
+            ) {
+                continue;
+            }
+
             $classCycleDetected     = false;
             $interfaceCycleDetected = false;
             $parentClasses          = $this->recursiveParentClasses(
@@ -578,8 +585,8 @@ final class Analyser
             return $parentClassCache[$className];
         }
 
-        $parentClasses = [];
-        $hasCycle      = false;
+        $parentClassesSet = [];
+        $hasCycle         = false;
 
         foreach ($parentClassMap[$className] ?? [] as $parentClass) {
             if (isset($seen[$parentClass])) {
@@ -587,22 +594,25 @@ final class Analyser
                 continue;
             }
 
-            $childHasCycle = false;
-            $parentClasses = [
-                ...$parentClasses,
-                $parentClass,
-                ...$this->recursiveParentClasses(
+            $childHasCycle                  = false;
+            $parentClassesSet[$parentClass] = true;
+
+            foreach (
+                $this->recursiveParentClasses(
                     $parentClass,
                     $parentClassMap,
                     $parentClassCache,
                     $seen + [$parentClass => true],
                     $childHasCycle
-                ),
-            ];
-            $hasCycle      = $hasCycle || $childHasCycle;
+                ) as $ancestor
+            ) {
+                $parentClassesSet[$ancestor] = true;
+            }
+
+            $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        $parentClasses = array_values(array_unique($parentClasses));
+        $parentClasses = array_keys($parentClassesSet);
 
         if (! $hasCycle) {
             $parentClassCache[$className] = $parentClasses;
@@ -632,8 +642,8 @@ final class Analyser
             return $parentInterfaceCache[$className];
         }
 
-        $parentInterfaces = [];
-        $hasCycle         = false;
+        $parentInterfacesSet = [];
+        $hasCycle            = false;
 
         foreach ($parentInterfaceMap[$className] ?? [] as $parentInterface) {
             if (isset($seen[$parentInterface])) {
@@ -641,20 +651,23 @@ final class Analyser
                 continue;
             }
 
-            $childHasCycle    = false;
-            $parentInterfaces = [
-                ...$parentInterfaces,
-                $parentInterface,
-                ...$this->recursiveParentInterfaces(
+            $childHasCycle                         = false;
+            $parentInterfacesSet[$parentInterface] = true;
+
+            foreach (
+                $this->recursiveParentInterfaces(
                     $parentInterface,
                     $parentClassMap,
                     $parentInterfaceMap,
                     $parentInterfaceCache,
                     $seen + [$parentInterface => true],
                     $childHasCycle
-                ),
-            ];
-            $hasCycle         = $hasCycle || $childHasCycle;
+                ) as $ancestor
+            ) {
+                $parentInterfacesSet[$ancestor] = true;
+            }
+
+            $hasCycle = $hasCycle || $childHasCycle;
         }
 
         foreach ($parentClassMap[$className] ?? [] as $parentClass) {
@@ -663,22 +676,25 @@ final class Analyser
                 continue;
             }
 
-            $childHasCycle    = false;
-            $parentInterfaces = [
-                ...$parentInterfaces,
-                ...$this->recursiveParentInterfaces(
+            $childHasCycle = false;
+
+            foreach (
+                $this->recursiveParentInterfaces(
                     $parentClass,
                     $parentClassMap,
                     $parentInterfaceMap,
                     $parentInterfaceCache,
                     $seen + [$parentClass => true],
                     $childHasCycle
-                ),
-            ];
-            $hasCycle         = $hasCycle || $childHasCycle;
+                ) as $ancestor
+            ) {
+                $parentInterfacesSet[$ancestor] = true;
+            }
+
+            $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        $parentInterfaces = array_values(array_unique($parentInterfaces));
+        $parentInterfaces = array_keys($parentInterfacesSet);
 
         if (! $hasCycle) {
             $parentInterfaceCache[$className] = $parentInterfaces;
