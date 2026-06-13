@@ -20,12 +20,12 @@ final class BufferedWorkerProgressHandlerTest extends TestCase
         $stream = fopen('php://memory', 'w+');
         $this->assertNotFalse($stream);
 
-        $progressHandler = new BufferedWorkerProgressHandler($stream);
+        $bufferedWorkerProgressHandler = new BufferedWorkerProgressHandler($stream);
 
-        $progressHandler->start(2);
-        $progressHandler->advance('/path/Foo.php');
-        $progressHandler->advance('/path/Bar.php');
-        $progressHandler->finish();
+        $bufferedWorkerProgressHandler->start(2);
+        $bufferedWorkerProgressHandler->advance('/path/Foo.php');
+        $bufferedWorkerProgressHandler->advance('/path/Bar.php');
+        $bufferedWorkerProgressHandler->finish();
 
         rewind($stream);
 
