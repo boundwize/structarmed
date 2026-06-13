@@ -529,7 +529,7 @@ final class Analyser
                 : [];
             $parentInterfaceMap[$classNode->className] = $classNode->interfaceExtends !== []
                 ? array_values(array_unique([...$classNode->implements, ...$classNode->interfaceExtends]))
-                : $classNode->implements;
+                : array_values($classNode->implements);
         }
 
         foreach ($classNodes as $classNode) {
