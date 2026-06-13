@@ -688,6 +688,7 @@ final class Analyser
 
         return $parentInterfaces;
     }
+
     /**
      * @param list<string> $files
      * @param array<string, string|list<string>> $layers
