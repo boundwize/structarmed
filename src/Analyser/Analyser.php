@@ -518,10 +518,9 @@ final class Analyser
      */
     private function withRecursiveParents(array $classNodes): array
     {
-        $parentClassMap       = [];
-        $parentInterfaceMap   = [];
-        $parentClassCache     = [];
-        $parentInterfaceCache = [];
+        $parentClassMap     = [];
+        $parentInterfaceMap = [];
+        $parentsCache       = [];
 
         foreach ($classNodes as $classNode) {
             $parentClassMap[$classNode->className]     = $classNode->extends !== null
@@ -540,49 +539,48 @@ final class Analyser
                 continue;
             }
 
-            $classCycleDetected     = false;
-            $interfaceCycleDetected = false;
-            $parentClasses          = $this->recursiveParentClasses(
-                $classNode->className,
-                $parentClassMap,
-                $parentClassCache,
-                [$classNode->className => true],
-                $classCycleDetected
-            );
-            $parentInterfaces       = $this->recursiveParentInterfaces(
+            $cycleDetected = false;
+            $result        = $this->recursiveParents(
                 $classNode->className,
                 $parentClassMap,
                 $parentInterfaceMap,
-                $parentInterfaceCache,
+                $parentsCache,
                 [$classNode->className => true],
-                $interfaceCycleDetected
+                $cycleDetected
             );
 
-            $classNode->setRecursiveParents($parentClasses, $parentInterfaces);
+            $classNode->setRecursiveParents($result['classes'], $result['interfaces']);
         }
 
         return $classNodes;
     }
 
     /**
-     * @param array<string, list<string>> $parentClassMap
-     * @param array<string, list<string>> $parentClassCache
-     * @param array<string, true>         $seen
-     * @return list<string>
+     * Single DFS that collects both ancestor classes and transitively implemented/extended
+     * interfaces in one pass, avoiding the double traversal of the parent-class chain that
+     * the previous two-method approach required.
+     *
+     * @param array<string, list<string>>                                        $parentClassMap
+     * @param array<string, list<string>>                                        $parentInterfaceMap
+     * @param array<string, array{classes: list<string>, interfaces: list<string>}> $cache
+     * @param array<string, true>                                                $seen
+     * @return array{classes: list<string>, interfaces: list<string>}
      */
-    private function recursiveParentClasses(
+    private function recursiveParents(
         string $className,
         array $parentClassMap,
-        array &$parentClassCache,
+        array $parentInterfaceMap,
+        array &$cache,
         array $seen,
         bool &$cycleDetected
     ): array {
-        if (isset($parentClassCache[$className])) {
-            return $parentClassCache[$className];
+        if (isset($cache[$className])) {
+            return $cache[$className];
         }
 
-        $parentClassesSet = [];
-        $hasCycle         = false;
+        $classesSet    = [];
+        $interfacesSet = [];
+        $hasCycle      = false;
 
         foreach ($parentClassMap[$className] ?? [] as $parentClass) {
             if (isset($seen[$parentClass])) {
@@ -590,56 +588,27 @@ final class Analyser
                 continue;
             }
 
-            $childHasCycle                  = false;
-            $parentClassesSet[$parentClass] = true;
+            $childHasCycle            = false;
+            $classesSet[$parentClass] = true;
+            $result                   = $this->recursiveParents(
+                $parentClass,
+                $parentClassMap,
+                $parentInterfaceMap,
+                $cache,
+                $seen + [$parentClass => true],
+                $childHasCycle
+            );
 
-            foreach (
-                $this->recursiveParentClasses(
-                    $parentClass,
-                    $parentClassMap,
-                    $parentClassCache,
-                    $seen + [$parentClass => true],
-                    $childHasCycle
-                ) as $ancestor
-            ) {
-                $parentClassesSet[$ancestor] = true;
+            foreach ($result['classes'] as $ancestor) {
+                $classesSet[$ancestor] = true;
+            }
+
+            foreach ($result['interfaces'] as $iface) {
+                $interfacesSet[$iface] = true;
             }
 
             $hasCycle = $hasCycle || $childHasCycle;
         }
-
-        $parentClasses = array_keys($parentClassesSet);
-
-        if (! $hasCycle) {
-            $parentClassCache[$className] = $parentClasses;
-        }
-
-        $cycleDetected = $cycleDetected || $hasCycle;
-
-        return $parentClasses;
-    }
-
-    /**
-     * @param array<string, list<string>> $parentClassMap
-     * @param array<string, list<string>> $parentInterfaceMap
-     * @param array<string, list<string>> $parentInterfaceCache
-     * @param array<string, true>         $seen
-     * @return list<string>
-     */
-    private function recursiveParentInterfaces(
-        string $className,
-        array $parentClassMap,
-        array $parentInterfaceMap,
-        array &$parentInterfaceCache,
-        array $seen,
-        bool &$cycleDetected
-    ): array {
-        if (isset($parentInterfaceCache[$className])) {
-            return $parentInterfaceCache[$className];
-        }
-
-        $parentInterfacesSet = [];
-        $hasCycle            = false;
 
         foreach ($parentInterfaceMap[$className] ?? [] as $parentInterface) {
             if (isset($seen[$parentInterface])) {
@@ -647,58 +616,36 @@ final class Analyser
                 continue;
             }
 
-            $childHasCycle                         = false;
-            $parentInterfacesSet[$parentInterface] = true;
+            $childHasCycle                   = false;
+            $interfacesSet[$parentInterface] = true;
+            $result                          = $this->recursiveParents(
+                $parentInterface,
+                $parentClassMap,
+                $parentInterfaceMap,
+                $cache,
+                $seen + [$parentInterface => true],
+                $childHasCycle
+            );
 
-            foreach (
-                $this->recursiveParentInterfaces(
-                    $parentInterface,
-                    $parentClassMap,
-                    $parentInterfaceMap,
-                    $parentInterfaceCache,
-                    $seen + [$parentInterface => true],
-                    $childHasCycle
-                ) as $ancestor
-            ) {
-                $parentInterfacesSet[$ancestor] = true;
+            foreach ($result['interfaces'] as $ancestor) {
+                $interfacesSet[$ancestor] = true;
             }
 
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        foreach ($parentClassMap[$className] ?? [] as $parentClass) {
-            if (isset($seen[$parentClass])) {
-                $hasCycle = true;
-                continue;
-            }
-
-            $childHasCycle = false;
-
-            foreach (
-                $this->recursiveParentInterfaces(
-                    $parentClass,
-                    $parentClassMap,
-                    $parentInterfaceMap,
-                    $parentInterfaceCache,
-                    $seen + [$parentClass => true],
-                    $childHasCycle
-                ) as $ancestor
-            ) {
-                $parentInterfacesSet[$ancestor] = true;
-            }
-
-            $hasCycle = $hasCycle || $childHasCycle;
-        }
-
-        $parentInterfaces = array_keys($parentInterfacesSet);
+        $result = [
+            'classes'    => array_keys($classesSet),
+            'interfaces' => array_keys($interfacesSet),
+        ];
 
         if (! $hasCycle) {
-            $parentInterfaceCache[$className] = $parentInterfaces;
+            $cache[$className] = $result;
         }
 
         $cycleDetected = $cycleDetected || $hasCycle;
 
-        return $parentInterfaces;
+        return $result;
     }
 
     /**
