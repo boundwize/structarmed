@@ -9,7 +9,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use function fflush;
 use function fwrite;
 
-final readonly class BufferedWorkerProgressHandler implements ProgressHandlerInterface
+final readonly class WorkerProgressHandler implements ProgressHandlerInterface
 {
     /** @param resource $stream */
     public function __construct(private mixed $stream)

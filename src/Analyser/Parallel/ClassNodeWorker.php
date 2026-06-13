@@ -49,7 +49,7 @@ final readonly class ClassNodeWorker
 
             $stream = $outputStream ?? STDOUT;
 
-            $progressHandler = $emitProgress ? new BufferedWorkerProgressHandler($stream) : null;
+            $progressHandler = $emitProgress ? new WorkerProgressHandler($stream) : null;
 
             $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
 
