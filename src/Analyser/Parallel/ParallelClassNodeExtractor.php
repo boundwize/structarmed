@@ -11,7 +11,6 @@ use RuntimeException;
 use function array_fill;
 use function array_key_exists;
 use function array_keys;
-use function array_merge;
 use function array_search;
 use function arsort;
 use function assert;
@@ -199,7 +198,10 @@ final readonly class ParallelClassNodeExtractor
 
                     /** @var list<ClassNode> $workerNodes */
                     $workerNodes = $result['nodes'];
-                    $nodes       = array_merge($nodes, $workerNodes);
+
+                    foreach ($workerNodes as $workerNode) {
+                        $nodes[] = $workerNode;
+                    }
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
                 } finally {
