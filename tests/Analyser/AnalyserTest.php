@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
+use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Preset\Preset;
@@ -28,11 +29,13 @@ use function dirname;
 use function file_put_contents;
 use function is_dir;
 use function mkdir;
+use function realpath;
 use function sort;
 use function str_replace;
 use function symlink;
 
 #[CoversClass(Analyser::class)]
+#[CoversClass(ParallelClassNodeExtractor::class)]
 final class AnalyserTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
@@ -545,6 +548,59 @@ final class AnalyserTest extends TestCase
 
         $this->assertSame(2, $progress->total);
         $this->assertCount(2, $progress->files);
+        $this->assertTrue($progress->finished);
+    }
+
+    public function testAnalyserReportsProgressFromParallelWorkers(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; final class Foo {}',
+            'src/Bar.php' => '<?php namespace App; final class Bar {}',
+        ]);
+        $progress = new class implements ProgressHandlerInterface {
+            public int $total = 0;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public bool $finished = false;
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+                $this->finished = true;
+            }
+        };
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        (new Analyser($basePath))->analyse(
+            $architecture,
+            [],
+            $progress,
+            AnalyserOptions::parallel(2)
+        );
+
+        $fooFile       = realpath($basePath . '/src/Foo.php');
+        $barFile       = realpath($basePath . '/src/Bar.php');
+        $progressFiles = array_map($this->normalisePath(...), $progress->files);
+
+        $this->assertIsString($fooFile);
+        $this->assertIsString($barFile);
+        $this->assertSame(2, $progress->total);
+        $this->assertCount(2, $progressFiles);
+        $this->assertContains($this->normalisePath($fooFile), $progressFiles);
+        $this->assertContains($this->normalisePath($barFile), $progressFiles);
         $this->assertTrue($progress->finished);
     }
 
