@@ -8,7 +8,6 @@ use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Throwable;
 
-use function count;
 use function file_get_contents;
 use function file_put_contents;
 use function is_array;
