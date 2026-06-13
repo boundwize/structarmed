@@ -1397,6 +1397,53 @@ final class AnalyserTest extends TestCase
         $this->assertStringContainsString('App\\Pager\\PagerInterface', $violations[0]->message);
     }
 
+    public function testAnalyserRulesetReportsDependenciesInheritedFromInterfaceExtends(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/ResponseInterface.php'     => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                interface ResponseInterface extends \App\Shared\PagerAwareInterface
+                {
+                }
+                PHP,
+            'src/Shared/PagerAwareInterface.php' => <<<'PHP'
+                <?php
+
+                namespace App\Shared;
+
+                interface PagerAwareInterface
+                {
+                    public function setLink(\App\Pager\PagerInterface $pager): void;
+                }
+                PHP,
+            'src/Pager/PagerInterface.php'       => <<<'PHP'
+                <?php
+
+                namespace App\Pager;
+
+                interface PagerInterface
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Shared', '/^App\\\\Shared\\\\.*$/')
+            ->layerPattern('Pager', '/^App\\\\Pager\\\\.*$/')
+            ->ruleset(['HTTP' => ['Shared']]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+        $violations              = $ruleViolationCollection->forRule('ruleset.HTTP');
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\HTTP\\ResponseInterface', $violations[0]->className);
+        $this->assertStringContainsString('App\\Pager\\PagerInterface', $violations[0]->message);
+    }
+
     public function testAnalyserRulesetStopsResolvingCyclicInheritanceDependencies(): void
     {
         $basePath = $this->makeTempProject([
