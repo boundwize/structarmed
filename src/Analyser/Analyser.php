@@ -128,6 +128,7 @@ final class Analyser
             $chainLayerResolver,
             $analyserOptions ?? AnalyserOptions::parallel()
         );
+        $classNodes = $this->withRecursiveParents($classNodes);
 
         // Evaluate declarative ruleset alongside class rules, but buffer its
         // violations so report ordering remains class rules before ruleset.
@@ -508,6 +509,142 @@ final class Analyser
         }
 
         return array_values(array_unique($resolvedDependencies));
+    }
+
+    /**
+     * @param list<ClassNode> $classNodes
+     * @return list<ClassNode>
+     */
+    private function withRecursiveParents(array $classNodes): array
+    {
+        $parentClassMap     = [];
+        $parentInterfaceMap = [];
+
+        foreach ($classNodes as $classNode) {
+            $parentClassMap[$classNode->className]     = $classNode->extends !== null
+                ? [$classNode->extends]
+                : [];
+            $parentInterfaceMap[$classNode->className] = array_values(array_unique([
+                ...$classNode->implements,
+                ...$classNode->interfaceExtends,
+            ]));
+        }
+
+        $resolvedClassNodes = [];
+
+        foreach ($classNodes as $classNode) {
+            $resolvedClassNodes[] = new ClassNode(
+                className:          $classNode->className,
+                file:               $classNode->file,
+                line:               $classNode->line,
+                layer:              $classNode->layer,
+                extends:            $classNode->extends,
+                isAbstract:         $classNode->isAbstract,
+                isFinal:            $classNode->isFinal,
+                isInterface:        $classNode->isInterface,
+                isReadonly:         $classNode->isReadonly,
+                isTrait:            $classNode->isTrait,
+                dependencies:       $classNode->dependencies,
+                implements:         $classNode->implements,
+                traits:             $classNode->traits,
+                methods:            $classNode->methods,
+                constants:          $classNode->constants,
+                properties:         $classNode->properties,
+                functionCalls:      $classNode->functionCalls,
+                superglobals:       $classNode->superglobals,
+                languageConstructs: $classNode->languageConstructs,
+                layers:             $classNode->layers,
+                isEnum:             $classNode->isEnum,
+                interfaceExtends:   $classNode->interfaceExtends,
+                parentClasses:      $this->recursiveParentClasses(
+                    $classNode->className,
+                    $parentClassMap,
+                    [$classNode->className => true]
+                ),
+                parentInterfaces:   $this->recursiveParentInterfaces(
+                    $classNode->className,
+                    $parentClassMap,
+                    $parentInterfaceMap,
+                    [$classNode->className => true]
+                ),
+            );
+        }
+
+        return $resolvedClassNodes;
+    }
+
+    /**
+     * @param array<string, list<string>> $parentClassMap
+     * @param array<string, true>         $seen
+     * @return list<string>
+     */
+    private function recursiveParentClasses(string $className, array $parentClassMap, array $seen): array
+    {
+        $parentClasses = [];
+
+        foreach ($parentClassMap[$className] ?? [] as $parentClass) {
+            if (isset($seen[$parentClass])) {
+                continue;
+            }
+
+            $parentClasses[] = $parentClass;
+            $parentClasses   = [
+                ...$parentClasses,
+                ...$this->recursiveParentClasses($parentClass, $parentClassMap, $seen + [$parentClass => true]),
+            ];
+        }
+
+        return array_values(array_unique($parentClasses));
+    }
+
+    /**
+     * @param array<string, list<string>> $parentClassMap
+     * @param array<string, list<string>> $parentInterfaceMap
+     * @param array<string, true>         $seen
+     * @return list<string>
+     */
+    private function recursiveParentInterfaces(
+        string $className,
+        array $parentClassMap,
+        array $parentInterfaceMap,
+        array $seen
+    ): array {
+        $parentInterfaces = [];
+
+        foreach ($parentInterfaceMap[$className] ?? [] as $parentInterface) {
+            if (isset($seen[$parentInterface])) {
+                continue;
+            }
+
+            $parentInterfaces[] = $parentInterface;
+            $parentInterfaces   = [
+                ...$parentInterfaces,
+                ...$this->recursiveParentInterfaces(
+                    $parentInterface,
+                    $parentClassMap,
+                    $parentInterfaceMap,
+                    $seen + [$parentInterface => true]
+                ),
+            ];
+        }
+
+        foreach ($parentClassMap[$className] ?? [] as $parentClass) {
+            if (isset($seen[$parentClass])) {
+                continue;
+            }
+
+            $parentInterfaces = [
+                ...$parentInterfaces,
+                ...$this->recursiveParentInterfaces(
+                    $parentClass,
+                    $parentClassMap,
+                    $parentInterfaceMap,
+                    $seen + [$parentClass => true]
+                ),
+            ];
+        }
+
+        return array_values(array_unique($parentInterfaces));
     }
 
     /**

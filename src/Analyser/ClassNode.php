@@ -30,6 +30,8 @@ final readonly class ClassNode
      * @param string[]       $languageConstructs  Language constructs used (exit, die, etc.)
      * @param list<string>   $layers              All layer names this class belongs to; defaults to [$layer]
      * @param string[]       $interfaceExtends    Interface names this interface extends
+     * @param list<string>   $parentClasses       Direct and transitive parent class names
+     * @param list<string>   $parentInterfaces    Direct and transitive implemented or extended interface names
      */
     public function __construct(
         public string $className,
@@ -54,6 +56,8 @@ final readonly class ClassNode
         array $layers = [],
         public bool $isEnum = false,
         public array $interfaceExtends = [],
+        public array $parentClasses = [],
+        public array $parentInterfaces = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
@@ -110,12 +114,20 @@ final readonly class ClassNode
 
     public function implementsInterface(string $interface): bool
     {
-        return in_array($interface, $this->implements, true);
+        return in_array($interface, $this->implements, true)
+            || in_array($interface, $this->parentInterfaces, true);
+    }
+
+    public function extendsClass(string $class): bool
+    {
+        return $this->extends === $class
+            || in_array($class, $this->parentClasses, true);
     }
 
     public function extendsInterface(string $interface): bool
     {
-        return in_array($interface, $this->interfaceExtends, true);
+        return in_array($interface, $this->interfaceExtends, true)
+            || in_array($interface, $this->parentInterfaces, true);
     }
 
     public function callsFunction(string $function): bool

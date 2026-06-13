@@ -103,12 +103,17 @@ final class ClassNodeTest extends TestCase
             superglobals:       ['$_SERVER'],
             languageConstructs: ['exit'],
             interfaceExtends:   ['App\\Contracts\\BaseOrderService'],
+            parentClasses:      ['App\\Support\\BaseOrderService'],
+            parentInterfaces:   ['App\\Contracts\\RootOrderService'],
         );
 
         $this->assertTrue($classNode->dependsOnNamespace('App\\Infrastructure'));
         $this->assertFalse($classNode->dependsOnNamespace('App\\Application'));
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\OrderService'));
+        $this->assertTrue($classNode->implementsInterface('App\\Contracts\\RootOrderService'));
+        $this->assertTrue($classNode->extendsClass('App\\Support\\BaseOrderService'));
         $this->assertTrue($classNode->extendsInterface('App\\Contracts\\BaseOrderService'));
+        $this->assertTrue($classNode->extendsInterface('App\\Contracts\\RootOrderService'));
         $this->assertTrue($classNode->callsFunction('var_dump'));
         $this->assertTrue($classNode->accessesSuperglobals());
         $this->assertTrue($classNode->usesLanguageConstruct('exit'));

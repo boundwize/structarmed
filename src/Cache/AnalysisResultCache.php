@@ -330,6 +330,8 @@ final readonly class AnalysisResultCache
             'dependencies'       => $classNode->dependencies,
             'implements'         => array_values($classNode->implements),
             'interfaceExtends'   => array_values($classNode->interfaceExtends),
+            'parentClasses'      => $classNode->parentClasses,
+            'parentInterfaces'   => $classNode->parentInterfaces,
             'traits'             => array_values($classNode->traits),
             'methods'            => array_map($this->methodNodeToArray(...), $classNode->methods),
             'constants'          => array_map($this->constantNodeToArray(...), $classNode->constants),
@@ -364,6 +366,8 @@ final readonly class AnalysisResultCache
         $dependencies       = $node['dependencies'] ?? null;
         $implements         = $node['implements'] ?? null;
         $interfaceExtends   = $node['interfaceExtends'] ?? [];
+        $parentClasses      = $node['parentClasses'] ?? [];
+        $parentInterfaces   = $node['parentInterfaces'] ?? [];
         $traits             = $node['traits'] ?? [];
         $rawMethods         = $node['methods'] ?? null;
         $rawConstants       = $node['constants'] ?? null;
@@ -388,6 +392,8 @@ final readonly class AnalysisResultCache
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($implements)
             || ! $this->isStringArray($interfaceExtends)
+            || ! $this->isStringArray($parentClasses)
+            || ! $this->isStringArray($parentInterfaces)
             || ! $this->isStringArray($traits)
             || ! is_array($rawMethods)
             || ! is_array($rawConstants)
@@ -471,6 +477,8 @@ final readonly class AnalysisResultCache
             layers:             array_values($layers),
             isEnum:             $isEnum,
             interfaceExtends:   array_values($interfaceExtends),
+            parentClasses:      array_values($parentClasses),
+            parentInterfaces:   array_values($parentInterfaces),
         );
     }
 
