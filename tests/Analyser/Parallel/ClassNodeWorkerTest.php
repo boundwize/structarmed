@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
+use Boundwize\StructArmed\Analyser\Parallel\BufferedWorkerProgressHandler;
 use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerFailedException;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
@@ -18,6 +19,7 @@ use function serialize;
 use function unserialize;
 
 #[CoversClass(ClassNodeWorker::class)]
+#[CoversClass(BufferedWorkerProgressHandler::class)]
 #[CoversClass(WorkerFailedException::class)]
 final class ClassNodeWorkerTest extends TestCase
 {

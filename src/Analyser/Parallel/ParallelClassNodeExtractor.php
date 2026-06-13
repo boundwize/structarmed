@@ -69,10 +69,11 @@ final readonly class ParallelClassNodeExtractor
             return [];
         }
 
-        $totalFiles  = count($files);
-        $workerCount = min($this->workerCount, $totalFiles);
-        $script      = dirname(__DIR__, 3) . '/bin/structarmed.php';
-        $processes   = [];
+        $totalFiles   = count($files);
+        $workerCount  = min($this->workerCount, $totalFiles);
+        $script       = dirname(__DIR__, 3) . '/bin/structarmed.php';
+        $processes    = [];
+        $emitProgress = $progressHandler instanceof ProgressHandlerInterface;
 
         foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             [
@@ -86,6 +87,7 @@ final readonly class ParallelClassNodeExtractor
                 'layers'        => $this->layers,
                 'layerPatterns' => $this->layerPatterns,
                 'files'         => $chunk,
+                'emitProgress'  => $emitProgress,
             ]));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
