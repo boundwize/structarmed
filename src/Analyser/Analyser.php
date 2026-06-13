@@ -532,8 +532,6 @@ final class Analyser
             ]));
         }
 
-        $resolvedClassNodes = [];
-
         foreach ($classNodes as $classNode) {
             $classCycleDetected     = false;
             $interfaceCycleDetected = false;
@@ -554,39 +552,13 @@ final class Analyser
             );
 
             if ($classNode->parentClasses === $parentClasses && $classNode->parentInterfaces === $parentInterfaces) {
-                $resolvedClassNodes[] = $classNode;
                 continue;
             }
 
-            $resolvedClassNodes[] = new ClassNode(
-                className:          $classNode->className,
-                file:               $classNode->file,
-                line:               $classNode->line,
-                layer:              $classNode->layer,
-                extends:            $classNode->extends,
-                isAbstract:         $classNode->isAbstract,
-                isFinal:            $classNode->isFinal,
-                isInterface:        $classNode->isInterface,
-                isReadonly:         $classNode->isReadonly,
-                isTrait:            $classNode->isTrait,
-                dependencies:       $classNode->dependencies,
-                implements:         $classNode->implements,
-                traits:             $classNode->traits,
-                methods:            $classNode->methods,
-                constants:          $classNode->constants,
-                properties:         $classNode->properties,
-                functionCalls:      $classNode->functionCalls,
-                superglobals:       $classNode->superglobals,
-                languageConstructs: $classNode->languageConstructs,
-                layers:             $classNode->layers,
-                isEnum:             $classNode->isEnum,
-                interfaceExtends:   $classNode->interfaceExtends,
-                parentClasses:      $parentClasses,
-                parentInterfaces:   $parentInterfaces,
-            );
+            $classNode->setRecursiveParents($parentClasses, $parentInterfaces);
         }
 
-        return $resolvedClassNodes;
+        return $classNodes;
     }
 
     /**
