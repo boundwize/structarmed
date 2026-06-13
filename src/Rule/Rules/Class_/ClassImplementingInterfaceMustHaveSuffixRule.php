@@ -21,16 +21,9 @@ final readonly class ClassImplementingInterfaceMustHaveSuffixRule implements Rul
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        if (! $classNode->isInLayer($this->layer)) {
-            return false;
-        }
-
-        if ($classNode->isClass()) {
-            return $classNode->implementsInterface($this->interface);
-        }
-
-        return $classNode->isInterface
-            && $classNode->extendsInterface($this->interface);
+        return $classNode->isClass()
+            && $classNode->isInLayer($this->layer)
+            && $classNode->implementsInterface($this->interface);
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
@@ -39,15 +32,10 @@ final readonly class ClassImplementingInterfaceMustHaveSuffixRule implements Rul
             return null;
         }
 
-        $declaration = $classNode->isInterface ? 'Interface' : 'Class';
-        $relation    = $classNode->isInterface ? 'extending' : 'implementing';
-
         return new RuleViolation(
             message:   sprintf(
-                '%s [%s] %s interface [%s] must have suffix [%s]',
-                $declaration,
+                'Class [%s] implementing interface [%s] must have suffix [%s]',
                 $classNode->className,
-                $relation,
                 $this->interface,
                 $this->suffix
             ),
