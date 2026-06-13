@@ -558,10 +558,6 @@ final class Analyser
                 $interfaceCycleDetected
             );
 
-            if ($classNode->parentClasses === $parentClasses && $classNode->parentInterfaces === $parentInterfaces) {
-                continue;
-            }
-
             $classNode->setRecursiveParents($parentClasses, $parentInterfaces);
         }
 
