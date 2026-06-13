@@ -377,6 +377,54 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\Auth', $violations[0]->className);
     }
 
+    public function testPsr15PresetReportsClassExtendingCustomMiddlewareImplementationWithoutMiddlewareSuffix(): void
+    {
+        $basePath = $this->makeTempProject([
+            'app/AuthMiddleware.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                interface AuthMiddleware extends \Psr\Http\Server\MiddlewareInterface
+                {
+                }
+                PHP,
+            'app/BaseAuthMiddleware.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                class BaseAuthMiddleware implements AuthMiddleware
+                {
+                    public function process(
+                        \Psr\Http\Message\ServerRequestInterface $request,
+                        \Psr\Http\Server\RequestHandlerInterface $handler
+                    ): \Psr\Http\Message\ResponseInterface {
+                        return $handler->handle($request);
+                    }
+                }
+                PHP,
+            'app/Auth.php'               => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Auth extends BaseAuthMiddleware
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR15(sourcePaths: ['app/']));
+
+        $violations = (new Analyser($basePath))->analyse($architecture)
+            ->forRule(Psr15Preset::MIDDLEWARE_INTERFACE_IMPLEMENTATION_MUST_HAVE_MIDDLEWARE_SUFFIX);
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\Auth', $violations[0]->className);
+    }
+
     public function testDddPresetResolvesConventionalLayersInsidePsr4SourceLayer(): void
     {
         $repositoryPath = 'src/Infrastructure/Persistence/Album/SQLAlbumRepository.php';
