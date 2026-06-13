@@ -158,7 +158,7 @@ final class Analyser
         $dependencyMap            = $classDependencyMaps['dependencies'];
         $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
 
-        $resolvedDependencyClosures = [];
+        $resolvedInheritedDependencies = [];
 
         if ($hasLayerAwareRules) {
             array_walk(
@@ -222,7 +222,7 @@ final class Analyser
                 $classNode->className,
                 $dependencyMap,
                 $inheritanceDependencyMap,
-                $resolvedDependencyClosures
+                $resolvedInheritedDependencies
             );
 
             foreach ($dependencies as $dependency) {
@@ -458,14 +458,14 @@ final class Analyser
     /**
      * @param array<string, list<string>> $dependencyMap
      * @param array<string, list<string>> $inheritanceDependencyMap
-     * @param array<string, list<string>> $resolvedDependencyClosures
+     * @param array<string, list<string>> $resolvedInheritedDependencies
      * @return list<string>
      */
     private function dependenciesForClass(
         string $className,
         array $dependencyMap,
         array $inheritanceDependencyMap,
-        array &$resolvedDependencyClosures
+        array &$resolvedInheritedDependencies
     ): array {
         $dependencies = $dependencyMap[$className] ?? [];
 
@@ -477,7 +477,7 @@ final class Analyser
                     $dependency,
                     $dependencyMap,
                     $inheritanceDependencyMap,
-                    $resolvedDependencyClosures,
+                    $resolvedInheritedDependencies,
                     [$className => true],
                     $cycleDetected
                 ),
@@ -490,7 +490,7 @@ final class Analyser
     /**
      * @param array<string, list<string>> $dependencyMap
      * @param array<string, list<string>> $inheritanceDependencyMap
-     * @param array<string, list<string>> $resolvedDependencyClosures
+     * @param array<string, list<string>> $resolvedInheritedDependencies
      * @param array<string, true>         $seen
      * @return list<string>
      */
@@ -498,7 +498,7 @@ final class Analyser
         string $dependency,
         array $dependencyMap,
         array $inheritanceDependencyMap,
-        array &$resolvedDependencyClosures,
+        array &$resolvedInheritedDependencies,
         array $seen,
         bool &$cycleDetected
     ): array {
@@ -510,8 +510,8 @@ final class Analyser
             return $resolvedDependencies;
         }
 
-        if (isset($resolvedDependencyClosures[$dependency])) {
-            return $resolvedDependencyClosures[$dependency];
+        if (isset($resolvedInheritedDependencies[$dependency])) {
+            return $resolvedInheritedDependencies[$dependency];
         }
 
         $hasCycle             = false;
@@ -529,7 +529,7 @@ final class Analyser
                     $inheritedDependency,
                     $dependencyMap,
                     $inheritanceDependencyMap,
-                    $resolvedDependencyClosures,
+                    $resolvedInheritedDependencies,
                     $seen,
                     $childHasCycle
                 ),
@@ -540,7 +540,7 @@ final class Analyser
         $resolvedDependencies = array_values(array_unique($resolvedDependencies));
 
         if (! $hasCycle) {
-            $resolvedDependencyClosures[$dependency] = $resolvedDependencies;
+            $resolvedInheritedDependencies[$dependency] = $resolvedDependencies;
         }
 
         $cycleDetected = $cycleDetected || $hasCycle;
