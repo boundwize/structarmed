@@ -71,6 +71,14 @@ final class ClassCollectorTest extends TestCase
         $this->assertTrue($classNode->isInterface);
     }
 
+    public function testCollectsInterfaceExtends(): void
+    {
+        $classNode = $this->collect('<?php interface FooInterface extends FirstInterface, SecondInterface {}');
+
+        $this->assertTrue($classNode->isInterface);
+        $this->assertSame(['FirstInterface', 'SecondInterface'], $classNode->interfaceExtends);
+    }
+
     public function testCollectsTrait(): void
     {
         $classNode = $this->collect('<?php trait FooTrait {}');

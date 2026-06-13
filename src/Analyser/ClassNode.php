@@ -13,10 +13,10 @@ use function rtrim;
 use function str_ends_with;
 use function str_starts_with;
 
-final readonly class ClassNode
+final class ClassNode
 {
     /** @var list<string> */
-    public array $layers;
+    public readonly array $layers;
 
     /**
      * @param list<string>   $dependencies        Fully-qualified class names this class depends on
@@ -29,31 +29,47 @@ final readonly class ClassNode
      * @param string[]       $superglobals        Superglobals accessed ($_GET, $_POST, etc.)
      * @param string[]       $languageConstructs  Language constructs used (exit, die, etc.)
      * @param list<string>   $layers              All layer names this class belongs to; defaults to [$layer]
+     * @param string[]       $interfaceExtends    Interface names this interface extends
+     * @param list<string>   $parentClasses       Direct and transitive parent class names
+     * @param list<string>   $parentInterfaces    Direct and transitive implemented or extended interface names
      */
     public function __construct(
-        public string $className,
-        public string $file,
-        public int $line,
-        public ?string $layer,
-        public ?string $extends,
-        public bool $isAbstract,
-        public bool $isFinal,
-        public bool $isInterface,
-        public bool $isReadonly,
-        public bool $isTrait = false,
-        public array $dependencies = [],
-        public array $implements = [],
-        public array $traits = [],
-        public array $methods = [],
-        public array $constants = [],
-        public array $properties = [],
-        public array $functionCalls = [],
-        public array $superglobals = [],
-        public array $languageConstructs = [],
+        public readonly string $className,
+        public readonly string $file,
+        public readonly int $line,
+        public readonly ?string $layer,
+        public readonly ?string $extends,
+        public readonly bool $isAbstract,
+        public readonly bool $isFinal,
+        public readonly bool $isInterface,
+        public readonly bool $isReadonly,
+        public readonly bool $isTrait = false,
+        public readonly array $dependencies = [],
+        public readonly array $implements = [],
+        public readonly array $traits = [],
+        public readonly array $methods = [],
+        public readonly array $constants = [],
+        public readonly array $properties = [],
+        public readonly array $functionCalls = [],
+        public readonly array $superglobals = [],
+        public readonly array $languageConstructs = [],
         array $layers = [],
-        public bool $isEnum = false,
+        public readonly bool $isEnum = false,
+        public readonly array $interfaceExtends = [],
+        public array $parentClasses = [],
+        public array $parentInterfaces = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
+    }
+
+    /**
+     * @param list<string> $parentClasses
+     * @param list<string> $parentInterfaces
+     */
+    public function setRecursiveParents(array $parentClasses, array $parentInterfaces): void
+    {
+        $this->parentClasses    = $parentClasses;
+        $this->parentInterfaces = $parentInterfaces;
     }
 
     public function shortName(): string
@@ -108,7 +124,20 @@ final readonly class ClassNode
 
     public function implementsInterface(string $interface): bool
     {
-        return in_array($interface, $this->implements, true);
+        return in_array($interface, $this->implements, true)
+            || in_array($interface, $this->parentInterfaces, true);
+    }
+
+    public function extendsClass(string $class): bool
+    {
+        return $this->extends === $class
+            || in_array($class, $this->parentClasses, true);
+    }
+
+    public function extendsInterface(string $interface): bool
+    {
+        return in_array($interface, $this->interfaceExtends, true)
+            || in_array($interface, $this->parentInterfaces, true);
     }
 
     public function callsFunction(string $function): bool

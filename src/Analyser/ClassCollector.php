@@ -338,15 +338,16 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function collectClassLike(ClassLike $classLike): void
     {
-        $analysis   = $this->collectClassLikeAnalysis($classLike);
-        $className  = $this->resolveClassName($classLike);
-        $layers     = $this->layerResolver->resolveAll($className, $this->currentFile);
-        $layer      = $this->layerResolver->resolve($className, $this->currentFile);
-        $methods    = $this->collectMethods($classLike, $analysis['complexityByMethodId']);
-        $implements = $this->collectImplements($classLike);
-        $traits     = $this->collectTraits($classLike);
-        $constants  = $this->collectConstants($classLike);
-        $properties = $this->collectProperties($classLike);
+        $analysis         = $this->collectClassLikeAnalysis($classLike);
+        $className        = $this->resolveClassName($classLike);
+        $layers           = $this->layerResolver->resolveAll($className, $this->currentFile);
+        $layer            = $this->layerResolver->resolve($className, $this->currentFile);
+        $methods          = $this->collectMethods($classLike, $analysis['complexityByMethodId']);
+        $implements       = $this->collectImplements($classLike);
+        $interfaceExtends = $this->collectInterfaceExtends($classLike);
+        $traits           = $this->collectTraits($classLike);
+        $constants        = $this->collectConstants($classLike);
+        $properties       = $this->collectProperties($classLike);
 
         $this->nodes[] = new ClassNode(
             className:          $className,
@@ -372,6 +373,7 @@ final class ClassCollector extends NodeVisitorAbstract
             languageConstructs: $analysis['languageConstructs'],
             layers:             $layers,
             isEnum:             $classLike instanceof Enum_,
+            interfaceExtends:   $interfaceExtends,
         );
     }
 
@@ -542,6 +544,24 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         return $interfaces;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function collectInterfaceExtends(ClassLike $classLike): array
+    {
+        if (! $classLike instanceof Interface_) {
+            return [];
+        }
+
+        $parents = [];
+
+        foreach ($classLike->extends as $parent) {
+            $parents[] = $parent->toString();
+        }
+
+        return $parents;
     }
 
     /**

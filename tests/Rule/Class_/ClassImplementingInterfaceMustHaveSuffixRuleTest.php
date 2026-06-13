@@ -74,28 +74,37 @@ final class ClassImplementingInterfaceMustHaveSuffixRuleTest extends TestCase
             implements: [self::MIDDLEWARE_INTERFACE],
             isInterface: true
         )));
+        $this->assertFalse($classImplementingInterfaceMustHaveSuffixRule->appliesTo($this->makeNode(
+            className:        'App\\Http\\AuthMiddleware',
+            implements:       [],
+            isInterface:      true,
+            interfaceExtends: [self::MIDDLEWARE_INTERFACE],
+        )));
     }
 
     /**
      * @param string[] $implements
+     * @param string[] $interfaceExtends
      */
     private function makeNode(
         string $className,
         array $implements,
         string $layer = 'Source',
         bool $isInterface = false,
+        array $interfaceExtends = [],
     ): ClassNode {
         return new ClassNode(
-            className:   $className,
-            file:        '/fake.php',
-            line:        1,
-            layer:       $layer,
-            extends:     null,
-            isAbstract:  false,
-            isFinal:     false,
-            isInterface: $isInterface,
-            isReadonly:  false,
-            implements:  $implements,
+            className:        $className,
+            file:             '/fake.php',
+            line:             1,
+            layer:            $layer,
+            extends:          null,
+            isAbstract:       false,
+            isFinal:          false,
+            isInterface:      $isInterface,
+            isReadonly:       false,
+            implements:       $implements,
+            interfaceExtends: $interfaceExtends,
         );
     }
 }

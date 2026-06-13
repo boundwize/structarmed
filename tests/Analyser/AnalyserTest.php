@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
@@ -309,6 +310,119 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testPsr15PresetAcceptsInterfaceExtendingMiddlewareInterfaceWithMiddlewareSuffix(): void
+    {
+        $basePath = $this->makeTempProject([
+            'app/AuthMiddleware.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                interface AuthMiddleware extends \Psr\Http\Server\MiddlewareInterface
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR15(sourcePaths: ['app/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+        $ruleKey                 = Psr15Preset::MIDDLEWARE_INTERFACE_IMPLEMENTATION_MUST_HAVE_MIDDLEWARE_SUFFIX;
+
+        $this->assertCount(
+            0,
+            $ruleViolationCollection->forRule($ruleKey)
+        );
+    }
+
+    public function testPsr15PresetReportsClassImplementingCustomMiddlewareInterfaceWithoutMiddlewareSuffix(): void
+    {
+        $basePath = $this->makeTempProject([
+            'app/AuthMiddleware.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                interface AuthMiddleware extends \Psr\Http\Server\MiddlewareInterface
+                {
+                }
+                PHP,
+            'app/Auth.php'           => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Auth implements AuthMiddleware
+                {
+                    public function process(
+                        \Psr\Http\Message\ServerRequestInterface $request,
+                        \Psr\Http\Server\RequestHandlerInterface $handler
+                    ): \Psr\Http\Message\ResponseInterface {
+                        return $handler->handle($request);
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR15(sourcePaths: ['app/']));
+
+        $violations = (new Analyser($basePath))->analyse($architecture)
+            ->forRule(Psr15Preset::MIDDLEWARE_INTERFACE_IMPLEMENTATION_MUST_HAVE_MIDDLEWARE_SUFFIX);
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\Auth', $violations[0]->className);
+    }
+
+    public function testPsr15PresetReportsClassExtendingCustomMiddlewareImplementationWithoutMiddlewareSuffix(): void
+    {
+        $basePath = $this->makeTempProject([
+            'app/AuthMiddleware.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                interface AuthMiddleware extends \Psr\Http\Server\MiddlewareInterface
+                {
+                }
+                PHP,
+            'app/BaseAuthMiddleware.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                class BaseAuthMiddleware implements AuthMiddleware
+                {
+                    public function process(
+                        \Psr\Http\Message\ServerRequestInterface $request,
+                        \Psr\Http\Server\RequestHandlerInterface $handler
+                    ): \Psr\Http\Message\ResponseInterface {
+                        return $handler->handle($request);
+                    }
+                }
+                PHP,
+            'app/Auth.php'               => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Auth extends BaseAuthMiddleware
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR15(sourcePaths: ['app/']));
+
+        $violations = (new Analyser($basePath))->analyse($architecture)
+            ->forRule(Psr15Preset::MIDDLEWARE_INTERFACE_IMPLEMENTATION_MUST_HAVE_MIDDLEWARE_SUFFIX);
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\Auth', $violations[0]->className);
     }
 
     public function testDddPresetResolvesConventionalLayersInsidePsr4SourceLayer(): void
@@ -1247,6 +1361,89 @@ final class AnalyserTest extends TestCase
         $this->assertSame(['App\\HTTP\\Response', 'App\\HTTP\\ResponseTrait'], $classes);
     }
 
+    public function testAnalyserRulesetReportsInterfaceExtendsDependencyViolations(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/ResponseInterface.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                interface ResponseInterface extends \App\Pager\PagerInterface
+                {
+                }
+                PHP,
+            'src/Pager/PagerInterface.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Pager;
+
+                interface PagerInterface
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Pager', '/^App\\\\Pager\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+        $violations              = $ruleViolationCollection->forRule('ruleset.HTTP');
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\HTTP\\ResponseInterface', $violations[0]->className);
+        $this->assertStringContainsString('App\\Pager\\PagerInterface', $violations[0]->message);
+    }
+
+    public function testAnalyserRulesetReportsDependenciesInheritedFromInterfaceExtends(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/ResponseInterface.php'     => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                interface ResponseInterface extends \App\Shared\PagerAwareInterface
+                {
+                }
+                PHP,
+            'src/Shared/PagerAwareInterface.php' => <<<'PHP'
+                <?php
+
+                namespace App\Shared;
+
+                interface PagerAwareInterface
+                {
+                    public function setLink(\App\Pager\PagerInterface $pager): void;
+                }
+                PHP,
+            'src/Pager/PagerInterface.php'       => <<<'PHP'
+                <?php
+
+                namespace App\Pager;
+
+                interface PagerInterface
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Shared', '/^App\\\\Shared\\\\.*$/')
+            ->layerPattern('Pager', '/^App\\\\Pager\\\\.*$/')
+            ->ruleset(['HTTP' => ['Shared']]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+        $violations              = $ruleViolationCollection->forRule('ruleset.HTTP');
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\HTTP\\ResponseInterface', $violations[0]->className);
+        $this->assertStringContainsString('App\\Pager\\PagerInterface', $violations[0]->message);
+    }
+
     public function testAnalyserRulesetStopsResolvingCyclicInheritanceDependencies(): void
     {
         $basePath = $this->makeTempProject([
@@ -1297,6 +1494,37 @@ final class AnalyserTest extends TestCase
         sort($classes);
 
         $this->assertSame(['App\\HTTP\\First', 'App\\HTTP\\Second'], $classes);
+    }
+
+    public function testAnalyserStopsResolvingCyclicInterfaceParents(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Contracts/First.php'  => <<<'PHP'
+                <?php
+
+                namespace App\Contracts;
+
+                interface First extends Second
+                {
+                }
+                PHP,
+            'src/Contracts/Second.php' => <<<'PHP'
+                <?php
+
+                namespace App\Contracts;
+
+                interface Second extends First
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testAnalyserRulesetAllowsSameLayerDependencies(): void

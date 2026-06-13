@@ -29,6 +29,7 @@ use function array_fill_keys;
 use function array_filter;
 use function array_intersect;
 use function array_key_exists;
+use function array_keys;
 use function array_merge;
 use function array_unique;
 use function array_values;
@@ -128,6 +129,7 @@ final class Analyser
             $chainLayerResolver,
             $analyserOptions ?? AnalyserOptions::parallel()
         );
+        $classNodes = $this->withRecursiveParents($classNodes);
 
         // Evaluate declarative ruleset alongside class rules, but buffer its
         // violations so report ordering remains class rules before ruleset.
@@ -418,7 +420,10 @@ final class Analyser
 
         foreach ($classNodes as $classNode) {
             $dependencyMap[$classNode->className] = $classNode->dependencies;
-            $dependencies                         = $classNode->implements;
+            $dependencies                         = [
+                ...$classNode->implements,
+                ...$classNode->interfaceExtends,
+            ];
 
             if ($classNode->extends !== null) {
                 $dependencies[] = $classNode->extends;
@@ -505,6 +510,142 @@ final class Analyser
         }
 
         return array_values(array_unique($resolvedDependencies));
+    }
+
+    /**
+     * @param list<ClassNode> $classNodes
+     * @return list<ClassNode>
+     */
+    private function withRecursiveParents(array $classNodes): array
+    {
+        $parentClassMap     = [];
+        $parentInterfaceMap = [];
+        $parentsCache       = [];
+
+        foreach ($classNodes as $classNode) {
+            $parentClassMap[$classNode->className]     = $classNode->extends !== null
+                ? [$classNode->extends]
+                : [];
+            $parentInterfaceMap[$classNode->className] = $classNode->interfaceExtends !== []
+                ? array_values(array_unique([...$classNode->implements, ...$classNode->interfaceExtends]))
+                : array_values($classNode->implements);
+        }
+
+        foreach ($classNodes as $classNode) {
+            if (
+                $parentClassMap[$classNode->className] === []
+                && $parentInterfaceMap[$classNode->className] === []
+            ) {
+                continue;
+            }
+
+            $cycleDetected = false;
+            $result        = $this->recursiveParents(
+                $classNode->className,
+                $parentClassMap,
+                $parentInterfaceMap,
+                $parentsCache,
+                [$classNode->className => true],
+                $cycleDetected
+            );
+
+            $classNode->setRecursiveParents($result['classes'], $result['interfaces']);
+        }
+
+        return $classNodes;
+    }
+
+    /**
+     * Single DFS that collects both ancestor classes and transitively implemented/extended
+     * interfaces in one pass, avoiding the double traversal of the parent-class chain that
+     * the previous two-method approach required.
+     *
+     * @param array<string, list<string>>                                        $parentClassMap
+     * @param array<string, list<string>>                                        $parentInterfaceMap
+     * @param array<string, array{classes: list<string>, interfaces: list<string>}> $cache
+     * @param array<string, true>                                                $seen
+     * @return array{classes: list<string>, interfaces: list<string>}
+     */
+    private function recursiveParents(
+        string $className,
+        array $parentClassMap,
+        array $parentInterfaceMap,
+        array &$cache,
+        array $seen,
+        bool &$cycleDetected
+    ): array {
+        if (isset($cache[$className])) {
+            return $cache[$className];
+        }
+
+        $classesSet    = [];
+        $interfacesSet = [];
+        $hasCycle      = false;
+
+        foreach ($parentClassMap[$className] ?? [] as $parentClass) {
+            if (isset($seen[$parentClass])) {
+                $hasCycle = true;
+                continue;
+            }
+
+            $childHasCycle            = false;
+            $classesSet[$parentClass] = true;
+            $result                   = $this->recursiveParents(
+                $parentClass,
+                $parentClassMap,
+                $parentInterfaceMap,
+                $cache,
+                $seen + [$parentClass => true],
+                $childHasCycle
+            );
+
+            foreach ($result['classes'] as $ancestor) {
+                $classesSet[$ancestor] = true;
+            }
+
+            foreach ($result['interfaces'] as $iface) {
+                $interfacesSet[$iface] = true;
+            }
+
+            $hasCycle = $hasCycle || $childHasCycle;
+        }
+
+        foreach ($parentInterfaceMap[$className] ?? [] as $parentInterface) {
+            if (isset($seen[$parentInterface])) {
+                $hasCycle = true;
+                continue;
+            }
+
+            $childHasCycle                   = false;
+            $interfacesSet[$parentInterface] = true;
+            $result                          = $this->recursiveParents(
+                $parentInterface,
+                $parentClassMap,
+                $parentInterfaceMap,
+                $cache,
+                $seen + [$parentInterface => true],
+                $childHasCycle
+            );
+
+            foreach ($result['interfaces'] as $ancestor) {
+                $interfacesSet[$ancestor] = true;
+            }
+
+            $hasCycle = $hasCycle || $childHasCycle;
+        }
+
+        $result = [
+            'classes'    => array_keys($classesSet),
+            'interfaces' => array_keys($interfacesSet),
+        ];
+
+        if (! $hasCycle) {
+            $cache[$className] = $result;
+        }
+
+        $cycleDetected = $cycleDetected || $hasCycle;
+
+        return $result;
     }
 
     /**
