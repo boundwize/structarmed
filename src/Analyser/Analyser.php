@@ -158,6 +158,8 @@ final class Analyser
         $dependencyMap            = $classDependencyMaps['dependencies'];
         $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
 
+        $resolvedInheritedDependencies = [];
+
         if ($hasLayerAwareRules) {
             array_walk(
                 $layerAwareRules,
@@ -219,7 +221,8 @@ final class Analyser
             $dependencies        = $this->dependenciesForClass(
                 $classNode->className,
                 $dependencyMap,
-                $inheritanceDependencyMap
+                $inheritanceDependencyMap,
+                $resolvedInheritedDependencies
             );
 
             foreach ($dependencies as $dependency) {
@@ -455,61 +458,94 @@ final class Analyser
     /**
      * @param array<string, list<string>> $dependencyMap
      * @param array<string, list<string>> $inheritanceDependencyMap
+     * @param array<string, list<string>> $resolvedInheritedDependencies
      * @return list<string>
      */
     private function dependenciesForClass(
         string $className,
         array $dependencyMap,
-        array $inheritanceDependencyMap
+        array $inheritanceDependencyMap,
+        array &$resolvedInheritedDependencies
     ): array {
-        $dependencies = [
-            ...$dependencyMap[$className] ?? [],
-            ...$this->dependenciesForInheritanceDependencies(
-                $inheritanceDependencyMap[$className] ?? [],
-                $dependencyMap,
-                $inheritanceDependencyMap,
-                [$className => true]
-            ),
-        ];
+        $dependencies = $dependencyMap[$className] ?? [];
+
+        foreach ($inheritanceDependencyMap[$className] ?? [] as $dependency) {
+            $cycleDetected = false;
+            $dependencies  = [
+                ...$dependencies,
+                ...$this->dependenciesForInheritanceDependency(
+                    $dependency,
+                    $dependencyMap,
+                    $inheritanceDependencyMap,
+                    $resolvedInheritedDependencies,
+                    [$className => true],
+                    $cycleDetected
+                ),
+            ];
+        }
 
         return array_values(array_unique($dependencies));
     }
 
     /**
-     * @param list<string>                $dependencies
      * @param array<string, list<string>> $dependencyMap
      * @param array<string, list<string>> $inheritanceDependencyMap
+     * @param array<string, list<string>> $resolvedInheritedDependencies
      * @param array<string, true>         $seen
      * @return list<string>
      */
-    private function dependenciesForInheritanceDependencies(
-        array $dependencies,
+    private function dependenciesForInheritanceDependency(
+        string $dependency,
         array $dependencyMap,
         array $inheritanceDependencyMap,
-        array $seen
+        array &$resolvedInheritedDependencies,
+        array $seen,
+        bool &$cycleDetected
     ): array {
-        $resolvedDependencies = [];
+        $resolvedDependencies = [$dependency];
 
-        foreach ($dependencies as $dependency) {
-            $resolvedDependencies[] = $dependency;
+        if (isset($seen[$dependency])) {
+            $cycleDetected = true;
 
-            if (isset($seen[$dependency])) {
-                continue;
-            }
-
-            $resolvedDependencies = [
-                ...$resolvedDependencies,
-                ...$dependencyMap[$dependency] ?? [],
-                ...$this->dependenciesForInheritanceDependencies(
-                    $inheritanceDependencyMap[$dependency] ?? [],
-                    $dependencyMap,
-                    $inheritanceDependencyMap,
-                    $seen + [$dependency => true]
-                ),
-            ];
+            return $resolvedDependencies;
         }
 
-        return array_values(array_unique($resolvedDependencies));
+        if (isset($resolvedInheritedDependencies[$dependency])) {
+            return $resolvedInheritedDependencies[$dependency];
+        }
+
+        $hasCycle             = false;
+        $resolvedDependencies = [
+            ...$resolvedDependencies,
+            ...$dependencyMap[$dependency] ?? [],
+        ];
+        $seen                += [$dependency => true];
+
+        foreach ($inheritanceDependencyMap[$dependency] ?? [] as $inheritedDependency) {
+            $childHasCycle        = false;
+            $resolvedDependencies = [
+                ...$resolvedDependencies,
+                ...$this->dependenciesForInheritanceDependency(
+                    $inheritedDependency,
+                    $dependencyMap,
+                    $inheritanceDependencyMap,
+                    $resolvedInheritedDependencies,
+                    $seen,
+                    $childHasCycle
+                ),
+            ];
+            $hasCycle             = $hasCycle || $childHasCycle;
+        }
+
+        $resolvedDependencies = array_values(array_unique($resolvedDependencies));
+
+        if (! $hasCycle) {
+            $resolvedInheritedDependencies[$dependency] = $resolvedDependencies;
+        }
+
+        $cycleDetected = $cycleDetected || $hasCycle;
+
+        return $resolvedDependencies;
     }
 
     /**
