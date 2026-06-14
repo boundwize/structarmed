@@ -9,5 +9,6 @@
 /phpunit.xml export-ignore
 /rector.php export-ignore
 /structarmed.php export-ignore
+/pyrameter.php export-ignore
 /tests/ export-ignore
 /CONTRIBUTING.md export-ignore
