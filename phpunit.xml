@@ -13,8 +13,6 @@
   <!-- ensure properly tested as e2e -->
   <extensions>
     <bootstrap class="Boundwize\StructArmed\PHPUnit\StructArmedExtension"/>
-    <bootstrap class="Pyrameter\Extension">
-        <parameter name="config" value="pyrameter.php"/>
-    </bootstrap>
+    <bootstrap class="Boundwize\Pyrameter\Extension"/>
   </extensions>
 </phpunit>
