@@ -9,7 +9,7 @@ use Boundwize\Pyrameter\TestKind;
 return PyrameterConfig::defaults()
     ->usesClass(Analyser::class, TestKind::Integration)
     ->targetShape(
-        unit: ['min' => 30],
-        integration: ['max' => 70],
+        unit: ['min' => 35],
+        integration: ['max' => 65],
     )
     ->failOnViolation();
