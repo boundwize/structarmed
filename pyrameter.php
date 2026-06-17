@@ -11,4 +11,5 @@ return PyrameterConfig::defaults()
     ->targetShape(
         unit: ['min' => 30],
         integration: ['max' => 70],
-    );
+    )
+    ->failOnViolation();
