@@ -33,7 +33,7 @@
         "nikic/php-parser": "^5.7"
     },
     "require-dev": {
-        "boundwize/pyrameter": "^0.2",
+        "boundwize/pyrameter": "^0.3",
         "laminas/laminas-coding-standard": "^3.1",
         "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^11.5",

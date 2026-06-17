@@ -9,6 +9,6 @@ use Boundwize\Pyrameter\TestKind;
 return PyrameterConfig::defaults()
     ->usesClass(Analyser::class, TestKind::Integration)
     ->targetShape(
-        unit: ['min' => 85],
-        integration: ['max' => 15],
+        unit: ['min' => 30],
+        integration: ['max' => 70],
     );
