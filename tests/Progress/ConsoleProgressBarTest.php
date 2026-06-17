@@ -5,26 +5,25 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Progress;
 
 use Boundwize\StructArmed\Progress\ConsoleProgressBar;
+use Boundwize\StructArmed\Tests\Support\InMemoryStreamTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function array_filter;
 use function count;
 use function explode;
-use function fopen;
 use function getenv;
 use function putenv;
-use function rewind;
-use function stream_get_contents;
 use function trim;
 
 #[CoversClass(ConsoleProgressBar::class)]
 final class ConsoleProgressBarTest extends TestCase
 {
+    use InMemoryStreamTrait;
+
     public function testProgressBarRendersFinalState(): void
     {
-        $stream = fopen('php://temp', 'w+');
-        $this->assertIsResource($stream);
+        $stream = $this->openMemoryStream();
 
         $consoleProgressBar = new ConsoleProgressBar($stream, 10, false, true);
         $consoleProgressBar->start(2);
@@ -32,8 +31,7 @@ final class ConsoleProgressBarTest extends TestCase
         $consoleProgressBar->advance('/tmp/Bar.php');
         $consoleProgressBar->finish();
 
-        rewind($stream);
-        $output = (string) stream_get_contents($stream);
+        $output = $this->streamContents($stream);
 
         $this->assertStringContainsString('Analyzing [==========] 100% 2/2', $output);
         $this->assertStringNotContainsString('Foo.php', $output);
@@ -42,16 +40,14 @@ final class ConsoleProgressBarTest extends TestCase
 
     public function testProgressBarCanRenderWithColor(): void
     {
-        $stream = fopen('php://temp', 'w+');
-        $this->assertIsResource($stream);
+        $stream = $this->openMemoryStream();
 
         $consoleProgressBar = new ConsoleProgressBar($stream, 10, true, true);
         $consoleProgressBar->start(1);
         $consoleProgressBar->advance('/tmp/Foo.php');
         $consoleProgressBar->finish();
 
-        rewind($stream);
-        $output = (string) stream_get_contents($stream);
+        $output = $this->streamContents($stream);
 
         $this->assertStringContainsString("\033[36mAnalyzing\033[0m", $output);
         $this->assertStringContainsString("\033[32m==========\033[0m", $output);
@@ -64,16 +60,14 @@ final class ConsoleProgressBarTest extends TestCase
             noColor: null,
             forceColor: '1',
             callback: function (): void {
-                $stream = fopen('php://temp', 'w+');
-                $this->assertIsResource($stream);
+                $stream = $this->openMemoryStream();
 
                 $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
 
-                rewind($stream);
-                $output = (string) stream_get_contents($stream);
+                $output = $this->streamContents($stream);
 
                 $this->assertStringContainsString("\033[36mAnalyzing\033[0m", $output);
             }
@@ -86,16 +80,14 @@ final class ConsoleProgressBarTest extends TestCase
             noColor: '1',
             forceColor: '1',
             callback: function (): void {
-                $stream = fopen('php://temp', 'w+');
-                $this->assertIsResource($stream);
+                $stream = $this->openMemoryStream();
 
                 $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
 
-                rewind($stream);
-                $output = (string) stream_get_contents($stream);
+                $output = $this->streamContents($stream);
 
                 $this->assertStringContainsString('Analyzing [==========] 100% 1/1', $output);
                 $this->assertStringNotContainsString("\033[", $output);
@@ -109,16 +101,14 @@ final class ConsoleProgressBarTest extends TestCase
             noColor: null,
             forceColor: null,
             callback: function (): void {
-                $stream = fopen('php://temp', 'w+');
-                $this->assertIsResource($stream);
+                $stream = $this->openMemoryStream();
 
                 $consoleProgressBar = new ConsoleProgressBar($stream, 10, isTty: true);
                 $consoleProgressBar->start(1);
                 $consoleProgressBar->advance('/tmp/Foo.php');
                 $consoleProgressBar->finish();
 
-                rewind($stream);
-                $output = (string) stream_get_contents($stream);
+                $output = $this->streamContents($stream);
 
                 $this->assertStringContainsString('Analyzing [==========] 100% 1/1', $output);
                 $this->assertStringNotContainsString("\033[", $output);
@@ -128,8 +118,7 @@ final class ConsoleProgressBarTest extends TestCase
 
     public function testProgressBarPrintsAtMostEvery10PercentWhenNotTty(): void
     {
-        $stream = fopen('php://temp', 'w+');
-        $this->assertIsResource($stream);
+        $stream = $this->openMemoryStream();
 
         $consoleProgressBar = new ConsoleProgressBar($stream, 10, false, false);
         $consoleProgressBar->start(93);
@@ -140,8 +129,7 @@ final class ConsoleProgressBarTest extends TestCase
 
         $consoleProgressBar->finish();
 
-        rewind($stream);
-        $output = (string) stream_get_contents($stream);
+        $output = $this->streamContents($stream);
 
         $this->assertStringContainsString('Analyzing [----------]   0% 0/93', $output);
         $this->assertStringContainsString('Analyzing [==========] 100% 93/93', $output);
@@ -153,16 +141,14 @@ final class ConsoleProgressBarTest extends TestCase
 
     public function testProgressBarHandlesZeroTotalWithoutRenderingFileName(): void
     {
-        $stream = fopen('php://temp', 'w+');
-        $this->assertIsResource($stream);
+        $stream = $this->openMemoryStream();
 
         $consoleProgressBar = new ConsoleProgressBar($stream, 8, true, true);
         $consoleProgressBar->start(0);
         $consoleProgressBar->advance('/tmp/VeryLongClassNameThatNeedsTruncating.php');
         $consoleProgressBar->finish();
 
-        rewind($stream);
-        $output = (string) stream_get_contents($stream);
+        $output = $this->streamContents($stream);
 
         $this->assertStringContainsString('100% 0/0', $output);
         $this->assertStringNotContainsString('VeryLongClassNameThatNeedsTruncating.php', $output);

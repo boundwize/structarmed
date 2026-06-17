@@ -16,12 +16,12 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-use function getcwd;
-
 #[CoversClass(ClassCollector::class)]
 #[CoversClass(ClassLikeAnalysis::class)]
 final class ClassCollectorTest extends TestCase
 {
+    private const BASE_PATH = '/structarmed-test-project';
+
     private function collect(string $code): ClassNode
     {
         $nodes = $this->collectNodes($code);
@@ -33,8 +33,7 @@ final class ClassCollectorTest extends TestCase
     /** @return ClassNode[] */
     private function collectNodes(string $code): array
     {
-        $cwd                    = getcwd();
-        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], $cwd !== false ? $cwd : '');
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
         $classCollector         = new ClassCollector($namespaceLayerResolver);
         $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
         $ast                    = $parser->parse($code);
@@ -749,8 +748,7 @@ PHP;
 
     public function testIgnoresClassMethodNodesOutsideTrackedClassLike(): void
     {
-        $cwd                    = getcwd();
-        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], $cwd !== false ? $cwd : '');
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
         $classCollector         = new ClassCollector($namespaceLayerResolver);
         $classMethod            = new ClassMethod('orphan');
 

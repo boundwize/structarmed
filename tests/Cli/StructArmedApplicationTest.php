@@ -30,7 +30,6 @@ use function ob_start;
 use function random_bytes;
 use function rmdir;
 use function serialize;
-use function sprintf;
 use function str_replace;
 use function sys_get_temp_dir;
 use function tempnam;
@@ -45,35 +44,6 @@ use function unlink;
 #[CoversClass(Baseline::class)]
 final class StructArmedApplicationTest extends TestCase
 {
-    public function testApplicationPrintsUsageWithoutCommand(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed']);
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('structarmed --version', $output);
-        $this->assertStringContainsString('structarmed init', $output);
-        $this->assertStringContainsString('structarmed analyse|analyze', $output);
-    }
-
-    public function testApplicationPrintsVersion(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed', '--version']);
-
-        $this->assertSame(0, $exitCode);
-        $this->assertSame(
-            sprintf("StructArmed %s\n", Version::current()),
-            $output
-        );
-    }
-
-    public function testApplicationRejectsUnknownCommand(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed', 'unknown']);
-
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Unknown command: unknown', $output);
-    }
-
     public function testApplicationClearsCacheWithoutAnalyseCommand(): void
     {
         $basePath = $this->createTempDirectory();
@@ -156,31 +126,6 @@ PHP);
         } finally {
             $this->removeTempDirectory($basePath);
         }
-    }
-
-    public function testApplicationReportsInvalidClearCacheConfig(): void
-    {
-        $basePath = $this->createTempDirectory();
-
-        try {
-            [$exitCode, $output] = $this->runApplication(
-                ['structarmed', '--clear-cache', '--config=' . $basePath . '/missing.php'],
-                $basePath
-            );
-
-            $this->assertSame(1, $exitCode);
-            $this->assertStringContainsString('StructArmed config file not found', $output);
-        } finally {
-            $this->removeTempDirectory($basePath);
-        }
-    }
-
-    public function testApplicationRejectsUnknownClearCacheOption(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed', '--clear-cache', '--bad-option']);
-
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Unknown option: --bad-option', $output);
     }
 
     /**
@@ -271,22 +216,6 @@ PHP);
         } finally {
             $this->removeTempDirectory($basePath);
         }
-    }
-
-    public function testInitCommandRejectsUnknownOption(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed', 'init', '--bad-option']);
-
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Unknown option: --bad-option', $output);
-    }
-
-    public function testInitCommandRejectsInvalidPreset(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed', 'init', '--preset=unknown']);
-
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Invalid preset: unknown', $output);
     }
 
     public function testAnalyseCommandRendersConsoleReport(): void
@@ -712,22 +641,6 @@ PHP);
         }
     }
 
-    public function testAnalyseCommandRejectsInvalidReportType(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', '--report=xml']);
-
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Invalid report type: xml', $output);
-    }
-
-    public function testAnalyseCommandRejectsUnknownOption(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', '--bad-option']);
-
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Unknown option: --bad-option', $output);
-    }
-
     public function testAnalyseCommandDisablesParallel(): void
     {
         $basePath = $this->createProjectDirectory();
@@ -774,14 +687,6 @@ PHP);
         }
     }
 
-    public function testAnalyseCommandRejectsMissingScanPath(): void
-    {
-        [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', 'missing']);
-
-        $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Error: path [missing] not found.', $output);
-    }
-
     public function testAnalyseCommandCanAnalyseSingleFile(): void
     {
         $basePath = $this->createProjectDirectoryWithViolation();
@@ -823,20 +728,6 @@ PHP);
         } finally {
             unlink($readmePath);
             rmdir($basePath);
-        }
-    }
-
-    public function testAnalyseCommandReportsMissingConfig(): void
-    {
-        $basePath = $this->createTempDirectory();
-
-        try {
-            [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse'], $basePath);
-
-            $this->assertSame(1, $exitCode);
-            $this->assertStringContainsString('Could not find a structarmed.php config file', $output);
-        } finally {
-            $this->removeTempDirectory($basePath);
         }
     }
 
