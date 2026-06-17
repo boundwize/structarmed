@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Cli;
 
 use Boundwize\StructArmed\Cli\ColorSupport;
+use Boundwize\StructArmed\Tests\Support\InMemoryStreamTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function fopen;
 use function getenv;
 use function putenv;
 
 #[CoversClass(ColorSupport::class)]
 final class ColorSupportTest extends TestCase
 {
+    use InMemoryStreamTrait;
+
     public function testDetectReturnsFalseWhenNoColorIsSet(): void
     {
         $this->withEnvironment(
@@ -66,8 +68,8 @@ final class ColorSupportTest extends TestCase
             noColor: null,
             forceColor: null,
             callback: function (): void {
-                $stream = fopen('php://temp', 'w+');
-                $this->assertIsResource($stream);
+                $stream = $this->openMemoryStream();
+
                 $this->assertFalse(ColorSupport::detect($stream));
             }
         );

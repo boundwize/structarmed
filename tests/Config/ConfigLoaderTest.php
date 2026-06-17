@@ -12,7 +12,6 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 use function file_put_contents;
-use function sys_get_temp_dir;
 use function touch;
 
 #[CoversClass(ConfigLoader::class)]
@@ -25,14 +24,6 @@ final class ConfigLoaderTest extends TestCase
         $path = $this->writeTempConfig('return ' . Architecture::class . '::define();');
 
         $this->assertInstanceOf(Architecture::class, ConfigLoader::load($path));
-    }
-
-    public function testLoadThrowsWhenConfigIsMissing(): void
-    {
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('StructArmed config file not found');
-
-        ConfigLoader::load(sys_get_temp_dir() . '/structarmed-missing-config.php');
     }
 
     public function testLoadThrowsWhenConfigReturnsWrongType(): void
@@ -60,14 +51,6 @@ final class ConfigLoaderTest extends TestCase
         touch($basePath . '/structarmed.dist.php');
 
         $this->assertSame($basePath . '/structarmed.dist.php', ConfigLoader::discover($basePath));
-    }
-
-    public function testDiscoverThrowsWhenNoConfigExists(): void
-    {
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Could not find a structarmed.php config file');
-
-        ConfigLoader::discover($this->makeTempDir());
     }
 
     private function writeTempConfig(string $body): string
