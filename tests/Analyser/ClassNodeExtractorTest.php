@@ -26,10 +26,10 @@ final class ClassNodeExtractorTest extends TestCase
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], '/tmp');
         $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
 
-        $result = $classNodeExtractor->extract([]);
+        $extractionResult = $classNodeExtractor->extract([]);
 
-        $this->assertSame([], $result->classNodes);
-        $this->assertSame([], $result->fileAnalyses);
+        $this->assertSame([], $extractionResult->classNodes);
+        $this->assertSame([], $extractionResult->fileAnalyses);
     }
 
     public function testExtractReturnsClassNodesFromPhpFile(): void
@@ -50,11 +50,11 @@ PHP);
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
         $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
 
-        $result = $classNodeExtractor->extract([$file]);
+        $extractionResult = $classNodeExtractor->extract([$file]);
 
-        $this->assertCount(1, $result->classNodes);
-        $this->assertInstanceOf(ClassNode::class, $result->classNodes[0]);
-        $this->assertSame('App\\Domain\\Foo', $result->classNodes[0]->className);
+        $this->assertCount(1, $extractionResult->classNodes);
+        $this->assertInstanceOf(ClassNode::class, $extractionResult->classNodes[0]);
+        $this->assertSame('App\\Domain\\Foo', $extractionResult->classNodes[0]->className);
     }
 
     public function testExtractSkipsFilesWithParseErrors(): void
@@ -67,9 +67,9 @@ PHP);
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
         $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
 
-        $result = $classNodeExtractor->extract([$file]);
+        $extractionResult = $classNodeExtractor->extract([$file]);
 
-        $this->assertSame([], $result->classNodes);
+        $this->assertSame([], $extractionResult->classNodes);
     }
 
     public function testExtractSkipsFilesWithEmptyAst(): void
@@ -82,9 +82,9 @@ PHP);
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
         $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
 
-        $result = $classNodeExtractor->extract([$file]);
+        $extractionResult = $classNodeExtractor->extract([$file]);
 
-        $this->assertSame([], $result->classNodes);
+        $this->assertSame([], $extractionResult->classNodes);
     }
 
     public function testExtractReturnsFactsFromTheSameParse(): void

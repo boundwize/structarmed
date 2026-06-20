@@ -14,6 +14,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
@@ -715,6 +716,18 @@ final class AnalyserTest extends TestCase
         $this->assertSame(1, $progress->total);
         $this->assertCount(1, $progress->files);
         $this->assertStringEndsWith('/src/Baz.php', $this->normalisePath($progress->files[0]));
+
+        $architecture->rule('file-tags', new Psr1PhpTagsRule(['src/']));
+        $analyser = new Analyser($basePath, $analysisResultCache, 'config-with-file-analysis');
+        $analyser->analyse($architecture);
+
+        $progress->total = -1;
+        $progress->files = [];
+
+        $analyser->analyse($architecture, [], $progress);
+
+        $this->assertSame(0, $progress->total);
+        $this->assertSame([], $progress->files);
     }
 
     public function testAnalyserReportsAllViolationsFromMultipleViolationRules(): void
