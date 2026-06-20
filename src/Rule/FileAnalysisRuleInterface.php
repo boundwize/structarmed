@@ -2,12 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Rule\Rules\File;
+namespace Boundwize\StructArmed\Rule;
 
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
-use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
-use Boundwize\StructArmed\Rule\RuleViolation;
 
 interface FileAnalysisRuleInterface extends MultipleProjectRuleViolationInterface
 {
