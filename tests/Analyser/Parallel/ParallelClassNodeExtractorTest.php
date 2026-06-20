@@ -348,4 +348,54 @@ PHP);
             $GLOBALS['mock_tracked_tempnam_files']     = [];
         }
     }
+
+    public function testExtractThrowsWhenFileAnalysesPayloadIsNotAnArray(): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'        => [],
+            'fileAnalyses' => 'invalid',
+            'error'        => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid file analyses.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    public function testExtractThrowsWhenFileAnalysisEntryIsInvalid(): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'        => [],
+            'fileAnalyses' => ['Foo.php' => 'invalid'],
+            'error'        => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid file analyses.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
 }

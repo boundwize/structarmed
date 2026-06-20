@@ -27,6 +27,7 @@ use function file_put_contents;
 use function glob;
 use function hash;
 use function is_dir;
+use function json_decode;
 use function json_encode;
 use function mkdir;
 use function preg_match;
@@ -913,6 +914,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -946,6 +948,93 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertNotNull($loaded);
             $this->assertEquals($classNodes, $loaded['classNodes']);
             $this->assertEquals($fileAnalysis, $loaded['fileAnalysis']);
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClassNodesWithFileAnalysisMissesLegacyEntryWithoutFileFacts(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+
+            $this->assertNull($analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{array<mixed, mixed>}>
+     */
+    public static function malformedFileAnalysisProvider(): iterable
+    {
+        $valid = [
+            'file'              => __FILE__,
+            'hasUtf8Bom'        => false,
+            'hasValidUtf8'      => true,
+            'invalidPhpTagLine' => null,
+            'hasValidAst'       => true,
+            'declaresSymbols'   => true,
+            'hasSideEffects'    => false,
+            'sideEffectLine'    => 1,
+        ];
+
+        yield 'numeric keys' => [[0 => 'bad']];
+        yield 'invalid file' => [[...$valid, 'file' => 1]];
+        yield 'invalid BOM flag' => [[...$valid, 'hasUtf8Bom' => 'bad']];
+        yield 'invalid UTF-8 flag' => [[...$valid, 'hasValidUtf8' => 'bad']];
+        yield 'missing invalid tag line' => [
+            [
+                'file'            => __FILE__,
+                'hasUtf8Bom'      => false,
+                'hasValidUtf8'    => true,
+                'hasValidAst'     => true,
+                'declaresSymbols' => true,
+                'hasSideEffects'  => false,
+                'sideEffectLine'  => 1,
+            ],
+        ];
+        yield 'invalid tag line type' => [[...$valid, 'invalidPhpTagLine' => 'bad']];
+        yield 'invalid AST flag' => [[...$valid, 'hasValidAst' => 'bad']];
+        yield 'invalid declaration flag' => [[...$valid, 'declaresSymbols' => 'bad']];
+        yield 'invalid side-effects flag' => [[...$valid, 'hasSideEffects' => 'bad']];
+        yield 'invalid side-effect line' => [[...$valid, 'sideEffectLine' => 'bad']];
+    }
+
+    /** @param array<mixed, mixed> $fileAnalysis */
+    #[DataProvider('malformedFileAnalysisProvider')]
+    public function testClassNodesWithFileAnalysisMissesMalformedFacts(array $fileAnalysis): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes(
+                $sourceFile,
+                'config',
+                [$this->makeClassNode($sourceFile)],
+                new FileAnalysis($sourceFile, false, true, null, true, true, false, 1),
+            );
+
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($payload);
+            $payload['fileAnalysis'] = $fileAnalysis;
+            $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
+
+            $this->assertNull($analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1884,7 +1973,7 @@ final class AnalysisResultCacheTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param array<mixed, mixed> $payload
      */
     private function writeCachePayload(string $cacheDirectory, array $payload, string $filename = 'key.json'): void
     {

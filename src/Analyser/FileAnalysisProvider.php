@@ -49,7 +49,7 @@ final class FileAnalysisProvider
     /** @param array<string, FileAnalysis> $analyses */
     public function __construct(private array $analyses = [])
     {
-        $this->parser   = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->parser = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     public function analyse(string $file): FileAnalysis

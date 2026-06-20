@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
+use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\TestCase;
 use function file_put_contents;
 
 #[CoversClass(ClassNodeExtractor::class)]
+#[CoversClass(ExtractionResult::class)]
 final class ClassNodeExtractorTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
@@ -92,7 +94,7 @@ PHP);
         file_put_contents($file, '<?php final class Foo {} echo "side effect";');
 
         $namespaceLayerResolver = new NamespaceLayerResolver(['Source' => ''], $dir);
-        $extractionResult                 = (new ClassNodeExtractor($namespaceLayerResolver))
+        $extractionResult       = (new ClassNodeExtractor($namespaceLayerResolver))
             ->extractWithFileAnalyses([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);

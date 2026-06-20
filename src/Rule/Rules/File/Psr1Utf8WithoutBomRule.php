@@ -41,7 +41,7 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
     }
 
     /**
-     * @param string[] $skipPaths
+     * @param list<string> $skipPaths
      * @return RuleViolation[]
      */
     public function evaluateProjectAllWithProvider(

@@ -41,7 +41,7 @@ final readonly class Psr1SymbolsOrSideEffectsRule implements FileAnalysisRuleInt
     }
 
     /**
-     * @param string[] $skipPaths
+     * @param list<string> $skipPaths
      * @return RuleViolation[]
      */
     public function evaluateProjectAllWithProvider(

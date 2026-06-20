@@ -41,7 +41,7 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface
     }
 
     /**
-     * @param string[] $skipPaths
+     * @param list<string> $skipPaths
      * @return RuleViolation[]
      */
     public function evaluateProjectAllWithProvider(
