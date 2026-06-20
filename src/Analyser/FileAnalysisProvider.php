@@ -91,8 +91,16 @@ final class FileAnalysisProvider
     }
 
     /** @return array<Node\Stmt>|null */
-    public function ast(string $file): ?array
+    public function ast(string $file, bool $retainForAnalysis = true): ?array
     {
+        if (! $retainForAnalysis) {
+            try {
+                return $this->parser->parse((string) file_get_contents($file));
+            } catch (Error) {
+                return null;
+            }
+        }
+
         if (array_key_exists($file, $this->asts)) {
             return $this->asts[$file];
         }

@@ -32,7 +32,7 @@ final readonly class ClassNodeExtractor
 
         foreach ($files as $file) {
             try {
-                $ast = $this->fileAnalysisProvider->ast($file);
+                $ast = $this->fileAnalysisProvider->ast($file, $withFileAnalysis);
 
                 if ($withFileAnalysis) {
                     $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse($file);

@@ -758,26 +758,38 @@ final class Analyser
         $filesToParse = [];
 
         foreach ($files as $file) {
-            $cachedResult = $withFileAnalysis
-                ? $this->analysisResultCache?->loadClassNodesWithFileAnalysis(
+            if ($withFileAnalysis) {
+                $cachedResult = $this->analysisResultCache?->loadClassNodesWithFileAnalysis(
                     $file,
                     $this->classNodeCacheNamespace
-                )
-                : $this->analysisResultCache?->loadClassNodes($file, $this->classNodeCacheNamespace);
+                );
 
-            if ($cachedResult === null) {
+                if ($cachedResult === null) {
+                    $filesToParse[] = $file;
+                    continue;
+                }
+
+                foreach ($cachedResult['classNodes'] as $cachedClassNode) {
+                    $classNodes[] = $cachedClassNode;
+                }
+
+                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
+
+                continue;
+            }
+
+            $cachedClassNodes = $this->analysisResultCache?->loadClassNodes(
+                $file,
+                $this->classNodeCacheNamespace,
+            );
+
+            if ($cachedClassNodes === null) {
                 $filesToParse[] = $file;
                 continue;
             }
 
-            $cachedClassNodes = $withFileAnalysis ? $cachedResult['classNodes'] : $cachedResult;
-
             foreach ($cachedClassNodes as $cachedClassNode) {
                 $classNodes[] = $cachedClassNode;
-            }
-
-            if ($withFileAnalysis) {
-                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
             }
         }
 
