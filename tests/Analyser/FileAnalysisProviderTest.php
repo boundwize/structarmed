@@ -58,6 +58,14 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertFalse($fileAnalysis->hasSideEffects);
     }
 
+    public function testParsesAstWithoutRetainingItForAnalysis(): void
+    {
+        $fileAnalysisProvider = new FileAnalysisProvider();
+
+        $this->assertIsArray($fileAnalysisProvider->ast($this->source('<?php final class Foo {}'), false));
+        $this->assertNull($fileAnalysisProvider->ast($this->source('<?php invalid !!!!!'), false));
+    }
+
     /** @return iterable<string, array{string, bool, bool, int|null}> */
     public static function lightweightAnalysisProvider(): iterable
     {
