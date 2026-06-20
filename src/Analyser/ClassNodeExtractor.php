@@ -45,7 +45,10 @@ final readonly class ClassNodeExtractor
                 $classCollector->setCurrentFile($file);
                 $nodeTraverser->traverse($ast);
             } finally {
-                $this->fileAnalysisProvider->releaseAst($file);
+                if ($withFileAnalysis) {
+                    $this->fileAnalysisProvider->releaseAst($file);
+                }
+
                 $progressHandler?->advance($file);
             }
         }

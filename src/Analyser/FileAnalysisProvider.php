@@ -107,8 +107,6 @@ final class FileAnalysisProvider
     /** @return array<Node\Stmt>|null */
     public function ast(string $file, bool $retainForAnalysis = true): ?array
     {
-        $file = $this->normalisePath($file);
-
         if (! $retainForAnalysis) {
             try {
                 return $this->parser->parse((string) file_get_contents($file));
@@ -116,6 +114,8 @@ final class FileAnalysisProvider
                 return null;
             }
         }
+
+        $file = $this->normalisePath($file);
 
         if (array_key_exists($file, $this->asts)) {
             return $this->asts[$file];
