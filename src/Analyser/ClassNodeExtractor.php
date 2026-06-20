@@ -20,19 +20,8 @@ final readonly class ClassNodeExtractor
         $this->fileAnalysisProvider = $fileAnalysisProvider ?? new FileAnalysisProvider();
     }
 
-    /**
-     * @param list<string> $files
-     * @return list<ClassNode>
-     */
-    public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
-    {
-        return $this->extractWithFileAnalyses($files, $progressHandler)->classNodes;
-    }
-
-    /**
-     * @param list<string> $files
-     */
-    public function extractWithFileAnalyses(
+    /** @param list<string> $files */
+    public function extract(
         array $files,
         ?ProgressHandlerInterface $progressHandler = null,
     ): ExtractionResult {

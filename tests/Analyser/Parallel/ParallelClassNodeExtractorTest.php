@@ -36,7 +36,8 @@ final class ParallelClassNodeExtractorTest extends TestCase
 
         $result = $parallelClassNodeExtractor->extract([]);
 
-        $this->assertSame([], $result);
+        $this->assertSame([], $result->classNodes);
+        $this->assertSame([], $result->fileAnalyses);
     }
 
     public function testExtractWithWorkerCountOneUsesSequentialPath(): void
@@ -63,9 +64,9 @@ PHP);
 
         $result = $parallelClassNodeExtractor->extract([$file]);
 
-        $this->assertCount(1, $result);
-        $this->assertInstanceOf(ClassNode::class, $result[0]);
-        $this->assertSame('App\\Domain\\Foo', $result[0]->className);
+        $this->assertCount(1, $result->classNodes);
+        $this->assertInstanceOf(ClassNode::class, $result->classNodes[0]);
+        $this->assertSame('App\\Domain\\Foo', $result->classNodes[0]->className);
     }
 
     public function testExtractWithMultipleFilesUsesParallelPath(): void
@@ -103,13 +104,13 @@ PHP);
 
         $result = $parallelClassNodeExtractor->extract([$file1, $file2]);
 
-        $this->assertCount(2, $result);
-        $classNames = [$result[0]->className, $result[1]->className];
+        $this->assertCount(2, $result->classNodes);
+        $classNames = [$result->classNodes[0]->className, $result->classNodes[1]->className];
         $this->assertContains('App\\Domain\\Foo', $classNames);
         $this->assertContains('App\\Domain\\Bar', $classNames);
     }
 
-    public function testExtractWithFileAnalysesReturnsWorkerFacts(): void
+    public function testExtractReturnsWorkerFacts(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
         $file = $dir . '/Foo.php';
@@ -117,7 +118,7 @@ PHP);
         file_put_contents($file, '<?php final class Foo {} echo "side effect";');
 
         $extractionResult = (new ParallelClassNodeExtractor($dir, ['Source' => ''], [], 2))
-            ->extractWithFileAnalyses([$file]);
+            ->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
         $this->assertArrayHasKey($file, $extractionResult->fileAnalyses);
@@ -151,8 +152,8 @@ PHP);
 
         $result = $parallelClassNodeExtractor->extract([$file]);
 
-        $this->assertCount(1, $result);
-        $this->assertSame('App\\Domain\\Baz', $result[0]->className);
+        $this->assertCount(1, $result->classNodes);
+        $this->assertSame('App\\Domain\\Baz', $result->classNodes[0]->className);
     }
 
     public function testExtractWithLayerPatternsUsesChainResolver(): void
@@ -179,7 +180,7 @@ PHP);
 
         $result = $parallelClassNodeExtractor->extract([$file]);
 
-        $this->assertCount(1, $result);
+        $this->assertCount(1, $result->classNodes);
     }
 
     public function testExtractSequentialPathWithLayerPatterns(): void
@@ -206,8 +207,8 @@ PHP);
 
         $result = $parallelClassNodeExtractor->extract([$file]);
 
-        $this->assertCount(1, $result);
-        $this->assertSame('App\\Domain\\FooService', $result[0]->className);
+        $this->assertCount(1, $result->classNodes);
+        $this->assertSame('App\\Domain\\FooService', $result->classNodes[0]->className);
     }
 
     public function testExtractThrowsWhenWorkerFailsDueToNullByteInFilePath(): void
@@ -255,7 +256,7 @@ PHP);
 
         try {
             $result = $parallelClassNodeExtractor->extract([$file]);
-            $this->assertCount(1, $result);
+            $this->assertCount(1, $result->classNodes);
         } finally {
             if (is_dir($cacheDir)) {
                 foreach (glob($cacheDir . '/*') ?: [] as $tmpFile) {

@@ -790,9 +790,9 @@ final class Analyser
                 $layerPatterns,
                 $options->workerCount,
                 $this->analysisResultCache?->getCacheDirectory(),
-            ))->extractWithFileAnalyses($filesToParse, $progressHandler);
+            ))->extract($filesToParse, $progressHandler);
         } else {
-            $parsedResult = (new ClassNodeExtractor($chainLayerResolver))->extractWithFileAnalyses(
+            $parsedResult = (new ClassNodeExtractor($chainLayerResolver))->extract(
                 $filesToParse,
                 $progressHandler
             );

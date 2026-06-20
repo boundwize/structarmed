@@ -60,17 +60,8 @@ final readonly class ParallelClassNodeExtractor
     ) {
     }
 
-    /**
-     * @param list<string> $files
-     * @return list<ClassNode>
-     */
-    public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
-    {
-        return $this->extractWithFileAnalyses($files, $progressHandler)->classNodes;
-    }
-
     /** @param list<string> $files */
-    public function extractWithFileAnalyses(
+    public function extract(
         array $files,
         ?ProgressHandlerInterface $progressHandler = null,
     ): ExtractionResult {

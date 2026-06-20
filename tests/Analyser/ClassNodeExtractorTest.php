@@ -28,7 +28,8 @@ final class ClassNodeExtractorTest extends TestCase
 
         $result = $classNodeExtractor->extract([]);
 
-        $this->assertSame([], $result);
+        $this->assertSame([], $result->classNodes);
+        $this->assertSame([], $result->fileAnalyses);
     }
 
     public function testExtractReturnsClassNodesFromPhpFile(): void
@@ -51,9 +52,9 @@ PHP);
 
         $result = $classNodeExtractor->extract([$file]);
 
-        $this->assertCount(1, $result);
-        $this->assertInstanceOf(ClassNode::class, $result[0]);
-        $this->assertSame('App\\Domain\\Foo', $result[0]->className);
+        $this->assertCount(1, $result->classNodes);
+        $this->assertInstanceOf(ClassNode::class, $result->classNodes[0]);
+        $this->assertSame('App\\Domain\\Foo', $result->classNodes[0]->className);
     }
 
     public function testExtractSkipsFilesWithParseErrors(): void
@@ -68,7 +69,7 @@ PHP);
 
         $result = $classNodeExtractor->extract([$file]);
 
-        $this->assertSame([], $result);
+        $this->assertSame([], $result->classNodes);
     }
 
     public function testExtractSkipsFilesWithEmptyAst(): void
@@ -83,10 +84,10 @@ PHP);
 
         $result = $classNodeExtractor->extract([$file]);
 
-        $this->assertSame([], $result);
+        $this->assertSame([], $result->classNodes);
     }
 
-    public function testExtractWithFileAnalysesReturnsFactsFromTheSameParse(): void
+    public function testExtractReturnsFactsFromTheSameParse(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');
         $file = $dir . '/Foo.php';
@@ -95,7 +96,7 @@ PHP);
 
         $namespaceLayerResolver = new NamespaceLayerResolver(['Source' => ''], $dir);
         $extractionResult       = (new ClassNodeExtractor($namespaceLayerResolver))
-            ->extractWithFileAnalyses([$file]);
+            ->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
         $this->assertArrayHasKey($file, $extractionResult->fileAnalyses);

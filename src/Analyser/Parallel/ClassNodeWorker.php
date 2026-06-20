@@ -51,7 +51,7 @@ final readonly class ClassNodeWorker
 
             $progressHandler = $emitProgress ? new WorkerProgressHandler($stream) : null;
 
-            $result = (new ClassNodeExtractor($layerResolver))->extractWithFileAnalyses($files, $progressHandler);
+            $result = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
 
             file_put_contents($outputFile, serialize([
                 'nodes'        => $result->classNodes,
