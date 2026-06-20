@@ -158,7 +158,7 @@ final class Psr1PhpTagsRuleTest extends TestCase
             $canonicalFile = realpath($basePath . '/src/Foo.php');
             $this->assertIsString($canonicalFile);
 
-            $fileAnalysis = new FileAnalysis(
+            $fileAnalysis         = new FileAnalysis(
                 file: $canonicalFile,
                 hasUtf8Bom: false,
                 hasValidUtf8: true,
@@ -168,12 +168,12 @@ final class Psr1PhpTagsRuleTest extends TestCase
                 hasSideEffects: true,
                 sideEffectLine: 1,
             );
-            $provider     = new FileAnalysisProvider([$canonicalFile => $fileAnalysis]);
+            $fileAnalysisProvider = new FileAnalysisProvider([$canonicalFile => $fileAnalysis]);
 
             $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAllWithProvider(
                 $linkedBasePath,
                 Architecture::define(),
-                $provider,
+                $fileAnalysisProvider,
             );
 
             $this->assertCount(1, $violations);

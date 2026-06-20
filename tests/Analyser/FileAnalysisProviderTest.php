@@ -68,8 +68,8 @@ final class FileAnalysisProviderTest extends TestCase
 
     public function testReusesSeededAnalysisAcrossWindowsPathSeparators(): void
     {
-        $windowsPath = 'C:\\project\\src\\Foo.php';
-        $analysis    = new FileAnalysis(
+        $windowsPath  = 'C:\\project\\src\\Foo.php';
+        $fileAnalysis = new FileAnalysis(
             file: $windowsPath,
             hasUtf8Bom: false,
             hasValidUtf8: true,
@@ -80,9 +80,9 @@ final class FileAnalysisProviderTest extends TestCase
             sideEffectLine: 1,
         );
 
-        $fileAnalysisProvider = new FileAnalysisProvider([$windowsPath => $analysis]);
+        $fileAnalysisProvider = new FileAnalysisProvider([$windowsPath => $fileAnalysis]);
 
-        $this->assertSame($analysis, $fileAnalysisProvider->analyse('C:/project/src/Foo.php'));
+        $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse('C:/project/src/Foo.php'));
     }
 
     /** @return iterable<string, array{string, bool, bool, int|null}> */
