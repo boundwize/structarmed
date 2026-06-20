@@ -24,6 +24,7 @@ final readonly class ClassNodeExtractor
     public function extract(
         array $files,
         ?ProgressHandlerInterface $progressHandler = null,
+        bool $withFileAnalysis = true,
     ): ExtractionResult {
         $classCollector = new ClassCollector($this->layerResolver);
         $nodeTraverser  = new NodeTraverser(new NameResolver(), $classCollector);
@@ -31,8 +32,11 @@ final readonly class ClassNodeExtractor
 
         foreach ($files as $file) {
             try {
-                $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse($file);
-                $ast                 = $this->fileAnalysisProvider->ast($file);
+                $ast = $this->fileAnalysisProvider->ast($file);
+
+                if ($withFileAnalysis) {
+                    $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse($file);
+                }
 
                 if ($ast === null || $ast === []) {
                     continue;

@@ -64,6 +64,7 @@ final readonly class ParallelClassNodeExtractor
     public function extract(
         array $files,
         ?ProgressHandlerInterface $progressHandler = null,
+        bool $withFileAnalysis = true,
     ): ExtractionResult {
         if ($files === []) {
             return new ExtractionResult([], []);
@@ -83,11 +84,12 @@ final readonly class ParallelClassNodeExtractor
             ] = $this->createWorkerFiles();
 
             file_put_contents($inputFile, serialize([
-                'basePath'      => $this->basePath,
-                'layers'        => $this->layers,
-                'layerPatterns' => $this->layerPatterns,
-                'files'         => $chunk,
-                'emitProgress'  => $emitProgress,
+                'basePath'         => $this->basePath,
+                'layers'           => $this->layers,
+                'layerPatterns'    => $this->layerPatterns,
+                'files'            => $chunk,
+                'emitProgress'     => $emitProgress,
+                'withFileAnalysis' => $withFileAnalysis,
             ]));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName

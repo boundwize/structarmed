@@ -131,7 +131,8 @@ final class Analyser
             $layers,
             $layerPatterns,
             $chainLayerResolver,
-            $analyserOptions ?? AnalyserOptions::parallel()
+            $analyserOptions ?? AnalyserOptions::parallel(),
+            $fileAnalysisRules !== [],
         );
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes);
@@ -749,28 +750,35 @@ final class Analyser
         array $layers,
         array $layerPatterns,
         ChainLayerResolver $chainLayerResolver,
-        ?AnalyserOptions $analyserOptions = null
+        ?AnalyserOptions $analyserOptions = null,
+        bool $withFileAnalysis = true,
     ): ExtractionResult {
         $classNodes   = [];
         $fileAnalyses = [];
         $filesToParse = [];
 
         foreach ($files as $file) {
-            $cachedResult = $this->analysisResultCache?->loadClassNodesWithFileAnalysis(
-                $file,
-                $this->classNodeCacheNamespace
-            );
+            $cachedResult = $withFileAnalysis
+                ? $this->analysisResultCache?->loadClassNodesWithFileAnalysis(
+                    $file,
+                    $this->classNodeCacheNamespace
+                )
+                : $this->analysisResultCache?->loadClassNodes($file, $this->classNodeCacheNamespace);
 
             if ($cachedResult === null) {
                 $filesToParse[] = $file;
                 continue;
             }
 
-            foreach ($cachedResult['classNodes'] as $cachedClassNode) {
+            $cachedClassNodes = $withFileAnalysis ? $cachedResult['classNodes'] : $cachedResult;
+
+            foreach ($cachedClassNodes as $cachedClassNode) {
                 $classNodes[] = $cachedClassNode;
             }
 
-            $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
+            if ($withFileAnalysis) {
+                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
+            }
         }
 
         $progressHandler?->start(count($filesToParse));
@@ -790,11 +798,12 @@ final class Analyser
                 $layerPatterns,
                 $options->workerCount,
                 $this->analysisResultCache?->getCacheDirectory(),
-            ))->extract($filesToParse, $progressHandler);
+            ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         } else {
             $parsedResult = (new ClassNodeExtractor($chainLayerResolver))->extract(
                 $filesToParse,
-                $progressHandler
+                $progressHandler,
+                $withFileAnalysis,
             );
         }
 

@@ -40,6 +40,12 @@ final class FileAnalysisProvider
     /** @var array<string, array<Node\Stmt>|null> */
     private array $asts = [];
 
+    /** @var array<string, bool> */
+    private array $validAsts = [];
+
+    /** @var array<string, array<Token>> */
+    private array $tokens = [];
+
     /** @var array<string, string> */
     private array $contents = [];
 
@@ -59,17 +65,9 @@ final class FileAnalysisProvider
         }
 
         $code        = $this->contents($file);
-        $ast         = null;
-        $hasValidAst = true;
-
-        try {
-            $ast = $this->parser->parse($code);
-        } catch (Error) {
-            $hasValidAst = false;
-        }
-
-        $this->asts[$file] = $ast;
-        $fileState         = $hasValidAst ? $this->fileState($ast ?? []) : [
+        $ast         = $this->ast($file);
+        $hasValidAst = $this->validAsts[$file];
+        $fileState   = $hasValidAst ? $this->fileState($ast ?? []) : [
             'declaresSymbols' => false,
             'hasSideEffects'  => false,
             'sideEffectLine'  => 1,
@@ -79,7 +77,7 @@ final class FileAnalysisProvider
             file: $file,
             hasUtf8Bom: str_starts_with($code, "\xEF\xBB\xBF"),
             hasValidUtf8: preg_match('//u', $code) === 1,
-            invalidPhpTagLine: $this->invalidPhpTagLineFromTokens($this->parser->getTokens()),
+            invalidPhpTagLine: $this->invalidPhpTagLineFromTokens($this->tokens[$file]),
             hasValidAst: $hasValidAst,
             declaresSymbols: $fileState['declaresSymbols'],
             hasSideEffects: $fileState['hasSideEffects'],
@@ -95,14 +93,38 @@ final class FileAnalysisProvider
     /** @return array<Node\Stmt>|null */
     public function ast(string $file): ?array
     {
-        $this->analyse($file);
+        if (array_key_exists($file, $this->asts)) {
+            return $this->asts[$file];
+        }
 
-        return $this->asts[$file] ?? null;
+        if (isset($this->analyses[$file])) {
+            return null;
+        }
+
+        $ast     = null;
+        $isValid = true;
+
+        try {
+            $ast = $this->parser->parse($this->contents($file));
+        } catch (Error) {
+            $isValid = false;
+        }
+
+        $this->asts[$file]      = $ast;
+        $this->validAsts[$file] = $isValid;
+        $this->tokens[$file]    = $this->parser->getTokens();
+
+        return $ast;
     }
 
     public function releaseAst(string $file): void
     {
-        unset($this->asts[$file]);
+        unset(
+            $this->asts[$file],
+            $this->validAsts[$file],
+            $this->tokens[$file],
+            $this->contents[$file],
+        );
     }
 
     public function hasUtf8Bom(string $file): bool
