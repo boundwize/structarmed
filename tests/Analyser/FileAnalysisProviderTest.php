@@ -66,6 +66,25 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertNull($fileAnalysisProvider->ast($this->source('<?php invalid !!!!!'), false));
     }
 
+    public function testReusesSeededAnalysisAcrossWindowsPathSeparators(): void
+    {
+        $windowsPath = 'C:\\project\\src\\Foo.php';
+        $analysis    = new FileAnalysis(
+            file: $windowsPath,
+            hasUtf8Bom: false,
+            hasValidUtf8: true,
+            invalidPhpTagLine: null,
+            hasValidAst: true,
+            declaresSymbols: true,
+            hasSideEffects: false,
+            sideEffectLine: 1,
+        );
+
+        $fileAnalysisProvider = new FileAnalysisProvider([$windowsPath => $analysis]);
+
+        $this->assertSame($analysis, $fileAnalysisProvider->analyse('C:/project/src/Foo.php'));
+    }
+
     /** @return iterable<string, array{string, bool, bool, int|null}> */
     public static function lightweightAnalysisProvider(): iterable
     {

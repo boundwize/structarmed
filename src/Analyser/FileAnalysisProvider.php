@@ -25,6 +25,9 @@ use function array_key_exists;
 use function file_get_contents;
 use function is_array;
 use function preg_match;
+use function realpath;
+use function rtrim;
+use function str_replace;
 use function str_starts_with;
 use function token_get_all;
 use function trim;
@@ -52,14 +55,25 @@ final class FileAnalysisProvider
     /** @var array<string, int|null> */
     private array $invalidPhpTagLines = [];
 
+    /** @var array<string, string> */
+    private array $normalisedPaths = [];
+
     /** @param array<string, FileAnalysis> $analyses */
     public function __construct(private array $analyses = [])
     {
-        $this->parser = (new ParserFactory())->createForNewestSupportedVersion();
+        $normalisedAnalyses = [];
+        foreach ($this->analyses as $file => $analysis) {
+            $normalisedAnalyses[$this->normalisePath($file)] = $analysis;
+        }
+
+        $this->analyses = $normalisedAnalyses;
+        $this->parser   = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     public function analyse(string $file): FileAnalysis
     {
+        $file = $this->normalisePath($file);
+
         if (isset($this->analyses[$file])) {
             return $this->analyses[$file];
         }
@@ -93,6 +107,8 @@ final class FileAnalysisProvider
     /** @return array<Node\Stmt>|null */
     public function ast(string $file, bool $retainForAnalysis = true): ?array
     {
+        $file = $this->normalisePath($file);
+
         if (! $retainForAnalysis) {
             try {
                 return $this->parser->parse((string) file_get_contents($file));
@@ -127,6 +143,8 @@ final class FileAnalysisProvider
 
     public function releaseAst(string $file): void
     {
+        $file = $this->normalisePath($file);
+
         unset(
             $this->asts[$file],
             $this->validAsts[$file],
@@ -137,16 +155,22 @@ final class FileAnalysisProvider
 
     public function hasUtf8Bom(string $file): bool
     {
+        $file = $this->normalisePath($file);
+
         return $this->analyses[$file]->hasUtf8Bom ?? str_starts_with($this->contents($file), "\xEF\xBB\xBF");
     }
 
     public function hasValidUtf8(string $file): bool
     {
+        $file = $this->normalisePath($file);
+
         return $this->analyses[$file]->hasValidUtf8 ?? preg_match('//u', $this->contents($file)) === 1;
     }
 
     public function invalidPhpTagLine(string $file): ?int
     {
+        $file = $this->normalisePath($file);
+
         if (isset($this->analyses[$file])) {
             return $this->analyses[$file]->invalidPhpTagLine;
         }
@@ -198,7 +222,23 @@ final class FileAnalysisProvider
 
     private function contents(string $file): string
     {
+        $file = $this->normalisePath($file);
+
         return $this->contents[$file] ??= (string) file_get_contents($file);
+    }
+
+    private function normalisePath(string $path): string
+    {
+        if (isset($this->normalisedPaths[$path])) {
+            return $this->normalisedPaths[$path];
+        }
+
+        $normalisedPath = rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
+
+        $this->normalisedPaths[$path]           = $normalisedPath;
+        $this->normalisedPaths[$normalisedPath] = $normalisedPath;
+
+        return $normalisedPath;
     }
 
     /**

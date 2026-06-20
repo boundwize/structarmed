@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\File;
 
+use Boundwize\StructArmed\Analyser\FileAnalysis;
+use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
@@ -15,6 +17,7 @@ use function bin2hex;
 use function file_put_contents;
 use function mkdir;
 use function random_bytes;
+use function realpath;
 use function rmdir;
 use function str_replace;
 use function symlink;
@@ -133,9 +136,10 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
-    public function testPhpFileFinderIgnoresDirectorySymlinks(): void
+    public function testPhpFileFinderIgnoresDirectorySymlinksAndReusesCanonicalAnalysis(): void
     {
-        $basePath = $this->makeTempDir();
+        $basePath       = $this->makeTempDir();
+        $linkedBasePath = $basePath . '-link';
 
         try {
             mkdir($basePath . '/src');
@@ -144,12 +148,39 @@ final class Psr1PhpTagsRuleTest extends TestCase
             symlink($basePath . '/LinkedDirectory', $basePath . '/src/LinkedDirectory');
             file_put_contents($basePath . '/src/Docs/readme.md', '<? echo "x";');
             file_put_contents($basePath . '/src/Foo.php', '<?php echo "x";');
+            symlink($basePath, $linkedBasePath);
 
             $files = (new PhpFileFinder(['src/']))->files($basePath);
 
             $this->assertCount(1, $files);
             $this->assertStringEndsWith('/src/Foo.php', str_replace('\\', '/', $files[0]));
+
+            $canonicalFile = realpath($basePath . '/src/Foo.php');
+            $this->assertIsString($canonicalFile);
+
+            $fileAnalysis = new FileAnalysis(
+                file: $canonicalFile,
+                hasUtf8Bom: false,
+                hasValidUtf8: true,
+                invalidPhpTagLine: 37,
+                hasValidAst: true,
+                declaresSymbols: false,
+                hasSideEffects: true,
+                sideEffectLine: 1,
+            );
+            $provider     = new FileAnalysisProvider([$canonicalFile => $fileAnalysis]);
+
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAllWithProvider(
+                $linkedBasePath,
+                Architecture::define(),
+                $provider,
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(37, $violations[0]->line);
+            $this->assertStringStartsWith($linkedBasePath, $violations[0]->file);
         } finally {
+            DIRECTORY_SEPARATOR === '\\' ? rmdir($linkedBasePath) : unlink($linkedBasePath);
             unlink($basePath . '/src/Foo.php');
             unlink($basePath . '/src/Docs/readme.md');
             DIRECTORY_SEPARATOR === '\\'

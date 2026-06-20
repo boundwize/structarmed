@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
+use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
@@ -14,6 +15,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\File\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
@@ -31,9 +33,13 @@ use function file_put_contents;
 use function is_dir;
 use function mkdir;
 use function realpath;
+use function rmdir;
 use function sort;
 use function str_replace;
 use function symlink;
+use function unlink;
+
+use const DIRECTORY_SEPARATOR;
 
 #[CoversClass(Analyser::class)]
 #[CoversClass(ParallelClassNodeExtractor::class)]
@@ -728,6 +734,67 @@ final class AnalyserTest extends TestCase
 
         $this->assertSame(0, $progress->total);
         $this->assertSame([], $progress->files);
+    }
+
+    public function testAnalyserReusesFileAnalysisThroughSymlinkedProjectPath(): void
+    {
+        $basePath       = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; final class Foo {}',
+        ]);
+        $linkedBasePath = $basePath . '-link';
+        symlink($basePath, $linkedBasePath);
+
+        $rule = new class ($linkedBasePath . '/src/Foo.php') implements FileAnalysisRuleInterface {
+            public bool $reusedAnalysis = false;
+
+            public function __construct(private readonly string $file)
+            {
+            }
+
+            public function evaluateProject(
+                string $basePath,
+                Architecture $architecture,
+                array $skipPaths = [],
+            ): ?RuleViolation {
+                return null;
+            }
+
+            public function evaluateProjectAll(
+                string $basePath,
+                Architecture $architecture,
+                array $skipPaths = [],
+            ): array {
+                return [];
+            }
+
+            public function evaluateProjectAllWithProvider(
+                string $basePath,
+                Architecture $architecture,
+                FileAnalysisProvider $fileAnalysisProvider,
+                array $skipPaths = [],
+            ): array {
+                file_put_contents($this->file, '<?php echo "changed after extraction";');
+
+                $this->reusedAnalysis = $fileAnalysisProvider->analyse($this->file)->declaresSymbols;
+
+                return [];
+            }
+        };
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('reuse-probe', $rule);
+
+        try {
+            (new Analyser($linkedBasePath))->analyse(
+                $architecture,
+                analyserOptions: AnalyserOptions::sequential(),
+            );
+
+            $this->assertTrue($rule->reusedAnalysis);
+        } finally {
+            DIRECTORY_SEPARATOR === '\\' ? rmdir($linkedBasePath) : unlink($linkedBasePath);
+        }
     }
 
     public function testAnalyserReportsAllViolationsFromMultipleViolationRules(): void
