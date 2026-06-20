@@ -51,18 +51,20 @@ final readonly class ClassNodeWorker
 
             $progressHandler = $emitProgress ? new WorkerProgressHandler($stream) : null;
 
-            $nodes = (new ClassNodeExtractor($layerResolver))->extract($files, $progressHandler);
+            $result = (new ClassNodeExtractor($layerResolver))->extractWithFileAnalyses($files, $progressHandler);
 
             file_put_contents($outputFile, serialize([
-                'nodes' => $nodes,
-                'error' => null,
+                'nodes'        => $result->classNodes,
+                'fileAnalyses' => $result->fileAnalyses,
+                'error'        => null,
             ]));
 
             return 0;
         } catch (Throwable $throwable) {
             file_put_contents($outputFile, serialize([
-                'nodes' => [],
-                'error' => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
+                'nodes'        => [],
+                'fileAnalyses' => [],
+                'error'        => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
             ]));
 
             return 1;

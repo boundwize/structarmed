@@ -84,6 +84,23 @@ PHP);
         $this->assertSame([], $result);
     }
 
+    public function testExtractWithFileAnalysesReturnsFactsFromTheSameParse(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $file = $dir . '/Foo.php';
+
+        file_put_contents($file, '<?php final class Foo {} echo "side effect";');
+
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Source' => ''], $dir);
+        $extractionResult                 = (new ClassNodeExtractor($namespaceLayerResolver))
+            ->extractWithFileAnalyses([$file]);
+
+        $this->assertCount(1, $extractionResult->classNodes);
+        $this->assertArrayHasKey($file, $extractionResult->fileAnalyses);
+        $this->assertTrue($extractionResult->fileAnalyses[$file]->declaresSymbols);
+        $this->assertTrue($extractionResult->fileAnalyses[$file]->hasSideEffects);
+    }
+
     public function testExtractAdvancesProgressHandler(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');

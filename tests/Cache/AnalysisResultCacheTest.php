@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Cache;
 use App\Foo;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
+use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
@@ -912,6 +913,39 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testStoresAndLoadsClassNodesWithFileAnalysis(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $fileAnalysis        = new FileAnalysis(
+            file: $sourceFile,
+            hasUtf8Bom: false,
+            hasValidUtf8: true,
+            invalidPhpTagLine: null,
+            hasValidAst: true,
+            declaresSymbols: true,
+            hasSideEffects: false,
+            sideEffectLine: 1,
+        );
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $classNodes = [$this->makeClassNode($sourceFile)];
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes, $fileAnalysis);
+
+            $loaded = $analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config');
+
+            $this->assertNotNull($loaded);
+            $this->assertEquals($classNodes, $loaded['classNodes']);
+            $this->assertEquals($fileAnalysis, $loaded['fileAnalysis']);
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);

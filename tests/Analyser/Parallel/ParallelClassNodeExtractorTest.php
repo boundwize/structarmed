@@ -109,6 +109,22 @@ PHP);
         $this->assertContains('App\\Domain\\Bar', $classNames);
     }
 
+    public function testExtractWithFileAnalysesReturnsWorkerFacts(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+
+        file_put_contents($file, '<?php final class Foo {} echo "side effect";');
+
+        $extractionResult = (new ParallelClassNodeExtractor($dir, ['Source' => ''], [], 2))
+            ->extractWithFileAnalyses([$file]);
+
+        $this->assertCount(1, $extractionResult->classNodes);
+        $this->assertArrayHasKey($file, $extractionResult->fileAnalyses);
+        $this->assertTrue($extractionResult->fileAnalyses[$file]->declaresSymbols);
+        $this->assertTrue($extractionResult->fileAnalyses[$file]->hasSideEffects);
+    }
+
     public function testExtractWithCacheDirectoryCreatesWorkerTempFilesInIt(): void
     {
         $dir      = $this->makeTemporaryDirectory('structarmed-parallel-test');
