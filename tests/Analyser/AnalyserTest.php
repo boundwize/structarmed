@@ -33,7 +33,6 @@ use function file_put_contents;
 use function is_dir;
 use function mkdir;
 use function realpath;
-use function rmdir;
 use function sort;
 use function str_replace;
 use function symlink;
@@ -738,13 +737,18 @@ final class AnalyserTest extends TestCase
 
     public function testAnalyserReusesFileAnalysisThroughSymlinkedProjectPath(): void
     {
-        $basePath       = $this->makeTempProject([
+        $basePath         = $this->makeTempProject([
             'src/Foo.php' => '<?php namespace App; final class Foo {}',
         ]);
-        $linkedBasePath = $basePath . '-link';
-        symlink($basePath, $linkedBasePath);
+        $linkedBasePath   = $basePath . '-link';
+        $analysisBasePath = $basePath;
 
-        $rule = new class ($linkedBasePath . '/src/Foo.php') implements FileAnalysisRuleInterface {
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            symlink($basePath, $linkedBasePath);
+            $analysisBasePath = $linkedBasePath;
+        }
+
+        $rule = new class ($analysisBasePath . '/src/Foo.php') implements FileAnalysisRuleInterface {
             public bool $reusedAnalysis = false;
 
             public function __construct(private readonly string $file)
@@ -786,14 +790,16 @@ final class AnalyserTest extends TestCase
             ->rule('reuse-probe', $rule);
 
         try {
-            (new Analyser($linkedBasePath))->analyse(
+            (new Analyser($analysisBasePath))->analyse(
                 $architecture,
                 analyserOptions: AnalyserOptions::sequential(),
             );
 
             $this->assertTrue($rule->reusedAnalysis);
         } finally {
-            DIRECTORY_SEPARATOR === '\\' ? rmdir($linkedBasePath) : unlink($linkedBasePath);
+            if (DIRECTORY_SEPARATOR !== '\\') {
+                unlink($linkedBasePath);
+            }
         }
     }
 

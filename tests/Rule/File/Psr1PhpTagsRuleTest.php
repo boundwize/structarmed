@@ -19,6 +19,7 @@ use function mkdir;
 use function random_bytes;
 use function realpath;
 use function rmdir;
+use function rtrim;
 use function str_replace;
 use function symlink;
 use function sys_get_temp_dir;
@@ -138,8 +139,9 @@ final class Psr1PhpTagsRuleTest extends TestCase
 
     public function testPhpFileFinderIgnoresDirectorySymlinksAndReusesCanonicalAnalysis(): void
     {
-        $basePath       = $this->makeTempDir();
-        $linkedBasePath = $basePath . '-link';
+        $basePath         = $this->makeTempDir();
+        $linkedBasePath   = $basePath . '-link';
+        $analysisBasePath = $basePath;
 
         try {
             mkdir($basePath . '/src');
@@ -148,7 +150,10 @@ final class Psr1PhpTagsRuleTest extends TestCase
             symlink($basePath . '/LinkedDirectory', $basePath . '/src/LinkedDirectory');
             file_put_contents($basePath . '/src/Docs/readme.md', '<? echo "x";');
             file_put_contents($basePath . '/src/Foo.php', '<?php echo "x";');
-            symlink($basePath, $linkedBasePath);
+            if (DIRECTORY_SEPARATOR !== '\\') {
+                symlink($basePath, $linkedBasePath);
+                $analysisBasePath = $linkedBasePath;
+            }
 
             $files = (new PhpFileFinder(['src/']))->files($basePath);
 
@@ -171,16 +176,22 @@ final class Psr1PhpTagsRuleTest extends TestCase
             $fileAnalysisProvider = new FileAnalysisProvider([$canonicalFile => $fileAnalysis]);
 
             $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAllWithProvider(
-                $linkedBasePath,
+                $analysisBasePath,
                 Architecture::define(),
                 $fileAnalysisProvider,
             );
 
             $this->assertCount(1, $violations);
             $this->assertSame(37, $violations[0]->line);
-            $this->assertStringStartsWith($linkedBasePath, $violations[0]->file);
+            $this->assertStringStartsWith(
+                rtrim(str_replace('\\', '/', $analysisBasePath), '/') . '/',
+                str_replace('\\', '/', $violations[0]->file),
+            );
         } finally {
-            DIRECTORY_SEPARATOR === '\\' ? rmdir($linkedBasePath) : unlink($linkedBasePath);
+            if (DIRECTORY_SEPARATOR !== '\\') {
+                unlink($linkedBasePath);
+            }
+
             unlink($basePath . '/src/Foo.php');
             unlink($basePath . '/src/Docs/readme.md');
             DIRECTORY_SEPARATOR === '\\'
