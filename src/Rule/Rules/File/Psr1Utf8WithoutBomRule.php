@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\File;
 
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
