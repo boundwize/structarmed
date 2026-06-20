@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Rules\File;
 
+use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
-use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-use function file_get_contents;
-use function preg_match;
 use function sprintf;
-use function str_starts_with;
 
-final readonly class Psr1Utf8WithoutBomRule implements MultipleProjectRuleViolationInterface
+final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
 {
     /**
      * @param list<string>|null $sourcePaths
@@ -35,13 +32,29 @@ final readonly class Psr1Utf8WithoutBomRule implements MultipleProjectRuleViolat
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
+        return $this->evaluateProjectAllWithProvider(
+            $basePath,
+            $architecture,
+            new FileAnalysisProvider(),
+            $skipPaths,
+        );
+    }
+
+    /**
+     * @param list<string> $skipPaths
+     * @return RuleViolation[]
+     */
+    public function evaluateProjectAllWithProvider(
+        string $basePath,
+        Architecture $architecture,
+        FileAnalysisProvider $fileAnalysisProvider,
+        array $skipPaths = [],
+    ): array {
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
         $violations    = [];
 
         foreach ($phpFileFinder->files($basePath, $skipPaths) as $file) {
-            $contents = (string) file_get_contents($file);
-
-            if (str_starts_with($contents, "\xEF\xBB\xBF")) {
+            if ($fileAnalysisProvider->hasUtf8Bom($file)) {
                 $violations[] = new RuleViolation(
                     message: sprintf('File [%s] must use UTF-8 without BOM', $file),
                     file: $file,
@@ -51,7 +64,7 @@ final readonly class Psr1Utf8WithoutBomRule implements MultipleProjectRuleViolat
                 continue;
             }
 
-            if (preg_match('//u', $contents) !== 1) {
+            if (! $fileAnalysisProvider->hasValidUtf8($file)) {
                 $violations[] = new RuleViolation(
                     message: sprintf('File [%s] must use valid UTF-8 encoding', $file),
                     file: $file,

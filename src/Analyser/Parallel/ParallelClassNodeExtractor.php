@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ExtractionResult;
+use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
@@ -58,14 +60,14 @@ final readonly class ParallelClassNodeExtractor
     ) {
     }
 
-    /**
-     * @param list<string> $files
-     * @return list<ClassNode>
-     */
-    public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
-    {
+    /** @param list<string> $files */
+    public function extract(
+        array $files,
+        ?ProgressHandlerInterface $progressHandler = null,
+        bool $withFileAnalysis = true,
+    ): ExtractionResult {
         if ($files === []) {
-            return [];
+            return new ExtractionResult([], []);
         }
 
         $totalFiles   = count($files);
@@ -82,11 +84,12 @@ final readonly class ParallelClassNodeExtractor
             ] = $this->createWorkerFiles();
 
             file_put_contents($inputFile, serialize([
-                'basePath'      => $this->basePath,
-                'layers'        => $this->layers,
-                'layerPatterns' => $this->layerPatterns,
-                'files'         => $chunk,
-                'emitProgress'  => $emitProgress,
+                'basePath'         => $this->basePath,
+                'layers'           => $this->layers,
+                'layerPatterns'    => $this->layerPatterns,
+                'files'            => $chunk,
+                'emitProgress'     => $emitProgress,
+                'withFileAnalysis' => $withFileAnalysis,
             ]));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
@@ -125,9 +128,10 @@ final readonly class ParallelClassNodeExtractor
             ];
         }
 
-        $nodes   = [];
-        $failure = null;
-        $pending = $processes;
+        $nodes        = [];
+        $fileAnalyses = [];
+        $failure      = null;
+        $pending      = $processes;
 
         while ($pending !== []) {
             $anyActivity = false;
@@ -202,6 +206,20 @@ final readonly class ParallelClassNodeExtractor
                     foreach ($workerNodes as $workerNode) {
                         $nodes[] = $workerNode;
                     }
+
+                    $workerFileAnalyses = $result['fileAnalyses'] ?? [];
+
+                    if (! is_array($workerFileAnalyses)) {
+                        throw new RuntimeException('Parallel analysis worker returned invalid file analyses.');
+                    }
+
+                    foreach ($workerFileAnalyses as $file => $fileAnalysis) {
+                        if (! is_string($file) || ! $fileAnalysis instanceof FileAnalysis) {
+                            throw new RuntimeException('Parallel analysis worker returned invalid file analyses.');
+                        }
+
+                        $fileAnalyses[$file] = $fileAnalysis;
+                    }
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
                 } finally {
@@ -225,7 +243,7 @@ final readonly class ParallelClassNodeExtractor
             throw new RuntimeException($failure);
         }
 
-        return $nodes;
+        return new ExtractionResult($nodes, $fileAnalyses);
     }
 
     /**

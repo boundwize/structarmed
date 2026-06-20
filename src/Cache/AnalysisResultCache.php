@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Cache;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
+use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Rule\RuleViolation;
@@ -203,16 +204,59 @@ final readonly class AnalysisResultCache
      */
     public function loadClassNodes(string $file, string $namespace): ?array
     {
-        $payload = $this->read($this->classNodesKey($file, $namespace));
+        $payload = $this->classNodePayload($file, $namespace);
 
         if ($payload === null) {
             return null;
         }
 
-        if (($payload['metadata'] ?? null) !== $this->fileMetadata($file, $namespace)) {
+        return $this->classNodesFromPayload($payload);
+    }
+
+    /**
+     * @return array{classNodes: list<ClassNode>, fileAnalysis: FileAnalysis}|null
+     */
+    public function loadClassNodesWithFileAnalysis(string $file, string $namespace): ?array
+    {
+        $payload = $this->classNodePayload($file, $namespace);
+
+        if ($payload === null) {
             return null;
         }
 
+        $classNodes   = $this->classNodesFromPayload($payload);
+        $fileAnalysis = is_array($payload['fileAnalysis'] ?? null)
+            ? $this->fileAnalysisFromArray($payload['fileAnalysis'])
+            : null;
+
+        if ($classNodes === null || ! $fileAnalysis instanceof FileAnalysis) {
+            return null;
+        }
+
+        return [
+            'classNodes'   => $classNodes,
+            'fileAnalysis' => $fileAnalysis,
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function classNodePayload(string $file, string $namespace): ?array
+    {
+        $payload = $this->read($this->classNodesKey($file, $namespace));
+
+        if ($payload === null || ($payload['metadata'] ?? null) !== $this->fileMetadata($file, $namespace)) {
+            return null;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<ClassNode>|null
+     */
+    private function classNodesFromPayload(array $payload): ?array
+    {
         if (! is_array($payload['nodes'] ?? null)) {
             return null;
         }
@@ -239,16 +283,29 @@ final readonly class AnalysisResultCache
     /**
      * @param list<ClassNode> $classNodes
      */
-    public function storeClassNodes(string $file, string $namespace, array $classNodes): void
-    {
+    public function storeClassNodes(
+        string $file,
+        string $namespace,
+        array $classNodes,
+        ?FileAnalysis $fileAnalysis = null,
+    ): void {
         if (! is_dir($this->cacheDirectory)) {
             mkdir($this->cacheDirectory, 0777, true);
         }
 
-        file_put_contents($this->path($this->classNodesKey($file, $namespace)), json_encode([
+        $payload = [
             'metadata' => $this->fileMetadata($file, $namespace),
             'nodes'    => array_map($this->classNodeToArray(...), $classNodes),
-        ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+        ];
+
+        if ($fileAnalysis instanceof FileAnalysis) {
+            $payload['fileAnalysis'] = $this->fileAnalysisToArray($fileAnalysis);
+        }
+
+        file_put_contents(
+            $this->path($this->classNodesKey($file, $namespace)),
+            json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)
+        );
     }
 
     /**
@@ -611,6 +668,51 @@ final readonly class AnalysisResultCache
             visibility:           $property['visibility'],
             hasExplicitVisibility: $property['hasExplicitVisibility'],
             line:                 $property['line'],
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function fileAnalysisToArray(FileAnalysis $fileAnalysis): array
+    {
+        return [
+            'file'              => $fileAnalysis->file,
+            'hasUtf8Bom'        => $fileAnalysis->hasUtf8Bom,
+            'hasValidUtf8'      => $fileAnalysis->hasValidUtf8,
+            'invalidPhpTagLine' => $fileAnalysis->invalidPhpTagLine,
+            'hasValidAst'       => $fileAnalysis->hasValidAst,
+            'declaresSymbols'   => $fileAnalysis->declaresSymbols,
+            'hasSideEffects'    => $fileAnalysis->hasSideEffects,
+            'sideEffectLine'    => $fileAnalysis->sideEffectLine,
+        ];
+    }
+
+    /** @param array<mixed, mixed> $analysis */
+    private function fileAnalysisFromArray(array $analysis): ?FileAnalysis
+    {
+        if (
+            ! $this->hasOnlyStringKeys($analysis)
+            || ! is_string($analysis['file'] ?? null)
+            || ! is_bool($analysis['hasUtf8Bom'] ?? null)
+            || ! is_bool($analysis['hasValidUtf8'] ?? null)
+            || ! array_key_exists('invalidPhpTagLine', $analysis)
+            || ($analysis['invalidPhpTagLine'] !== null && ! is_int($analysis['invalidPhpTagLine']))
+            || ! is_bool($analysis['hasValidAst'] ?? null)
+            || ! is_bool($analysis['declaresSymbols'] ?? null)
+            || ! is_bool($analysis['hasSideEffects'] ?? null)
+            || ! is_int($analysis['sideEffectLine'] ?? null)
+        ) {
+            return null;
+        }
+
+        return new FileAnalysis(
+            file: $analysis['file'],
+            hasUtf8Bom: $analysis['hasUtf8Bom'],
+            hasValidUtf8: $analysis['hasValidUtf8'],
+            invalidPhpTagLine: $analysis['invalidPhpTagLine'],
+            hasValidAst: $analysis['hasValidAst'],
+            declaresSymbols: $analysis['declaresSymbols'],
+            hasSideEffects: $analysis['hasSideEffects'],
+            sideEffectLine: $analysis['sideEffectLine'],
         );
     }
 

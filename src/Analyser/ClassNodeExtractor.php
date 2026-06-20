@@ -6,37 +6,37 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
-use PhpParser\Error;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
-use PhpParser\Parser;
-use PhpParser\ParserFactory;
-
-use function file_get_contents;
 
 final readonly class ClassNodeExtractor
 {
-    private Parser $parser;
+    private FileAnalysisProvider $fileAnalysisProvider;
 
     public function __construct(
         private LayerResolverInterface $layerResolver,
+        ?FileAnalysisProvider $fileAnalysisProvider = null,
     ) {
-        $this->parser = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->fileAnalysisProvider = $fileAnalysisProvider ?? new FileAnalysisProvider();
     }
 
-    /**
-     * @param list<string> $files
-     * @return list<ClassNode>
-     */
-    public function extract(array $files, ?ProgressHandlerInterface $progressHandler = null): array
-    {
+    /** @param list<string> $files */
+    public function extract(
+        array $files,
+        ?ProgressHandlerInterface $progressHandler = null,
+        bool $withFileAnalysis = true,
+    ): ExtractionResult {
         $classCollector = new ClassCollector($this->layerResolver);
         $nodeTraverser  = new NodeTraverser(new NameResolver(), $classCollector);
+        $fileAnalyses   = [];
 
         foreach ($files as $file) {
             try {
-                $code = (string) file_get_contents($file);
-                $ast  = $this->parser->parse($code);
+                $ast = $this->fileAnalysisProvider->ast($file, $withFileAnalysis);
+
+                if ($withFileAnalysis) {
+                    $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse($file);
+                }
 
                 if ($ast === null || $ast === []) {
                     continue;
@@ -44,13 +44,15 @@ final readonly class ClassNodeExtractor
 
                 $classCollector->setCurrentFile($file);
                 $nodeTraverser->traverse($ast);
-            } catch (Error) {
-                // Skip files with parse errors
             } finally {
+                if ($withFileAnalysis) {
+                    $this->fileAnalysisProvider->releaseAst($file);
+                }
+
                 $progressHandler?->advance($file);
             }
         }
 
-        return $classCollector->getNodes();
+        return new ExtractionResult($classCollector->getNodes(), $fileAnalyses);
     }
 }

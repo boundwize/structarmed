@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\Rules\File\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
@@ -90,6 +91,9 @@ final class Analyser
         $classRules       = $this->classRules($rules, $skippedRuleKeys);
         $ruleSkipMatchers = $this->ruleSkipMatchers($classRules, $ruleSkipPaths);
 
+        $projectRuleViolations = [];
+        $fileAnalysisRules     = [];
+
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
                 continue;
@@ -99,14 +103,57 @@ final class Analyser
                 continue;
             }
 
-            if ($rule instanceof MultipleProjectRuleViolationInterface) {
-                $violations = $rule->evaluateProjectAll($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
-            } else {
-                $single     = $rule->evaluateProject($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
-                $violations = $single instanceof RuleViolation ? [$single] : [];
+            if ($rule instanceof FileAnalysisRuleInterface) {
+                $fileAnalysisRules[$key] = $rule;
+                continue;
             }
 
-            foreach ($violations as $violation) {
+            if ($rule instanceof MultipleProjectRuleViolationInterface) {
+                $projectRuleViolations[$key] = $rule->evaluateProjectAll(
+                    $this->basePath,
+                    $architecture,
+                    $ruleSkipPaths[$key] ?? []
+                );
+            } else {
+                $single = $rule->evaluateProject($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
+
+                $projectRuleViolations[$key] = $single instanceof RuleViolation ? [$single] : [];
+            }
+        }
+
+        $layerPatterns      = $architecture->getLayerPatterns();
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
+
+        $files          ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
+        $extractionResult = $this->collectClassNodes(
+            $files,
+            $progressHandler,
+            $layers,
+            $layerPatterns,
+            $chainLayerResolver,
+            $analyserOptions ?? AnalyserOptions::parallel(),
+            $fileAnalysisRules !== [],
+        );
+        $classNodes       = $extractionResult->classNodes;
+        $classNodes       = $this->withRecursiveParents($classNodes);
+
+        $fileAnalysisProvider = new FileAnalysisProvider($extractionResult->fileAnalyses);
+
+        foreach ($fileAnalysisRules as $key => $rule) {
+            $projectRuleViolations[$key] = $rule->evaluateProjectAllWithProvider(
+                $this->basePath,
+                $architecture,
+                $fileAnalysisProvider,
+                $ruleSkipPaths[$key] ?? [],
+            );
+        }
+
+        foreach ($rules as $key => $rule) {
+            if (! $rule instanceof ProjectRuleInterface || ! isset($projectRuleViolations[$key])) {
+                continue;
+            }
+
+            foreach ($projectRuleViolations[$key] as $violation) {
                 $ruleViolationCollection->add(new RuleViolation(
                     message:   $violation->message,
                     file:      $violation->file,
@@ -117,20 +164,6 @@ final class Analyser
                 ));
             }
         }
-
-        $layerPatterns      = $architecture->getLayerPatterns();
-        $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
-
-        $files    ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
-        $classNodes = $this->collectClassNodes(
-            $files,
-            $progressHandler,
-            $layers,
-            $layerPatterns,
-            $chainLayerResolver,
-            $analyserOptions ?? AnalyserOptions::parallel()
-        );
-        $classNodes = $this->withRecursiveParents($classNodes);
 
         // Evaluate declarative ruleset alongside class rules, but buffer its
         // violations so report ordering remains class rules before ruleset.
@@ -710,7 +743,6 @@ final class Analyser
      *     pattern: string|list<string>,
      *     excludePattern: string|list<string|null>|null
      * }> $layerPatterns
-     * @return list<ClassNode>
      */
     private function collectClassNodes(
         array $files,
@@ -718,13 +750,38 @@ final class Analyser
         array $layers,
         array $layerPatterns,
         ChainLayerResolver $chainLayerResolver,
-        ?AnalyserOptions $analyserOptions = null
-    ): array {
+        ?AnalyserOptions $analyserOptions = null,
+        bool $withFileAnalysis = true,
+    ): ExtractionResult {
         $classNodes   = [];
+        $fileAnalyses = [];
         $filesToParse = [];
 
         foreach ($files as $file) {
-            $cachedClassNodes = $this->analysisResultCache?->loadClassNodes($file, $this->classNodeCacheNamespace);
+            if ($withFileAnalysis) {
+                $cachedResult = $this->analysisResultCache?->loadClassNodesWithFileAnalysis(
+                    $file,
+                    $this->classNodeCacheNamespace
+                );
+
+                if ($cachedResult === null) {
+                    $filesToParse[] = $file;
+                    continue;
+                }
+
+                foreach ($cachedResult['classNodes'] as $cachedClassNode) {
+                    $classNodes[] = $cachedClassNode;
+                }
+
+                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
+
+                continue;
+            }
+
+            $cachedClassNodes = $this->analysisResultCache?->loadClassNodes(
+                $file,
+                $this->classNodeCacheNamespace,
+            );
 
             if ($cachedClassNodes === null) {
                 $filesToParse[] = $file;
@@ -741,25 +798,29 @@ final class Analyser
         if ($filesToParse === []) {
             $progressHandler?->finish();
 
-            return $classNodes;
+            return new ExtractionResult($classNodes, $fileAnalyses);
         }
 
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
         if ($options->isParallel()) {
-            $parsedClassNodes = (new ParallelClassNodeExtractor(
+            $parsedResult = (new ParallelClassNodeExtractor(
                 $this->basePath,
                 $layers,
                 $layerPatterns,
                 $options->workerCount,
                 $this->analysisResultCache?->getCacheDirectory(),
-            ))->extract($filesToParse, $progressHandler);
+            ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         } else {
-            $parsedClassNodes = (new ClassNodeExtractor($chainLayerResolver))->extract($filesToParse, $progressHandler);
+            $parsedResult = (new ClassNodeExtractor($chainLayerResolver))->extract(
+                $filesToParse,
+                $progressHandler,
+                $withFileAnalysis,
+            );
         }
 
         $classNodesByFile = array_fill_keys($filesToParse, []);
-        foreach ($parsedClassNodes as $parsedClassNode) {
+        foreach ($parsedResult->classNodes as $parsedClassNode) {
             $classNodes[] = $parsedClassNode;
 
             if (isset($classNodesByFile[$parsedClassNode->file])) {
@@ -767,17 +828,22 @@ final class Analyser
             }
         }
 
+        foreach ($parsedResult->fileAnalyses as $file => $fileAnalysis) {
+            $fileAnalyses[$file] = $fileAnalysis;
+        }
+
         foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
             $this->analysisResultCache?->storeClassNodes(
                 $fileToParse,
                 $this->classNodeCacheNamespace,
-                $fileClassNodes
+                $fileClassNodes,
+                $fileAnalyses[$fileToParse] ?? null,
             );
         }
 
         $progressHandler?->finish();
 
-        return $classNodes;
+        return new ExtractionResult($classNodes, $fileAnalyses);
     }
 
     /**
