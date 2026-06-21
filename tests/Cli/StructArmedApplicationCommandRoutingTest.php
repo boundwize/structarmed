@@ -115,6 +115,22 @@ final class StructArmedApplicationCommandRoutingTest extends TestCase
         $this->assertStringContainsString('Error: path [missing] not found.', $output);
     }
 
+    public function testAnalyseCommandAcceptsAbsoluteScanPath(): void
+    {
+        [$exitCode, $output] = $this->runApplication(
+            [
+                'structarmed',
+                'analyse',
+                __DIR__,
+                '--config=' . self::BASE_PATH . '/missing.php',
+            ],
+            self::BASE_PATH
+        );
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('StructArmed config file not found', $output);
+    }
+
     public function testAnalyseCommandReportsMissingConfig(): void
     {
         [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse'], self::BASE_PATH);

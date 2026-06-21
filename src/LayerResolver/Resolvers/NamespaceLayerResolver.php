@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\LayerResolver\Resolvers;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
+use Boundwize\StructArmed\Util\Path;
 
 use function realpath;
 use function rtrim;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
-use function trim;
-
-use const DIRECTORY_SEPARATOR;
 
 /**
  * Resolves a layer by matching the file path against registered layer paths.
@@ -39,7 +37,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         foreach ($layers as $layerName => $layerPaths) {
             foreach ((array) $layerPaths as $layerPath) {
                 $normalisedLayers[$layerName][] = $this->normalisePath(
-                    $basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
+                    Path::resolve($layerPath, $basePath)
                 );
             }
         }

@@ -16,15 +16,14 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Util\Path;
 use RuntimeException;
 
 use function count;
 use function in_array;
 use function is_dir;
 use function is_file;
-use function ltrim;
 use function microtime;
-use function rtrim;
 use function sprintf;
 use function str_ends_with;
 use function str_starts_with;
@@ -116,7 +115,7 @@ final readonly class AnalyseCommand
         }
 
         foreach ($scanPaths as $scanPath) {
-            $fullScanPath = rtrim($basePath, '/') . '/' . ltrim($scanPath, '/');
+            $fullScanPath = Path::resolve($scanPath, $basePath);
 
             if (is_dir($fullScanPath)) {
                 continue;

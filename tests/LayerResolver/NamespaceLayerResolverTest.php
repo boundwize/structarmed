@@ -77,6 +77,20 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertSame('Source', $layer);
     }
 
+    public function testResolvesLayerByAbsolutePath(): void
+    {
+        $layerPath              = $this->basePath . '/src/Domain';
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: ['Domain' => $layerPath],
+            basePath: '/unrelated/project'
+        );
+
+        $this->assertSame(
+            'Domain',
+            $namespaceLayerResolver->resolve(Order::class, $layerPath . '/Entities/Order.php')
+        );
+    }
+
     public function testResolvesMostSpecificMatchingLayerPath(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(

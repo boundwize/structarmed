@@ -41,7 +41,6 @@ use function getcwd;
 use function in_array;
 use function is_dir;
 use function is_file;
-use function ltrim;
 use function realpath;
 use function rtrim;
 use function sprintf;
@@ -872,12 +871,7 @@ final class Analyser
         $skipMatchers = $this->compileSkipMatchers($skipPaths);
 
         foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
-            $isAbsolute = Path::isAbsolute($layerPath);
-            $fullPath   = $this->normalisePath(
-                $isAbsolute
-                    ? $layerPath
-                    : rtrim($this->basePath, '/') . '/' . ltrim($layerPath, '/')
-            );
+            $fullPath = $this->normalisePath(Path::resolve($layerPath, $this->basePath));
 
             if (is_file($fullPath)) {
                 if (str_ends_with($fullPath, '.php') && ! $this->isSkipped($fullPath, $skipMatchers)) {
@@ -954,7 +948,10 @@ final class Analyser
         ];
 
         foreach ($skipPaths as $skipPath) {
-            $absoluteSkipPath = $this->toAbsoluteSkipPath($this->normaliseSkipPath($skipPath));
+            $absoluteSkipPath = Path::resolve(
+                $this->normaliseSkipPath($skipPath),
+                $this->normalisedBasePath
+            );
 
             if (strpbrk($absoluteSkipPath, '*?[') !== false) {
                 $skipMatchers['patterns'][] = $absoluteSkipPath;
@@ -992,15 +989,6 @@ final class Analyser
         }
 
         return false;
-    }
-
-    private function toAbsoluteSkipPath(string $normalisedSkipPath): string
-    {
-        if (Path::isAbsolute($normalisedSkipPath)) {
-            return $normalisedSkipPath;
-        }
-
-        return $this->normalisedBasePath . '/' . $normalisedSkipPath;
     }
 
     private function normaliseSkipPath(string $path): string
