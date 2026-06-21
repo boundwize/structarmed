@@ -8,8 +8,6 @@ use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\Path;
 
 use function realpath;
-use function rtrim;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
 
@@ -89,7 +87,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
     private function normalisePath(string $path): string
     {
-        return rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
+        return Path::normalise(realpath($path) ?: $path);
     }
 
     private function matchesLayerPath(string $path, string $layerPath): bool

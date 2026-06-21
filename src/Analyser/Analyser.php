@@ -42,10 +42,8 @@ use function in_array;
 use function is_dir;
 use function is_file;
 use function realpath;
-use function rtrim;
 use function sprintf;
 use function str_ends_with;
-use function str_replace;
 use function str_starts_with;
 use function strpbrk;
 use function substr;
@@ -949,7 +947,7 @@ final class Analyser
 
         foreach ($skipPaths as $skipPath) {
             $absoluteSkipPath = Path::resolve(
-                $this->normaliseSkipPath($skipPath),
+                Path::normalise($skipPath),
                 $this->normalisedBasePath
             );
 
@@ -991,14 +989,9 @@ final class Analyser
         return false;
     }
 
-    private function normaliseSkipPath(string $path): string
-    {
-        return rtrim(str_replace('\\', '/', $path), '/');
-    }
-
     private function normalisePath(string $path): string
     {
-        return $this->normalisedPaths[$path] ??= rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
+        return $this->normalisedPaths[$path] ??= Path::normalise(realpath($path) ?: $path);
     }
 
     /**

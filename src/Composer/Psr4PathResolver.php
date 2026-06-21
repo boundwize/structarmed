@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Composer;
 
+use Boundwize\StructArmed\Util\Path;
+
 use function array_merge;
 use function array_values;
 use function file_exists;
@@ -13,7 +15,6 @@ use function is_int;
 use function is_string;
 use function json_decode;
 use function rtrim;
-use function str_replace;
 use function trim;
 
 final class Psr4PathResolver
@@ -158,7 +159,7 @@ final class Psr4PathResolver
         $normalised = [];
 
         foreach ($paths as $path) {
-            $path = rtrim(str_replace('\\', '/', trim($path)), '/');
+            $path = Path::normalise(trim($path));
 
             if ($path !== '' && $path !== '.') {
                 $normalised[$path] = $path;

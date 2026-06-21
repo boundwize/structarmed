@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Util\Path;
 
 use function array_map;
 use function implode;
-use function rtrim;
 use function sort;
-use function str_replace;
 
 trait ResolvesSourceLayerNameTrait
 {
@@ -44,7 +43,7 @@ trait ResolvesSourceLayerNameTrait
     private function normalizePaths(array $paths): array
     {
         return array_map(
-            static fn (string $path): string => rtrim(str_replace('\\', '/', $path), '/') . '/',
+            static fn (string $path): string => Path::normalise($path) . '/',
             $paths
         );
     }

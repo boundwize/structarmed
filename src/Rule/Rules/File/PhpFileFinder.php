@@ -19,8 +19,6 @@ use function fnmatch;
 use function is_dir;
 use function ltrim;
 use function realpath;
-use function rtrim;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -91,13 +89,13 @@ final readonly class PhpFileFinder
         $skipMatchers = [];
 
         foreach ($skipPaths as $skipPath) {
-            $baseRelativePath = rtrim(str_replace('\\', '/', ltrim($skipPath, '/')), '/');
+            $baseRelativePath = Path::normalise(ltrim($skipPath, '/'));
             $fullSkipPath     = $baseRelativePath === '' ? $normalisedBase : $normalisedBase . '/' . $baseRelativePath;
 
             $skipMatchers[] = [
                 'absolutePath'     => realpath($skipPath) !== false ? $this->normalisePath($skipPath, true) : null,
                 'baseRelativePath' => $this->normalisePath($fullSkipPath, true),
-                'pattern'          => rtrim(str_replace('\\', '/', $skipPath), '/'),
+                'pattern'          => Path::normalise($skipPath),
             ];
         }
 
@@ -149,6 +147,6 @@ final readonly class PhpFileFinder
     {
         $normalisedPath = $resolve ? (realpath($path) ?: $path) : $path;
 
-        return rtrim(str_replace('\\', '/', $normalisedPath), '/');
+        return Path::normalise($normalisedPath);
     }
 }

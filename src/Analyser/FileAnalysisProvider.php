@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Util\Path;
 use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\Node\Stmt;
@@ -26,8 +27,6 @@ use function file_get_contents;
 use function is_array;
 use function preg_match;
 use function realpath;
-use function rtrim;
-use function str_replace;
 use function str_starts_with;
 use function token_get_all;
 use function trim;
@@ -233,7 +232,7 @@ final class FileAnalysisProvider
             return $this->normalisedPaths[$path];
         }
 
-        $normalisedPath = rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
+        $normalisedPath = Path::normalise(realpath($path) ?: $path);
 
         $this->normalisedPaths[$path]           = $normalisedPath;
         $this->normalisedPaths[$normalisedPath] = $normalisedPath;

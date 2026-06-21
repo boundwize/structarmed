@@ -28,9 +28,7 @@ use function is_scalar;
 use function json_encode;
 use function ltrim;
 use function realpath;
-use function rtrim;
 use function sprintf;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -228,8 +226,8 @@ final readonly class Baseline
 
     private function relativePath(string $path, string $basePath): string
     {
-        $normalisedBasePath = rtrim(str_replace('\\', '/', realpath($basePath) ?: $basePath), '/');
-        $normalisedPath     = str_replace('\\', '/', realpath($path) ?: $path);
+        $normalisedBasePath = Path::normalise(realpath($basePath) ?: $basePath);
+        $normalisedPath     = Path::normalise(realpath($path) ?: $path);
 
         if ($normalisedPath === $normalisedBasePath) {
             return '';

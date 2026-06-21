@@ -41,7 +41,8 @@ final class Path
             return true;
         }
 
-        $normalised = str_replace('\\', '/', $path);
-        return strlen($normalised) >= 3 && $normalised[1] === ':' && $normalised[2] === '/';
+        return strlen($path) >= 3
+            && $path[1] === ':'
+            && ($path[2] === '/' || $path[2] === '\\');
     }
 }
