@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\Path;
 
 use function array_key_first;
 use function arsort;
@@ -16,8 +17,6 @@ use function file_exists;
 use function ltrim;
 use function max;
 use function preg_replace;
-use function realpath;
-use function rtrim;
 use function sprintf;
 use function str_ends_with;
 use function str_replace;
@@ -73,13 +72,13 @@ final class Psr4NamespaceRule implements RuleInterface
             return [];
         }
 
-        $file = $this->normalisePath($file);
+        $file = Path::normalise($file, canonicalise: true);
 
         $candidates = [];
 
         foreach ($this->mappingsFor($basePath) as $namespace => $paths) {
             foreach ($paths as $path) {
-                $prefix = $this->normalisePath($basePath . '/' . $path);
+                $prefix = Path::normalise($basePath . '/' . $path, canonicalise: true);
 
                 if (! str_starts_with($file, $prefix . '/')) {
                     continue;
@@ -108,7 +107,7 @@ final class Psr4NamespaceRule implements RuleInterface
 
     private function basePathFor(string $file): ?string
     {
-        $directory = dirname($this->normalisePath($file));
+        $directory = dirname(Path::normalise($file, canonicalise: true));
 
         while ($directory !== '' && $directory !== '.') {
             if (file_exists($directory . '/composer.json')) {
@@ -137,14 +136,5 @@ final class Psr4NamespaceRule implements RuleInterface
         }
 
         return $this->mappingsByBasePath[$basePath];
-    }
-
-    private function normalisePath(string $path): string
-    {
-        $path = realpath($path) ?: $path;
-        $path = str_replace('\\', '/', $path);
-        $path = (string) preg_replace('#/+#', '/', $path);
-
-        return rtrim($path, '/');
     }
 }

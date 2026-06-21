@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\Path;
 
 use function array_map;
 use function file_exists;
@@ -15,7 +16,6 @@ use function implode;
 use function in_array;
 use function rtrim;
 use function sprintf;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -96,11 +96,11 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
      */
     private function normalisePaths(array $paths, string $basePath): array
     {
-        $normalisedBase = rtrim(str_replace('\\', '/', $basePath), '/');
+        $normalisedBase = Path::normalise($basePath);
 
         return array_map(
             static function (string $path) use ($normalisedBase): string {
-                $path = rtrim(str_replace('\\', '/', trim($path)), '/');
+                $path = Path::normalise(trim($path));
 
                 if ($normalisedBase !== '' && str_starts_with($path, $normalisedBase . '/')) {
                     return substr($path, strlen($normalisedBase) + 1);

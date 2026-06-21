@@ -27,10 +27,7 @@ use function is_dir;
 use function is_scalar;
 use function json_encode;
 use function ltrim;
-use function realpath;
-use function rtrim;
 use function sprintf;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -69,7 +66,7 @@ final readonly class Baseline
             throw new RuntimeException('Baseline path cannot be empty.');
         }
 
-        $path      = $this->resolvePath($baselinePath, $basePath);
+        $path      = Path::resolve($baselinePath, $basePath);
         $directory = dirname($path);
 
         if (! is_dir($directory)) {
@@ -167,7 +164,7 @@ final readonly class Baseline
      */
     private function loadSignatures(string $baselinePath, string $basePath): array
     {
-        $path = $this->resolvePath($baselinePath, $basePath);
+        $path = Path::resolve($baselinePath, $basePath);
 
         if (! file_exists($path)) {
             throw new RuntimeException(sprintf('Baseline file [%s] does not exist.', $baselinePath));
@@ -226,19 +223,10 @@ final readonly class Baseline
         ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
-    private function resolvePath(string $path, string $basePath): string
-    {
-        if (Path::isAbsolute($path)) {
-            return $path;
-        }
-
-        return rtrim($basePath, '/') . '/' . ltrim($path, '/');
-    }
-
     private function relativePath(string $path, string $basePath): string
     {
-        $normalisedBasePath = rtrim(str_replace('\\', '/', realpath($basePath) ?: $basePath), '/');
-        $normalisedPath     = str_replace('\\', '/', realpath($path) ?: $path);
+        $normalisedBasePath = Path::normalise($basePath, canonicalise: true);
+        $normalisedPath     = Path::normalise($path, canonicalise: true);
 
         if ($normalisedPath === $normalisedBasePath) {
             return '';

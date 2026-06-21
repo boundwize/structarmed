@@ -8,12 +8,12 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\Path;
 
 use function in_array;
 use function is_array;
 use function sprintf;
 use function str_contains;
-use function str_replace;
 use function str_starts_with;
 
 final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerAwareRuleInterface
@@ -28,7 +28,7 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
         private readonly string $to,
         ?string $toPath = null,
     ) {
-        $this->normalisedToPath = str_replace('\\', '/', $toPath ?? $to);
+        $this->normalisedToPath = Path::normalise($toPath ?? $to);
     }
 
     /** @param array<string, string|list<string>> $classLayerMap */
@@ -95,7 +95,7 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
         }
 
         // Priority 2: Fallback to path matching
-        $depPath = str_replace('\\', '/', $dependency);
+        $depPath = Path::normalise($dependency);
 
         return str_contains($depPath . '/', '/' . $this->normalisedToPath . '/')
             || str_starts_with($depPath . '/', $this->normalisedToPath . '/');

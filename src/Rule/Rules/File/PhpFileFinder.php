@@ -19,8 +19,6 @@ use function fnmatch;
 use function is_dir;
 use function ltrim;
 use function realpath;
-use function rtrim;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -42,16 +40,13 @@ final readonly class PhpFileFinder
      */
     public function files(string $basePath, array $skipPaths = []): array
     {
-        $normalisedBase = $this->normalisePath($basePath, true);
+        $normalisedBase = Path::normalise($basePath, canonicalise: true);
         $skipMatchers   = $this->compileSkipMatchers($normalisedBase, $skipPaths);
         $append         = new AppendIterator();
 
         $sourcePaths = array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath));
         foreach ($sourcePaths as $sourcePath) {
-            $isAbsolute = Path::isAbsolute($sourcePath);
-            $fullPath   = $isAbsolute
-                ? $sourcePath
-                : rtrim($basePath, '/') . '/' . ltrim($sourcePath, '/');
+            $fullPath = Path::resolve($sourcePath, $basePath);
 
             if (! is_dir($fullPath)) {
                 continue;
@@ -94,13 +89,15 @@ final readonly class PhpFileFinder
         $skipMatchers = [];
 
         foreach ($skipPaths as $skipPath) {
-            $baseRelativePath = rtrim(str_replace('\\', '/', ltrim($skipPath, '/')), '/');
+            $baseRelativePath = Path::normalise(ltrim($skipPath, '/'));
             $fullSkipPath     = $baseRelativePath === '' ? $normalisedBase : $normalisedBase . '/' . $baseRelativePath;
 
             $skipMatchers[] = [
-                'absolutePath'     => realpath($skipPath) !== false ? $this->normalisePath($skipPath, true) : null,
-                'baseRelativePath' => $this->normalisePath($fullSkipPath, true),
-                'pattern'          => rtrim(str_replace('\\', '/', $skipPath), '/'),
+                'absolutePath'     => realpath($skipPath) !== false
+                    ? Path::normalise($skipPath, canonicalise: true)
+                    : null,
+                'baseRelativePath' => Path::normalise($fullSkipPath, canonicalise: true),
+                'pattern'          => Path::normalise($skipPath),
             ];
         }
 
@@ -116,7 +113,7 @@ final readonly class PhpFileFinder
             return false;
         }
 
-        $normalisedFile = $this->normalisePath($filePath, true);
+        $normalisedFile = Path::normalise($filePath, canonicalise: true);
         $relativePath   = substr($normalisedFile, strlen($normalisedBase) + 1);
 
         foreach ($skipMatchers as $skipMatcher) {
@@ -146,12 +143,5 @@ final readonly class PhpFileFinder
         }
 
         return false;
-    }
-
-    private function normalisePath(string $path, bool $resolve = false): string
-    {
-        $normalisedPath = $resolve ? (realpath($path) ?: $path) : $path;
-
-        return rtrim(str_replace('\\', '/', $normalisedPath), '/');
     }
 }

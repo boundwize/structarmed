@@ -14,7 +14,6 @@ use function is_array;
 use function is_string;
 use function rtrim;
 use function sprintf;
-use function str_replace;
 use function trim;
 
 final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInterface
@@ -72,9 +71,9 @@ final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInt
                         continue;
                     }
 
-                    $normalisedPath = rtrim(str_replace('\\', '/', trim($path)), '/');
+                    $trimmedPath = trim($path);
 
-                    if ($normalisedPath !== '.' && $normalisedPath !== '') {
+                    if ($trimmedPath !== '' && rtrim($trimmedPath, '/\\') !== '.') {
                         continue;
                     }
 

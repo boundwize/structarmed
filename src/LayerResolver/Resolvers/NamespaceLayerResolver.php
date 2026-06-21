@@ -5,15 +5,10 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\LayerResolver\Resolvers;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
+use Boundwize\StructArmed\Util\Path;
 
-use function realpath;
-use function rtrim;
-use function str_replace;
 use function str_starts_with;
 use function strlen;
-use function trim;
-
-use const DIRECTORY_SEPARATOR;
 
 /**
  * Resolves a layer by matching the file path against registered layer paths.
@@ -38,8 +33,9 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($layers as $layerName => $layerPaths) {
             foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayers[$layerName][] = $this->normalisePath(
-                    $basePath . DIRECTORY_SEPARATOR . trim($layerPath, '/')
+                $normalisedLayers[$layerName][] = Path::normalise(
+                    Path::resolve($layerPath, $basePath),
+                    canonicalise: true
                 );
             }
         }
@@ -49,7 +45,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
     public function resolve(string $className, string $filePath): ?string
     {
-        $normalised    = $this->normalisePath($filePath);
+        $normalised    = Path::normalise($filePath, canonicalise: true);
         $matchedLayer  = null;
         $matchedLength = -1;
 
@@ -74,7 +70,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
      */
     public function resolveAll(string $className, string $filePath): array
     {
-        $normalised = $this->normalisePath($filePath);
+        $normalised = Path::normalise($filePath, canonicalise: true);
         $matched    = [];
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
@@ -87,11 +83,6 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         }
 
         return $matched;
-    }
-
-    private function normalisePath(string $path): string
-    {
-        return rtrim(str_replace('\\', '/', realpath($path) ?: $path), '/');
     }
 
     private function matchesLayerPath(string $path, string $layerPath): bool
