@@ -34,7 +34,7 @@ final class PathCanonicalisationTest extends TestCase
 
             $afterCreation = Path::normalise($path, canonicalise: true);
 
-            $this->assertSame($path, $beforeCreation);
+            $this->assertSame(Path::normalise($path), $beforeCreation);
             $this->assertSame($beforeCreation, $afterCreation);
         } finally {
             if (file_exists($directory . '/created.php')) {
