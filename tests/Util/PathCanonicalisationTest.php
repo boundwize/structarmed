@@ -20,7 +20,7 @@ use function unlink;
 #[CoversClass(Path::class)]
 final class PathCanonicalisationTest extends TestCase
 {
-    public function testCanonicalisationMissIsNotCached(): void
+    public function testCanonicalisationMissIsCached(): void
     {
         $directory = sys_get_temp_dir() . '/structarmed-path-' . bin2hex(random_bytes(6));
         $path      = $directory . '/./created.php';
@@ -35,8 +35,7 @@ final class PathCanonicalisationTest extends TestCase
             $afterCreation = Path::normalise($path, canonicalise: true);
 
             $this->assertSame($path, $beforeCreation);
-            $this->assertNotSame($beforeCreation, $afterCreation);
-            $this->assertStringEndsWith('/created.php', $afterCreation);
+            $this->assertSame($beforeCreation, $afterCreation);
         } finally {
             if (file_exists($directory . '/created.php')) {
                 unlink($directory . '/created.php');

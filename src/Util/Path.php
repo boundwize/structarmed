@@ -32,7 +32,7 @@ final class Path
             $canonicalPath = realpath($path);
 
             if ($canonicalPath === false) {
-                return self::normalise($path);
+                return self::$normalisedPaths[$cacheKey] = self::normalise($path);
             }
 
             return self::$normalisedPaths[$cacheKey] = self::normalise($canonicalPath);
