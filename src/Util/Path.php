@@ -22,14 +22,26 @@ final class Path
 
     public static function normalise(string $path, bool $canonicalise = false): string
     {
-        $cacheKey = ($canonicalise ? "1\0" : "0\0") . $path;
+        if ($canonicalise) {
+            $cacheKey = "1\0" . $path;
+
+            if (isset(self::$normalisedPaths[$cacheKey])) {
+                return self::$normalisedPaths[$cacheKey];
+            }
+
+            $canonicalPath = realpath($path);
+
+            if ($canonicalPath === false) {
+                return self::normalise($path);
+            }
+
+            return self::$normalisedPaths[$cacheKey] = self::normalise($canonicalPath);
+        }
+
+        $cacheKey = "0\0" . $path;
 
         if (isset(self::$normalisedPaths[$cacheKey])) {
             return self::$normalisedPaths[$cacheKey];
-        }
-
-        if ($canonicalise) {
-            $path = realpath($path) ?: $path;
         }
 
         $isUnc = str_starts_with($path, '\\\\') || str_starts_with($path, '//');
