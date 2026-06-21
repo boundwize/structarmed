@@ -23,6 +23,9 @@ final class PathTest extends TestCase
         yield 'windows absolute' => ['C:\\project\\src\\', 'C:/project/src'];
         yield 'windows UNC backslashes' => ['\\\\server\\share\\src\\', '//server/share/src'];
         yield 'windows UNC forward slashes' => ['//server/share//src/', '//server/share/src'];
+        yield 'unix root' => ['/', '/'];
+        yield 'windows drive root forward slash' => ['C:/', 'C:/'];
+        yield 'windows drive root backslash' => ['C:\\', 'C:/'];
     }
 
     #[DataProvider('provideNormalise')]

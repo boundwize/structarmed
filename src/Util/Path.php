@@ -52,7 +52,12 @@ final class Path
             $path = '//' . ltrim($path, '/');
         }
 
-        return self::$normalisedPaths[$cacheKey] = rtrim($path, '/');
+        $normalised = rtrim($path, '/');
+
+        // Preserve Unix root '/' and Windows drive roots like 'C:/' — rtrim would reduce them to '' or 'C:'
+        return self::$normalisedPaths[$cacheKey] = (
+            $normalised === '' || (strlen($normalised) === 2 && $normalised[1] === ':')
+        ) ? $path : $normalised;
     }
 
     public static function resolve(string $path, string $basePath): string
