@@ -40,7 +40,7 @@ final readonly class PhpFileFinder
      */
     public function files(string $basePath, array $skipPaths = []): array
     {
-        $normalisedBase = $this->normalisePath($basePath, true);
+        $normalisedBase = Path::normalise($basePath, canonicalise: true);
         $skipMatchers   = $this->compileSkipMatchers($normalisedBase, $skipPaths);
         $append         = new AppendIterator();
 
@@ -93,8 +93,10 @@ final readonly class PhpFileFinder
             $fullSkipPath     = $baseRelativePath === '' ? $normalisedBase : $normalisedBase . '/' . $baseRelativePath;
 
             $skipMatchers[] = [
-                'absolutePath'     => realpath($skipPath) !== false ? $this->normalisePath($skipPath, true) : null,
-                'baseRelativePath' => $this->normalisePath($fullSkipPath, true),
+                'absolutePath'     => realpath($skipPath) !== false
+                    ? Path::normalise($skipPath, canonicalise: true)
+                    : null,
+                'baseRelativePath' => Path::normalise($fullSkipPath, canonicalise: true),
                 'pattern'          => Path::normalise($skipPath),
             ];
         }
@@ -111,7 +113,7 @@ final readonly class PhpFileFinder
             return false;
         }
 
-        $normalisedFile = $this->normalisePath($filePath, true);
+        $normalisedFile = Path::normalise($filePath, canonicalise: true);
         $relativePath   = substr($normalisedFile, strlen($normalisedBase) + 1);
 
         foreach ($skipMatchers as $skipMatcher) {
@@ -141,12 +143,5 @@ final readonly class PhpFileFinder
         }
 
         return false;
-    }
-
-    private function normalisePath(string $path, bool $resolve = false): string
-    {
-        $normalisedPath = $resolve ? (realpath($path) ?: $path) : $path;
-
-        return Path::normalise($normalisedPath);
     }
 }

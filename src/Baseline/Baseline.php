@@ -27,7 +27,6 @@ use function is_dir;
 use function is_scalar;
 use function json_encode;
 use function ltrim;
-use function realpath;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
@@ -226,8 +225,8 @@ final readonly class Baseline
 
     private function relativePath(string $path, string $basePath): string
     {
-        $normalisedBasePath = Path::normalise(realpath($basePath) ?: $basePath);
-        $normalisedPath     = Path::normalise(realpath($path) ?: $path);
+        $normalisedBasePath = Path::normalise($basePath, canonicalise: true);
+        $normalisedPath     = Path::normalise($path, canonicalise: true);
 
         if ($normalisedPath === $normalisedBasePath) {
             return '';

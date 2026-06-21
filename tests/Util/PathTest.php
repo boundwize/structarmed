@@ -53,4 +53,22 @@ final class PathTest extends TestCase
     {
         $this->assertSame($expected, Path::resolve($path, $basePath));
     }
+
+    public function testMemoisesNormalisedAndResolvedPaths(): void
+    {
+        $path = __DIR__ . '/../Util/PathTest.php';
+
+        $this->assertSame(
+            Path::normalise(__FILE__),
+            Path::normalise($path, canonicalise: true)
+        );
+        $this->assertSame(
+            Path::normalise($path, canonicalise: true),
+            Path::normalise($path, canonicalise: true)
+        );
+        $this->assertSame(
+            Path::resolve('src', '/project'),
+            Path::resolve('src', '/project')
+        );
+    }
 }

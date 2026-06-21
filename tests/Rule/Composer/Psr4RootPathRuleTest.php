@@ -24,7 +24,9 @@ final class Psr4RootPathRuleTest extends TestCase
 {
     "autoload": {
         "psr-4": {
-            "App\\": "src/"
+            "App\\": "src/",
+            "UnixRoot\\": "/",
+            "WindowsRoot\\": "\\\\"
         }
     }
 }

@@ -8,7 +8,6 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
-use Boundwize\StructArmed\Util\Path;
 
 use function file_exists;
 use function is_array;
@@ -72,9 +71,9 @@ final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInt
                         continue;
                     }
 
-                    $normalisedPath = Path::normalise(trim($path));
+                    $trimmedPath = trim($path);
 
-                    if ($normalisedPath !== '.' && $normalisedPath !== '') {
+                    if ($trimmedPath !== '' && rtrim($trimmedPath, '/\\') !== '.') {
                         continue;
                     }
 

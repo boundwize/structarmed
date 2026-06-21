@@ -41,7 +41,6 @@ use function getcwd;
 use function in_array;
 use function is_dir;
 use function is_file;
-use function realpath;
 use function sprintf;
 use function str_ends_with;
 use function str_starts_with;
@@ -50,22 +49,19 @@ use function substr;
 
 use const ARRAY_FILTER_USE_BOTH;
 
-final class Analyser
+final readonly class Analyser
 {
-    private readonly string $basePath;
+    private string $basePath;
 
-    private readonly string $normalisedBasePath;
-
-    /** @var array<string, string> */
-    private array $normalisedPaths = [];
+    private string $normalisedBasePath;
 
     public function __construct(
         string $basePath = '',
-        private readonly ?AnalysisResultCache $analysisResultCache = null,
-        private readonly string $classNodeCacheNamespace = '',
+        private ?AnalysisResultCache $analysisResultCache = null,
+        private string $classNodeCacheNamespace = '',
     ) {
         $this->basePath           = $basePath !== '' ? $basePath : (string) getcwd();
-        $this->normalisedBasePath = $this->normalisePath($this->basePath);
+        $this->normalisedBasePath = Path::normalise($this->basePath, canonicalise: true);
     }
 
     /**
@@ -869,7 +865,10 @@ final class Analyser
         $skipMatchers = $this->compileSkipMatchers($skipPaths);
 
         foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
-            $fullPath = $this->normalisePath(Path::resolve($layerPath, $this->basePath));
+            $fullPath = Path::normalise(
+                Path::resolve($layerPath, $this->basePath),
+                canonicalise: true
+            );
 
             if (is_file($fullPath)) {
                 if (str_ends_with($fullPath, '.php') && ! $this->isSkipped($fullPath, $skipMatchers)) {
@@ -957,7 +956,7 @@ final class Analyser
                 continue;
             }
 
-            $skipMatchers['paths'][] = $this->normalisePath($absoluteSkipPath);
+            $skipMatchers['paths'][] = Path::normalise($absoluteSkipPath, canonicalise: true);
         }
 
         return $skipMatchers;
@@ -972,7 +971,7 @@ final class Analyser
             return false;
         }
 
-        $normalisedPath = $this->normalisePath($path);
+        $normalisedPath = Path::normalise($path, canonicalise: true);
 
         foreach ($skipMatchers['paths'] as $skipPath) {
             if ($normalisedPath === $skipPath || str_starts_with($normalisedPath, $skipPath . '/')) {
@@ -987,11 +986,6 @@ final class Analyser
         }
 
         return false;
-    }
-
-    private function normalisePath(string $path): string
-    {
-        return $this->normalisedPaths[$path] ??= Path::normalise(realpath($path) ?: $path);
     }
 
     /**
@@ -1018,7 +1012,7 @@ final class Analyser
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            $files[] = $this->normalisePath($file->getPathname());
+            $files[] = Path::normalise($file->getPathname(), canonicalise: true);
         }
 
         return $files;

@@ -7,7 +7,6 @@ namespace Boundwize\StructArmed\LayerResolver\Resolvers;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\Path;
 
-use function realpath;
 use function str_starts_with;
 use function strlen;
 
@@ -34,8 +33,9 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($layers as $layerName => $layerPaths) {
             foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayers[$layerName][] = $this->normalisePath(
-                    Path::resolve($layerPath, $basePath)
+                $normalisedLayers[$layerName][] = Path::normalise(
+                    Path::resolve($layerPath, $basePath),
+                    canonicalise: true
                 );
             }
         }
@@ -45,7 +45,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
     public function resolve(string $className, string $filePath): ?string
     {
-        $normalised    = $this->normalisePath($filePath);
+        $normalised    = Path::normalise($filePath, canonicalise: true);
         $matchedLayer  = null;
         $matchedLength = -1;
 
@@ -70,7 +70,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
      */
     public function resolveAll(string $className, string $filePath): array
     {
-        $normalised = $this->normalisePath($filePath);
+        $normalised = Path::normalise($filePath, canonicalise: true);
         $matched    = [];
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
@@ -83,11 +83,6 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         }
 
         return $matched;
-    }
-
-    private function normalisePath(string $path): string
-    {
-        return Path::normalise(realpath($path) ?: $path);
     }
 
     private function matchesLayerPath(string $path, string $layerPath): bool
