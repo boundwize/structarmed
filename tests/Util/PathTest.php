@@ -14,6 +14,24 @@ use PHPUnit\Framework\TestCase;
 final class PathTest extends TestCase
 {
     /**
+     * @return Iterator<string, array{string, string}>
+     */
+    public static function provideNormalise(): Iterator
+    {
+        yield 'relative' => ['src//Domain/', 'src/Domain'];
+        yield 'unix absolute' => ['/project//src/', '/project/src'];
+        yield 'windows absolute' => ['C:\\project\\src\\', 'C:/project/src'];
+        yield 'windows UNC backslashes' => ['\\\\server\\share\\src\\', '//server/share/src'];
+        yield 'windows UNC forward slashes' => ['//server/share//src/', '//server/share/src'];
+    }
+
+    #[DataProvider('provideNormalise')]
+    public function testNormalise(string $path, string $expected): void
+    {
+        $this->assertSame($expected, Path::normalise($path));
+    }
+
+    /**
      * @return Iterator<string, array{string, string, string}>
      */
     public static function provideResolve(): Iterator
