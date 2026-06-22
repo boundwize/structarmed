@@ -14,11 +14,18 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MayNotDependOnRule::class)]
 final class MayNotDependOnRuleTest extends TestCase
 {
-    /** @param list<string> $dependencies */
-    private function makeNode(string $layer, array $dependencies = []): ClassNode
-    {
+    /**
+     * @param list<string> $dependencies
+     * @param list<string> $layers
+     */
+    private function makeNode(
+        ?string $layer,
+        array $dependencies = [],
+        string $className = 'App\\Domain\\OrderService',
+        array $layers = [],
+    ): ClassNode {
         return new ClassNode(
-            className:    'App\\Domain\\OrderService',
+            className:    $className,
             file:         '/fake.php',
             line:         1,
             layer:        $layer,
@@ -28,6 +35,7 @@ final class MayNotDependOnRuleTest extends TestCase
             isInterface:  false,
             isReadonly:   false,
             dependencies: $dependencies,
+            layers:       $layers,
         );
     }
 
@@ -116,12 +124,14 @@ final class MayNotDependOnRuleTest extends TestCase
         );
     }
 
-    public function testViolatesUsingClassLayerMapWhenInjected(): void
+    public function testViolatesUsingClassNodeMapWhenInjected(): void
     {
         $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
-        $mayNotDependOnRule->injectClassLayerMap([
-            'App\Infrastructure\Persistence\DoctrineOrderRepository' => 'Infrastructure',
-        ]);
+        $dependencyNode     = $this->makeNode(
+            layer:     'Infrastructure',
+            className: 'App\Infrastructure\Persistence\DoctrineOrderRepository',
+        );
+        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
         $classNode = $this->makeNode('Domain', [
             'App\Infrastructure\Persistence\DoctrineOrderRepository',
         ]);
@@ -132,12 +142,11 @@ final class MayNotDependOnRuleTest extends TestCase
         $this->assertStringContainsString('Infrastructure', $violation->message);
     }
 
-    public function testPassesUsingClassLayerMapWhenDependencyNotInForbiddenLayer(): void
+    public function testPassesUsingClassNodeMapWhenDependencyNotInForbiddenLayer(): void
     {
         $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
-        $mayNotDependOnRule->injectClassLayerMap([
-            'App\Domain\Order' => 'Domain',
-        ]);
+        $dependencyNode     = $this->makeNode(layer: 'Domain', className: 'App\Domain\Order');
+        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
         $classNode = $this->makeNode('Domain', [
             'App\Domain\Order',
         ]);
@@ -145,23 +154,22 @@ final class MayNotDependOnRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 
-    public function testClassLayerMapTakesPrecedenceOverToPath(): void
+    public function testClassNodeMapTakesPrecedenceOverToPath(): void
     {
-        // path would match 'App\Infrastructure\A', but map says it's in Domain — no violation
+        // Path would match 'App\Infrastructure\A', but its node is in Domain — no violation.
         $mayNotDependOnRule = new MayNotDependOnRule(
             from:   'Domain',
             to:     'Infrastructure',
             toPath: 'Infrastructure'
         );
-        $mayNotDependOnRule->injectClassLayerMap([
-            'App\Infrastructure\A' => 'Domain',
-        ]);
+        $dependencyNode     = $this->makeNode(layer: 'Domain', className: 'App\Infrastructure\A');
+        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
         $classNode = $this->makeNode('Domain', ['App\Infrastructure\A']);
 
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 
-    public function testViolatesUsingToAsPathFallbackWhenNoClassLayerMapMatch(): void
+    public function testViolatesUsingToAsPathFallbackWhenNoClassNodeMapMatch(): void
     {
         $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
         $classNode          = $this->makeNode('Domain', [
@@ -171,14 +179,34 @@ final class MayNotDependOnRuleTest extends TestCase
         $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 
-    public function testViolatesWhenDependencyMatchesSecondaryLayerInClassLayerMap(): void
+    public function testFallsBackToPathWhenScannedDependencyHasNoLayer(): void
+    {
+        $mayNotDependOnRule = new MayNotDependOnRule(
+            from:   'Domain',
+            to:     'Infrastructure',
+            toPath: 'Infrastructure',
+        );
+        $dependencyNode     = $this->makeNode(
+            layer:     null,
+            className: 'App\\Infrastructure\\A',
+        );
+        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
+        $classNode = $this->makeNode('Domain', ['App\\Infrastructure\\A']);
+
+        $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+    }
+
+    public function testViolatesWhenDependencyMatchesSecondaryLayerInClassNodeMap(): void
     {
         // UserRepository is stored under primary layer 'Infrastructure' but also matches 'Repository'.
         // The rule forbids 'Repository'; the bug was that only the primary layer was checked.
         $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Repository');
-        $mayNotDependOnRule->injectClassLayerMap([
-            'App\Infrastructure\UserRepository' => ['Infrastructure', 'Repository'],
-        ]);
+        $dependencyNode     = $this->makeNode(
+            layer:     'Infrastructure',
+            className: 'App\Infrastructure\UserRepository',
+            layers:    ['Infrastructure', 'Repository'],
+        );
+        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
         $classNode = $this->makeNode('Domain', ['App\Infrastructure\UserRepository']);
 
         $violation = $mayNotDependOnRule->evaluate($classNode);
@@ -190,9 +218,11 @@ final class MayNotDependOnRuleTest extends TestCase
     public function testPassesWhenDependencyOnlyMatchesPrimaryLayerNotForbidden(): void
     {
         $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Repository');
-        $mayNotDependOnRule->injectClassLayerMap([
-            'App\Infrastructure\Cache\RedisCache' => ['Infrastructure'],
-        ]);
+        $dependencyNode     = $this->makeNode(
+            layer:     'Infrastructure',
+            className: 'App\Infrastructure\Cache\RedisCache',
+        );
+        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
         $classNode = $this->makeNode('Domain', ['App\Infrastructure\Cache\RedisCache']);
 
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));

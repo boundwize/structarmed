@@ -11,7 +11,6 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Util\Path;
 
 use function in_array;
-use function is_array;
 use function sprintf;
 use function str_contains;
 use function str_starts_with;
@@ -20,8 +19,8 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
 {
     private readonly string $normalisedToPath;
 
-    /** @var array<string, list<string>>|null */
-    private ?array $classLayerMap = null;
+    /** @var array<string, ClassNode> */
+    private array $classNodeMap = [];
 
     public function __construct(
         private readonly string $from,
@@ -31,14 +30,10 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
         $this->normalisedToPath = Path::normalise($toPath ?? $to);
     }
 
-    /** @param array<string, string|list<string>> $classLayerMap */
-    public function injectClassLayerMap(array $classLayerMap): void
+    /** @param array<string, ClassNode> $classNodeMap */
+    public function injectClassNodeMap(array $classNodeMap): void
     {
-        $this->classLayerMap = [];
-
-        foreach ($classLayerMap as $className => $layers) {
-            $this->classLayerMap[$className] = is_array($layers) ? $layers : [$layers];
-        }
+        $this->classNodeMap = $classNodeMap;
     }
 
     public function appliesTo(ClassNode $classNode): bool
@@ -85,13 +80,11 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
 
     private function isInForbiddenLayer(string $dependency): bool
     {
-        // Priority 1: Use class layer map if available
-        if ($this->classLayerMap !== null) {
-            $depLayers = $this->classLayerMap[$dependency] ?? null;
+        // Priority 1: Use the scanned dependency node if available
+        $dependencyNode = $this->classNodeMap[$dependency] ?? null;
 
-            if ($depLayers !== null) {
-                return in_array($this->to, $depLayers, true);
-            }
+        if ($dependencyNode instanceof ClassNode && $dependencyNode->layers !== []) {
+            return in_array($this->to, $dependencyNode->layers, true);
         }
 
         // Priority 2: Fallback to path matching

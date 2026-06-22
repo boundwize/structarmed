@@ -2449,7 +2449,7 @@ class Order {
     public function testMayNotDependOnRuleDetectsViolationWhenDependencyMatchesSecondaryLayer(): void
     {
         // AuthTokenStore must be scanned so it gets a ClassNode with layers
-        // ['Support', 'Auth'] which is then stored in classLayerMap.
+        // ['Support', 'Auth'] which is then read from the dependency ClassNode.
         $basePath = $this->makeTempProject([
             'src/HTTP/LoginController.php'   => <<<'PHP'
                 <?php
