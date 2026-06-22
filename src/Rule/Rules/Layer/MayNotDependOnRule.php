@@ -83,7 +83,7 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
         // Priority 1: Use the scanned dependency node if available
         $dependencyNode = $this->classNodeMap[$dependency] ?? null;
 
-        if ($dependencyNode !== null) {
+        if ($dependencyNode !== null && $dependencyNode->layers !== []) {
             return in_array($this->to, $dependencyNode->layers, true);
         }
 

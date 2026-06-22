@@ -19,7 +19,7 @@ final class MayNotDependOnRuleTest extends TestCase
      * @param list<string> $layers
      */
     private function makeNode(
-        string $layer,
+        ?string $layer,
         array $dependencies = [],
         string $className = 'App\\Domain\\OrderService',
         array $layers = [],
@@ -175,6 +175,23 @@ final class MayNotDependOnRuleTest extends TestCase
         $classNode          = $this->makeNode('Domain', [
             'App\Infrastructure\Persistence\DoctrineOrderRepository',
         ]);
+
+        $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+    }
+
+    public function testFallsBackToPathWhenScannedDependencyHasNoLayer(): void
+    {
+        $mayNotDependOnRule = new MayNotDependOnRule(
+            from:   'Domain',
+            to:     'Infrastructure',
+            toPath: 'Infrastructure',
+        );
+        $dependencyNode     = $this->makeNode(
+            layer:     null,
+            className: 'App\\Infrastructure\\A',
+        );
+        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
+        $classNode = $this->makeNode('Domain', ['App\\Infrastructure\\A']);
 
         $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
