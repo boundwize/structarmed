@@ -6,8 +6,8 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
-use Boundwize\StructArmed\Rule\Fixer\AddPublicMethodVisibilityVisitor;
-use Boundwize\StructArmed\Rule\Fixer\ClassMethodVisibilityFixer;
+use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\Method\ClassMethodVisibilityFixer;
 use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
 use Boundwize\StructArmed\Rule\RuleViolation;

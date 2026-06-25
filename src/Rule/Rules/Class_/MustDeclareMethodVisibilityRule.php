@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\FixableInterface;
-use Boundwize\StructArmed\Rule\Fixer\ClassMethodVisibilityFixer;
+use Boundwize\StructArmed\Rule\Fixer\Method\ClassMethodVisibilityFixer;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
