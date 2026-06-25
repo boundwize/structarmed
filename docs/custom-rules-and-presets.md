@@ -187,6 +187,8 @@ final class AddFinalClassVisitor extends NodeVisitorAbstract
 
 `PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
 
+Built-in rules follow the same pattern: for example, `MustDeclareMethodVisibilityRule` calls `PhpParserFixerProcessor` directly with `AddPublicMethodVisibilityVisitor` rather than introducing an extra wrapper fixer class.
+
 - `fix()` receives the `RuleViolation` selected for fixing.
 - Return `true` only when the source file was actually changed.
 - `vendor/bin/structarmed analyse --fix` calls `fix()` only for rules that implement `FixableInterface`.

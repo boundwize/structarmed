@@ -7,7 +7,6 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
-use Boundwize\StructArmed\Rule\Fixer\Method\ClassMethodVisibilityFixer;
 use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
@@ -21,7 +20,6 @@ use function tempnam;
 use function unlink;
 
 #[CoversClass(MustDeclareMethodVisibilityRule::class)]
-#[CoversClass(ClassMethodVisibilityFixer::class)]
 #[CoversClass(PhpParserFixerProcessor::class)]
 #[CoversClass(AddPublicMethodVisibilityVisitor::class)]
 final class MustDeclareMethodVisibilityRuleTest extends TestCase
