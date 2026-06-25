@@ -61,10 +61,6 @@ final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViol
 
     public function fix(RuleViolation $ruleViolation): bool
     {
-        if ($ruleViolation->line < 1 || $ruleViolation->methodName === null || $ruleViolation->methodName === '') {
-            return false;
-        }
-
         return (new PhpParserFixerProcessor())->process(
             $ruleViolation->file,
             new AddPublicMethodVisibilityVisitor(

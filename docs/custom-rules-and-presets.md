@@ -132,10 +132,6 @@ Add `FixableInterface` only when the rule can make a deterministic change on dis
     {
 +     public function fix(RuleViolation $ruleViolation): bool
 +     {
-+         if ($ruleViolation->className === '') {
-+             return false;
-+         }
-+
 +         return (new PhpParserFixerProcessor())->process(
 +             $ruleViolation->file,
 +             new AddFinalClassVisitor($ruleViolation->className),
