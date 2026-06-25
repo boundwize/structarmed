@@ -124,15 +124,17 @@ Add `FixableInterface` only when the rule can make a deterministic change on dis
 
 ```diff
 + use Boundwize\StructArmed\Rule\FixableInterface;
-+ use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
++ use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessorTrait;
 + use Boundwize\StructArmed\Rule\RuleViolation;
 
 - final readonly class ServiceClassMustBeFinalRule implements RuleInterface
 + final readonly class ServiceClassMustBeFinalRule implements RuleInterface, FixableInterface
     {
++     use PhpParserFixerProcessorTrait;
++
 +     public function fix(RuleViolation $ruleViolation): bool
 +     {
-+         return (new PhpParserFixerProcessor())->process(
++         return self::fixerProcessor()->process(
 +             $ruleViolation->file,
 +             new AddFinalClassVisitor($ruleViolation->className),
 +         );
@@ -181,9 +183,9 @@ final class AddFinalClassVisitor extends NodeVisitorAbstract
 }
 ```
 
-`PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
+`PhpParserFixerProcessorTrait` provides a shared cached `PhpParserFixerProcessor` instance, and `PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
 
-Built-in rules follow the same pattern: for example, `MustDeclareMethodVisibilityRule` calls `PhpParserFixerProcessor` directly with `AddPublicMethodVisibilityVisitor` rather than introducing an extra wrapper fixer class.
+Built-in rules follow the same pattern: for example, `MustDeclareMethodVisibilityRule` uses `PhpParserFixerProcessorTrait` and calls `self::fixerProcessor()->process(...)` with `AddPublicMethodVisibilityVisitor` rather than introducing an extra wrapper fixer class.
 
 - `fix()` receives the `RuleViolation` selected for fixing.
 - Return `true` only when the source file was actually changed.

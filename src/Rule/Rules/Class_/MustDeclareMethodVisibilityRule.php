@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Rule\Rules\Class_;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
-use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessorTrait;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
@@ -15,6 +15,8 @@ use function sprintf;
 
 final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViolationInterface, FixableInterface
 {
+    use PhpParserFixerProcessorTrait;
+
     public function __construct(
         private string $layer,
     ) {
@@ -61,7 +63,7 @@ final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViol
 
     public function fix(RuleViolation $ruleViolation): bool
     {
-        return (new PhpParserFixerProcessor())->process(
+        return self::fixerProcessor()->process(
             $ruleViolation->file,
             new AddPublicMethodVisibilityVisitor(
                 $ruleViolation->className,
