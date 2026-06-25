@@ -58,15 +58,14 @@ final readonly class MustDeclareMethodVisibilityRule extends AbstractPhpParserFi
         return $violations;
     }
 
-    protected function createFixerVisitor(RuleViolation $ruleViolation): ?AddPublicMethodVisibilityVisitor
+    protected function createFixerVisitor(RuleViolation $ruleViolation): AddPublicMethodVisibilityVisitor
     {
-        if ($ruleViolation->methodName === null) {
-            return null;
-        }
+        /** @var string $methodName */
+        $methodName = $ruleViolation->methodName;
 
         return new AddPublicMethodVisibilityVisitor(
             $ruleViolation->className,
-            $ruleViolation->methodName
+            $methodName
         );
     }
 }

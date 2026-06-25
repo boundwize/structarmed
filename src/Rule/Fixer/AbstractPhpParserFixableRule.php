@@ -13,25 +13,21 @@ abstract readonly class AbstractPhpParserFixableRule implements FixableInterface
     final public function fix(RuleViolation $ruleViolation): bool
     {
         $nodeVisitor = $this->createFixerVisitor($ruleViolation);
-        if ($nodeVisitor === null) {
-            return false;
-        }
 
-        return self::fixerProcessor()->process(
+        return $this->fixerProcessor()->process(
             $ruleViolation->file,
             $nodeVisitor,
         );
     }
 
-    protected function createFixerVisitor(RuleViolation $ruleViolation): ?NodeVisitor
-    {
-        return null;
-    }
+    abstract protected function createFixerVisitor(RuleViolation $ruleViolation): NodeVisitor;
 
-    private static function fixerProcessor(): PhpParserFixerProcessor
+    private function fixerProcessor(): PhpParserFixerProcessor
     {
         static $processor;
 
-        return $processor instanceof PhpParserFixerProcessor ? $processor : $processor = new PhpParserFixerProcessor();
+        return $processor instanceof PhpParserFixerProcessor
+            ? $processor
+            : ($processor = new PhpParserFixerProcessor());
     }
 }

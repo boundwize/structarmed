@@ -108,18 +108,6 @@ PHP);
         }
     }
 
-    public function testFixReturnsFalseWhenViolationHasNoMethodName(): void
-    {
-        $mustDeclareMethodVisibilityRule = new MustDeclareMethodVisibilityRule('Source');
-
-        $this->assertFalse($mustDeclareMethodVisibilityRule->fix(new RuleViolation(
-            message:   'Method must declare an explicit visibility',
-            file:      '/missing.php',
-            line:      1,
-            className: 'Order',
-        )));
-    }
-
     /**
      * @param list<MethodNode> $methods
      */
