@@ -50,6 +50,10 @@ final class ConsoleReport implements ReportInterface
             if ($violation->layer !== null) {
                 $lines[] = sprintf('   Layer: %s', $violation->layer);
             }
+
+            if ($violation->fixable) {
+                $lines[] = '   Hint: run again with --fix to automatically fix this violation.';
+            }
         }
 
         $lines[] = '';

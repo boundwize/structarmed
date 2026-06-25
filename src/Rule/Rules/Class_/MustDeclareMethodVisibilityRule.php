@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\Fixer\ClassMethodVisibilityFixer;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViolationInterface
+final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViolationInterface, FixableInterface
 {
     public function __construct(
         private string $layer,
@@ -49,9 +51,15 @@ final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViol
                 line:      $method->line !== 0 ? $method->line : $classNode->line,
                 className: $classNode->className,
                 layer:     $classNode->layer,
+                methodName: $method->name,
             );
         }
 
         return $violations;
+    }
+
+    public function fix(RuleViolation $ruleViolation): bool
+    {
+        return (new ClassMethodVisibilityFixer())->fix($ruleViolation);
     }
 }

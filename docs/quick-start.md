@@ -69,6 +69,12 @@ If violations are found, StructArmed reports each one:
     <img alt="StructArmed violation output" src="{{ '/assets/structarmed-showoff.svg' | relative_url }}">
 </figure>
 
+If a reported violation is marked as fixable, rerun the analyser with `--fix` to apply the available source changes automatically:
+
+```bash
+vendor/bin/structarmed analyse --fix
+```
+
 If everything passes, StructArmed prints a clean summary:
 
 <figure class="doc-screenshot">

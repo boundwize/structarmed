@@ -15,6 +15,8 @@ final readonly class RuleViolation
         public string $className,
         public ?string $layer = null,
         public string $ruleKey = '',
+        public bool $fixable = false,
+        public ?string $methodName = null,
     ) {
     }
 
@@ -32,7 +34,7 @@ final readonly class RuleViolation
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        $data = [
             'rule'    => $this->ruleKey,
             'message' => $this->message,
             'file'    => $this->file,
@@ -40,5 +42,15 @@ final readonly class RuleViolation
             'class'   => $this->className,
             'layer'   => $this->layer,
         ];
+
+        if ($this->fixable) {
+            $data['fixable'] = true;
+        }
+
+        if ($this->methodName !== null) {
+            $data['method'] = $this->methodName;
+        }
+
+        return $data;
     }
 }

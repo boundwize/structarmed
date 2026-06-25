@@ -6,12 +6,24 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
+use Boundwize\StructArmed\Rule\Fixer\AddPublicMethodVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\ClassMethodVisibilityFixer;
+use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function file_get_contents;
+use function file_put_contents;
+use function sys_get_temp_dir;
+use function tempnam;
+use function unlink;
+
 #[CoversClass(MustDeclareMethodVisibilityRule::class)]
+#[CoversClass(ClassMethodVisibilityFixer::class)]
+#[CoversClass(PhpParserFixerProcessor::class)]
+#[CoversClass(AddPublicMethodVisibilityVisitor::class)]
 final class MustDeclareMethodVisibilityRuleTest extends TestCase
 {
     public function testAppliesOnlyToConfiguredLayer(): void
@@ -46,6 +58,7 @@ final class MustDeclareMethodVisibilityRuleTest extends TestCase
         $this->assertInstanceOf(RuleViolation::class, $violations[0]);
         $this->assertStringContainsString('save', $violations[0]->message);
         $this->assertSame(5, $violations[0]->line);
+        $this->assertSame('save', $violations[0]->methodName);
     }
 
     public function testEvaluateReturnsFirstViolation(): void
@@ -57,6 +70,42 @@ final class MustDeclareMethodVisibilityRuleTest extends TestCase
         ]));
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
+    }
+
+    public function testFixAddsPublicVisibilityToImplicitMethod(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'structarmed-method-');
+        $this->assertIsString($file);
+
+        file_put_contents($file, <<<'PHP'
+<?php
+
+class Order
+{
+    static function save(): void
+    {
+    }
+}
+PHP);
+
+        try {
+            $mustDeclareMethodVisibilityRule = new MustDeclareMethodVisibilityRule('Source');
+
+            $this->assertTrue($mustDeclareMethodVisibilityRule->fix(new RuleViolation(
+                message:   'Method [Order::save()] must declare an explicit visibility (public, protected, or private)',
+                file:      $file,
+                line:      5,
+                className: 'Order',
+                methodName: 'save',
+            )));
+
+            $this->assertStringContainsString(
+                '    public static function save(): void',
+                (string) file_get_contents($file)
+            );
+        } finally {
+            unlink($file);
+        }
     }
 
     /**

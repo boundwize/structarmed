@@ -343,6 +343,7 @@ final readonly class AnalysisResultCache
         $line      = $violation['line'] ?? null;
         $className = $violation['class'] ?? null;
         $layer     = $violation['layer'] ?? null;
+        $method    = $violation['method'] ?? null;
 
         if (
             ! is_string($ruleKey)
@@ -351,6 +352,7 @@ final readonly class AnalysisResultCache
             || ! is_int($line)
             || ! is_string($className)
             || ($layer !== null && ! is_string($layer))
+            || ($method !== null && ! is_string($method))
         ) {
             return null;
         }
@@ -362,6 +364,7 @@ final readonly class AnalysisResultCache
             className: $className,
             layer:     $layer,
             ruleKey:   $ruleKey,
+            methodName: $method,
         );
     }
 

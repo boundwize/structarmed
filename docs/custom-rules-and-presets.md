@@ -116,6 +116,84 @@ return Architecture::define()
     );
 ```
 
+## Making A Custom Rule Fixable
+
+Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
+
+Add `FixableInterface` only when the rule can make a deterministic change on disk.
+
+```diff
++ use Boundwize\StructArmed\Rule\FixableInterface;
++ use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
++ use Boundwize\StructArmed\Rule\RuleViolation;
+
+- final readonly class ServiceClassMustBeFinalRule implements RuleInterface
++ final readonly class ServiceClassMustBeFinalRule implements RuleInterface, FixableInterface
+    {
++     public function fix(RuleViolation $ruleViolation): bool
++     {
++         if ($ruleViolation->className === '') {
++             return false;
++         }
++
++         return (new PhpParserFixerProcessor())->process(
++             $ruleViolation->file,
++             new AddFinalClassVisitor($ruleViolation->className),
++         );
++     }
+    }
+```
+
+For that example, `AddFinalClassVisitor` can be a small `PhpParser\NodeVisitor` that targets one class and adds the `final` modifier:
+
+```php
+<?php
+
+namespace App\Architecture\Rules\Fixer;
+
+use PhpParser\Modifiers;
+use PhpParser\Node;
+use PhpParser\Node\Stmt\ClassLike;
+use PhpParser\Node\Stmt\Class_;
+use PhpParser\NodeVisitorAbstract;
+
+final class AddFinalClassVisitor extends NodeVisitorAbstract
+{
+    public function __construct(
+        private readonly string $className,
+    ) {
+    }
+
+    public function enterNode(Node $node): ?Node
+    {
+        if (! $node instanceof ClassLike || ! $node instanceof Class_) {
+            return null;
+        }
+
+        if (! isset($node->namespacedName) || $this->className !== $node->namespacedName->toString()) {
+            return null;
+        }
+
+        if ($node->isFinal()) {
+            return null;
+        }
+
+        $node->flags |= Modifiers::FINAL;
+
+        return $node;
+    }
+}
+```
+
+`PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
+
+- `fix()` receives the `RuleViolation` selected for fixing.
+- Return `true` only when the source file was actually changed.
+- `vendor/bin/structarmed analyse --fix` calls `fix()` only for rules that implement `FixableInterface`.
+- The console report marks those violations as fixable and shows a `--fix` hint.
+
+Keep fixers deterministic and narrowly scoped. A failed or skipped fix should return `false` so StructArmed can leave the violation in the report.
+
 ## Custom Presets
 
 A custom preset is a class that implements `Boundwize\StructArmed\Preset\PresetInterface`. Inside `apply()`, add the layers and rules you want to reuse.

@@ -27,6 +27,7 @@ use function json_decode;
 use function mkdir;
 use function ob_get_clean;
 use function ob_start;
+use function preg_replace;
 use function random_bytes;
 use function rmdir;
 use function serialize;
@@ -453,6 +454,129 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandFixesFixableViolations(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertMatchesRegularExpression(
+                "/1 violation has been fixed\\.\n\nStructArmed/",
+                $this->withoutAnsi($output)
+            );
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertStringContainsString(
+                '    public function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsPluralFixedViolations(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation(<<<'PHP'
+<?php
+
+namespace App;
+
+class Foo
+{
+    function handle(): void
+    {
+    }
+
+    function dispatch(): void
+    {
+    }
+}
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('2 violations have been fixed.', $this->withoutAnsi($output));
+            $this->assertStringContainsString(
+                '    public function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+            $this->assertStringContainsString(
+                '    public function dispatch(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsFixHintForFixableViolations(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('Hint: run again with --fix', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandDoesNotFixNonFixableViolations(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringNotContainsString('violation has been fixed', $this->withoutAnsi($output));
+            $this->assertStringContainsString('Class [App\\Foo] must be declared final', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandGeneratesBaseline(): void
     {
         $basePath = $this->createProjectDirectoryWithViolation();
@@ -617,6 +741,82 @@ PHP);
             $this->assertSame(1, $exitCode);
             $this->assertStringContainsString(
                 'Error: Baseline file [missing-baseline.php] does not exist.',
+                $output
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsConfiguredBaselineFailureAfterFix(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        try {
+            file_put_contents($basePath . '/structarmed-baseline.php', '<?php return [];');
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+return Architecture::define()
+    ->baseline('structarmed-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule(
+        'source.fixable_failure',
+        new class (__DIR__ . '/structarmed-baseline.php') implements RuleInterface, FixableInterface {
+        public function __construct(private readonly string $baselineFile)
+        {
+        }
+
+        public function appliesTo(ClassNode $classNode): bool
+        {
+            return true;
+        }
+
+        public function evaluate(ClassNode $classNode): ?RuleViolation
+        {
+            return new RuleViolation(
+                message:   'Fixable failure',
+                file:      $classNode->file,
+                line:      $classNode->line,
+                className: $classNode->className,
+                layer:     $classNode->layer,
+                ruleKey:   'source.fixable_failure',
+            );
+        }
+
+        public function fix(RuleViolation $ruleViolation): bool
+        {
+            unlink($this->baselineFile);
+
+            return true;
+        }
+    }
+    );
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString(
+                'Error: Baseline file [structarmed-baseline.php] does not exist.',
                 $output
             );
         } finally {
@@ -829,6 +1029,44 @@ return Architecture::define()
 PHP);
 
         return $basePath;
+    }
+
+    private function createProjectDirectoryWithImplicitMethodVisibilityViolation(?string $source = null): string
+    {
+        $basePath = $this->createProjectDirectory();
+
+        file_put_contents($basePath . '/src/Foo.php', $source ?? <<<'PHP'
+<?php
+
+namespace App;
+
+class Foo
+{
+    function handle(): void
+    {
+    }
+}
+PHP);
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule('source.must_declare_method_visibility', new MustDeclareMethodVisibilityRule('Source'));
+PHP);
+
+        return $basePath;
+    }
+
+    private function withoutAnsi(string $value): string
+    {
+        return (string) preg_replace('/\e\[[0-9;]*m/', '', $value);
     }
 
     private function createTempDirectory(): string
