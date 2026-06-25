@@ -119,25 +119,21 @@ return Architecture::define()
 ## Making A Custom Rule Fixable
 
 Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
+For PHP-Parser based rewrites, extend `Boundwize\StructArmed\Rule\Fixer\AbstractPhpParserFixableRule`.
 
-Add `FixableInterface` only when the rule can make a deterministic change on disk.
+`AbstractPhpParserFixableRule` implements `FixableInterface`, owns a shared cached `PhpParserFixerProcessor`, and lets the rule provide only the `PhpParser\NodeVisitor` for the selected violation.
+Add fix support only when the rule can make a deterministic change on disk.
 
 ```diff
-+ use Boundwize\StructArmed\Rule\FixableInterface;
-+ use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessorTrait;
++ use Boundwize\StructArmed\Rule\Fixer\AbstractPhpParserFixableRule;
 + use Boundwize\StructArmed\Rule\RuleViolation;
 
 - final readonly class ServiceClassMustBeFinalRule implements RuleInterface
-+ final readonly class ServiceClassMustBeFinalRule implements RuleInterface, FixableInterface
++ final readonly class ServiceClassMustBeFinalRule extends AbstractPhpParserFixableRule implements RuleInterface
     {
-+     use PhpParserFixerProcessorTrait;
-+
-+     public function fix(RuleViolation $ruleViolation): bool
++     protected function createFixerVisitor(RuleViolation $ruleViolation): AddFinalClassVisitor
 +     {
-+         return self::fixerProcessor()->process(
-+             $ruleViolation->file,
-+             new AddFinalClassVisitor($ruleViolation->className),
-+         );
++         return new AddFinalClassVisitor($ruleViolation->className);
 +     }
     }
 ```
@@ -183,11 +179,12 @@ final class AddFinalClassVisitor extends NodeVisitorAbstract
 }
 ```
 
-`PhpParserFixerProcessorTrait` provides a shared cached `PhpParserFixerProcessor` instance, and `PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
+`AbstractPhpParserFixableRule` provides a shared cached `PhpParserFixerProcessor` instance, and `PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
 
-Built-in rules follow the same pattern: for example, `MustDeclareMethodVisibilityRule` uses `PhpParserFixerProcessorTrait` and calls `self::fixerProcessor()->process(...)` with `AddPublicMethodVisibilityVisitor` rather than introducing an extra wrapper fixer class.
+Built-in rules follow the same pattern: for example, `MustDeclareMethodVisibilityRule` extends `AbstractPhpParserFixableRule` and returns `AddPublicMethodVisibilityVisitor` from `createFixerVisitor()` rather than introducing an extra wrapper fixer class.
 
 - `fix()` receives the `RuleViolation` selected for fixing.
+- `createFixerVisitor()` should return a `PhpParser\NodeVisitor`, or `null` when the violation does not contain enough data to fix safely.
 - Return `true` only when the source file was actually changed.
 - `vendor/bin/structarmed analyse --fix` calls `fix()` only for rules that implement `FixableInterface`.
 - The console report marks those violations as fixable and shows a `--fix` hint.

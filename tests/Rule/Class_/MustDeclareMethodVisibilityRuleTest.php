@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
+use Boundwize\StructArmed\Rule\Fixer\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
 use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
@@ -20,6 +21,7 @@ use function tempnam;
 use function unlink;
 
 #[CoversClass(MustDeclareMethodVisibilityRule::class)]
+#[CoversClass(AbstractPhpParserFixableRule::class)]
 #[CoversClass(PhpParserFixerProcessor::class)]
 #[CoversClass(AddPublicMethodVisibilityVisitor::class)]
 final class MustDeclareMethodVisibilityRuleTest extends TestCase
@@ -104,6 +106,18 @@ PHP);
         } finally {
             unlink($file);
         }
+    }
+
+    public function testFixReturnsFalseWhenViolationHasNoMethodName(): void
+    {
+        $mustDeclareMethodVisibilityRule = new MustDeclareMethodVisibilityRule('Source');
+
+        $this->assertFalse($mustDeclareMethodVisibilityRule->fix(new RuleViolation(
+            message:   'Method must declare an explicit visibility',
+            file:      '/missing.php',
+            line:      1,
+            className: 'Order',
+        )));
     }
 
     /**

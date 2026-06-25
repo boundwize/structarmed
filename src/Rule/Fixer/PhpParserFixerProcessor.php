@@ -34,6 +34,10 @@ final readonly class PhpParserFixerProcessor
             return false;
         }
 
+        if ($originalStatements === null || $originalStatements === []) {
+            return false;
+        }
+
         $nameResolver = new NameResolver(options: ['replaceNodes' => false]);
         $statements   = (new NodeTraverser($nameResolver, $nodeVisitor))
             ->traverse((new NodeTraverser(new CloningVisitor()))

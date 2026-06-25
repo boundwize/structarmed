@@ -5,18 +5,15 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\Fixer\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
-use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessorTrait;
-use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
+use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface as MultipleViolations;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViolationInterface, FixableInterface
+final readonly class MustDeclareMethodVisibilityRule extends AbstractPhpParserFixableRule implements MultipleViolations
 {
-    use PhpParserFixerProcessorTrait;
-
     public function __construct(
         private string $layer,
     ) {
@@ -61,14 +58,15 @@ final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViol
         return $violations;
     }
 
-    public function fix(RuleViolation $ruleViolation): bool
+    protected function createFixerVisitor(RuleViolation $ruleViolation): ?AddPublicMethodVisibilityVisitor
     {
-        return self::fixerProcessor()->process(
-            $ruleViolation->file,
-            new AddPublicMethodVisibilityVisitor(
-                $ruleViolation->className,
-                $ruleViolation->methodName
-            ),
+        if ($ruleViolation->methodName === null) {
+            return null;
+        }
+
+        return new AddPublicMethodVisibilityVisitor(
+            $ruleViolation->className,
+            $ruleViolation->methodName
         );
     }
 }

@@ -61,6 +61,17 @@ PHP);
         }
     }
 
+    public function testProcessReturnsFalseForEmptyPhpFile(): void
+    {
+        $file = $this->temporaryPhpFile("<?php\n");
+
+        try {
+            $this->assertFalse($this->process($file, 'App\\Order', 'save'));
+        } finally {
+            unlink($file);
+        }
+    }
+
     public function testProcessReturnsFalseWhenMethodAlreadyHasVisibility(): void
     {
         $file = $this->temporaryPhpFile(<<<'PHP'
