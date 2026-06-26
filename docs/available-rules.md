@@ -81,7 +81,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 | `MayNotImplementInterfaceRule` | `new MayNotImplementInterfaceRule(layer: 'Domain', interface: JsonSerializable::class)` | Classes in a layer do not implement a forbidden interface. |
 | `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. Supports `--fix`. |
 | `MustBeInterfaceRule` | `new MustBeInterfaceRule(layer: 'Contract', classNamePattern: '/Interface$/')` | Matching declarations in a layer are interfaces. |
-| `MustDeclareConstantVisibilityRule` | `new MustDeclareConstantVisibilityRule(layer: 'Source')` | Class constants declare `public`, `protected`, or `private`. |
+| `MustDeclareConstantVisibilityRule` | `new MustDeclareConstantVisibilityRule(layer: 'Source')` | Class constants declare `public`, `protected`, or `private`. Supports `--fix`. |
 | `MustDeclareMethodVisibilityRule` | `new MustDeclareMethodVisibilityRule(layer: 'Source')` | Methods declare `public`, `protected`, or `private`. Supports `--fix`. |
 | `MustDeclarePropertyVisibilityRule` | `new MustDeclarePropertyVisibilityRule(layer: 'Source')` | Properties declare `public`, `protected`, or `private`. |
 | `MustImplementInterfaceRule` | `new MustImplementInterfaceRule(layer: 'HTTP', interface: RequestHandlerInterface::class, classNamePattern: '/Handler$/')` | Matching classes implement a required interface. |
@@ -90,7 +90,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`MustBeFinalRule` and `MustDeclareMethodVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically add the `final` class modifier and missing method visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+`MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, and `MustDeclareMethodVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically add the `final` class modifier and missing constant or method visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
 ## Layer Rules
 

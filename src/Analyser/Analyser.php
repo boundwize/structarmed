@@ -159,6 +159,7 @@ final readonly class Analyser
                     layer:     $violation->layer,
                     ruleKey:   $key,
                     methodName: $violation->methodName,
+                    constantName: $violation->constantName,
                 ));
             }
         }
@@ -221,6 +222,7 @@ final readonly class Analyser
                         layer:     $violation->layer,
                         ruleKey:   $key,
                         methodName: $violation->methodName,
+                        constantName: $violation->constantName,
                     ));
                 }
             }

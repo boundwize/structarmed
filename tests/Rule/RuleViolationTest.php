@@ -87,6 +87,19 @@ final class RuleViolationTest extends TestCase
         $this->assertSame('save', $ruleViolation->toArray()['method']);
     }
 
+    public function testViolationSerializesConstantNameWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:      'Broken rule',
+            file:         '/src/File.php',
+            line:         7,
+            className:    'App\\Domain\\File',
+            constantName: 'VERSION',
+        );
+
+        $this->assertSame('VERSION', $ruleViolation->toArray()['constant']);
+    }
+
     public function testCollectionFiltersAndSerializesViolations(): void
     {
         $collection    = new RuleViolationCollection();

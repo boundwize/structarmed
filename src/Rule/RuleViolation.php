@@ -17,6 +17,7 @@ final readonly class RuleViolation
         public string $ruleKey = '',
         public bool $fixable = false,
         public ?string $methodName = null,
+        public ?string $constantName = null,
     ) {
     }
 
@@ -49,6 +50,10 @@ final readonly class RuleViolation
 
         if ($this->methodName !== null) {
             $data['method'] = $this->methodName;
+        }
+
+        if ($this->constantName !== null) {
+            $data['constant'] = $this->constantName;
         }
 
         return $data;

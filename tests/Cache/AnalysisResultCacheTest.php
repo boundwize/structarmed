@@ -71,6 +71,7 @@ final class AnalysisResultCacheTest extends TestCase
             layer:     'Domain',
             ruleKey:   'rule',
             methodName: 'save',
+            constantName: 'VERSION',
         ));
 
         try {
