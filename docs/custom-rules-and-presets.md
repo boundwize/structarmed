@@ -119,10 +119,29 @@ return Architecture::define()
 ## Making A Custom Rule Fixable
 
 Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
-For PHP-Parser based rewrites, extend `Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule`.
+`FixableInterface` is the only contract required by `vendor/bin/structarmed analyse --fix`; the PHP-Parser helper is optional.
 
+Implement `FixableInterface` directly when the rule owns the complete fix logic. Add fix support only when the rule can make a deterministic change on disk.
+
+```diff
++ use Boundwize\StructArmed\Rule\FixableInterface;
+  use Boundwize\StructArmed\Rule\RuleInterface;
+  use Boundwize\StructArmed\Rule\RuleViolation;
+
+- final readonly class SomeRule implements RuleInterface
++ final readonly class SomeRule implements RuleInterface, FixableInterface
+    {
++     public function fix(RuleViolation $ruleViolation): bool
++     {
++         return $this->rewriteSourceFile($ruleViolation);
++     }
+    }
+```
+
+`rewriteSourceFile()` represents your own custom fixer implementation. `fix()` receives the selected `RuleViolation`; use the violation data, such as `file`, `line`, `className`, `methodName`, `constantName`, or `propertyName`, to target the rewrite. Return `true` only when the source file was actually changed; return `false` when the rule cannot safely apply a fix.
+
+For PHP-Parser based rewrites, extend `Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule`.
 `AbstractPhpParserFixableRule` implements `FixableInterface`, owns a shared cached `PhpParserFixerProcessor`, and lets the rule provide only the `PhpParser\NodeVisitor` for the selected violation.
-Add fix support only when the rule can make a deterministic change on disk.
 
 ```diff
 + use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
@@ -145,7 +164,7 @@ StructArmed ships `Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalCla
 
 Built-in rules follow the same pattern: `MustBeFinalRule` returns `AddFinalClassVisitor`, `MustDeclareConstantVisibilityRule` returns `AddPublicConstantVisibilityVisitor`, `MustDeclareMethodVisibilityRule` returns `AddPublicMethodVisibilityVisitor`, and `MustDeclarePropertyVisibilityRule` returns `AddPublicPropertyVisibilityVisitor` from `createFixerVisitor()` rather than introducing extra wrapper fixer classes.
 
-- `fix()` receives the `RuleViolation` selected for fixing.
+- Direct `FixableInterface` implementations should keep all file changes inside `fix()`.
 - `createFixerVisitor()` should return a `PhpParser\NodeVisitor` that safely no-ops when the violation does not contain enough data to fix.
 - Return `true` only when the source file was actually changed.
 - `vendor/bin/structarmed analyse --fix` calls `fix()` only for rules that implement `FixableInterface`.
