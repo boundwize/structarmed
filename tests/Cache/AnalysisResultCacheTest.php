@@ -72,6 +72,7 @@ final class AnalysisResultCacheTest extends TestCase
             ruleKey:   'rule',
             methodName: 'save',
             constantName: 'VERSION',
+            propertyName: 'status',
         ));
 
         try {

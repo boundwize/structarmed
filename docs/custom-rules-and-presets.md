@@ -143,7 +143,7 @@ StructArmed ships `Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalCla
 
 `AbstractPhpParserFixableRule` provides a shared cached `PhpParserFixerProcessor` instance, and `PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
 
-Built-in rules follow the same pattern: `MustBeFinalRule` returns `AddFinalClassVisitor`, `MustDeclareConstantVisibilityRule` returns `AddPublicConstantVisibilityVisitor`, and `MustDeclareMethodVisibilityRule` returns `AddPublicMethodVisibilityVisitor` from `createFixerVisitor()` rather than introducing extra wrapper fixer classes.
+Built-in rules follow the same pattern: `MustBeFinalRule` returns `AddFinalClassVisitor`, `MustDeclareConstantVisibilityRule` returns `AddPublicConstantVisibilityVisitor`, `MustDeclareMethodVisibilityRule` returns `AddPublicMethodVisibilityVisitor`, and `MustDeclarePropertyVisibilityRule` returns `AddPublicPropertyVisibilityVisitor` from `createFixerVisitor()` rather than introducing extra wrapper fixer classes.
 
 - `fix()` receives the `RuleViolation` selected for fixing.
 - `createFixerVisitor()` should return a `PhpParser\NodeVisitor` that safely no-ops when the violation does not contain enough data to fix.

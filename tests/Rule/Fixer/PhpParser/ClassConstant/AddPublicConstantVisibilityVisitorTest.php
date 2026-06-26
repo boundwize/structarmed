@@ -21,60 +21,60 @@ final class AddPublicConstantVisibilityVisitorTest extends TestCase
 {
     public function testAddsPublicVisibilityToMatchingNamespacedConstant(): void
     {
-        $classConstant         = new ClassConst([new Const_('VERSION', new Int_(1))], Modifiers::FINAL);
-        $class                 = new Class_('Order', ['stmts' => [$classConstant]]);
-        $visitor               = new AddPublicConstantVisibilityVisitor('App\\Order', 'VERSION');
-        $class->namespacedName = new Name('App\\Order');
+        $classConst                         = new ClassConst([new Const_('VERSION', new Int_(1))], Modifiers::FINAL);
+        $class                              = new Class_('Order', ['stmts' => [$classConst]]);
+        $addPublicConstantVisibilityVisitor = new AddPublicConstantVisibilityVisitor('App\\Order', 'VERSION');
+        $class->namespacedName              = new Name('App\\Order');
 
-        (new NodeTraverser($visitor))->traverse([$class]);
+        (new NodeTraverser($addPublicConstantVisibilityVisitor))->traverse([$class]);
 
-        $this->assertSame(Modifiers::PUBLIC | Modifiers::FINAL, $classConstant->flags);
+        $this->assertSame(Modifiers::PUBLIC | Modifiers::FINAL, $classConst->flags);
     }
 
     public function testDoesNotChangeAlreadyVisibleConstant(): void
     {
-        $classConstant         = new ClassConst([new Const_('VERSION', new Int_(1))], Modifiers::PUBLIC);
-        $class                 = new Class_('Order', ['stmts' => [$classConstant]]);
-        $visitor               = new AddPublicConstantVisibilityVisitor('Order', 'VERSION');
-        $class->namespacedName = new Name('Order');
+        $classConst                         = new ClassConst([new Const_('VERSION', new Int_(1))], Modifiers::PUBLIC);
+        $class                              = new Class_('Order', ['stmts' => [$classConst]]);
+        $addPublicConstantVisibilityVisitor = new AddPublicConstantVisibilityVisitor('Order', 'VERSION');
+        $class->namespacedName              = new Name('Order');
 
-        (new NodeTraverser($visitor))->traverse([$class]);
+        (new NodeTraverser($addPublicConstantVisibilityVisitor))->traverse([$class]);
 
-        $this->assertSame(Modifiers::PUBLIC, $classConstant->flags);
+        $this->assertSame(Modifiers::PUBLIC, $classConst->flags);
     }
 
     public function testDoesNotChangeConstantInDifferentClass(): void
     {
-        $classConstant         = new ClassConst([new Const_('VERSION', new Int_(1))]);
-        $class                 = new Class_('Order', ['stmts' => [$classConstant]]);
-        $visitor               = new AddPublicConstantVisibilityVisitor('App\\Order', 'VERSION');
-        $class->namespacedName = new Name('App\\Invoice');
+        $classConst                         = new ClassConst([new Const_('VERSION', new Int_(1))]);
+        $class                              = new Class_('Order', ['stmts' => [$classConst]]);
+        $addPublicConstantVisibilityVisitor = new AddPublicConstantVisibilityVisitor('App\\Order', 'VERSION');
+        $class->namespacedName              = new Name('App\\Invoice');
 
-        (new NodeTraverser($visitor))->traverse([$class]);
+        (new NodeTraverser($addPublicConstantVisibilityVisitor))->traverse([$class]);
 
-        $this->assertSame(0, $classConstant->flags);
+        $this->assertSame(0, $classConst->flags);
     }
 
     public function testDoesNotChangeDifferentConstant(): void
     {
-        $classConstant         = new ClassConst([new Const_('STATUS', new Int_(1))]);
-        $class                 = new Class_('Order', ['stmts' => [$classConstant]]);
-        $visitor               = new AddPublicConstantVisibilityVisitor('App\\Order', 'VERSION');
-        $class->namespacedName = new Name('App\\Order');
+        $classConst                         = new ClassConst([new Const_('STATUS', new Int_(1))]);
+        $class                              = new Class_('Order', ['stmts' => [$classConst]]);
+        $addPublicConstantVisibilityVisitor = new AddPublicConstantVisibilityVisitor('App\\Order', 'VERSION');
+        $class->namespacedName              = new Name('App\\Order');
 
-        (new NodeTraverser($visitor))->traverse([$class]);
+        (new NodeTraverser($addPublicConstantVisibilityVisitor))->traverse([$class]);
 
-        $this->assertSame(0, $classConstant->flags);
+        $this->assertSame(0, $classConst->flags);
     }
 
     public function testDoesNotChangeAnonymousClassConstant(): void
     {
-        $classConstant = new ClassConst([new Const_('VERSION', new Int_(1))]);
-        $class         = new Class_(null, ['stmts' => [$classConstant]]);
-        $visitor       = new AddPublicConstantVisibilityVisitor('App\\Missing', 'VERSION');
+        $classConst                         = new ClassConst([new Const_('VERSION', new Int_(1))]);
+        $class                              = new Class_(null, ['stmts' => [$classConst]]);
+        $addPublicConstantVisibilityVisitor = new AddPublicConstantVisibilityVisitor('App\\Missing', 'VERSION');
 
-        (new NodeTraverser(new NameResolver(), $visitor))->traverse([$class]);
+        (new NodeTraverser(new NameResolver(), $addPublicConstantVisibilityVisitor))->traverse([$class]);
 
-        $this->assertSame(0, $classConstant->flags);
+        $this->assertSame(0, $classConst->flags);
     }
 }

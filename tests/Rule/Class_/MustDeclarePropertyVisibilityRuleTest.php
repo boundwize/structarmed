@@ -6,13 +6,17 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
+use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassProperty\AddPublicPropertyVisibilityVisitor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclarePropertyVisibilityRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 #[CoversClass(MustDeclarePropertyVisibilityRule::class)]
 #[CoversClass(PropertyNode::class)]
+#[CoversClass(AddPublicPropertyVisibilityVisitor::class)]
 final class MustDeclarePropertyVisibilityRuleTest extends TestCase
 {
     public function testAppliesOnlyToConfiguredLayer(): void
@@ -47,6 +51,7 @@ final class MustDeclarePropertyVisibilityRuleTest extends TestCase
         $this->assertInstanceOf(RuleViolation::class, $violations[0]);
         $this->assertStringContainsString('$status', $violations[0]->message);
         $this->assertSame(7, $violations[0]->line);
+        $this->assertSame('status', $violations[0]->propertyName);
     }
 
     public function testEvaluateReturnsFirstViolation(): void
@@ -58,6 +63,33 @@ final class MustDeclarePropertyVisibilityRuleTest extends TestCase
         ]));
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
+    }
+
+    public function testIsFixable(): void
+    {
+        $this->assertInstanceOf(FixableInterface::class, new MustDeclarePropertyVisibilityRule('Source'));
+    }
+
+    public function testCreatesPropertyVisibilityFixerVisitor(): void
+    {
+        $mustDeclarePropertyVisibilityRule = new MustDeclarePropertyVisibilityRule('Source');
+        $reflectionMethod                  = new ReflectionMethod(
+            $mustDeclarePropertyVisibilityRule,
+            'createFixerVisitor'
+        );
+
+        $visitor = $reflectionMethod->invoke(
+            $mustDeclarePropertyVisibilityRule,
+            new RuleViolation(
+                message:      'Property [Order::$status] must declare an explicit visibility',
+                file:         '/src/Order.php',
+                line:         7,
+                className:    'Order',
+                propertyName: 'status',
+            )
+        );
+
+        $this->assertInstanceOf(AddPublicPropertyVisibilityVisitor::class, $visitor);
     }
 
     /**

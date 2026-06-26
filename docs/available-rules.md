@@ -83,14 +83,14 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 | `MustBeInterfaceRule` | `new MustBeInterfaceRule(layer: 'Contract', classNamePattern: '/Interface$/')` | Matching declarations in a layer are interfaces. |
 | `MustDeclareConstantVisibilityRule` | `new MustDeclareConstantVisibilityRule(layer: 'Source')` | Class constants declare `public`, `protected`, or `private`. Supports `--fix`. |
 | `MustDeclareMethodVisibilityRule` | `new MustDeclareMethodVisibilityRule(layer: 'Source')` | Methods declare `public`, `protected`, or `private`. Supports `--fix`. |
-| `MustDeclarePropertyVisibilityRule` | `new MustDeclarePropertyVisibilityRule(layer: 'Source')` | Properties declare `public`, `protected`, or `private`. |
+| `MustDeclarePropertyVisibilityRule` | `new MustDeclarePropertyVisibilityRule(layer: 'Source')` | Properties declare `public`, `protected`, or `private`. Supports `--fix`. |
 | `MustImplementInterfaceRule` | `new MustImplementInterfaceRule(layer: 'HTTP', interface: RequestHandlerInterface::class, classNamePattern: '/Handler$/')` | Matching classes implement a required interface. |
 | `NamingConventionRule` | `new NamingConventionRule(classNamePattern: '/Repository$/', mustBeInLayer: 'Infrastructure')` | Classes matching a name pattern live in the expected layer. |
 {: .rule-table }
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, and `MustDeclareMethodVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically add the `final` class modifier and missing constant or method visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+`MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically add the `final` class modifier and missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
 ## Layer Rules
 

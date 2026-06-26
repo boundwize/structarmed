@@ -314,6 +314,7 @@ final readonly class AnalyseCommand
                 fixable:   $rule instanceof FixableInterface,
                 methodName: $ruleViolation->methodName,
                 constantName: $ruleViolation->constantName,
+                propertyName: $ruleViolation->propertyName,
             ));
         }
 

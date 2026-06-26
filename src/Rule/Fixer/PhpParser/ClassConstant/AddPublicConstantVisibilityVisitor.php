@@ -45,9 +45,9 @@ final class AddPublicConstantVisibilityVisitor extends NodeVisitorAbstract
         return null;
     }
 
-    private function containsConstant(ClassConst $classConstant): bool
+    private function containsConstant(ClassConst $classConst): bool
     {
-        foreach ($classConstant->consts as $constant) {
+        foreach ($classConst->consts as $constant) {
             if ($constant->name->toString() === $this->constantName) {
                 return true;
             }

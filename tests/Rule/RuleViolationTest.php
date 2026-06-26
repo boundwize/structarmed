@@ -100,6 +100,19 @@ final class RuleViolationTest extends TestCase
         $this->assertSame('VERSION', $ruleViolation->toArray()['constant']);
     }
 
+    public function testViolationSerializesPropertyNameWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:      'Broken rule',
+            file:         '/src/File.php',
+            line:         7,
+            className:    'App\\Domain\\File',
+            propertyName: 'status',
+        );
+
+        $this->assertSame('status', $ruleViolation->toArray()['property']);
+    }
+
     public function testCollectionFiltersAndSerializesViolations(): void
     {
         $collection    = new RuleViolationCollection();

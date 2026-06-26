@@ -160,6 +160,7 @@ final readonly class Analyser
                     ruleKey:   $key,
                     methodName: $violation->methodName,
                     constantName: $violation->constantName,
+                    propertyName: $violation->propertyName,
                 ));
             }
         }
@@ -223,6 +224,7 @@ final readonly class Analyser
                         ruleKey:   $key,
                         methodName: $violation->methodName,
                         constantName: $violation->constantName,
+                        propertyName: $violation->propertyName,
                     ));
                 }
             }
