@@ -472,7 +472,7 @@ PHP);
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertMatchesRegularExpression(
-                "/1 violation has been fixed\\.\n\nStructArmed/",
+                "/1 violation has been fixed\\.\\R\\RStructArmed/",
                 $this->withoutAnsi($output)
             );
             $this->assertStringContainsString('No violations found', $output);
