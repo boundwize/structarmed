@@ -22,11 +22,11 @@ final class AddFinalClassVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        if (! isset($node->namespacedName) || $this->className !== $node->namespacedName->toString()) {
+        if ($node->isFinal() || $node->isAbstract()) {
             return null;
         }
 
-        if ($node->isFinal() || $node->isAbstract()) {
+        if ($node->namespacedName?->toString() !== $this->className) {
             return null;
         }
 

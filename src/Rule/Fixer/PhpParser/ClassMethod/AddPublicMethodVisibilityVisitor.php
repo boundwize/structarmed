@@ -24,7 +24,7 @@ final class AddPublicMethodVisibilityVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        if (! isset($node->namespacedName) || $this->className !== $node->namespacedName->toString()) {
+        if ($node->namespacedName?->toString() !== $this->className) {
             return null;
         }
 
