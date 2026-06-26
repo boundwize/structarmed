@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\ClassProperty;
+namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\Property;
 
-use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassProperty\AddPublicPropertyVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\Property\AddPublicPropertyVisibilityVisitor;
 use PhpParser\Modifiers;
 use PhpParser\Node\Name;
 use PhpParser\Node\PropertyItem;
@@ -66,7 +66,7 @@ final class AddPublicPropertyVisibilityVisitorTest extends TestCase
         $this->assertSame(0, $property->flags);
     }
 
-    public function testDoesNotChangeAnonymousClassProperty(): void
+    public function testDoesNotChangePropertyInAnonymousClass(): void
     {
         $property                           = new Property(0, [new PropertyItem('status')]);
         $class                              = new Class_(null, ['stmts' => [$property]]);
