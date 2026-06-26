@@ -13,7 +13,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use function file_get_contents;
 use function file_put_contents;
 use function is_array;
-use function is_readable;
+use function is_file;
 use function preg_match;
 use function sprintf;
 use function strlen;
@@ -88,7 +88,7 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
 
     public function fix(RuleViolation $ruleViolation): bool
     {
-        if (! is_readable($ruleViolation->file)) {
+        if (! is_file($ruleViolation->file)) {
             return false;
         }
 
