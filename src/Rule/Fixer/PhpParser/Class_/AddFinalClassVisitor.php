@@ -22,7 +22,7 @@ final class AddFinalClassVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        if ($node->isFinal() || $node->isAbstract()) {
+        if ($node->isFinal() || $node->isAbstract() || $node->isAnonymous()) {
             return null;
         }
 

@@ -10,6 +10,7 @@ use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -70,7 +71,7 @@ final class AddPublicMethodVisibilityVisitorTest extends TestCase
         $class                            = new Class_(null, ['stmts' => [$classMethod]]);
         $addPublicMethodVisibilityVisitor = new AddPublicMethodVisibilityVisitor('App\\Missing', 'run');
 
-        (new NodeTraverser($addPublicMethodVisibilityVisitor))->traverse([$class]);
+        (new NodeTraverser(new NameResolver(), $addPublicMethodVisibilityVisitor))->traverse([$class]);
 
         $this->assertSame(0, $classMethod->flags);
     }
