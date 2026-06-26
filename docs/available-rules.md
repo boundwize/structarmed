@@ -59,7 +59,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\File`.
 
 | Rule | Constructor | Checks |
 |---|---|---|
-| `Psr1PhpTagsRule` | `new Psr1PhpTagsRule(sourcePaths: ['src/'])` | PHP files use only `<?php` and `<?=` tags. |
+| `Psr1PhpTagsRule` | `new Psr1PhpTagsRule(sourcePaths: ['src/'])` | PHP files use only `<?php` and `<?=` tags. Supports `--fix`. |
 | `Psr1SymbolsOrSideEffectsRule` | `new Psr1SymbolsOrSideEffectsRule(sourcePaths: ['src/'])` | A file declares symbols or causes side effects, but does not do both. |
 | `Psr1Utf8WithoutBomRule` | `new Psr1Utf8WithoutBomRule(sourcePaths: ['src/'])` | PHP files use valid UTF-8 without a byte order mark. |
 {: .rule-table }
@@ -90,7 +90,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically add the `final` class modifier and missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+`Psr1PhpTagsRule`, `MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically normalize invalid PHP opening tags, add the `final` class modifier, and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
 ## Layer Rules
 
