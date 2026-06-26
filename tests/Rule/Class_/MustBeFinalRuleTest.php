@@ -6,10 +6,13 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 #[CoversClass(MustBeFinalRule::class)]
 final class MustBeFinalRuleTest extends TestCase
@@ -54,6 +57,29 @@ final class MustBeFinalRuleTest extends TestCase
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('final', $violation->message);
+    }
+
+    public function testIsFixable(): void
+    {
+        $this->assertInstanceOf(FixableInterface::class, new MustBeFinalRule(layer: 'Domain'));
+    }
+
+    public function testCreatesFinalClassFixerVisitor(): void
+    {
+        $mustBeFinalRule      = new MustBeFinalRule(layer: 'Domain');
+        $reflectionMethod     = new ReflectionMethod($mustBeFinalRule, 'createFixerVisitor');
+        $addFinalClassVisitor = $reflectionMethod->invoke(
+            $mustBeFinalRule,
+            new RuleViolation(
+                message:   'Class [App\\Order] must be declared final',
+                file:      '/src/Order.php',
+                line:      1,
+                className: 'App\\Order',
+                layer:     'Domain',
+            )
+        );
+
+        $this->assertInstanceOf(AddFinalClassVisitor::class, $addFinalClassVisitor);
     }
 
     public function testDoesNotApplyToWrongLayer(): void

@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassMethod\AddPublicMethodVisibilityVisitor;
+use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface as MultipleViolations;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViolationInterface
+final readonly class MustDeclareMethodVisibilityRule extends AbstractPhpParserFixableRule implements MultipleViolations
 {
     public function __construct(
         private string $layer,
@@ -49,9 +51,21 @@ final readonly class MustDeclareMethodVisibilityRule implements MultipleRuleViol
                 line:      $method->line !== 0 ? $method->line : $classNode->line,
                 className: $classNode->className,
                 layer:     $classNode->layer,
+                methodName: $method->name,
             );
         }
 
         return $violations;
+    }
+
+    protected function createFixerVisitor(RuleViolation $ruleViolation): AddPublicMethodVisibilityVisitor
+    {
+        /** @var string $methodName */
+        $methodName = $ruleViolation->methodName;
+
+        return new AddPublicMethodVisibilityVisitor(
+            $ruleViolation->className,
+            $methodName
+        );
     }
 }

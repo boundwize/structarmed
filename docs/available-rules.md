@@ -79,16 +79,18 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 | `ClassNameMustNotHavePrefixRule` | `new ClassNameMustNotHavePrefixRule(layer: 'Model', prefix: 'Model')` | Classes in a layer do not use a forbidden prefix. |
 | `MaxDependencyCountRule` | `new MaxDependencyCountRule(layer: 'Controller', maxCount: 5)` | Constructor dependency count stays below the configured limit. |
 | `MayNotImplementInterfaceRule` | `new MayNotImplementInterfaceRule(layer: 'Domain', interface: JsonSerializable::class)` | Classes in a layer do not implement a forbidden interface. |
-| `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. |
+| `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. Supports `--fix`. |
 | `MustBeInterfaceRule` | `new MustBeInterfaceRule(layer: 'Contract', classNamePattern: '/Interface$/')` | Matching declarations in a layer are interfaces. |
-| `MustDeclareConstantVisibilityRule` | `new MustDeclareConstantVisibilityRule(layer: 'Source')` | Class constants declare `public`, `protected`, or `private`. |
-| `MustDeclareMethodVisibilityRule` | `new MustDeclareMethodVisibilityRule(layer: 'Source')` | Methods declare `public`, `protected`, or `private`. |
-| `MustDeclarePropertyVisibilityRule` | `new MustDeclarePropertyVisibilityRule(layer: 'Source')` | Properties declare `public`, `protected`, or `private`. |
+| `MustDeclareConstantVisibilityRule` | `new MustDeclareConstantVisibilityRule(layer: 'Source')` | Class constants declare `public`, `protected`, or `private`. Supports `--fix`. |
+| `MustDeclareMethodVisibilityRule` | `new MustDeclareMethodVisibilityRule(layer: 'Source')` | Methods declare `public`, `protected`, or `private`. Supports `--fix`. |
+| `MustDeclarePropertyVisibilityRule` | `new MustDeclarePropertyVisibilityRule(layer: 'Source')` | Properties declare `public`, `protected`, or `private`. Supports `--fix`. |
 | `MustImplementInterfaceRule` | `new MustImplementInterfaceRule(layer: 'HTTP', interface: RequestHandlerInterface::class, classNamePattern: '/Handler$/')` | Matching classes implement a required interface. |
 | `NamingConventionRule` | `new NamingConventionRule(classNamePattern: '/Repository$/', mustBeInLayer: 'Infrastructure')` | Classes matching a name pattern live in the expected layer. |
 {: .rule-table }
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
+
+`MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically add the `final` class modifier and missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
 ## Layer Rules
 

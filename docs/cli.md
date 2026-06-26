@@ -44,6 +44,20 @@ vendor/bin/structarmed analyse --config=path/to/structarmed.php
 vendor/bin/structarmed analyze --config=path/to/structarmed.php
 ```
 
+## Auto-Fix Violations
+
+Use `--fix` to automatically apply fixes for violations produced by rules that implement `Boundwize\StructArmed\Rule\FixableInterface`.
+
+```bash
+# Apply available fixes, then print the updated report.
+vendor/bin/structarmed analyse --fix
+
+# Fix only a subset of paths.
+vendor/bin/structarmed analyze src --fix
+```
+
+When a violation is fixable, the console report adds a hint telling you to rerun the command with `--fix`. Rules that do not implement `FixableInterface` are still reported, but are skipped by the fixer pass.
+
 ## Reports
 
 ```bash

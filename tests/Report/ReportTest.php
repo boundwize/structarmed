@@ -42,6 +42,34 @@ final class ReportTest extends TestCase
         $this->assertStringContainsString('1 violation(s) found', $report);
     }
 
+    public function testConsoleReportRendersFixHintForFixableViolations(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add(new RuleViolation(
+            message:   'Something failed',
+            file:      '/src/Order.php',
+            line:      10,
+            className: 'App\\Domain\\Order',
+            layer:     'Domain',
+            ruleKey:   'rule.key',
+            fixable:   true,
+        ));
+
+        $report = (new ConsoleReport())->render($ruleViolationCollection, 0.34);
+
+        $this->assertStringContainsString('Hint: run again with --fix', $report);
+    }
+
+    public function testConsoleReportDoesNotRenderFixHintForNonFixableViolations(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation());
+
+        $report = (new ConsoleReport())->render($ruleViolationCollection, 0.34);
+
+        $this->assertStringNotContainsString('Hint: run again with --fix', $report);
+    }
+
     public function testJsonReportEndsWithNewline(): void
     {
         $json = (new JsonReport())->render(new RuleViolationCollection(), 0.0);
@@ -61,6 +89,7 @@ final class ReportTest extends TestCase
         $this->assertIsArray($data['violations']);
         $this->assertIsArray($data['violations'][0]);
         $this->assertSame('rule.key', $data['violations'][0]['rule']);
+        $this->assertArrayNotHasKey('fixable', $data['violations'][0]);
         $this->assertSame(1, $data['total']);
         $this->assertFalse($data['passed']);
         $this->assertEqualsWithDelta(1.23, $data['elapsed'], PHP_FLOAT_EPSILON);

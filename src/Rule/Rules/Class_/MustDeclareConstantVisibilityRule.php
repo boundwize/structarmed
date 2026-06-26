@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule as PhpParserFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConstant\AddPublicConstantVisibilityVisitor;
+use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface as MultipleViolations;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MustDeclareConstantVisibilityRule implements MultipleRuleViolationInterface
+final readonly class MustDeclareConstantVisibilityRule extends PhpParserFixableRule implements MultipleViolations
 {
     public function __construct(
         private string $layer,
@@ -49,9 +51,21 @@ final readonly class MustDeclareConstantVisibilityRule implements MultipleRuleVi
                 line:      $constant->line !== 0 ? $constant->line : $classNode->line,
                 className: $classNode->className,
                 layer:     $classNode->layer,
+                constantName: $constant->name,
             );
         }
 
         return $violations;
+    }
+
+    protected function createFixerVisitor(RuleViolation $ruleViolation): AddPublicConstantVisibilityVisitor
+    {
+        /** @var string $constantName */
+        $constantName = $ruleViolation->constantName;
+
+        return new AddPublicConstantVisibilityVisitor(
+            $ruleViolation->className,
+            $constantName
+        );
     }
 }

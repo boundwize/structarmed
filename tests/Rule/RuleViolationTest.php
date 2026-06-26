@@ -47,6 +47,72 @@ final class RuleViolationTest extends TestCase
         $this->assertSame('', $ruleViolation->ruleKey);
     }
 
+    public function testFixableViolationSerializesFixableFlag(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:   'Broken rule',
+            file:      '/src/File.php',
+            line:      7,
+            className: 'App\\Domain\\File',
+            ruleKey:   'first.rule',
+            fixable:   true,
+        );
+
+        $this->assertSame([
+            'rule'    => 'first.rule',
+            'message' => 'Broken rule',
+            'file'    => '/src/File.php',
+            'line'    => 7,
+            'class'   => 'App\\Domain\\File',
+            'layer'   => null,
+            'fixable' => true,
+        ], $ruleViolation->toArray());
+    }
+
+    public function testNonFixableViolationDoesNotSerializeFixableFlag(): void
+    {
+        $this->assertArrayNotHasKey('fixable', $this->violation('first.rule', 'Domain')->toArray());
+    }
+
+    public function testViolationSerializesMethodNameWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:    'Broken rule',
+            file:       '/src/File.php',
+            line:       7,
+            className:  'App\\Domain\\File',
+            methodName: 'save',
+        );
+
+        $this->assertSame('save', $ruleViolation->toArray()['method']);
+    }
+
+    public function testViolationSerializesConstantNameWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:      'Broken rule',
+            file:         '/src/File.php',
+            line:         7,
+            className:    'App\\Domain\\File',
+            constantName: 'VERSION',
+        );
+
+        $this->assertSame('VERSION', $ruleViolation->toArray()['constant']);
+    }
+
+    public function testViolationSerializesPropertyNameWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:      'Broken rule',
+            file:         '/src/File.php',
+            line:         7,
+            className:    'App\\Domain\\File',
+            propertyName: 'status',
+        );
+
+        $this->assertSame('status', $ruleViolation->toArray()['property']);
+    }
+
     public function testCollectionFiltersAndSerializesViolations(): void
     {
         $collection    = new RuleViolationCollection();

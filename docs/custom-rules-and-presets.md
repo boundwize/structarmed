@@ -116,6 +116,43 @@ return Architecture::define()
     );
 ```
 
+## Making A Custom Rule Fixable
+
+Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
+For PHP-Parser based rewrites, extend `Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule`.
+
+`AbstractPhpParserFixableRule` implements `FixableInterface`, owns a shared cached `PhpParserFixerProcessor`, and lets the rule provide only the `PhpParser\NodeVisitor` for the selected violation.
+Add fix support only when the rule can make a deterministic change on disk.
+
+```diff
++ use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
++ use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor;
++ use Boundwize\StructArmed\Rule\RuleViolation;
+
+- final readonly class ServiceClassMustBeFinalRule implements RuleInterface
++ final readonly class ServiceClassMustBeFinalRule extends AbstractPhpParserFixableRule implements RuleInterface
+    {
++     protected function createFixerVisitor(RuleViolation $ruleViolation): AddFinalClassVisitor
++     {
++         return new AddFinalClassVisitor($ruleViolation->className);
++     }
+    }
+```
+
+StructArmed ships `Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor` for this final-class fixer shape. It is a small `PhpParser\NodeVisitor` that targets one class and adds the `final` modifier.
+
+`AbstractPhpParserFixableRule` provides a shared cached `PhpParserFixerProcessor` instance, and `PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
+
+Built-in rules follow the same pattern: `MustBeFinalRule` returns `AddFinalClassVisitor`, `MustDeclareConstantVisibilityRule` returns `AddPublicConstantVisibilityVisitor`, `MustDeclareMethodVisibilityRule` returns `AddPublicMethodVisibilityVisitor`, and `MustDeclarePropertyVisibilityRule` returns `AddPublicPropertyVisibilityVisitor` from `createFixerVisitor()` rather than introducing extra wrapper fixer classes.
+
+- `fix()` receives the `RuleViolation` selected for fixing.
+- `createFixerVisitor()` should return a `PhpParser\NodeVisitor` that safely no-ops when the violation does not contain enough data to fix.
+- Return `true` only when the source file was actually changed.
+- `vendor/bin/structarmed analyse --fix` calls `fix()` only for rules that implement `FixableInterface`.
+- The console report marks those violations as fixable and shows a `--fix` hint.
+
+Keep fixers deterministic and narrowly scoped. A failed or skipped fix should return `false` so StructArmed can leave the violation in the report.
+
 ## Custom Presets
 
 A custom preset is a class that implements `Boundwize\StructArmed\Preset\PresetInterface`. Inside `apply()`, add the layers and rules you want to reuse.

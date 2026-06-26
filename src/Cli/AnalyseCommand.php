@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
+use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
@@ -15,6 +16,7 @@ use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
+use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
 use RuntimeException;
@@ -82,6 +84,11 @@ final readonly class AnalyseCommand
 
             if ($argument === '--disable-parallel') {
                 $options['disable-parallel'] = true;
+                continue;
+            }
+
+            if ($argument === '--fix') {
+                $options['fix'] = true;
                 continue;
             }
 
@@ -161,11 +168,11 @@ final readonly class AnalyseCommand
         $progress        = $reportType === 'console' && $progressEnabled
             ? $this->progressHandler ?? new ConsoleProgressBar()
             : null;
+        $analyserOptions = isset($options['disable-parallel']) ? AnalyserOptions::sequential() : null;
 
         $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
 
         if (! $ruleViolationCollection instanceof RuleViolationCollection) {
-            $analyserOptions         = isset($options['disable-parallel']) ? AnalyserOptions::sequential() : null;
             $ruleViolationCollection = $analyser->analyse(
                 $architecture,
                 $scanPaths,
@@ -209,13 +216,87 @@ final readonly class AnalyseCommand
             return 1;
         }
 
+        $fixedCount = 0;
+
+        if (isset($options['fix'])) {
+            $fixedCount = $this->fixViolations($architecture, $ruleViolationCollection);
+
+            if ($fixedCount > 0) {
+                $analysisResultCache->clear();
+
+                $files                   = $analyser->filesForAnalysis($architecture, $scanPaths);
+                $metadata                = $analysisCacheMetadataFactory->metadata(
+                    $basePath,
+                    $configFile,
+                    $scanPaths,
+                    $files
+                );
+                $cacheKey                = $analysisCacheMetadataFactory->key($metadata);
+                $ruleViolationCollection = $analyser->analyse(
+                    $architecture,
+                    $scanPaths,
+                    null,
+                    $analyserOptions,
+                    $files
+                );
+                $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
+
+                try {
+                    $ruleViolationCollection = (new BaselineFilter())->apply(
+                        $ruleViolationCollection,
+                        $architecture,
+                        $basePath
+                    );
+                } catch (RuntimeException $runtimeException) {
+                    echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+
+                    return 1;
+                }
+
+                $elapsed = microtime(true) - $start;
+            }
+        }
+
         $report = match ($reportType) {
             'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
             default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
         };
 
+        if ($reportType === 'console' && $fixedCount > 0) {
+            echo PHP_EOL . $this->fixedViolationMessage($fixedCount) . PHP_EOL;
+        }
+
         echo $report;
 
         return $ruleViolationCollection->hasViolations() ? 1 : 0;
+    }
+
+    private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int
+    {
+        $rules      = $architecture->getRules();
+        $fixedCount = 0;
+
+        foreach ($ruleViolationCollection as $ruleViolation) {
+            $rule = $rules[$ruleViolation->ruleKey] ?? null;
+
+            if (! $rule instanceof FixableInterface) {
+                continue;
+            }
+
+            if ($rule->fix($ruleViolation)) {
+                $fixedCount++;
+            }
+        }
+
+        return $fixedCount;
+    }
+
+    private function fixedViolationMessage(int $fixedCount): string
+    {
+        $message = $fixedCount === 1
+            ? '1 violation has been fixed.'
+            : sprintf('%d violations have been fixed.', $fixedCount);
+
+        return sprintf('%s  %s', ColorSupport::wrap('✓', '92', ColorSupport::detect()), $message);
     }
 }

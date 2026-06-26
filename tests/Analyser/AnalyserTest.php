@@ -93,6 +93,25 @@ final class AnalyserTest extends TestCase
         $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testAnalyserMarksFixableRuleViolations(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $violations = $ruleViolationCollection->forRule('source.must_be_final');
+
+        $this->assertCount(1, $violations);
+        $this->assertTrue($violations[0]->fixable);
+    }
+
     public function testAnalyserCollectsClassNodesWithSequentialRunnerAndLayerPatterns(): void
     {
         $basePath = $this->makeTempProject([
