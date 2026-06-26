@@ -120,9 +120,9 @@ return Architecture::define()
 
 Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
 
-`FixableInterface` is the only contract required by `vendor/bin/structarmed analyse --fix`.
+`Boundwize\StructArmed\Rule\FixableInterface` is the only contract required by `vendor/bin/structarmed analyse --fix`.
 
-Implement `FixableInterface` directly when the rule owns the complete fix logic. Add fix support only when the rule can make a deterministic change on disk.
+Implement `Boundwize\StructArmed\Rule\FixableInterface` directly when the rule owns the complete fix logic. Add fix support only when the rule can make a deterministic change on disk.
 
 ```diff
 + use Boundwize\StructArmed\Rule\FixableInterface;
