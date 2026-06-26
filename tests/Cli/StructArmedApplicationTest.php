@@ -555,7 +555,7 @@ PHP);
 
     public function testAnalyseCommandDoesNotFixNonFixableViolations(): void
     {
-        $basePath = $this->createProjectDirectoryWithViolation();
+        $basePath = $this->createProjectDirectoryWithNonFixableViolation();
 
         try {
             [$exitCode, $output] = $this->runApplication(
@@ -571,7 +571,7 @@ PHP);
 
             $this->assertSame(1, $exitCode, $output);
             $this->assertStringNotContainsString('violation has been fixed', $this->withoutAnsi($output));
-            $this->assertStringContainsString('Class [App\\Foo] must be declared final', $output);
+            $this->assertStringContainsString('Class [App\\Foo] must have suffix [Service]', $output);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -1026,6 +1026,36 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 return Architecture::define()
     ->layer('Source', 'src/')
     ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+PHP);
+
+        return $basePath;
+    }
+
+    private function createProjectDirectoryWithNonFixableViolation(): string
+    {
+        $basePath = $this->createProjectDirectory();
+
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+<?php
+
+namespace App;
+
+class Foo
+{
+}
+PHP);
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustHaveSuffixRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule('source.class_name_must_have_suffix', new ClassNameMustHaveSuffixRule('Source', 'Service'));
 PHP);
 
         return $basePath;

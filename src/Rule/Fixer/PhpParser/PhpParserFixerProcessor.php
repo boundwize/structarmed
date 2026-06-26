@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Rule\Fixer;
+namespace Boundwize\StructArmed\Rule\Fixer\PhpParser;
 
 use PhpParser\Error;
 use PhpParser\NodeTraverser;

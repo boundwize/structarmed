@@ -79,7 +79,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 | `ClassNameMustNotHavePrefixRule` | `new ClassNameMustNotHavePrefixRule(layer: 'Model', prefix: 'Model')` | Classes in a layer do not use a forbidden prefix. |
 | `MaxDependencyCountRule` | `new MaxDependencyCountRule(layer: 'Controller', maxCount: 5)` | Constructor dependency count stays below the configured limit. |
 | `MayNotImplementInterfaceRule` | `new MayNotImplementInterfaceRule(layer: 'Domain', interface: JsonSerializable::class)` | Classes in a layer do not implement a forbidden interface. |
-| `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. |
+| `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. Supports `--fix`. |
 | `MustBeInterfaceRule` | `new MustBeInterfaceRule(layer: 'Contract', classNamePattern: '/Interface$/')` | Matching declarations in a layer are interfaces. |
 | `MustDeclareConstantVisibilityRule` | `new MustDeclareConstantVisibilityRule(layer: 'Source')` | Class constants declare `public`, `protected`, or `private`. |
 | `MustDeclareMethodVisibilityRule` | `new MustDeclareMethodVisibilityRule(layer: 'Source')` | Methods declare `public`, `protected`, or `private`. Supports `--fix`. |
@@ -90,7 +90,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`MustDeclareMethodVisibilityRule` currently implements `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically add method visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+`MustBeFinalRule` and `MustDeclareMethodVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically add the `final` class modifier and missing method visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
 ## Layer Rules
 

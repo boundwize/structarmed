@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Rule\Fixer\Method;
+namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\ClassMethod;
 
-use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
-use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassMethod\AddPublicMethodVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\PhpParserFixerProcessor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

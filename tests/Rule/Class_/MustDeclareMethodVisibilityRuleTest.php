@@ -6,9 +6,9 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
-use Boundwize\StructArmed\Rule\Fixer\AbstractPhpParserFixableRule;
-use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
-use Boundwize\StructArmed\Rule\Fixer\PhpParserFixerProcessor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassMethod\AddPublicMethodVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;

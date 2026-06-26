@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Rule\Fixer\AbstractPhpParserFixableRule;
-use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassMethod\AddPublicMethodVisibilityVisitor;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface as MultipleViolations;
 use Boundwize\StructArmed\Rule\RuleViolation;
 

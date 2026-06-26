@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Rule\Fixer\Method;
+namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\ClassMethod;
 
-use Boundwize\StructArmed\Rule\Fixer\Method\AddPublicMethodVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassMethod\AddPublicMethodVisibilityVisitor;
 use PhpParser\Modifiers;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Class_;

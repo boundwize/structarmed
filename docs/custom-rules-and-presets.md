@@ -119,13 +119,14 @@ return Architecture::define()
 ## Making A Custom Rule Fixable
 
 Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
-For PHP-Parser based rewrites, extend `Boundwize\StructArmed\Rule\Fixer\AbstractPhpParserFixableRule`.
+For PHP-Parser based rewrites, extend `Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule`.
 
 `AbstractPhpParserFixableRule` implements `FixableInterface`, owns a shared cached `PhpParserFixerProcessor`, and lets the rule provide only the `PhpParser\NodeVisitor` for the selected violation.
 Add fix support only when the rule can make a deterministic change on disk.
 
 ```diff
-+ use Boundwize\StructArmed\Rule\Fixer\AbstractPhpParserFixableRule;
++ use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
++ use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor;
 + use Boundwize\StructArmed\Rule\RuleViolation;
 
 - final readonly class ServiceClassMustBeFinalRule implements RuleInterface
@@ -138,53 +139,14 @@ Add fix support only when the rule can make a deterministic change on disk.
     }
 ```
 
-For that example, `AddFinalClassVisitor` can be a small `PhpParser\NodeVisitor` that targets one class and adds the `final` modifier:
-
-```php
-<?php
-
-namespace App\Architecture\Rules\Fixer;
-
-use PhpParser\Modifiers;
-use PhpParser\Node;
-use PhpParser\Node\Stmt\ClassLike;
-use PhpParser\Node\Stmt\Class_;
-use PhpParser\NodeVisitorAbstract;
-
-final class AddFinalClassVisitor extends NodeVisitorAbstract
-{
-    public function __construct(
-        private readonly string $className,
-    ) {
-    }
-
-    public function enterNode(Node $node): ?Node
-    {
-        if (! $node instanceof ClassLike || ! $node instanceof Class_) {
-            return null;
-        }
-
-        if (! isset($node->namespacedName) || $this->className !== $node->namespacedName->toString()) {
-            return null;
-        }
-
-        if ($node->isFinal()) {
-            return null;
-        }
-
-        $node->flags |= Modifiers::FINAL;
-
-        return $node;
-    }
-}
-```
+StructArmed ships `Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor` for this final-class fixer shape. It is a small `PhpParser\NodeVisitor` that targets one class and adds the `final` modifier.
 
 `AbstractPhpParserFixableRule` provides a shared cached `PhpParserFixerProcessor` instance, and `PhpParserFixerProcessor` handles parsing, format-preserving printing, and writing the updated file back to disk.
 
-Built-in rules follow the same pattern: for example, `MustDeclareMethodVisibilityRule` extends `AbstractPhpParserFixableRule` and returns `AddPublicMethodVisibilityVisitor` from `createFixerVisitor()` rather than introducing an extra wrapper fixer class.
+Built-in rules follow the same pattern: `MustBeFinalRule` returns `AddFinalClassVisitor`, and `MustDeclareMethodVisibilityRule` returns `AddPublicMethodVisibilityVisitor` from `createFixerVisitor()` rather than introducing extra wrapper fixer classes.
 
 - `fix()` receives the `RuleViolation` selected for fixing.
-- `createFixerVisitor()` should return a `PhpParser\NodeVisitor`, or `null` when the violation does not contain enough data to fix safely.
+- `createFixerVisitor()` should return a `PhpParser\NodeVisitor` that safely no-ops when the violation does not contain enough data to fix.
 - Return `true` only when the source file was actually changed.
 - `vendor/bin/structarmed analyse --fix` calls `fix()` only for rules that implement `FixableInterface`.
 - The console report marks those violations as fixable and shows a `--fix` hint.
