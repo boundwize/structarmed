@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\File;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
@@ -14,6 +15,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
+use function file_get_contents;
 use function file_put_contents;
 use function mkdir;
 use function random_bytes;
@@ -221,6 +223,118 @@ final class Psr1PhpTagsRuleTest extends TestCase
             rmdir($basePath . '/src');
             rmdir($basePath);
         }
+    }
+
+    public function testIsFixable(): void
+    {
+        $this->assertInstanceOf(FixableInterface::class, new Psr1PhpTagsRule(['src/']));
+    }
+
+    public function testFixesInvalidPhpTagOnViolationLineOnly(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                '<?php $template = "<? echo string"; ?><? echo "x";'
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame(1, $violation->line);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                '<?php $template = "<? echo string"; ?><?php echo "x";',
+                file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testFixesUpperCaseLongOpenTag(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<?PHP echo "x";');
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame('<?php echo "x";', file_get_contents($basePath . '/src/Foo.php'));
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testDoesNotFixValidPhpTag(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<?php echo "x";');
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+
+            $this->assertFalse($psr1PhpTagsRule->fix(new RuleViolation(
+                message:   'File must use only valid PHP tags',
+                file:      $basePath . '/src/Foo.php',
+                line:      1,
+                className: '',
+            )));
+            $this->assertSame('<?php echo "x";', file_get_contents($basePath . '/src/Foo.php'));
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testDoesNotFixInvalidPhpTagFromDifferentLine(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?php\n?>\n<? echo \"x\";");
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+
+            $this->assertFalse($psr1PhpTagsRule->fix(new RuleViolation(
+                message:   'File must use only valid PHP tags',
+                file:      $basePath . '/src/Foo.php',
+                line:      1,
+                className: '',
+            )));
+            $this->assertSame("<?php\n?>\n<? echo \"x\";", file_get_contents($basePath . '/src/Foo.php'));
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testDoesNotFixMissingFile(): void
+    {
+        $this->assertFalse((new Psr1PhpTagsRule(['src/']))->fix(new RuleViolation(
+            message:   'File must use only valid PHP tags',
+            file:      sys_get_temp_dir() . '/structarmed-missing-file-' . bin2hex(random_bytes(6)) . '.php',
+            line:      1,
+            className: '',
+        )));
     }
 
     public function testReturnsAllViolationsWhenMultipleFilesViolate(): void
