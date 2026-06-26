@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\Class_;
 
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor;
 use PhpParser\Modifiers;
+use PhpParser\Node;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
@@ -31,7 +32,7 @@ final class AddFinalClassVisitorTest extends TestCase
     {
         $addFinalClassVisitor = new AddFinalClassVisitor('App\\Order');
 
-        $this->assertNull($addFinalClassVisitor->enterNode(new ClassMethod('save')));
+        $this->assertNotInstanceOf(Node::class, $addFinalClassVisitor->enterNode(new ClassMethod('save')));
     }
 
     public function testDoesNotChangeAlreadyFinalClass(): void

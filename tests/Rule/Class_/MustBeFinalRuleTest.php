@@ -67,8 +67,8 @@ final class MustBeFinalRuleTest extends TestCase
     public function testCreatesFinalClassFixerVisitor(): void
     {
         $mustBeFinalRule      = new MustBeFinalRule(layer: 'Domain');
-        $createFixerVisitor   = new ReflectionMethod($mustBeFinalRule, 'createFixerVisitor');
-        $addFinalClassVisitor = $createFixerVisitor->invoke(
+        $reflectionMethod     = new ReflectionMethod($mustBeFinalRule, 'createFixerVisitor');
+        $addFinalClassVisitor = $reflectionMethod->invoke(
             $mustBeFinalRule,
             new RuleViolation(
                 message:   'Class [App\\Order] must be declared final',
