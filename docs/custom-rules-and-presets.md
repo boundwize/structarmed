@@ -165,10 +165,10 @@ StructArmed ships `Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalCla
 
 Built-in rules follow the same pattern: `MustBeFinalRule` returns `AddFinalClassVisitor`, `MustDeclareConstantVisibilityRule` returns `AddPublicConstantVisibilityVisitor`, `MustDeclareMethodVisibilityRule` returns `AddPublicMethodVisibilityVisitor`, and `MustDeclarePropertyVisibilityRule` returns `AddPublicPropertyVisibilityVisitor` from `createFixerVisitor()` rather than introducing extra wrapper fixer classes.
 
-- Direct `FixableInterface` implementations should keep all file changes inside `fix()`.
+- Direct `Boundwize\StructArmed\Rule\FixableInterface` implementations should keep all file changes inside `fix()`.
 - `createFixerVisitor()` should return a `PhpParser\NodeVisitor` that safely no-ops when the violation does not contain enough data to fix.
 - Return `true` only when the source file was actually changed.
-- `vendor/bin/structarmed analyse --fix` calls `fix()` only for rules that implement `FixableInterface`.
+- `vendor/bin/structarmed analyse --fix` calls `fix()` only for rules that implement `Boundwize\StructArmed\Rule\FixableInterface`.
 - The console report marks those violations as fixable and shows a `--fix` hint.
 
 Keep fixers deterministic and narrowly scoped. A failed or skipped fix should return `false` so StructArmed can leave the violation in the report.
