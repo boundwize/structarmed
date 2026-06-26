@@ -346,6 +346,7 @@ final readonly class AnalysisResultCache
         $method    = $violation['method'] ?? null;
         $constant  = $violation['constant'] ?? null;
         $property  = $violation['property'] ?? null;
+        $fixable   = $violation['fixable'] ?? false;
 
         if (
             ! is_string($ruleKey)
@@ -357,6 +358,7 @@ final readonly class AnalysisResultCache
             || ($method !== null && ! is_string($method))
             || ($constant !== null && ! is_string($constant))
             || ($property !== null && ! is_string($property))
+            || ! is_bool($fixable)
         ) {
             return null;
         }
@@ -368,6 +370,7 @@ final readonly class AnalysisResultCache
             className: $className,
             layer:     $layer,
             ruleKey:   $ruleKey,
+            fixable:   $fixable,
             methodName: $method,
             constantName: $constant,
             propertyName: $property,

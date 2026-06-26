@@ -70,6 +70,7 @@ final class AnalysisResultCacheTest extends TestCase
             className: self::class,
             layer:     'Domain',
             ruleKey:   'rule',
+            fixable:   true,
             methodName: 'save',
             constantName: 'VERSION',
             propertyName: 'status',

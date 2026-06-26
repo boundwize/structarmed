@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
+use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
@@ -158,6 +159,7 @@ final readonly class Analyser
                     className: $violation->className,
                     layer:     $violation->layer,
                     ruleKey:   $key,
+                    fixable:   $rule instanceof FixableInterface,
                     methodName: $violation->methodName,
                     constantName: $violation->constantName,
                     propertyName: $violation->propertyName,
@@ -222,6 +224,7 @@ final readonly class Analyser
                         className: $violation->className,
                         layer:     $violation->layer,
                         ruleKey:   $key,
+                        fixable:   $rule instanceof FixableInterface,
                         methodName: $violation->methodName,
                         constantName: $violation->constantName,
                         propertyName: $violation->propertyName,

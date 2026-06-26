@@ -17,7 +17,6 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Rule\FixableInterface;
-use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
 use RuntimeException;
@@ -258,8 +257,6 @@ final readonly class AnalyseCommand
             }
         }
 
-        $ruleViolationCollection = $this->withFixableMetadata($architecture, $ruleViolationCollection);
-
         $report = match ($reportType) {
             'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
             default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
@@ -292,33 +289,6 @@ final readonly class AnalyseCommand
         }
 
         return $fixedCount;
-    }
-
-    private function withFixableMetadata(
-        Architecture $architecture,
-        RuleViolationCollection $ruleViolationCollection
-    ): RuleViolationCollection {
-        $rules      = $architecture->getRules();
-        $collection = new RuleViolationCollection();
-
-        foreach ($ruleViolationCollection as $ruleViolation) {
-            $rule = $rules[$ruleViolation->ruleKey] ?? null;
-
-            $collection->add(new RuleViolation(
-                message:   $ruleViolation->message,
-                file:      $ruleViolation->file,
-                line:      $ruleViolation->line,
-                className: $ruleViolation->className,
-                layer:     $ruleViolation->layer,
-                ruleKey:   $ruleViolation->ruleKey,
-                fixable:   $rule instanceof FixableInterface,
-                methodName: $ruleViolation->methodName,
-                constantName: $ruleViolation->constantName,
-                propertyName: $ruleViolation->propertyName,
-            ));
-        }
-
-        return $collection;
     }
 
     private function fixedViolationMessage(int $fixedCount): string
