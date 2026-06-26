@@ -119,7 +119,8 @@ return Architecture::define()
 ## Making A Custom Rule Fixable
 
 Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
-`FixableInterface` is the only contract required by `vendor/bin/structarmed analyse --fix`; the PHP-Parser helper is optional.
+
+`FixableInterface` is the only contract required by `vendor/bin/structarmed analyse --fix`.
 
 Implement `FixableInterface` directly when the rule owns the complete fix logic. Add fix support only when the rule can make a deterministic change on disk.
 
