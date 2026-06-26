@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Rule\FixableInterface;
-use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassProperty\AddPublicPropertyVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\Property\AddPublicPropertyVisibilityVisitor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclarePropertyVisibilityRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
