@@ -38,6 +38,7 @@ final class PresetTest extends TestCase
 
         $rules = $architecture->getRules();
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
+        $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_UTF8, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_UTF8_WITHOUT_BOM, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS, $rules);
         $this->assertArrayHasKey(Psr4Preset::CLASSES_MUST_MATCH_COMPOSER, $rules);
@@ -60,6 +61,7 @@ final class PresetTest extends TestCase
 
         $rules = $architecture->getRules();
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
+        $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_UTF8, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_UTF8_WITHOUT_BOM, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS, $rules);
         $this->assertArrayHasKey(Psr4Preset::CLASSES_MUST_MATCH_COMPOSER, $rules);
@@ -220,9 +222,10 @@ final class PresetTest extends TestCase
 
         $rules = $architecture->getRules();
 
-        $this->assertCount(14, $rules);
+        $this->assertCount(15, $rules);
 
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
+        $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_UTF8, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_UTF8_WITHOUT_BOM, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS, $rules);
         $this->assertArrayHasKey(Psr4Preset::CLASSES_MUST_MATCH_COMPOSER, $rules);
