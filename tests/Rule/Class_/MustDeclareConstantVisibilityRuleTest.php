@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Rule\FixableInterface;
-use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConstant\AddPublicConstantVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConst\AddPublicConstantVisibilityVisitor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareConstantVisibilityRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;

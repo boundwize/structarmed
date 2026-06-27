@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConstant;
+namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConst;
 
 use PhpParser\Modifiers;
 use PhpParser\Node;

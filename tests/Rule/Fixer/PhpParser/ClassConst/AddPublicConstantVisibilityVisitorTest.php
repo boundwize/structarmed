@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\ClassConstant;
+namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\ClassConst;
 
-use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConstant\AddPublicConstantVisibilityVisitor;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConst\AddPublicConstantVisibilityVisitor;
 use PhpParser\Modifiers;
 use PhpParser\Node\Const_;
 use PhpParser\Node\Name;
