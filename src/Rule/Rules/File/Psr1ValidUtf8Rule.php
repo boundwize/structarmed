@@ -7,17 +7,11 @@ namespace Boundwize\StructArmed\Rule\Rules\File;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
-use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-use function file_get_contents;
-use function file_put_contents;
-use function is_file;
 use function sprintf;
-use function str_starts_with;
-use function substr;
 
-final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface, FixableInterface
+final readonly class Psr1ValidUtf8Rule implements FileAnalysisRuleInterface
 {
     /**
      * @param list<string>|null $sourcePaths
@@ -61,9 +55,9 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
         $violations    = [];
 
         foreach ($phpFileFinder->files($basePath, $skipPaths) as $file) {
-            if ($fileAnalysisProvider->hasUtf8Bom($file)) {
+            if (! $fileAnalysisProvider->hasValidUtf8($file)) {
                 $violations[] = new RuleViolation(
-                    message: sprintf('File [%s] must use UTF-8 without BOM', $file),
+                    message: sprintf('File [%s] must use valid UTF-8 encoding', $file),
                     file: $file,
                     line: 1,
                     className: '',
@@ -72,20 +66,5 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
         }
 
         return $violations;
-    }
-
-    public function fix(RuleViolation $ruleViolation): bool
-    {
-        if (! is_file($ruleViolation->file)) {
-            return false;
-        }
-
-        $code = (string) file_get_contents($ruleViolation->file);
-
-        if (! str_starts_with($code, "\xEF\xBB\xBF")) {
-            return false;
-        }
-
-        return file_put_contents($ruleViolation->file, substr($code, 3)) !== false;
     }
 }

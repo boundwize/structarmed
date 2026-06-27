@@ -19,7 +19,7 @@ StructArmed ships with presets for common PHP standards and architecture styles.
 
 | Preset | Rules |
 |---|---|
-| `Preset::PSR1()` | Basic Coding Standard checks: PHP tags, UTF-8 without BOM, symbols vs side effects, PSR-4 class placement, StudlyCaps class names, upper-case class constants, camelCase methods |
+| `Preset::PSR1()` | Basic Coding Standard checks: PHP tags, valid UTF-8, UTF-8 without BOM, symbols vs side effects, PSR-4 class placement, StudlyCaps class names, upper-case class constants, camelCase methods |
 | `Preset::PSR12()` | Extends PSR-1: all methods, constants, and properties must declare explicit visibility |
 | `Preset::PSR15()` | `*Middleware` classes must implement PSR-15 `MiddlewareInterface`; `*Handler` classes must implement PSR-15 `RequestHandlerInterface`; StructArmed also enforces matching `Middleware`/`Handler` suffixes for implementations of those interfaces |
 | `Preset::PSR4()` | Verifies configured source paths exist in composer.json `autoload` or `autoload-dev` PSR-4 mappings |

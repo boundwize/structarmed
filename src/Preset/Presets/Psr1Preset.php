@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustBeStudlyCapsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1SymbolsOrSideEffectsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1Utf8WithoutBomRule;
+use Boundwize\StructArmed\Rule\Rules\File\Psr1ValidUtf8Rule;
 use Boundwize\StructArmed\Rule\Rules\Method\MethodNameMustBeCamelCaseRule;
 
 final readonly class Psr1Preset implements PresetInterface
@@ -18,6 +19,8 @@ final readonly class Psr1Preset implements PresetInterface
     use ResolvesSourceLayerNameTrait;
 
     public const FILES_MUST_USE_VALID_TAGS = 'psr1.files.must_use_valid_tags';
+
+    public const FILES_MUST_USE_VALID_UTF8 = 'psr1.files.must_use_valid_utf8';
 
     public const FILES_MUST_USE_UTF8_WITHOUT_BOM = 'psr1.files.must_use_utf8_without_bom';
 
@@ -46,6 +49,7 @@ final readonly class Psr1Preset implements PresetInterface
         $architecture->layer($layerName, $this->sourcePaths ?? []);
 
         $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($this->sourcePaths));
+        $architecture->rule(self::FILES_MUST_USE_VALID_UTF8, new Psr1ValidUtf8Rule($this->sourcePaths));
         $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($this->sourcePaths));
         $architecture->rule(
             self::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS,
