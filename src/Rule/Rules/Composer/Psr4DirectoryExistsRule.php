@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Rule\Rules\Composer;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
-use Boundwize\StructArmed\Rule\Fixer\JsonRecast\Composer\RemoveMissingPsr4PathVisitor;
+use Boundwize\StructArmed\Rule\Fixer\JsonRecast\ObjectItemNode\RemoveMissingPsr4PathVisitor;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
