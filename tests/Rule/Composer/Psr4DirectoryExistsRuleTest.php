@@ -177,6 +177,41 @@ JSON, file_get_contents($basePath . '/composer.json'));
         );
     }
 
+    public function testFixKeepsUnchangedEmptyPsr4Block(): void
+    {
+        $basePath                = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "View\\Tests\\": "directory/not/exists"
+        }
+    }
+}
+JSON);
+        $psr4DirectoryExistsRule = new Psr4DirectoryExistsRule();
+        $violation               = $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define());
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertTrue($psr4DirectoryExistsRule->fix($violation));
+
+        $this->assertSame(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+        }
+    }
+}
+JSON, file_get_contents($basePath . '/composer.json'));
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
+        );
+    }
+
     public function testFixReturnsFalseWhenAllPsr4DirectoriesExist(): void
     {
         $basePath = $this->makeTempProject(<<<'JSON'
