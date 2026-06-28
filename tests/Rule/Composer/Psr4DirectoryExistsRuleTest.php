@@ -168,7 +168,8 @@ JSON);
         $this->assertTrue($psr4DirectoryExistsRule->fix($violation));
 
         $this->assertSame(<<<'JSON'
-{}
+{
+}
 JSON, file_get_contents($basePath . '/composer.json'));
         $this->assertNotInstanceOf(
             RuleViolation::class,

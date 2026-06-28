@@ -54,13 +54,6 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 
     public function leaveNode(NodeJson $nodeJson, NodeJsonPath $nodeJsonPath): null|NodeJson|int
     {
-        if ($nodeJson instanceof ObjectNode && $nodeJsonPath->isRoot() && $nodeJson->items === []) {
-            $nodeJson->afterOpenBrace   = '';
-            $nodeJson->beforeCloseBrace = '';
-
-            return $nodeJson;
-        }
-
         if (! $nodeJson instanceof ObjectItemNode) {
             return null;
         }
