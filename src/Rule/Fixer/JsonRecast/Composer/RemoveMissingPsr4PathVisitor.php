@@ -11,14 +11,12 @@ use Boundwize\JsonRecast\Node\ObjectItemNode;
 use Boundwize\JsonRecast\Node\ObjectNode;
 use Boundwize\JsonRecast\Node\StringNode;
 use Boundwize\JsonRecast\NodePath\NodeJsonPath;
-use Boundwize\JsonRecast\NodePath\NodeJsonPathSegment;
 use Boundwize\JsonRecast\NodeVisitor\NodeJsonVisitor;
 use Boundwize\JsonRecast\NodeVisitor\NodeJsonVisitorAbstract;
 use Boundwize\StructArmed\Util\Path;
 
 use function array_key_exists;
 use function array_slice;
-use function count;
 use function in_array;
 use function is_dir;
 use function strlen;
@@ -27,6 +25,9 @@ use function trim;
 final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 {
     private const CHILD_CHANGED = 'child_changed';
+
+    /** @var list<string> */
+    private const AUTOLOAD_SECTIONS = ['autoload', 'autoload-dev'];
 
     /** @var array<string, true> */
     private array $changedContainerPathKeys = [];
@@ -113,23 +114,14 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 
     private function isPsr4Section(ObjectItemNode $objectItemNode, NodeJsonPath $nodeJsonPath): bool
     {
-        $segments = $nodeJsonPath->segments();
-
-        if (count($segments) !== 1) {
-            return false;
-        }
-
-        return $this->isComposerAutoloadSection($segments[0])
-            && $objectItemNode->key->value === 'psr-4';
+        return $objectItemNode->key->value === 'psr-4'
+            && $this->isComposerAutoloadPath($nodeJsonPath);
     }
 
     private function isEmptyComposerAutoloadItem(ObjectItemNode $objectItemNode, NodeJsonPath $nodeJsonPath): bool
     {
-        if ($nodeJsonPath->segments() !== []) {
-            return false;
-        }
-
-        return in_array($objectItemNode->key->value, ['autoload', 'autoload-dev'], true)
+        return $nodeJsonPath->isRoot()
+            && $this->isComposerAutoloadKey($objectItemNode->key->value)
             && $objectItemNode->value instanceof ObjectNode
             && $objectItemNode->value->items === []
             && $this->hasChangedChild($objectItemNode->value);
@@ -137,44 +129,35 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 
     private function isPsr4Mapping(NodeJsonPath $nodeJsonPath): bool
     {
-        $segments = $nodeJsonPath->segments();
-
-        if (count($segments) !== 2) {
-            return false;
-        }
-
-        return $this->isComposerAutoloadSection($segments[0])
-            && $this->isObjectKey($segments[1], 'psr-4');
+        return $nodeJsonPath->matches(['autoload', 'psr-4'])
+            || $nodeJsonPath->matches(['autoload-dev', 'psr-4']);
     }
 
     private function isPsr4PathListItem(NodeJsonPath $nodeJsonPath): bool
     {
-        $segments = $nodeJsonPath->segments();
+        $last = $nodeJsonPath->last();
 
-        if (count($segments) !== 4) {
-            return false;
-        }
-
-        if (! $this->isComposerAutoloadSection($segments[0])) {
-            return false;
-        }
-
-        if (! $this->isObjectKey($segments[1], 'psr-4')) {
-            return false;
-        }
-
-        return $segments[2]->isObjectKey() && $segments[3]->isArrayIndex();
+        return $last?->isArrayIndex() === true
+            && $this->isPsr4MappingValuePath($this->parentPath($nodeJsonPath));
     }
 
-    private function isComposerAutoloadSection(NodeJsonPathSegment $nodeJsonPathSegment): bool
+    private function isPsr4MappingValuePath(NodeJsonPath $nodeJsonPath): bool
     {
-        return $nodeJsonPathSegment->isObjectKey()
-            && in_array($nodeJsonPathSegment->value, ['autoload', 'autoload-dev'], true);
+        $last = $nodeJsonPath->last();
+
+        return $last?->isObjectKey() === true
+            && $this->isPsr4Mapping($this->parentPath($nodeJsonPath));
     }
 
-    private function isObjectKey(NodeJsonPathSegment $nodeJsonPathSegment, string $key): bool
+    private function isComposerAutoloadPath(NodeJsonPath $nodeJsonPath): bool
     {
-        return $nodeJsonPathSegment->isObjectKey() && $nodeJsonPathSegment->value === $key;
+        return $nodeJsonPath->matches(['autoload'])
+            || $nodeJsonPath->matches(['autoload-dev']);
+    }
+
+    private function isComposerAutoloadKey(string $key): bool
+    {
+        return in_array($key, self::AUTOLOAD_SECTIONS, true);
     }
 
     private function directoryExists(string $path): bool
