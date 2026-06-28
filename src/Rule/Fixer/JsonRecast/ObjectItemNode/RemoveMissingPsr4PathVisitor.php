@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Rule\Fixer\JsonRecast\Composer;
+namespace Boundwize\StructArmed\Rule\Fixer\JsonRecast\ObjectItemNode;
 
 use Boundwize\JsonRecast\Node\ArrayItemNode;
 use Boundwize\JsonRecast\Node\ArrayNode;
