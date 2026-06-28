@@ -52,8 +52,15 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
         return NodeJsonVisitor::REMOVE_NODE;
     }
 
-    public function leaveNode(NodeJson $nodeJson, NodeJsonPath $nodeJsonPath): ?int
+    public function leaveNode(NodeJson $nodeJson, NodeJsonPath $nodeJsonPath): null|NodeJson|int
     {
+        if ($nodeJson instanceof ObjectNode && $nodeJsonPath->isRoot() && $nodeJson->items === []) {
+            $nodeJson->afterOpenBrace   = '';
+            $nodeJson->beforeCloseBrace = '';
+
+            return $nodeJson;
+        }
+
         if (! $nodeJson instanceof ObjectItemNode) {
             return null;
         }
@@ -63,6 +70,10 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
                 return null;
             }
 
+            return NodeJsonVisitor::REMOVE_NODE;
+        }
+
+        if ($this->isEmptyComposerAutoloadItem($nodeJson, $nodeJsonPath)) {
             return NodeJsonVisitor::REMOVE_NODE;
         }
 
@@ -87,6 +98,17 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 
         return $this->isComposerAutoloadSection($segments[0])
             && $objectItemNode->key->value === 'psr-4';
+    }
+
+    private function isEmptyComposerAutoloadItem(ObjectItemNode $objectItemNode, NodeJsonPath $nodeJsonPath): bool
+    {
+        if ($nodeJsonPath->segments() !== []) {
+            return false;
+        }
+
+        return in_array($objectItemNode->key->value, ['autoload', 'autoload-dev'], true)
+            && $objectItemNode->value instanceof ObjectNode
+            && $objectItemNode->value->items === [];
     }
 
     private function isPsr4Mapping(NodeJsonPath $nodeJsonPath): bool
@@ -120,15 +142,15 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
         return $segments[2]->isObjectKey() && $segments[3]->isArrayIndex();
     }
 
-    private function isComposerAutoloadSection(NodeJsonPathSegment $segment): bool
+    private function isComposerAutoloadSection(NodeJsonPathSegment $nodeJsonPathSegment): bool
     {
-        return $segment->isObjectKey()
-            && in_array($segment->value, ['autoload', 'autoload-dev'], true);
+        return $nodeJsonPathSegment->isObjectKey()
+            && in_array($nodeJsonPathSegment->value, ['autoload', 'autoload-dev'], true);
     }
 
-    private function isObjectKey(NodeJsonPathSegment $segment, string $key): bool
+    private function isObjectKey(NodeJsonPathSegment $nodeJsonPathSegment, string $key): bool
     {
-        return $segment->isObjectKey() && $segment->value === $key;
+        return $nodeJsonPathSegment->isObjectKey() && $nodeJsonPathSegment->value === $key;
     }
 
     private function directoryExists(string $path): bool

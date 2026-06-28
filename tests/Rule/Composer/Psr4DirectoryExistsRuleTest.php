@@ -105,7 +105,7 @@ JSON);
 
     public function testFixRemovesPsr4MappingsForMissingDirectories(): void
     {
-        $basePath  = $this->makeTempProject(<<<'JSON'
+        $basePath                = $this->makeTempProject(<<<'JSON'
 {
     "autoload": {
         "psr-4": {
@@ -123,11 +123,11 @@ JSON);
     }
 }
 JSON, ['src', 'tests']);
-        $rule      = new Psr4DirectoryExistsRule();
-        $violation = $rule->evaluateProject($basePath, Architecture::define());
+        $psr4DirectoryExistsRule = new Psr4DirectoryExistsRule();
+        $violation               = $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define());
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertTrue($rule->fix($violation));
+        $this->assertTrue($psr4DirectoryExistsRule->fix($violation));
 
         $this->assertSame(<<<'JSON'
 {
@@ -146,13 +146,13 @@ JSON, ['src', 'tests']);
 JSON, file_get_contents($basePath . '/composer.json'));
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $rule->evaluateProject($basePath, Architecture::define())
+            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
         );
     }
 
     public function testFixRemovesPsr4BlockWhenEveryMappingDirectoryIsMissing(): void
     {
-        $basePath  = $this->makeTempProject(<<<'JSON'
+        $basePath                = $this->makeTempProject(<<<'JSON'
 {
     "autoload": {
         "psr-4": {
@@ -161,21 +161,18 @@ JSON, file_get_contents($basePath . '/composer.json'));
     }
 }
 JSON);
-        $rule      = new Psr4DirectoryExistsRule();
-        $violation = $rule->evaluateProject($basePath, Architecture::define());
+        $psr4DirectoryExistsRule = new Psr4DirectoryExistsRule();
+        $violation               = $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define());
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertTrue($rule->fix($violation));
+        $this->assertTrue($psr4DirectoryExistsRule->fix($violation));
 
         $this->assertSame(<<<'JSON'
-{
-    "autoload": {
-    }
-}
+{}
 JSON, file_get_contents($basePath . '/composer.json'));
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $rule->evaluateProject($basePath, Architecture::define())
+            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
         );
     }
 
