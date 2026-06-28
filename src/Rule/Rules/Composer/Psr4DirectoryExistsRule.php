@@ -6,16 +6,19 @@ namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
+use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\JsonRecast\Composer\RemoveMissingPsr4PathVisitor;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
+use function dirname;
 use function file_exists;
 use function implode;
 use function is_dir;
 use function rtrim;
 use function sprintf;
 
-final readonly class Psr4DirectoryExistsRule implements ProjectRuleInterface
+final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRule implements ProjectRuleInterface
 {
     public function __construct(
         private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
@@ -72,5 +75,10 @@ final readonly class Psr4DirectoryExistsRule implements ProjectRuleInterface
             className: '',
             layer:     'Source',
         );
+    }
+
+    protected function createFixerVisitor(RuleViolation $ruleViolation): RemoveMissingPsr4PathVisitor
+    {
+        return new RemoveMissingPsr4PathVisitor(dirname($ruleViolation->file));
     }
 }

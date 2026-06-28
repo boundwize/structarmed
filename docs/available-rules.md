@@ -46,7 +46,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Composer`.
 
 | Rule | Constructor | Checks |
 |---|---|---|
-| `Psr4DirectoryExistsRule` | `new Psr4DirectoryExistsRule()` | `composer.json` exists, is valid JSON, and every PSR-4 source path exists on disk. |
+| `Psr4DirectoryExistsRule` | `new Psr4DirectoryExistsRule()` | `composer.json` exists, is valid JSON, and every PSR-4 source path exists on disk. Supports `--fix` by removing mappings for missing directories. |
 | `Psr4EmptyNamespacePrefixRule` | `new Psr4EmptyNamespacePrefixRule()` | `autoload` and `autoload-dev` PSR-4 mappings do not use an empty namespace prefix. |
 | `Psr4NamespaceRule` | `new Psr4NamespaceRule(layer: 'Source')` | A class name matches the namespace expected from its PSR-4 path. |
 | `Psr4RootPathRule` | `new Psr4RootPathRule()` | PSR-4 mappings do not point directly to the project root. |
@@ -91,7 +91,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically normalize invalid PHP opening tags, remove UTF-8 byte order marks, add the `final` class modifier, and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+`Psr4DirectoryExistsRule`, `Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically remove PSR-4 mappings for missing directories, normalize invalid PHP opening tags, remove UTF-8 byte order marks, add the `final` class modifier, and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
 ## Layer Rules
 
