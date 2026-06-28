@@ -14,7 +14,7 @@
         <text x="0" y="0" class="text"><tspan class="prompt">➜  </tspan><tspan class="dir">prj-ddd </tspan><tspan class="cmd">vendor/bin/structarmed analyze</tspan></text>
 
         <!-- Line 3: Title and Version -->
-        <text x="0" y="35" class="text header">StructArmed <tspan class="version">0.14.4</tspan> — Architecture Enforcement</text>
+        <text x="0" y="35" class="text header">StructArmed <tspan class="version">0.14.5</tspan> — Architecture Enforcement</text>
 
         <!-- Line 4: Separator (Reduced length) -->
         <text x="0" y="49" class="text">===============================================</text>
