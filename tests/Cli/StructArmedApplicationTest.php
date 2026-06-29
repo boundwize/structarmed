@@ -636,6 +636,178 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandFixesViolationsBeforeGeneratingBaseline(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                    '--generate-baseline=structarmed-baseline.php',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                'Generated baseline [structarmed-baseline.php] with 0 violation(s).',
+                $output
+            );
+            $this->assertStringContainsString(
+                '    public function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+            $this->assertSame(
+                <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+return [];
+
+PHP,
+                file_get_contents($basePath . '/structarmed-baseline.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsFixedCountWhenGeneratingBaselineAfterFix(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                    '--generate-baseline=structarmed-baseline.php',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                '1 violation has been fixed.',
+                $this->withoutAnsi($output)
+            );
+            $this->assertStringContainsString(
+                'Generated baseline [structarmed-baseline.php] with 0 violation(s).',
+                $output
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandCanFixAndGenerateMissingConfiguredBaseline(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
+
+return Architecture::define()
+    ->baseline('structarmed-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule('source.must_declare_method_visibility', new MustDeclareMethodVisibilityRule('Source'));
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                    '--generate-baseline=structarmed-baseline.php',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                'Generated baseline [structarmed-baseline.php] with 0 violation(s).',
+                $output
+            );
+            $this->assertStringContainsString(
+                '    public function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+            $this->assertFileExists($basePath . '/structarmed-baseline.php');
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandGeneratesBaselineFromRemainingViolationsAfterFix(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustHaveSuffixRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule('source.must_declare_method_visibility', new MustDeclareMethodVisibilityRule('Source'))
+    ->rule('source.class_name_must_have_suffix', new ClassNameMustHaveSuffixRule('Source', 'Service'));
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                    '--generate-baseline=structarmed-baseline.php',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                'Generated baseline [structarmed-baseline.php] with 1 violation(s).',
+                $output
+            );
+            $this->assertStringContainsString(
+                '    public function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+
+            $baseline = file_get_contents($basePath . '/structarmed-baseline.php');
+
+            $this->assertIsString($baseline);
+            $this->assertStringContainsString("'rule' => 'source.class_name_must_have_suffix'", $baseline);
+            $this->assertStringContainsString("'message' => 'Class [App\\Foo] must have suffix [Service]'", $baseline);
+            $this->assertStringNotContainsString('source.must_declare_method_visibility', $baseline);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandReportsBaselineGenerationFailure(): void
     {
         $basePath = $this->createProjectDirectoryWithViolation();
@@ -742,6 +914,50 @@ PHP);
             $this->assertStringContainsString(
                 'Error: Baseline file [missing-baseline.php] does not exist.',
                 $output
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsConfiguredBaselineFailureBeforeFix(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
+
+return Architecture::define()
+    ->baseline('missing-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule('source.must_declare_method_visibility', new MustDeclareMethodVisibilityRule('Source'));
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString(
+                'Error: Baseline file [missing-baseline.php] does not exist.',
+                $output
+            );
+            $this->assertStringContainsString(
+                '    function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
             );
         } finally {
             $this->removeTempDirectory($basePath);
