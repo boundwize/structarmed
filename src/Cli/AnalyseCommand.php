@@ -260,6 +260,10 @@ final readonly class AnalyseCommand
             }
         }
 
+        if ($reportType === 'console' && $fixedCount > 0) {
+            echo PHP_EOL . $this->fixedViolationMessage($fixedCount) . PHP_EOL;
+        }
+
         if ($shouldGenerateBaseline) {
             try {
                 $baseline->generate($unfilteredRuleViolationCollection, $options['generate-baseline'], $basePath);
@@ -282,10 +286,6 @@ final readonly class AnalyseCommand
             'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
             default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
         };
-
-        if ($reportType === 'console' && $fixedCount > 0) {
-            echo PHP_EOL . $this->fixedViolationMessage($fixedCount) . PHP_EOL;
-        }
 
         echo $report;
 

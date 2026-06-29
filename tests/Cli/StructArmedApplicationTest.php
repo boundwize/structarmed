@@ -678,6 +678,37 @@ PHP,
         }
     }
 
+    public function testAnalyseCommandReportsFixedCountWhenGeneratingBaselineAfterFix(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                    '--generate-baseline=structarmed-baseline.php',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                '1 violation has been fixed.',
+                $this->withoutAnsi($output)
+            );
+            $this->assertStringContainsString(
+                'Generated baseline [structarmed-baseline.php] with 0 violation(s).',
+                $output
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandCanFixAndGenerateMissingConfiguredBaseline(): void
     {
         $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
