@@ -183,67 +183,50 @@ final readonly class AnalyseCommand
             $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
         }
 
-        $elapsed  = microtime(true) - $start;
-        $baseline = new Baseline();
+        $elapsed                           = microtime(true) - $start;
+        $baseline                          = new Baseline();
+        $unfilteredRuleViolationCollection = $ruleViolationCollection;
+        $shouldGenerateBaseline            = isset($options['generate-baseline']);
+        $fixedCount                        = 0;
 
-        if (isset($options['generate-baseline'])) {
+        if (isset($options['fix'])) {
             try {
-                $baseline->generate($ruleViolationCollection, $options['generate-baseline'], $basePath);
+                $ruleViolationCollection = (new BaselineFilter())->apply(
+                    $unfilteredRuleViolationCollection,
+                    $architecture,
+                    $basePath
+                );
             } catch (RuntimeException $runtimeException) {
                 echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
                 return 1;
             }
 
-            echo sprintf(
-                "Generated baseline [%s] with %d violation(s).\n",
-                $options['generate-baseline'],
-                $ruleViolationCollection->count()
-            );
-
-            return 0;
-        }
-
-        try {
-            $ruleViolationCollection = (new BaselineFilter())->apply(
-                $ruleViolationCollection,
-                $architecture,
-                $basePath
-            );
-        } catch (RuntimeException $runtimeException) {
-            echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
-
-            return 1;
-        }
-
-        $fixedCount = 0;
-
-        if (isset($options['fix'])) {
             $fixedCount = $this->fixViolations($architecture, $ruleViolationCollection);
 
             if ($fixedCount > 0) {
                 $analysisResultCache->clear();
 
-                $files                   = $analyser->filesForAnalysis($architecture, $scanPaths);
-                $metadata                = $analysisCacheMetadataFactory->metadata(
+                $files                             = $analyser->filesForAnalysis($architecture, $scanPaths);
+                $metadata                          = $analysisCacheMetadataFactory->metadata(
                     $basePath,
                     $configFile,
                     $scanPaths,
                     $files
                 );
-                $cacheKey                = $analysisCacheMetadataFactory->key($metadata);
-                $ruleViolationCollection = $analyser->analyse(
+                $cacheKey                          = $analysisCacheMetadataFactory->key($metadata);
+                $unfilteredRuleViolationCollection = $analyser->analyse(
                     $architecture,
                     $scanPaths,
                     null,
                     $analyserOptions,
                     $files
                 );
-                $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
+                $analysisResultCache->store($cacheKey, $metadata, $unfilteredRuleViolationCollection);
 
                 try {
                     $ruleViolationCollection = (new BaselineFilter())->apply(
-                        $ruleViolationCollection,
+                        $unfilteredRuleViolationCollection,
                         $architecture,
                         $basePath
                     );
@@ -255,6 +238,36 @@ final readonly class AnalyseCommand
 
                 $elapsed = microtime(true) - $start;
             }
+        } elseif (! $shouldGenerateBaseline) {
+            try {
+                $ruleViolationCollection = (new BaselineFilter())->apply(
+                    $unfilteredRuleViolationCollection,
+                    $architecture,
+                    $basePath
+                );
+            } catch (RuntimeException $runtimeException) {
+                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+
+                return 1;
+            }
+        }
+
+        if ($shouldGenerateBaseline) {
+            try {
+                $baseline->generate($unfilteredRuleViolationCollection, $options['generate-baseline'], $basePath);
+            } catch (RuntimeException $runtimeException) {
+                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+
+                return 1;
+            }
+
+            echo sprintf(
+                "Generated baseline [%s] with %d violation(s).\n",
+                $options['generate-baseline'],
+                $unfilteredRuleViolationCollection->count()
+            );
+
+            return 0;
         }
 
         $report = match ($reportType) {
