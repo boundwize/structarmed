@@ -190,20 +190,17 @@ final readonly class AnalyseCommand
         $fixedCount                        = 0;
 
         if (isset($options['fix'])) {
-            if ($shouldGenerateBaseline) {
-                $ruleViolationCollection = $unfilteredRuleViolationCollection;
-            } else {
-                try {
-                    $ruleViolationCollection = (new BaselineFilter())->apply(
-                        $unfilteredRuleViolationCollection,
-                        $architecture,
-                        $basePath
-                    );
-                } catch (RuntimeException $runtimeException) {
-                    echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+            try {
+                $ruleViolationCollection = $this->resolveRuleViolationCollection(
+                    $unfilteredRuleViolationCollection,
+                    $architecture,
+                    $basePath,
+                    $shouldGenerateBaseline
+                );
+            } catch (RuntimeException $runtimeException) {
+                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
-                    return 1;
-                }
+                return 1;
             }
 
             $fixedCount = $this->fixViolations($architecture, $ruleViolationCollection);
@@ -228,30 +225,28 @@ final readonly class AnalyseCommand
                 );
                 $analysisResultCache->store($cacheKey, $metadata, $unfilteredRuleViolationCollection);
 
-                if ($shouldGenerateBaseline) {
-                    $ruleViolationCollection = $unfilteredRuleViolationCollection;
-                } else {
-                    try {
-                        $ruleViolationCollection = (new BaselineFilter())->apply(
-                            $unfilteredRuleViolationCollection,
-                            $architecture,
-                            $basePath
-                        );
-                    } catch (RuntimeException $runtimeException) {
-                        echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+                try {
+                    $ruleViolationCollection = $this->resolveRuleViolationCollection(
+                        $unfilteredRuleViolationCollection,
+                        $architecture,
+                        $basePath,
+                        $shouldGenerateBaseline
+                    );
+                } catch (RuntimeException $runtimeException) {
+                    echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
-                        return 1;
-                    }
+                    return 1;
                 }
 
                 $elapsed = microtime(true) - $start;
             }
-        } elseif (! $shouldGenerateBaseline) {
+        } else {
             try {
-                $ruleViolationCollection = (new BaselineFilter())->apply(
+                $ruleViolationCollection = $this->resolveRuleViolationCollection(
                     $unfilteredRuleViolationCollection,
                     $architecture,
-                    $basePath
+                    $basePath,
+                    $shouldGenerateBaseline
                 );
             } catch (RuntimeException $runtimeException) {
                 echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
@@ -290,6 +285,19 @@ final readonly class AnalyseCommand
         echo $report;
 
         return $ruleViolationCollection->hasViolations() ? 1 : 0;
+    }
+
+    private function resolveRuleViolationCollection(
+        RuleViolationCollection $unfilteredRuleViolationCollection,
+        Architecture $architecture,
+        string $basePath,
+        bool $shouldGenerateBaseline
+    ): RuleViolationCollection {
+        if ($shouldGenerateBaseline) {
+            return $unfilteredRuleViolationCollection;
+        }
+
+        return (new BaselineFilter())->apply($unfilteredRuleViolationCollection, $architecture, $basePath);
     }
 
     private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int
