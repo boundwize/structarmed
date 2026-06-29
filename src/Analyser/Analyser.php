@@ -151,6 +151,8 @@ final readonly class Analyser
                 continue;
             }
 
+            $isFixable = $rule instanceof FixableInterface;
+
             foreach ($projectRuleViolations[$key] as $violation) {
                 $ruleViolationCollection->add(new RuleViolation(
                     message:   $violation->message,
@@ -159,7 +161,7 @@ final readonly class Analyser
                     className: $violation->className,
                     layer:     $violation->layer,
                     ruleKey:   $key,
-                    fixable:   $rule instanceof FixableInterface,
+                    fixable:   $isFixable,
                     methodName: $violation->methodName,
                     constantName: $violation->constantName,
                     propertyName: $violation->propertyName,
@@ -211,6 +213,8 @@ final readonly class Analyser
                     ? $rule->evaluateAll($classNode)
                     : [$rule->evaluate($classNode)];
 
+                $isFixable = $rule instanceof FixableInterface;
+
                 foreach ($violations as $violation) {
                     if (! $violation instanceof RuleViolation) {
                         continue;
@@ -224,7 +228,7 @@ final readonly class Analyser
                         className: $violation->className,
                         layer:     $violation->layer,
                         ruleKey:   $key,
-                        fixable:   $rule instanceof FixableInterface,
+                        fixable:   $isFixable,
                         methodName: $violation->methodName,
                         constantName: $violation->constantName,
                         propertyName: $violation->propertyName,
