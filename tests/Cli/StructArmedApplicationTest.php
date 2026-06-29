@@ -678,6 +678,52 @@ PHP,
         }
     }
 
+    public function testAnalyseCommandCanFixAndGenerateMissingConfiguredBaseline(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
+
+return Architecture::define()
+    ->baseline('structarmed-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule('source.must_declare_method_visibility', new MustDeclareMethodVisibilityRule('Source'));
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                    '--generate-baseline=structarmed-baseline.php',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                'Generated baseline [structarmed-baseline.php] with 0 violation(s).',
+                $output
+            );
+            $this->assertStringContainsString(
+                '    public function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+            $this->assertFileExists($basePath . '/structarmed-baseline.php');
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandGeneratesBaselineFromRemainingViolationsAfterFix(): void
     {
         $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();

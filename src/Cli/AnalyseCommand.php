@@ -190,16 +190,20 @@ final readonly class AnalyseCommand
         $fixedCount                        = 0;
 
         if (isset($options['fix'])) {
-            try {
-                $ruleViolationCollection = (new BaselineFilter())->apply(
-                    $unfilteredRuleViolationCollection,
-                    $architecture,
-                    $basePath
-                );
-            } catch (RuntimeException $runtimeException) {
-                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+            if ($shouldGenerateBaseline) {
+                $ruleViolationCollection = $unfilteredRuleViolationCollection;
+            } else {
+                try {
+                    $ruleViolationCollection = (new BaselineFilter())->apply(
+                        $unfilteredRuleViolationCollection,
+                        $architecture,
+                        $basePath
+                    );
+                } catch (RuntimeException $runtimeException) {
+                    echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
-                return 1;
+                    return 1;
+                }
             }
 
             $fixedCount = $this->fixViolations($architecture, $ruleViolationCollection);
@@ -224,16 +228,20 @@ final readonly class AnalyseCommand
                 );
                 $analysisResultCache->store($cacheKey, $metadata, $unfilteredRuleViolationCollection);
 
-                try {
-                    $ruleViolationCollection = (new BaselineFilter())->apply(
-                        $unfilteredRuleViolationCollection,
-                        $architecture,
-                        $basePath
-                    );
-                } catch (RuntimeException $runtimeException) {
-                    echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+                if ($shouldGenerateBaseline) {
+                    $ruleViolationCollection = $unfilteredRuleViolationCollection;
+                } else {
+                    try {
+                        $ruleViolationCollection = (new BaselineFilter())->apply(
+                            $unfilteredRuleViolationCollection,
+                            $architecture,
+                            $basePath
+                        );
+                    } catch (RuntimeException $runtimeException) {
+                        echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
-                    return 1;
+                        return 1;
+                    }
                 }
 
                 $elapsed = microtime(true) - $start;
