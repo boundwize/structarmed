@@ -48,10 +48,31 @@ final class PathTest extends TestCase
         yield 'windows UNC absolute' => ['\\\\server\\share\\src', '/project', '\\\\server\\share\\src'];
     }
 
+    /**
+     * @return Iterator<string, array{string, string, bool}>
+     */
+    public static function provideIsAnalysableFile(): Iterator
+    {
+        yield 'relative php' => ['src/Foo.php', '/project', true];
+        yield 'absolute php' => ['/project/src/Foo.php', '/project', true];
+        yield 'base-relative root composer' => ['composer.json', '/project', true];
+        yield 'absolute root composer' => ['/project/composer.json', '/project', true];
+        yield 'nested composer' => ['/project/nested/composer.json', '/project', false];
+        yield 'other root composer' => ['/other/composer.json', '/project', false];
+        yield 'composer lock' => ['/project/composer.lock', '/project', false];
+        yield 'readme' => ['/project/README.md', '/project', false];
+    }
+
     #[DataProvider('provideResolve')]
     public function testResolve(string $path, string $basePath, string $expected): void
     {
         $this->assertSame($expected, Path::resolve($path, $basePath));
+    }
+
+    #[DataProvider('provideIsAnalysableFile')]
+    public function testIsAnalysableFile(string $path, string $basePath, bool $expected): void
+    {
+        $this->assertSame($expected, Path::isAnalysableFile($path, $basePath));
     }
 
     public function testMemoisesNormalisedAndResolvedPaths(): void

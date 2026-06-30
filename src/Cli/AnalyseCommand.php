@@ -27,7 +27,6 @@ use function is_dir;
 use function is_file;
 use function microtime;
 use function sprintf;
-use function str_ends_with;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -122,24 +121,13 @@ final readonly class AnalyseCommand
         }
 
         foreach ($scanPaths as $scanPath) {
-            $fullScanPath           = Path::resolve($scanPath, $basePath);
-            $normalisedFullScanPath = Path::normalise($fullScanPath);
-            $rootComposerFile       = Path::normalise(
-                Path::resolve('composer.json', $basePath),
-                canonicalise: true,
-            );
+            $fullScanPath = Path::resolve($scanPath, $basePath);
 
             if (is_dir($fullScanPath)) {
                 continue;
             }
 
-            if (
-                is_file($fullScanPath)
-                && (
-                    str_ends_with($normalisedFullScanPath, '.php')
-                    || Path::normalise($fullScanPath, canonicalise: true) === $rootComposerFile
-                )
-            ) {
+            if (is_file($fullScanPath) && Path::isAnalysableFile($fullScanPath, $basePath)) {
                 continue;
             }
 

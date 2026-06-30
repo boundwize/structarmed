@@ -42,7 +42,6 @@ use function in_array;
 use function is_dir;
 use function is_file;
 use function sprintf;
-use function str_ends_with;
 use function str_starts_with;
 use function strpbrk;
 use function substr;
@@ -895,7 +894,10 @@ final readonly class Analyser
             );
 
             if (is_file($fullPath)) {
-                if ($this->isAnalysableFile($fullPath) && ! $this->isSkipped($fullPath, $skipMatchers)) {
+                if (
+                    Path::isAnalysableFile($fullPath, $this->basePath)
+                    && ! $this->isSkipped($fullPath, $skipMatchers)
+                ) {
                     $files[] = $fullPath;
                 }
 
@@ -916,23 +918,6 @@ final readonly class Analyser
         }
 
         return array_values(array_unique($files));
-    }
-
-    private function isAnalysableFile(string $file): bool
-    {
-        return str_ends_with($file, '.php') || $this->isRootComposerFile($file);
-    }
-
-    private function isRootComposerFile(string $file): bool
-    {
-        if (! str_ends_with($file, '/composer.json')) {
-            return false;
-        }
-
-        return Path::normalise($file, canonicalise: true) === Path::normalise(
-            Path::resolve('composer.json', $this->basePath),
-            canonicalise: true,
-        );
     }
 
     /**

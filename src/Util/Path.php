@@ -8,6 +8,7 @@ use function ltrim;
 use function preg_replace;
 use function realpath;
 use function rtrim;
+use function str_ends_with;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
@@ -62,6 +63,24 @@ final class Path
         return self::$resolvedPaths[$cacheKey] ?? self::$resolvedPaths[$cacheKey] = self::isAbsolute($path)
             ? $path
             : rtrim($basePath, '/\\') . '/' . $path;
+    }
+
+    public static function isAnalysableFile(string $path, string $basePath): bool
+    {
+        if (str_ends_with($path, '.php')) {
+            return true;
+        }
+
+        if (! str_ends_with($path, 'composer.json')) {
+            return false;
+        }
+
+        $resolvedPath = self::resolve($path, $basePath);
+
+        return self::normalise($resolvedPath, canonicalise: true) === self::normalise(
+            self::resolve('composer.json', $basePath),
+            canonicalise: true,
+        );
     }
 
     private static function isAbsolute(string $path): bool
