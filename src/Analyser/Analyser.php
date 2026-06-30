@@ -882,13 +882,27 @@ final readonly class Analyser
      */
     private function withRootComposerFileInSourceLayer(array $layers): array
     {
-        if (! array_key_exists('Source', $layers)) {
-            return $layers;
+        foreach ($layers as $layerPaths) {
+            if (in_array('composer.json', (array) $layerPaths, true)) {
+                return $layers;
+            }
         }
 
-        $layers['Source'] = [...(array) $layers['Source'], 'composer.json'];
+        foreach ($layers as $layerName => $layerPaths) {
+            if (! $this->isSourceLayerName($layerName)) {
+                continue;
+            }
+
+            $layers[$layerName] = [...(array) $layerPaths, 'composer.json'];
+            break;
+        }
 
         return $layers;
+    }
+
+    private function isSourceLayerName(string $layerName): bool
+    {
+        return $layerName === 'Source' || str_starts_with($layerName, 'Source[');
     }
 
     /**

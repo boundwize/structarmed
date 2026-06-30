@@ -20,6 +20,8 @@ use function sprintf;
 
 final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRule implements ProjectRuleInterface
 {
+    use SkipsComposerFileTrait;
+
     public function __construct(
         private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
     ) {
@@ -28,6 +30,10 @@ final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRu
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
         $composerFile = rtrim($basePath, '/') . '/composer.json';
+
+        if ($this->isComposerFileSkipped($basePath, $composerFile, $skipPaths)) {
+            return null;
+        }
 
         if (! file_exists($composerFile)) {
             return $this->violation(

@@ -23,6 +23,8 @@ use function trim;
 
 final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
 {
+    use SkipsComposerFileTrait;
+
     /**
      * @param list<string> $sourcePaths
      */
@@ -47,6 +49,10 @@ final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
         $composerFile = rtrim($basePath, '/') . '/composer.json';
+
+        if ($this->isComposerFileSkipped($basePath, $composerFile, $skipPaths)) {
+            return null;
+        }
 
         if (! file_exists($composerFile)) {
             return $this->violation(

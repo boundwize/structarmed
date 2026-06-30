@@ -18,6 +18,8 @@ use function trim;
 
 final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInterface
 {
+    use SkipsComposerFileTrait;
+
     public function __construct(
         private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
     ) {
@@ -30,11 +32,15 @@ final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInt
 
     /**
      * @return list<RuleViolation>
-     * @param string[] $skipPaths
+     * @param list<string> $skipPaths
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
         $composerFile = rtrim($basePath, '/') . '/composer.json';
+
+        if ($this->isComposerFileSkipped($basePath, $composerFile, $skipPaths)) {
+            return [];
+        }
 
         if (! file_exists($composerFile)) {
             return [];
