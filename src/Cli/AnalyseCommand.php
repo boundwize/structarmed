@@ -124,6 +124,10 @@ final readonly class AnalyseCommand
         foreach ($scanPaths as $scanPath) {
             $fullScanPath           = Path::resolve($scanPath, $basePath);
             $normalisedFullScanPath = Path::normalise($fullScanPath);
+            $rootComposerFile       = Path::normalise(
+                Path::resolve('composer.json', $basePath),
+                canonicalise: true,
+            );
 
             if (is_dir($fullScanPath)) {
                 continue;
@@ -133,7 +137,7 @@ final readonly class AnalyseCommand
                 is_file($fullScanPath)
                 && (
                     str_ends_with($normalisedFullScanPath, '.php')
-                    || str_ends_with($normalisedFullScanPath, '/composer.json')
+                    || Path::normalise($fullScanPath, canonicalise: true) === $rootComposerFile
                 )
             ) {
                 continue;

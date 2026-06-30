@@ -920,7 +920,15 @@ final readonly class Analyser
 
     private function isAnalysableFile(string $file): bool
     {
-        return str_ends_with($file, '.php') || str_ends_with($file, '/composer.json');
+        return str_ends_with($file, '.php') || $this->isRootComposerFile($file);
+    }
+
+    private function isRootComposerFile(string $file): bool
+    {
+        return Path::normalise($file, canonicalise: true) === Path::normalise(
+            Path::resolve('composer.json', $this->basePath),
+            canonicalise: true,
+        );
     }
 
     /**

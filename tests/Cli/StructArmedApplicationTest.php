@@ -569,6 +569,18 @@ PHP);
                 $composerFile,
                 $this->normalisePath($fixProgress->files[0])
             );
+
+            [$nestedExitCode, $nestedOutput] = $this->runAnalyseCommand(
+                [
+                    'nested/composer.json',
+                    '--config=' . $basePath . '/structarmed.php',
+                ],
+                $basePath,
+                $fixProgress
+            );
+
+            $this->assertSame(1, $nestedExitCode, $nestedOutput);
+            $this->assertStringContainsString('Error: path [nested/composer.json] not found.', $nestedOutput);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -1318,6 +1330,8 @@ PHP);
     }
 }
 JSON);
+        mkdir($basePath . '/nested');
+        file_put_contents($basePath . '/nested/composer.json', '{}');
         file_put_contents($basePath . '/structarmed.php', <<<'PHP'
 <?php
 
@@ -1475,6 +1489,10 @@ PHP;
             unlink($basePath . '/composer.json');
         }
 
+        if (file_exists($basePath . '/nested/composer.json')) {
+            unlink($basePath . '/nested/composer.json');
+        }
+
         foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {
             unlink($cacheFile);
         }
@@ -1501,6 +1519,10 @@ PHP;
 
         if (is_dir($basePath . '/var')) {
             rmdir($basePath . '/var');
+        }
+
+        if (is_dir($basePath . '/nested')) {
+            rmdir($basePath . '/nested');
         }
 
         if (is_dir($basePath)) {
