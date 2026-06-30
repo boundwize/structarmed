@@ -667,18 +667,29 @@ final class AnalyserTest extends TestCase
 
     public function testFilesForAnalysisWithRootRelativeScanPath(): void
     {
-        $basePath = $this->makeTempProject([
-            'index.php'   => '<?php namespace App; final class Index {}',
-            'src/Foo.php' => '<?php namespace App; final class Foo {}',
+        $basePath         = $this->makeTempProject([
+            'composer.json'        => '{}',
+            'index.php'            => '<?php namespace App; final class Index {}',
+            'nested/composer.json' => '{}',
+            'src/Foo.php'          => '<?php namespace App; final class Foo {}',
         ]);
+        $rootComposerFile = realpath($basePath . '/composer.json');
+
+        $this->assertIsString($rootComposerFile);
 
         $architecture = Architecture::define()
             ->layer('Source', 'src/');
 
-        $files = (new Analyser($basePath))->filesForAnalysis($architecture, ['index.php']);
+        $analyser = new Analyser($basePath);
+        $files    = $analyser->filesForAnalysis($architecture, ['index.php']);
 
         $this->assertCount(1, $files);
         $this->assertStringEndsWith('/index.php', $this->normalisePath($files[0]));
+        $this->assertSame(
+            [$this->normalisePath($rootComposerFile)],
+            array_map($this->normalisePath(...), $analyser->filesForAnalysis($architecture, ['composer.json']))
+        );
+        $this->assertSame([], $analyser->filesForAnalysis($architecture, ['nested/composer.json']));
     }
 
     public function testFilesForAnalysisUsesPreResolvedLayersWhenProvided(): void
