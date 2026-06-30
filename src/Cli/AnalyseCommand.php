@@ -122,13 +122,20 @@ final readonly class AnalyseCommand
         }
 
         foreach ($scanPaths as $scanPath) {
-            $fullScanPath = Path::resolve($scanPath, $basePath);
+            $fullScanPath           = Path::resolve($scanPath, $basePath);
+            $normalisedFullScanPath = Path::normalise($fullScanPath);
 
             if (is_dir($fullScanPath)) {
                 continue;
             }
 
-            if (is_file($fullScanPath) && str_ends_with($fullScanPath, '.php')) {
+            if (
+                is_file($fullScanPath)
+                && (
+                    str_ends_with($normalisedFullScanPath, '.php')
+                    || str_ends_with($normalisedFullScanPath, '/composer.json')
+                )
+            ) {
                 continue;
             }
 

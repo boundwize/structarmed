@@ -29,6 +29,7 @@ use function ob_get_clean;
 use function ob_start;
 use function preg_replace;
 use function random_bytes;
+use function realpath;
 use function rmdir;
 use function serialize;
 use function str_replace;
@@ -479,6 +480,94 @@ PHP);
             $this->assertStringContainsString(
                 '    public function handle(): void',
                 (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandTracksComposerJsonProgressAsSingleFile(): void
+    {
+        $basePath = $this->createProjectDirectoryWithMissingComposerPsr4Path();
+        $progress = new class implements ProgressHandlerInterface {
+            /** @var list<int> */
+            public array $totals = [];
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->totals[] = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            $composerFile = $this->normalisePath((string) realpath($basePath . '/composer.json'));
+
+            [$firstExitCode, $firstOutput] = $this->runAnalyseCommand(
+                ['--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(1, $firstExitCode, $firstOutput);
+            $this->assertStringContainsString('declared in composer.json do not exist on disk', $firstOutput);
+            $this->assertSame([1], $progress->totals);
+            $this->assertCount(1, $progress->files);
+            $this->assertSame(
+                $composerFile,
+                $this->normalisePath($progress->files[0])
+            );
+
+            $fixProgress = new class implements ProgressHandlerInterface {
+                /** @var list<int> */
+                public array $totals = [];
+
+                /** @var list<string> */
+                public array $files = [];
+
+                public function start(int $total): void
+                {
+                    $this->totals[] = $total;
+                }
+
+                public function advance(string $file): void
+                {
+                    $this->files[] = $file;
+                }
+
+                public function finish(): void
+                {
+                }
+            };
+
+            [$exitCode, $output] = $this->runAnalyseCommand(
+                [
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--fix',
+                ],
+                $basePath,
+                $fixProgress
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('1 violation has been fixed.', $this->withoutAnsi($output));
+            $this->assertSame([1], $fixProgress->totals);
+            $this->assertCount(1, $fixProgress->files);
+            $this->assertSame(
+                $composerFile,
+                $this->normalisePath($fixProgress->files[0])
             );
         } finally {
             $this->removeTempDirectory($basePath);
@@ -1217,6 +1306,33 @@ PHP);
         return $basePath;
     }
 
+    private function createProjectDirectoryWithMissingComposerPsr4Path(): string
+    {
+        $basePath = $this->createTempDirectory();
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Missing\\": "missing/"
+        }
+    }
+}
+JSON);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+    ->withPreset(Preset::PSR4());
+PHP);
+
+        return $basePath;
+    }
+
     private function createProjectDirectoryWithViolation(): string
     {
         $basePath = $this->createProjectDirectory();
@@ -1353,6 +1469,10 @@ PHP;
 
         if (file_exists($basePath . '/structarmed-baseline.php')) {
             unlink($basePath . '/structarmed-baseline.php');
+        }
+
+        if (file_exists($basePath . '/composer.json')) {
+            unlink($basePath . '/composer.json');
         }
 
         foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {

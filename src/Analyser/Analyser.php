@@ -895,7 +895,7 @@ final readonly class Analyser
             );
 
             if (is_file($fullPath)) {
-                if (str_ends_with($fullPath, '.php') && ! $this->isSkipped($fullPath, $skipMatchers)) {
+                if ($this->isAnalysableFile($fullPath) && ! $this->isSkipped($fullPath, $skipMatchers)) {
                     $files[] = $fullPath;
                 }
 
@@ -918,6 +918,11 @@ final readonly class Analyser
         return array_values(array_unique($files));
     }
 
+    private function isAnalysableFile(string $file): bool
+    {
+        return str_ends_with($file, '.php') || str_ends_with($file, '/composer.json');
+    }
+
     /**
      * @return array<string, string|list<string>>
      */
@@ -927,7 +932,14 @@ final readonly class Analyser
 
         foreach ($layers as $layerName => $layerPaths) {
             if ($layerName === 'Source' && $layerPaths === []) {
-                $layers[$layerName] = (new Psr4PathResolver())->paths($this->basePath);
+                $paths        = (new Psr4PathResolver())->paths($this->basePath);
+                $composerFile = Path::resolve('composer.json', $this->basePath);
+
+                if (is_file($composerFile)) {
+                    $paths[] = 'composer.json';
+                }
+
+                $layers[$layerName] = $paths;
                 break;
             }
         }
