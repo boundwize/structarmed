@@ -303,9 +303,33 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->withPreset(Preset::PSR4(sourcePaths: ['src/']));
 
-        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+        $analyser = new Analyser($basePath);
+        $files    = array_map($this->normalisePath(...), $analyser->filesForAnalysis($architecture));
+
+        sort($files);
+
+        $this->assertCount(2, $files);
+        $this->assertStringEndsWith('/composer.json', $files[0]);
+        $this->assertStringEndsWith('/src/Foo.php', $files[1]);
+
+        $ruleViolationCollection = $analyser->analyse($architecture);
 
         $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testFilesForAnalysisIgnoresMissingRootComposerJsonCandidate(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR4(sourcePaths: ['src/']));
+
+        $files = array_map($this->normalisePath(...), (new Analyser($basePath))->filesForAnalysis($architecture));
+
+        $this->assertCount(1, $files);
+        $this->assertStringEndsWith('/src/Foo.php', $files[0]);
     }
 
     public function testAnalyserUsesComposerPsr4PathsForDefaultPsr4Preset(): void

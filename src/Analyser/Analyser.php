@@ -870,10 +870,25 @@ final readonly class Analyser
     public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
     {
         return $this->collectPhpFiles(
-            $layers ?? $this->resolveLayers($architecture),
+            $this->withRootComposerFileInSourceLayer($layers ?? $this->resolveLayers($architecture)),
             $scanPaths,
             $architecture->getSkipPaths()
         );
+    }
+
+    /**
+     * @param array<string, string|list<string>> $layers
+     * @return array<string, string|list<string>>
+     */
+    private function withRootComposerFileInSourceLayer(array $layers): array
+    {
+        if (! array_key_exists('Source', $layers)) {
+            return $layers;
+        }
+
+        $layers['Source'] = [...(array) $layers['Source'], 'composer.json'];
+
+        return $layers;
     }
 
     /**
@@ -929,14 +944,7 @@ final readonly class Analyser
 
         foreach ($layers as $layerName => $layerPaths) {
             if ($layerName === 'Source' && $layerPaths === []) {
-                $paths        = (new Psr4PathResolver())->paths($this->basePath);
-                $composerFile = Path::resolve('composer.json', $this->basePath);
-
-                if (is_file($composerFile)) {
-                    $paths[] = 'composer.json';
-                }
-
-                $layers[$layerName] = $paths;
+                $layers[$layerName] = (new Psr4PathResolver())->paths($this->basePath);
                 break;
             }
         }

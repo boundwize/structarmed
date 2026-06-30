@@ -1325,11 +1325,13 @@ PHP);
 {
     "autoload": {
         "psr-4": {
+            "App\\": "src/",
             "Missing\\": "missing/"
         }
     }
 }
 JSON);
+        mkdir($basePath . '/src');
         mkdir($basePath . '/nested');
         file_put_contents($basePath . '/nested/composer.json', '{}');
         file_put_contents($basePath . '/structarmed.php', <<<'PHP'
@@ -1341,7 +1343,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 
 return Architecture::define()
-    ->withPreset(Preset::PSR4());
+    ->withPreset(Preset::PSR4(sourcePaths: ['src/']));
 PHP);
 
         return $basePath;
