@@ -925,6 +925,10 @@ final readonly class Analyser
 
     private function isRootComposerFile(string $file): bool
     {
+        if (! str_ends_with($file, '/composer.json')) {
+            return false;
+        }
+
         return Path::normalise($file, canonicalise: true) === Path::normalise(
             Path::resolve('composer.json', $this->basePath),
             canonicalise: true,
