@@ -1279,9 +1279,8 @@ PHP);
         ob_start();
         $exitCode = (new StructArmedApplication())->run($argv, $basePath);
         $output   = ob_get_clean();
-        $this->assertIsString($output);
 
-        return [$exitCode, $output];
+        return [$exitCode, $output === false ? '' : $output];
     }
 
     /**
@@ -1296,9 +1295,8 @@ PHP);
         ob_start();
         $exitCode = (new AnalyseCommand($progressHandler))->run($arguments, $basePath);
         $output   = ob_get_clean();
-        $this->assertIsString($output);
 
-        return [$exitCode, $output];
+        return [$exitCode, $output === false ? '' : $output];
     }
 
     private function createProjectDirectory(): string

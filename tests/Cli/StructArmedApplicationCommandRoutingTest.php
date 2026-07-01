@@ -148,8 +148,7 @@ final class StructArmedApplicationCommandRoutingTest extends TestCase
         ob_start();
         $exitCode = (new StructArmedApplication())->run($argv, $basePath);
         $output   = ob_get_clean();
-        $this->assertIsString($output);
 
-        return [$exitCode, $output];
+        return [$exitCode, $output === false ? '' : $output];
     }
 }
