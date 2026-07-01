@@ -1278,9 +1278,10 @@ PHP);
     {
         ob_start();
         $exitCode = (new StructArmedApplication())->run($argv, $basePath);
-        $output   = ob_get_clean();
+        $output   = ob_get_contents();
+        ob_end_clean();
 
-        return [$exitCode, $output === false ? '' : $output];
+        return [$exitCode, (string) $output];
     }
 
     /**
@@ -1294,9 +1295,10 @@ PHP);
     ): array {
         ob_start();
         $exitCode = (new AnalyseCommand($progressHandler))->run($arguments, $basePath);
-        $output   = ob_get_clean();
+        $output   = ob_get_contents();
+        ob_end_clean();
 
-        return [$exitCode, $output === false ? '' : $output];
+        return [$exitCode, (string) $output];
     }
 
     private function createProjectDirectory(): string
