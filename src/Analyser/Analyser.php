@@ -895,7 +895,7 @@ final readonly class Analyser
      */
     public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
     {
-        $layers       = $layers ?? $this->resolveLayers($architecture);
+        $layers     ??= $this->resolveLayers($architecture);
         $files        = [];
         $skipPaths    = $architecture->getSkipPaths();
         $skipMatchers = $this->compileSkipMatchers($skipPaths);

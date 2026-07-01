@@ -13,7 +13,8 @@ use Boundwize\StructArmed\Version;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function ob_get_clean;
+use function ob_end_clean;
+use function ob_get_contents;
 use function ob_start;
 use function sprintf;
 
