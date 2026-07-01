@@ -895,12 +895,47 @@ final readonly class Analyser
      */
     public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
     {
-        return $this->collectPhpFiles(
-            $layers ?? $this->resolveLayers($architecture),
-            $scanPaths,
-            $architecture->getSkipPaths(),
-            $this->shouldAnalyseComposerJson($architecture),
-        );
+        $layers       = $layers ?? $this->resolveLayers($architecture);
+        $files        = [];
+        $skipPaths    = $architecture->getSkipPaths();
+        $skipMatchers = $this->compileSkipMatchers($skipPaths);
+        $scanPaths    = $this->scanPaths($layers, $scanPaths);
+
+        if ($this->shouldAnalyseComposerJson($architecture)) {
+            $scanPaths[] = 'composer.json';
+        }
+
+        foreach (array_values(array_unique($scanPaths)) as $layerPath) {
+            $fullPath = Path::normalise(
+                Path::resolve($layerPath, $this->basePath),
+                canonicalise: true
+            );
+
+            if (is_file($fullPath)) {
+                if (
+                    Path::isAnalysableFile($fullPath, $this->basePath)
+                    && ! $this->isSkipped($fullPath, $skipMatchers)
+                ) {
+                    $files[] = $fullPath;
+                }
+
+                continue;
+            }
+
+            if (! is_dir($fullPath)) {
+                continue;
+            }
+
+            if ($this->isSkipped($fullPath, $skipMatchers)) {
+                continue;
+            }
+
+            foreach ($this->phpFiles($fullPath, $skipMatchers) as $file) {
+                $files[] = $file;
+            }
+        }
+
+        return array_values(array_unique($files));
     }
 
     private function shouldAnalyseComposerJson(Architecture $architecture): bool
@@ -940,59 +975,6 @@ final readonly class Analyser
             Path::resolve('composer.json', $this->normalisedBasePath),
             $this->compileSkipMatchers($skipPaths)
         );
-    }
-
-    /**
-     * @param array<string, string|list<string>> $layers
-     * @param list<string> $scanPaths
-     * @param list<string> $skipPaths
-     * @return list<string>
-     */
-    private function collectPhpFiles(
-        array $layers,
-        array $scanPaths,
-        array $skipPaths,
-        bool $includeComposerJson,
-    ): array {
-        $files        = [];
-        $skipMatchers = $this->compileSkipMatchers($skipPaths);
-        $scanPaths    = $this->scanPaths($layers, $scanPaths);
-
-        if ($includeComposerJson) {
-            $scanPaths[] = 'composer.json';
-        }
-
-        foreach (array_values(array_unique($scanPaths)) as $layerPath) {
-            $fullPath = Path::normalise(
-                Path::resolve($layerPath, $this->basePath),
-                canonicalise: true
-            );
-
-            if (is_file($fullPath)) {
-                if (
-                    Path::isAnalysableFile($fullPath, $this->basePath)
-                    && ! $this->isSkipped($fullPath, $skipMatchers)
-                ) {
-                    $files[] = $fullPath;
-                }
-
-                continue;
-            }
-
-            if (! is_dir($fullPath)) {
-                continue;
-            }
-
-            if ($this->isSkipped($fullPath, $skipMatchers)) {
-                continue;
-            }
-
-            foreach ($this->phpFiles($fullPath, $skipMatchers) as $file) {
-                $files[] = $file;
-            }
-        }
-
-        return array_values(array_unique($files));
     }
 
     /**
