@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
+use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
@@ -16,10 +17,8 @@ use function rtrim;
 use function sprintf;
 use function trim;
 
-final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInterface
+final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInterface, ComposerJsonRuleInterface
 {
-    use SkipsComposerFileTrait;
-
     public function __construct(
         private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
     ) {
@@ -37,10 +36,6 @@ final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInt
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
         $composerFile = rtrim($basePath, '/') . '/composer.json';
-
-        if ($this->isComposerFileSkipped($basePath, $composerFile, $skipPaths)) {
-            return [];
-        }
 
         if (! file_exists($composerFile)) {
             return [];
