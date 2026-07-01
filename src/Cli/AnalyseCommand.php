@@ -27,7 +27,6 @@ use function is_dir;
 use function is_file;
 use function microtime;
 use function sprintf;
-use function str_ends_with;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -128,7 +127,7 @@ final readonly class AnalyseCommand
                 continue;
             }
 
-            if (is_file($fullScanPath) && str_ends_with($fullScanPath, '.php')) {
+            if (is_file($fullScanPath) && Path::isAnalysableFile($fullScanPath, $basePath)) {
                 continue;
             }
 

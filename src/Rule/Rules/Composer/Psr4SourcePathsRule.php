@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
-use Boundwize\StructArmed\Rule\ProjectRuleInterface;
+use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Util\Path;
 
@@ -21,7 +21,7 @@ use function strlen;
 use function substr;
 use function trim;
 
-final readonly class Psr4SourcePathsRule implements ProjectRuleInterface
+final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
 {
     /**
      * @param list<string> $sourcePaths

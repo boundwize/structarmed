@@ -6,9 +6,9 @@ namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
+use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\ObjectItemNode\RemoveMissingPsr4PathVisitor;
-use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function dirname;
@@ -18,7 +18,7 @@ use function is_dir;
 use function rtrim;
 use function sprintf;
 
-final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRule implements ProjectRuleInterface
+final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRule implements ComposerJsonRuleInterface
 {
     public function __construct(
         private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),

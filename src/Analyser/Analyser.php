@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
@@ -42,7 +43,6 @@ use function in_array;
 use function is_dir;
 use function is_file;
 use function sprintf;
-use function str_ends_with;
 use function str_starts_with;
 use function strpbrk;
 use function substr;
@@ -106,16 +106,21 @@ final readonly class Analyser
                 continue;
             }
 
+            $projectRuleSkipPaths = $ruleSkipPaths[$key] ?? [];
+
             if ($rule instanceof MultipleProjectRuleViolationInterface) {
-                $projectRuleViolations[$key] = $rule->evaluateProjectAll(
-                    $this->basePath,
-                    $architecture,
-                    $ruleSkipPaths[$key] ?? []
+                $projectRuleViolations[$key] = $this->withoutSkippedProjectViolations(
+                    $rule->evaluateProjectAll($this->basePath, $architecture, $projectRuleSkipPaths),
+                    $projectRuleSkipPaths,
                 );
             } else {
-                $single = $rule->evaluateProject($this->basePath, $architecture, $ruleSkipPaths[$key] ?? []);
+                $single     = $rule->evaluateProject($this->basePath, $architecture, $projectRuleSkipPaths);
+                $violations = $single instanceof RuleViolation ? [$single] : [];
 
-                $projectRuleViolations[$key] = $single instanceof RuleViolation ? [$single] : [];
+                $projectRuleViolations[$key] = $this->withoutSkippedProjectViolations(
+                    $violations,
+                    $projectRuleSkipPaths,
+                );
             }
         }
 
@@ -864,38 +869,53 @@ final readonly class Analyser
     }
 
     /**
+     * @param list<RuleViolation> $violations
+     * @param list<string> $skipPaths
+     * @return list<RuleViolation>
+     */
+    private function withoutSkippedProjectViolations(array $violations, array $skipPaths): array
+    {
+        if ($violations === [] || $skipPaths === []) {
+            return $violations;
+        }
+
+        $skipMatchers = $this->compileSkipMatchers($skipPaths);
+
+        return array_values(array_filter(
+            $violations,
+            fn(RuleViolation $ruleViolation): bool => $ruleViolation->file === ''
+                || ! $this->isSkipped($ruleViolation->file, $skipMatchers),
+        ));
+    }
+
+    /**
      * @param list<string> $scanPaths
      * @param array<string, string|list<string>>|null $layers
      * @return list<string>
      */
     public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
     {
-        return $this->collectPhpFiles(
-            $layers ?? $this->resolveLayers($architecture),
-            $scanPaths,
-            $architecture->getSkipPaths()
-        );
-    }
-
-    /**
-     * @param array<string, string|list<string>> $layers
-     * @param list<string> $scanPaths
-     * @param list<string> $skipPaths
-     * @return list<string>
-     */
-    private function collectPhpFiles(array $layers, array $scanPaths, array $skipPaths): array
-    {
+        $layers     ??= $this->resolveLayers($architecture);
         $files        = [];
+        $skipPaths    = $architecture->getSkipPaths();
         $skipMatchers = $this->compileSkipMatchers($skipPaths);
+        $scanPaths    = $this->scanPaths($layers, $scanPaths);
 
-        foreach ($this->scanPaths($layers, $scanPaths) as $layerPath) {
+        if ($this->shouldAnalyseComposerJson($architecture)) {
+            $scanPaths[] = 'composer.json';
+        }
+
+        foreach (array_values(array_unique($scanPaths)) as $layerPath) {
             $fullPath = Path::normalise(
                 Path::resolve($layerPath, $this->basePath),
                 canonicalise: true
             );
 
             if (is_file($fullPath)) {
-                if (str_ends_with($fullPath, '.php') && ! $this->isSkipped($fullPath, $skipMatchers)) {
+                if (
+                    Path::isAnalysableFile($fullPath, $this->basePath)
+                    && ! $this->isSkipped($fullPath, $skipMatchers)
+                ) {
                     $files[] = $fullPath;
                 }
 
@@ -916,6 +936,45 @@ final readonly class Analyser
         }
 
         return array_values(array_unique($files));
+    }
+
+    private function shouldAnalyseComposerJson(Architecture $architecture): bool
+    {
+        $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
+        $ruleSkipPaths   = $architecture->getRuleSkipPaths();
+
+        foreach ($architecture->getRules() as $key => $rule) {
+            if (array_key_exists($key, $skippedRuleKeys)) {
+                continue;
+            }
+
+            if (! $rule instanceof ComposerJsonRuleInterface) {
+                continue;
+            }
+
+            if ($this->isComposerJsonSkippedByRule($ruleSkipPaths[$key] ?? [])) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<string> $skipPaths
+     */
+    private function isComposerJsonSkippedByRule(array $skipPaths): bool
+    {
+        if ($skipPaths === []) {
+            return false;
+        }
+
+        return $this->isSkipped(
+            Path::resolve('composer.json', $this->normalisedBasePath),
+            $this->compileSkipMatchers($skipPaths)
+        );
     }
 
     /**

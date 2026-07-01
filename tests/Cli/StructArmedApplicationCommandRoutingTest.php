@@ -13,7 +13,8 @@ use Boundwize\StructArmed\Version;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function ob_get_clean;
+use function ob_end_clean;
+use function ob_get_contents;
 use function ob_start;
 use function sprintf;
 
@@ -147,9 +148,9 @@ final class StructArmedApplicationCommandRoutingTest extends TestCase
     {
         ob_start();
         $exitCode = (new StructArmedApplication())->run($argv, $basePath);
-        $output   = ob_get_clean();
-        $this->assertIsString($output);
+        $output   = ob_get_contents();
+        ob_end_clean();
 
-        return [$exitCode, $output];
+        return [$exitCode, (string) $output];
     }
 }

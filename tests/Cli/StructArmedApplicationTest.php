@@ -25,10 +25,12 @@ use function glob;
 use function is_dir;
 use function json_decode;
 use function mkdir;
-use function ob_get_clean;
+use function ob_end_clean;
+use function ob_get_contents;
 use function ob_start;
 use function preg_replace;
 use function random_bytes;
+use function realpath;
 use function rmdir;
 use function serialize;
 use function str_replace;
@@ -480,6 +482,106 @@ PHP);
                 '    public function handle(): void',
                 (string) file_get_contents($basePath . '/src/Foo.php')
             );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandTracksComposerJsonProgressAsSingleFile(): void
+    {
+        $basePath = $this->createProjectDirectoryWithMissingComposerPsr4Path();
+        $progress = new class implements ProgressHandlerInterface {
+            /** @var list<int> */
+            public array $totals = [];
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->totals[] = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            $composerFile = $this->normalisePath((string) realpath($basePath . '/composer.json'));
+
+            [$firstExitCode, $firstOutput] = $this->runAnalyseCommand(
+                ['--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(1, $firstExitCode, $firstOutput);
+            $this->assertStringContainsString('declared in composer.json do not exist on disk', $firstOutput);
+            $this->assertSame([1], $progress->totals);
+            $this->assertCount(1, $progress->files);
+            $this->assertSame(
+                $composerFile,
+                $this->normalisePath($progress->files[0])
+            );
+
+            $fixProgress = new class implements ProgressHandlerInterface {
+                /** @var list<int> */
+                public array $totals = [];
+
+                /** @var list<string> */
+                public array $files = [];
+
+                public function start(int $total): void
+                {
+                    $this->totals[] = $total;
+                }
+
+                public function advance(string $file): void
+                {
+                    $this->files[] = $file;
+                }
+
+                public function finish(): void
+                {
+                }
+            };
+
+            [$exitCode, $output] = $this->runAnalyseCommand(
+                [
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--fix',
+                ],
+                $basePath,
+                $fixProgress
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('1 violation has been fixed.', $this->withoutAnsi($output));
+            $this->assertSame([1], $fixProgress->totals);
+            $this->assertCount(1, $fixProgress->files);
+            $this->assertSame(
+                $composerFile,
+                $this->normalisePath($fixProgress->files[0])
+            );
+
+            [$nestedExitCode, $nestedOutput] = $this->runAnalyseCommand(
+                [
+                    'nested/composer.json',
+                    '--config=' . $basePath . '/structarmed.php',
+                ],
+                $basePath,
+                $fixProgress
+            );
+
+            $this->assertSame(1, $nestedExitCode, $nestedOutput);
+            $this->assertStringContainsString('Error: path [nested/composer.json] not found.', $nestedOutput);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -1177,10 +1279,10 @@ PHP);
     {
         ob_start();
         $exitCode = (new StructArmedApplication())->run($argv, $basePath);
-        $output   = ob_get_clean();
-        $this->assertIsString($output);
+        $output   = ob_get_contents();
+        ob_end_clean();
 
-        return [$exitCode, $output];
+        return [$exitCode, (string) $output];
     }
 
     /**
@@ -1194,10 +1296,10 @@ PHP);
     ): array {
         ob_start();
         $exitCode = (new AnalyseCommand($progressHandler))->run($arguments, $basePath);
-        $output   = ob_get_clean();
-        $this->assertIsString($output);
+        $output   = ob_get_contents();
+        ob_end_clean();
 
-        return [$exitCode, $output];
+        return [$exitCode, (string) $output];
     }
 
     private function createProjectDirectory(): string
@@ -1212,6 +1314,37 @@ declare(strict_types=1);
 use Boundwize\StructArmed\Architecture;
 
 return Architecture::define();
+PHP);
+
+        return $basePath;
+    }
+
+    private function createProjectDirectoryWithMissingComposerPsr4Path(): string
+    {
+        $basePath = $this->createTempDirectory();
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/",
+            "Missing\\": "missing/"
+        }
+    }
+}
+JSON);
+        mkdir($basePath . '/src');
+        mkdir($basePath . '/nested');
+        file_put_contents($basePath . '/nested/composer.json', '{}');
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+    ->withPreset(Preset::PSR4(sourcePaths: ['src/']));
 PHP);
 
         return $basePath;
@@ -1355,6 +1488,14 @@ PHP;
             unlink($basePath . '/structarmed-baseline.php');
         }
 
+        if (file_exists($basePath . '/composer.json')) {
+            unlink($basePath . '/composer.json');
+        }
+
+        if (file_exists($basePath . '/nested/composer.json')) {
+            unlink($basePath . '/nested/composer.json');
+        }
+
         foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {
             unlink($cacheFile);
         }
@@ -1381,6 +1522,10 @@ PHP;
 
         if (is_dir($basePath . '/var')) {
             rmdir($basePath . '/var');
+        }
+
+        if (is_dir($basePath . '/nested')) {
+            rmdir($basePath . '/nested');
         }
 
         if (is_dir($basePath)) {

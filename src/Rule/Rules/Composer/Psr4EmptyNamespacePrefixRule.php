@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
+use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
@@ -17,7 +18,9 @@ use function rtrim;
 use function sprintf;
 use function trim;
 
-final readonly class Psr4EmptyNamespacePrefixRule implements MultipleProjectRuleViolationInterface
+final readonly class Psr4EmptyNamespacePrefixRule implements
+    MultipleProjectRuleViolationInterface,
+    ComposerJsonRuleInterface
 {
     public function __construct(
         private Psr4PathResolver $psr4PathResolver = new Psr4PathResolver(),
@@ -31,7 +34,7 @@ final readonly class Psr4EmptyNamespacePrefixRule implements MultipleProjectRule
 
     /**
      * @return list<RuleViolation>
-     * @param string[] $skipPaths
+     * @param list<string> $skipPaths
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
