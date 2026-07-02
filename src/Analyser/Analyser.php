@@ -79,10 +79,11 @@ final readonly class Analyser
 
         $layers           = $this->resolveLayers($architecture);
         $rules            = $architecture->getRules();
+        $globalSkipPaths  = $architecture->getSkipPaths();
         $ruleSkipPaths    = $architecture->getRuleSkipPaths();
         $skippedRuleKeys  = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
         $classRules       = $this->classRules($rules, $skippedRuleKeys);
-        $ruleSkipMatchers = $this->ruleSkipMatchers($classRules, $ruleSkipPaths);
+        $ruleSkipMatchers = $this->ruleSkipMatchers($classRules, $globalSkipPaths, $ruleSkipPaths);
 
         $projectRuleViolations = [];
         $fileAnalysisRules     = [];
@@ -106,7 +107,7 @@ final readonly class Analyser
                 continue;
             }
 
-            $projectRuleSkipPaths = $ruleSkipPaths[$key] ?? [];
+            $projectRuleSkipPaths = $this->mergedSkipPaths($globalSkipPaths, $ruleSkipPaths[$key] ?? []);
 
             if ($rule instanceof MultipleProjectRuleViolationInterface) {
                 $projectRuleViolations[$key] = $this->withoutSkippedProjectViolations(
@@ -147,7 +148,7 @@ final readonly class Analyser
                 $this->basePath,
                 $architecture,
                 $fileAnalysisProvider,
-                $ruleSkipPaths[$key] ?? [],
+                $this->mergedSkipPaths($globalSkipPaths, $ruleSkipPaths[$key] ?? []),
             );
         }
 
@@ -178,7 +179,7 @@ final readonly class Analyser
         // violations so report ordering remains class rules before ruleset.
         $ruleset                    = $this->expandRuleset($architecture->getRuleset());
         $classViolationSkips        = $architecture->getClassViolationSkips();
-        $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
+        $rulesetSkipPaths           = $this->mergedSkipPaths($globalSkipPaths, $architecture->getRulesetSkipPaths());
         $rulesetSkipMatchers        = $this->compileSkipMatchers($rulesetSkipPaths);
         $rulesetViolationCollection = new RuleViolationCollection();
         $hasRuleset                 = $ruleset !== [];
@@ -450,18 +451,39 @@ final readonly class Analyser
 
     /**
      * @param array<string, RuleInterface> $classRules
+     * @param list<string>                 $globalSkipPaths
      * @param array<string, list<string>>  $ruleSkipPaths
      * @return array<string, array{paths: list<string>, patterns: list<string>}>
      */
-    private function ruleSkipMatchers(array $classRules, array $ruleSkipPaths): array
+    private function ruleSkipMatchers(array $classRules, array $globalSkipPaths, array $ruleSkipPaths): array
     {
         $ruleSkipMatchers = [];
 
         foreach (array_keys($classRules) as $key) {
-            $ruleSkipMatchers[$key] = $this->compileSkipMatchers($ruleSkipPaths[$key] ?? []);
+            $ruleSkipMatchers[$key] = $this->compileSkipMatchers(
+                $this->mergedSkipPaths($globalSkipPaths, $ruleSkipPaths[$key] ?? [])
+            );
         }
 
         return $ruleSkipMatchers;
+    }
+
+    /**
+     * @param list<string> $globalSkipPaths
+     * @param list<string> $ruleSkipPaths
+     * @return list<string>
+     */
+    private function mergedSkipPaths(array $globalSkipPaths, array $ruleSkipPaths): array
+    {
+        if ($globalSkipPaths === []) {
+            return $ruleSkipPaths;
+        }
+
+        if ($ruleSkipPaths === []) {
+            return $globalSkipPaths;
+        }
+
+        return array_values(array_unique([...$globalSkipPaths, ...$ruleSkipPaths]));
     }
 
     /**
@@ -941,6 +963,7 @@ final readonly class Analyser
     private function shouldAnalyseComposerJson(Architecture $architecture): bool
     {
         $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
+        $globalSkipPaths = $architecture->getSkipPaths();
         $ruleSkipPaths   = $architecture->getRuleSkipPaths();
 
         foreach ($architecture->getRules() as $key => $rule) {
@@ -952,7 +975,11 @@ final readonly class Analyser
                 continue;
             }
 
-            if ($this->isComposerJsonSkippedByRule($ruleSkipPaths[$key] ?? [])) {
+            if (
+                $this->isComposerJsonSkippedByRule(
+                    $this->mergedSkipPaths($globalSkipPaths, $ruleSkipPaths[$key] ?? [])
+                )
+            ) {
                 continue;
             }
 

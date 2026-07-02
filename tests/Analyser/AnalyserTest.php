@@ -274,6 +274,22 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule(Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER));
     }
 
+    public function testAnalyserSkipsComposerProjectRuleWithGlobalComposerJsonSkip(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR4(sourcePaths: ['src/', 'tests/']))
+            ->skip(['composer.json']);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule(Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER));
+    }
+
     public function testAnalyserSkipPathOnProjectRuleSuppressesViolations(): void
     {
         $basePath = $this->makeTempProject([
@@ -293,6 +309,21 @@ final class AnalyserTest extends TestCase
         $violations = $ruleViolationCollection->forRule(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS);
         $this->assertCount(1, $violations);
         $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($violations[0]->file));
+    }
+
+    public function testAnalyserAppliesGlobalSkipPathsToFileProjectRules(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Fixtures/Bad.php' => '<? echo "x";',
+        ]);
+
+        $architecture = Architecture::define()
+            ->skip(['src/Fixtures/'])
+            ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('psr1.php_tags'));
     }
 
     public function testAnalyserPsr1RuleFindsViolationsWithAbsoluteSourcePath(): void
@@ -2370,6 +2401,48 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $violations);
         $this->assertStringContainsString('App\\Database\\QueryBuilder', $violations[0]->message);
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+    }
+
+    public function testAnalyserRulesetSkipPathsForRulesetDoesNotSuppressClassRules(): void
+    {
+        $basePath = $this->makeTempProject([
+            'tests/HTTP/RequestTest.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                class RequestTest
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => [],
+            ])
+            ->skipPathsForRuleset(['*tests*'])
+            ->rule('http.must_be_final', new MustBeFinalRule('HTTP'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/', 'tests/']);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+
+        $violations = $ruleViolationCollection->forRule('http.must_be_final');
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/tests/HTTP/RequestTest.php', $this->normalisePath($violations[0]->file));
     }
 
     public function testRulesetPlusLayerSyntaxExpandsAllowedLayers(): void
