@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\Fixer\JsonRecast\ObjectItemNode;
 
+use Boundwize\JsonRecast\Attribute\NodeAttributes;
 use Boundwize\JsonRecast\Node\ArrayItemNode;
 use Boundwize\JsonRecast\Node\ArrayNode;
 use Boundwize\JsonRecast\Node\ObjectItemNode;
@@ -42,7 +43,7 @@ final class RemoveMissingPsr4PathVisitorTest extends TestCase
         ])));
     }
 
-    public function testChangedContainerPathKeysIncludeSegmentValueWhenLengthsMatch(): void
+    public function testLeaveNodeUsesOriginalTextToRemoveOnlyArraysThatBecameEmpty(): void
     {
         $removeMissingPsr4PathVisitor = new RemoveMissingPsr4PathVisitor('.');
         $nodeJsonPath                 = new NodeJsonPath([
@@ -62,6 +63,9 @@ final class RemoveMissingPsr4PathVisitorTest extends TestCase
 
         $removedAppArray = new ArrayNode([]);
         $keptFooArray    = new ArrayNode([]);
+
+        $removedAppArray->setAttribute(NodeAttributes::ORIGINAL_TEXT, '["missing/"]');
+        $keptFooArray->setAttribute(NodeAttributes::ORIGINAL_TEXT, '[]');
 
         $removeMissingPsr4PathVisitor->leaveNode($removedAppArray, new NodeJsonPath([
             NodeJsonPathSegment::objectKey('autoload'),

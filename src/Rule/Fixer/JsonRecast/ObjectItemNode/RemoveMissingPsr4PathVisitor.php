@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\JsonRecast\ObjectItemNode;
 
+use Boundwize\JsonRecast\Attribute\NodeAttributes;
 use Boundwize\JsonRecast\Node\ArrayItemNode;
 use Boundwize\JsonRecast\Node\ArrayNode;
 use Boundwize\JsonRecast\Node\NodeJson;
@@ -15,22 +16,18 @@ use Boundwize\JsonRecast\NodeVisitor\NodeJsonVisitor;
 use Boundwize\JsonRecast\NodeVisitor\NodeJsonVisitorAbstract;
 use Boundwize\StructArmed\Util\Path;
 
-use function array_key_exists;
 use function array_slice;
 use function in_array;
+use function is_array;
 use function is_dir;
-use function strlen;
+use function is_string;
+use function json_decode;
 use function trim;
 
 final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 {
-    private const CHILD_CHANGED = 'child_changed';
-
     /** @var list<string> */
     private const AUTOLOAD_SECTIONS = ['autoload', 'autoload-dev'];
-
-    /** @var array<string, true> */
-    private array $changedContainerPathKeys = [];
 
     public function __construct(
         private readonly string $basePath,
@@ -44,8 +41,6 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
                 $nodeJson->value instanceof StringNode
                 && ! $this->directoryExists($nodeJson->value->value)
             ) {
-                $this->markContainerChanged($nodeJsonPath);
-
                 return NodeJsonVisitor::REMOVE_NODE;
             }
 
@@ -60,19 +55,11 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
             return null;
         }
 
-        $this->markContainerChanged($this->parentPath($nodeJsonPath));
-
         return NodeJsonVisitor::REMOVE_NODE;
     }
 
     public function leaveNode(NodeJson $nodeJson, NodeJsonPath $nodeJsonPath): null|int
     {
-        if ($nodeJson instanceof ObjectNode || $nodeJson instanceof ArrayNode) {
-            $this->flagChangedContainer($nodeJson, $nodeJsonPath);
-
-            return null;
-        }
-
         if (! $nodeJson instanceof ObjectItemNode) {
             return null;
         }
@@ -80,13 +67,10 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
         if ($this->isPsr4Section($nodeJson, $nodeJsonPath)) {
             if (
                 ! $nodeJson->value instanceof ObjectNode
-                || $nodeJson->value->items !== []
-                || ! $this->hasChangedChild($nodeJson->value)
+                || ! $this->becameEmpty($nodeJson->value)
             ) {
                 return null;
             }
-
-            $this->markContainerChanged($nodeJsonPath);
 
             return NodeJsonVisitor::REMOVE_NODE;
         }
@@ -101,13 +85,10 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 
         if (
             ! $nodeJson->value instanceof ArrayNode
-            || $nodeJson->value->items !== []
-            || ! $this->hasChangedChild($nodeJson->value)
+            || ! $this->becameEmpty($nodeJson->value)
         ) {
             return null;
         }
-
-        $this->markContainerChanged($nodeJsonPath);
 
         return NodeJsonVisitor::REMOVE_NODE;
     }
@@ -123,8 +104,7 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
         return $nodeJsonPath->isRoot()
             && $this->isComposerAutoloadKey($objectItemNode->key->value)
             && $objectItemNode->value instanceof ObjectNode
-            && $objectItemNode->value->items === []
-            && $this->hasChangedChild($objectItemNode->value);
+            && $this->becameEmpty($objectItemNode->value);
     }
 
     private function isPsr4Mapping(NodeJsonPath $nodeJsonPath): bool
@@ -165,39 +145,25 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
         return is_dir(Path::resolve(Path::normalise(trim($path)), $this->basePath));
     }
 
-    private function markContainerChanged(NodeJsonPath $nodeJsonPath): void
+    private function becameEmpty(ObjectNode|ArrayNode $nodeJson): bool
     {
-        $this->changedContainerPathKeys[$this->pathKey($nodeJsonPath)] = true;
-    }
-
-    private function flagChangedContainer(NodeJson $nodeJson, NodeJsonPath $nodeJsonPath): void
-    {
-        if (! array_key_exists($this->pathKey($nodeJsonPath), $this->changedContainerPathKeys)) {
-            return;
+        if ($nodeJson->items !== []) {
+            return false;
         }
 
-        $nodeJson->setAttribute(self::CHILD_CHANGED, true);
-    }
+        $originalText = $nodeJson->getAttribute(NodeAttributes::ORIGINAL_TEXT);
 
-    private function hasChangedChild(NodeJson $nodeJson): bool
-    {
-        return $nodeJson->getAttribute(self::CHILD_CHANGED) === true;
+        if (! is_string($originalText)) {
+            return false;
+        }
+
+        $decodedValue = json_decode($originalText, true);
+
+        return is_array($decodedValue) && $decodedValue !== [];
     }
 
     private function parentPath(NodeJsonPath $nodeJsonPath): NodeJsonPath
     {
         return new NodeJsonPath(array_slice($nodeJsonPath->segments(), 0, -1));
-    }
-
-    private function pathKey(NodeJsonPath $nodeJsonPath): string
-    {
-        $key = '';
-
-        foreach ($nodeJsonPath->segments() as $nodeJsonPathSegment) {
-            $value = (string) $nodeJsonPathSegment->value;
-            $key  .= ($nodeJsonPathSegment->isObjectKey() ? 'o' : 'a') . strlen($value) . ':' . $value;
-        }
-
-        return $key;
     }
 }
