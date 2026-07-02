@@ -274,6 +274,22 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule(Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER));
     }
 
+    public function testAnalyserSkipsComposerProjectRuleWithGlobalComposerJsonSkip(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR4(sourcePaths: ['src/', 'tests/']))
+            ->skip(['composer.json']);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule(Psr4Preset::SOURCE_PATHS_MUST_BE_IN_COMPOSER));
+    }
+
     public function testAnalyserSkipPathOnProjectRuleSuppressesViolations(): void
     {
         $basePath = $this->makeTempProject([
@@ -293,6 +309,21 @@ final class AnalyserTest extends TestCase
         $violations = $ruleViolationCollection->forRule(Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS);
         $this->assertCount(1, $violations);
         $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($violations[0]->file));
+    }
+
+    public function testAnalyserAppliesGlobalSkipPathsToFileProjectRules(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Fixtures/Bad.php' => '<? echo "x";',
+        ]);
+
+        $architecture = Architecture::define()
+            ->skip(['src/Fixtures/'])
+            ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('psr1.php_tags'));
     }
 
     public function testAnalyserPsr1RuleFindsViolationsWithAbsoluteSourcePath(): void
