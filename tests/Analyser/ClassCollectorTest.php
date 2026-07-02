@@ -607,6 +607,38 @@ PHP);
         $this->assertNotContains('App\Infrastructure\Service', $nodes[1]->dependencies);
     }
 
+    public function testDoesNotShareNamespaceImportsOrFullyQualifiedDependenciesAcrossNamespaceBlocks(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+<?php
+
+namespace App\First {
+    use App\Infrastructure;
+
+    final class First
+    {
+        public function __construct(
+            private Infrastructure\Service $service,
+            private \App\Infrastructure\Repository $repository,
+        ) {
+        }
+    }
+}
+
+namespace App\Second {
+    final class Second {}
+}
+PHP);
+
+        $this->assertCount(2, $nodes);
+        $this->assertContains('App\Infrastructure', $nodes[0]->dependencies);
+        $this->assertContains('App\Infrastructure\Service', $nodes[0]->dependencies);
+        $this->assertContains('App\Infrastructure\Repository', $nodes[0]->dependencies);
+        $this->assertNotContains('App\Infrastructure', $nodes[1]->dependencies);
+        $this->assertNotContains('App\Infrastructure\Service', $nodes[1]->dependencies);
+        $this->assertNotContains('App\Infrastructure\Repository', $nodes[1]->dependencies);
+    }
+
     /**
      * @return iterable<string, array{string, list<string>}>
      */
