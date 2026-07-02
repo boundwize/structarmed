@@ -29,7 +29,7 @@
     "require": {
         "php": "^8.2",
         "composer-runtime-api": "^2.0",
-        "boundwize/jsonrecast": "^0.1",
+        "boundwize/jsonrecast": ">=0.1 <1.0",
         "fidry/cpu-core-counter": "^1.3",
         "nikic/php-parser": "^5.7"
     },
