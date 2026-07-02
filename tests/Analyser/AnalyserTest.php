@@ -2403,6 +2403,48 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
     }
 
+    public function testAnalyserRulesetSkipPathsForRulesetDoesNotSuppressClassRules(): void
+    {
+        $basePath = $this->makeTempProject([
+            'tests/HTTP/RequestTest.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                class RequestTest
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => [],
+            ])
+            ->skipPathsForRuleset(['*tests*'])
+            ->rule('http.must_be_final', new MustBeFinalRule('HTTP'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/', 'tests/']);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+
+        $violations = $ruleViolationCollection->forRule('http.must_be_final');
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/tests/HTTP/RequestTest.php', $this->normalisePath($violations[0]->file));
+    }
+
     public function testRulesetPlusLayerSyntaxExpandsAllowedLayers(): void
     {
         $basePath = $this->makeTempProject([
