@@ -88,5 +88,10 @@ final class RemoveMissingPsr4PathVisitorTest extends TestCase
             new ObjectItemNode(new StringNode('Foo\\'), $keptFooArray),
             $nodeJsonPath
         ));
+
+        $this->assertNull($removeMissingPsr4PathVisitor->leaveNode(
+            new ObjectItemNode(new StringNode('Bar\\'), new ArrayNode([])),
+            $nodeJsonPath
+        ));
     }
 }
