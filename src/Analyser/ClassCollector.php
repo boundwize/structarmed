@@ -41,6 +41,7 @@ use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\GroupUse;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Interface_;
+use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\Node\Stmt\TraitUse;
@@ -49,7 +50,6 @@ use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 
-use function array_merge;
 use function array_pop;
 use function array_unique;
 use function array_values;
@@ -78,8 +78,8 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private string $currentFile = '';
 
-    /** @var string[] */
-    private array $fileUses = [];
+    /** @var list<string> */
+    private array $currentNamespaceUses = [];
 
     /** @var ClassLike[] */
     private array $fileClassLikes = [];
@@ -107,7 +107,7 @@ final class ClassCollector extends NodeVisitorAbstract
     public function setCurrentFile(string $file): void
     {
         $this->currentFile             = $file;
-        $this->fileUses                = [];
+        $this->currentNamespaceUses    = [];
         $this->fileClassLikes          = [];
         $this->fileFunctions           = [];
         $this->classLikeAnalysis       = [];
@@ -124,9 +124,13 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function enterNode(Node $node): null
     {
+        if ($node instanceof Namespace_) {
+            $this->currentNamespaceUses = [];
+        }
+
         if ($node instanceof Use_) {
             foreach ($node->uses as $use) {
-                $this->fileUses[] = $use->name->toString();
+                $this->currentNamespaceUses[] = $use->name->toString();
             }
         }
 
@@ -134,7 +138,7 @@ final class ClassCollector extends NodeVisitorAbstract
             $prefix = $node->prefix->toString();
 
             foreach ($node->uses as $use) {
-                $this->fileUses[] = $prefix . '\\' . $use->name->toString();
+                $this->currentNamespaceUses[] = $prefix . '\\' . $use->name->toString();
             }
         }
 
@@ -195,6 +199,8 @@ final class ClassCollector extends NodeVisitorAbstract
     {
         $classLikeId       = spl_object_id($classLike);
         $classLikeAnalysis = new ClassLikeAnalysis();
+
+        $classLikeAnalysis->dependencies = $this->currentNamespaceUses;
 
         $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
         $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
@@ -481,10 +487,7 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         return [
-            'dependencies'         => array_values(array_unique(array_merge(
-                $this->fileUses,
-                $analysis->dependencies
-            ))),
+            'dependencies'         => array_values(array_unique($analysis->dependencies)),
             'functionCalls'        => array_values(array_unique($functionCalls)),
             'superglobals'         => array_values(array_unique($analysis->superglobals)),
             'languageConstructs'   => array_values(array_unique($analysis->languageConstructs)),

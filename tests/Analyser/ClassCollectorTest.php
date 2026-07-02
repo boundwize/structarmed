@@ -586,6 +586,27 @@ PHP;
         $this->assertContains('App\Domain\Order', $classNode->dependencies);
     }
 
+    public function testDoesNotShareImportsAcrossNamespaceBlocks(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+<?php
+
+namespace App\First {
+    use App\Infrastructure\Service;
+
+    final class First {}
+}
+
+namespace App\Second {
+    final class Second {}
+}
+PHP);
+
+        $this->assertCount(2, $nodes);
+        $this->assertContains('App\Infrastructure\Service', $nodes[0]->dependencies);
+        $this->assertNotContains('App\Infrastructure\Service', $nodes[1]->dependencies);
+    }
+
     /**
      * @return iterable<string, array{string, list<string>}>
      */
