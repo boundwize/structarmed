@@ -50,6 +50,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Wait for artifact availability
+        run: sleep 60
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
