@@ -22,7 +22,7 @@ final readonly class MustBeFinalRule extends AbstractPhpParserFixableRule implem
 
     public function appliesTo(ClassNode $classNode): bool
     {
-        if (! $classNode->isClass()) {
+        if (! $classNode->isClass() || $classNode->isAbstract) {
             return false;
         }
 

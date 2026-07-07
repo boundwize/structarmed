@@ -21,6 +21,7 @@ final class MustBeFinalRuleTest extends TestCase
         string $className = 'App\\Domain\\Entities\\OrderEntity',
         string $layer = 'Domain',
         bool $isFinal = false,
+        bool $isAbstract = false,
         bool $isInterface = false,
         bool $isTrait = false,
         bool $isEnum = false,
@@ -31,7 +32,7 @@ final class MustBeFinalRuleTest extends TestCase
             line:       1,
             layer:      $layer,
             extends:    null,
-            isAbstract: false,
+            isAbstract: $isAbstract,
             isFinal:    $isFinal,
             isInterface: $isInterface,
             isReadonly: false,
@@ -94,6 +95,14 @@ final class MustBeFinalRuleTest extends TestCase
     {
         $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
         $classNode       = $this->makeNode(isInterface: true);
+
+        $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
+    }
+
+    public function testDoesNotApplyToAbstractClasses(): void
+    {
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode(isAbstract: true);
 
         $this->assertFalse($mustBeFinalRule->appliesTo($classNode));
     }
