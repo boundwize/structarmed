@@ -234,16 +234,7 @@ final class FileAnalysisProvider
         $sideEffectLine  = 1;
 
         foreach ($nodes as $node) {
-            if ($node instanceof Namespace_) {
-                $state           = $this->fileState($node->stmts);
-                $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
-                $hasSideEffects  = $hasSideEffects || $state['hasSideEffects'];
-                $sideEffectLine  = $state['hasSideEffects'] ? $state['sideEffectLine'] : $sideEffectLine;
-
-                continue;
-            }
-
-            if ($node instanceof Declare_ && $node->stmts !== null) {
+            if (($node instanceof Namespace_ || $node instanceof Declare_) && $node->stmts !== null) {
                 $state           = $this->fileState($node->stmts);
                 $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
                 $hasSideEffects  = $hasSideEffects || $state['hasSideEffects'];
