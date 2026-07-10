@@ -9,6 +9,7 @@ use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassLike;
+use PhpParser\Node\Stmt\Const_;
 use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Else_;
 use PhpParser\Node\Stmt\Function_;
@@ -270,7 +271,8 @@ final class FileAnalysisProvider
     private function isSymbolDeclaration(Stmt $stmt): bool
     {
         return $stmt instanceof ClassLike
-            || $stmt instanceof Function_;
+            || $stmt instanceof Function_
+            || $stmt instanceof Const_;
     }
 
     private function isNeutralStatement(Stmt $stmt): bool

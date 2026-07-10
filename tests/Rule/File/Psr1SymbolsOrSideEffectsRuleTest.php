@@ -117,6 +117,38 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
+    public function testPassesFileWithNamespaceConstantAndClass(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+
+                namespace App;
+
+                const VERSION = '1.0';
+
+                final class Foo {}
+                PHP
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertSame([], $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testViolatesConditionalSideEffectNextToSymbol(): void
     {
         $basePath = $this->makeTempDir();
