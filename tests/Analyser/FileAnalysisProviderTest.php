@@ -144,6 +144,24 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertFalse($fileAnalysis->hasSideEffects);
     }
 
+    public function testTreatsNamespaceConstantAsSymbolDeclaration(): void
+    {
+        $file = $this->source(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            const VERSION = '1.0';
+
+            final class Foo {}
+            PHP);
+
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($file);
+
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertFalse($fileAnalysis->hasSideEffects);
+    }
+
     public function testRejectsConditionalDeclarationsWithBranchesOrSideEffects(): void
     {
         $elseIfFile = $this->source(<<<'PHP'
