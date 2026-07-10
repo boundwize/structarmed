@@ -69,6 +69,31 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
+    public function testViolatesSideEffectInsideDeclareBlockNextToSymbol(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                "<?php\n\ndeclare(ticks=1) {\n    echo 'side effect';\n}\n\nfinal class Foo {}\n"
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(4, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testPassesParseErrorsAndFilesWithOnlySideEffects(): void
     {
         $basePath = $this->makeTempDir();

@@ -162,6 +162,25 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertFalse($fileAnalysis->hasSideEffects);
     }
 
+    public function testDetectsSideEffectsInsideDeclareBlock(): void
+    {
+        $file = $this->source(<<<'PHP'
+            <?php
+
+            declare(ticks=1) {
+                echo 'side effect';
+            }
+
+            final class Foo {}
+            PHP);
+
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($file);
+
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertTrue($fileAnalysis->hasSideEffects);
+        $this->assertSame(4, $fileAnalysis->sideEffectLine);
+    }
+
     public function testRejectsConditionalDeclarationsWithBranchesOrSideEffects(): void
     {
         $elseIfFile = $this->source(<<<'PHP'

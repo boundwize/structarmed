@@ -243,6 +243,15 @@ final class FileAnalysisProvider
                 continue;
             }
 
+            if ($node instanceof Declare_ && $node->stmts !== null) {
+                $state           = $this->fileState($node->stmts);
+                $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
+                $hasSideEffects  = $hasSideEffects || $state['hasSideEffects'];
+                $sideEffectLine  = $state['hasSideEffects'] ? $state['sideEffectLine'] : $sideEffectLine;
+
+                continue;
+            }
+
             if ($this->isSymbolDeclaration($node)) {
                 $declaresSymbols = true;
                 continue;
