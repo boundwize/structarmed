@@ -53,6 +53,44 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testViolatesAssignmentUsingShortOpenTag(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<? $value = 1; ?>');
+
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(1, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testViolatesCommentPrefixedShortOpenTag(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<? /* comment */ echo 'x'; ?>");
+
+            $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(1, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testPassesLongAndEchoTags(): void
     {
         $basePath = $this->makeTempDir();
