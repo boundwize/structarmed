@@ -94,6 +94,7 @@ final class FileAnalysisProviderTest extends TestCase
         yield 'invalid UTF-8' => ["<?php echo \"\xB1\";", false, false, null];
         yield 'short tag' => ['<? echo "short";', false, true, 1];
         yield 'uppercase tag' => ['<?PHP echo "upper";', false, true, 1];
+        yield 'PHP tag without required whitespace' => ['<?php?>', false, true, 1];
         yield 'valid tag' => ['<?php echo "valid";', false, true, null];
         yield 'echo tag' => ['<?= "echo";', false, true, null];
         yield 'XML declaration' => ['<?xml version="1.0"?>', false, true, null];

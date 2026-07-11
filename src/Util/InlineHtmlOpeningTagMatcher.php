@@ -16,7 +16,6 @@ final class InlineHtmlOpeningTagMatcher
 {
     /** @var list<string> */
     private const ALLOWED_TAGS = [
-        'php',
         'xml',
         'xml-stylesheet',
     ];
