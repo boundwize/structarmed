@@ -16,6 +16,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
+use function escapeshellarg;
+use function exec;
 use function file_get_contents;
 use function file_put_contents;
 use function mkdir;
@@ -29,6 +31,7 @@ use function sys_get_temp_dir;
 use function unlink;
 
 use const DIRECTORY_SEPARATOR;
+use const PHP_BINARY;
 
 #[CoversClass(PhpFileFinder::class)]
 #[CoversClass(Psr1PhpTagsRule::class)]
@@ -46,6 +49,42 @@ final class Psr1PhpTagsRuleTest extends TestCase
             $violations = (new Psr1PhpTagsRule(['src/']))->evaluateProjectAll($basePath, Architecture::define());
 
             $this->assertCount(1, $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testViolatesEchoImmediatelyAfterShortOpenTag(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', "<?echo 'test';?>");
+            $command = escapeshellarg(PHP_BINARY)
+                . ' -d short_open_tag=1 '
+                . escapeshellarg($basePath . '/src/Foo.php');
+
+            exec($command, $output, $exitCode);
+
+            $this->assertSame(0, $exitCode);
+            $this->assertSame(['test'], $output);
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violations      = $psr1PhpTagsRule->evaluateProjectAll($basePath, Architecture::define());
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(1, $violations[0]->line);
+            $this->assertTrue($psr1PhpTagsRule->fix($violations[0]));
+            $this->assertSame("<?php echo 'test';?>", file_get_contents($basePath . '/src/Foo.php'));
+
+            $output = [];
+            exec($command, $output, $exitCode);
+
+            $this->assertSame(0, $exitCode);
+            $this->assertSame(['test'], $output);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
