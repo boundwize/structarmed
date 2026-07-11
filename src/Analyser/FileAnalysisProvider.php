@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\Util\Path;
+use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\Node\Stmt;
@@ -33,7 +34,6 @@ use function substr_count;
 use function token_get_all;
 use function trim;
 
-use const PREG_OFFSET_CAPTURE;
 use const T_INLINE_HTML;
 use const T_OPEN_TAG;
 use const T_OPEN_TAG_WITH_ECHO;
@@ -221,12 +221,12 @@ final class FileAnalysisProvider
 
         if (
             $id !== T_INLINE_HTML
-            || preg_match('/<\?(?!php(?:\s|$)|=)/', $text, $matches, PREG_OFFSET_CAPTURE) !== 1
+            || ($tagOffset = InlineHtmlOpeningTagMatcher::invalidInlineHtmlTagOffset($text)) === null
         ) {
             return null;
         }
 
-        return $tokenLine + substr_count(substr($text, 0, $matches[0][1]), "\n");
+        return $tokenLine + substr_count(substr($text, 0, $tagOffset), "\n");
     }
 
     private function contents(string $file): string

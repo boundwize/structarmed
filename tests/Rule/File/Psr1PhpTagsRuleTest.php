@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,6 +32,7 @@ use const DIRECTORY_SEPARATOR;
 
 #[CoversClass(PhpFileFinder::class)]
 #[CoversClass(Psr1PhpTagsRule::class)]
+#[CoversClass(InlineHtmlOpeningTagMatcher::class)]
 final class Psr1PhpTagsRuleTest extends TestCase
 {
     public function testViolatesShortOpenTag(): void
@@ -64,6 +66,42 @@ final class Psr1PhpTagsRuleTest extends TestCase
             $this->assertSame([], $violations);
         } finally {
             unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testPassesXmlProcessingInstructionsInInlineHtml(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            $contents = <<<'PHP'
+                <?php
+
+                header('Content-Type: application/xml');
+
+                ?>
+                <?xml version="1.0" encoding="UTF-8"?>
+                <?xml-stylesheet type="text/xsl" href="sitemap.xsl"?>
+                <urlset />
+                PHP;
+            file_put_contents($basePath . '/src/sitemap.php', $contents);
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violations      = $psr1PhpTagsRule->evaluateProjectAll($basePath, Architecture::define());
+
+            $this->assertSame([], $violations);
+            $this->assertFalse($psr1PhpTagsRule->fix(new RuleViolation(
+                message:   'File must use only valid PHP tags',
+                file:      $basePath . '/src/sitemap.php',
+                line:      6,
+                className: '',
+            )));
+            $this->assertSame($contents, file_get_contents($basePath . '/src/sitemap.php'));
+        } finally {
+            unlink($basePath . '/src/sitemap.php');
             rmdir($basePath . '/src');
             rmdir($basePath);
         }
