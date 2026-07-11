@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
-use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
+use Boundwize\StructArmed\Util\Path;
 use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\Node\Stmt;
