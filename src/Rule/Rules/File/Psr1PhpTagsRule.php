@@ -157,7 +157,7 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
                 return [
                     'offset' => $tagOffset,
                     'length' => 2,
-                    'text'   => '<?php',
+                    'text'   => preg_match('/^\s/', substr($text, $tagOffset + 2)) === 1 ? '<?php' : '<?php ',
                 ];
             }
 
