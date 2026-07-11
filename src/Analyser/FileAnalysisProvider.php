@@ -28,9 +28,12 @@ use function file_get_contents;
 use function is_array;
 use function preg_match;
 use function str_starts_with;
+use function substr;
+use function substr_count;
 use function token_get_all;
 use function trim;
 
+use const PREG_OFFSET_CAPTURE;
 use const T_INLINE_HTML;
 use const T_OPEN_TAG;
 use const T_OPEN_TAG_WITH_ECHO;
@@ -180,8 +183,10 @@ final class FileAnalysisProvider
                 continue;
             }
 
-            if ($this->isInvalidPhpTag($token[0], $token[1])) {
-                return $this->invalidPhpTagLines[$file] = $token[2];
+            $invalidLine = $this->invalidPhpTagLineForToken($token[0], $token[1], $token[2]);
+
+            if ($invalidLine !== null) {
+                return $this->invalidPhpTagLines[$file] = $invalidLine;
             }
         }
 
@@ -194,26 +199,34 @@ final class FileAnalysisProvider
     private function invalidPhpTagLineFromTokens(array $tokens): ?int
     {
         foreach ($tokens as $token) {
-            if ($this->isInvalidPhpTag($token->id, $token->text)) {
-                return $token->line;
+            $invalidLine = $this->invalidPhpTagLineForToken($token->id, $token->text, $token->line);
+
+            if ($invalidLine !== null) {
+                return $invalidLine;
             }
         }
 
         return null;
     }
 
-    private function isInvalidPhpTag(int $id, string $text): bool
+    private function invalidPhpTagLineForToken(int $id, string $text, int $tokenLine): ?int
     {
         if ($id === T_OPEN_TAG_WITH_ECHO) {
-            return false;
+            return null;
         }
 
-        if ($id === T_OPEN_TAG && preg_match('/^<\?php(?:\s|$)/', $text) === 1) {
-            return false;
+        if ($id === T_OPEN_TAG) {
+            return preg_match('/^<\?php(?:\s|$)/', $text) === 1 ? null : $tokenLine;
         }
 
-        return $id === T_OPEN_TAG
-            || ($id === T_INLINE_HTML && preg_match('/<\?(?!php(?:\s|$)|=)/', $text) === 1);
+        if (
+            $id !== T_INLINE_HTML
+            || preg_match('/<\?(?!php(?:\s|$)|=)/', $text, $matches, PREG_OFFSET_CAPTURE) !== 1
+        ) {
+            return null;
+        }
+
+        return $tokenLine + substr_count(substr($text, 0, $matches[0][1]), "\n");
     }
 
     private function contents(string $file): string

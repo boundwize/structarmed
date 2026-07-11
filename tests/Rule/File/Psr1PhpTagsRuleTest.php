@@ -258,6 +258,34 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testReportsAndFixesShortTagAfterMultilineInlineHtml(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/template.php',
+                "<html>\n<body>\n<? echo \"Hello\"; ?>"
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame(3, $violation->line);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                "<html>\n<body>\n<?php echo \"Hello\"; ?>",
+                file_get_contents($basePath . '/src/template.php')
+            );
+        } finally {
+            unlink($basePath . '/src/template.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testFixesUpperCaseLongOpenTag(): void
     {
         $basePath = $this->makeTempDir();
