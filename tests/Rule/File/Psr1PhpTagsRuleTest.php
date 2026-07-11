@@ -258,6 +258,114 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testReportsAndFixesShortTagAfterMultilineInlineHtml(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/template.php',
+                "<html>\n<body>\n<? echo \"Hello\"; ?>"
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame(3, $violation->line);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                "<html>\n<body>\n<?php echo \"Hello\"; ?>",
+                file_get_contents($basePath . '/src/template.php')
+            );
+        } finally {
+            unlink($basePath . '/src/template.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testReportsAndFixesShortTagWithDirectFunctionCallAfterMultilineInlineHtml(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/template.php',
+                "<html>\n<body>\n<? some_call(); ?>"
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame(3, $violation->line);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                "<html>\n<body>\n<?php some_call(); ?>",
+                file_get_contents($basePath . '/src/template.php')
+            );
+        } finally {
+            unlink($basePath . '/src/template.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testReportsAndFixesEmptyShortTagAfterMultilineInlineHtml(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/template.php',
+                "<html>\n<body>\n<? ?>"
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame(3, $violation->line);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                "<html>\n<body>\n<?php ?>",
+                file_get_contents($basePath . '/src/template.php')
+            );
+        } finally {
+            unlink($basePath . '/src/template.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testIgnoresShortTagExampleInsideString(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            $contents = "<?php\n\necho \"this is example of invalid code: <? echo \\\"test\\\"; ?>\";";
+            file_put_contents(
+                $basePath . '/src/template.php',
+                $contents
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame($contents, file_get_contents($basePath . '/src/template.php'));
+        } finally {
+            unlink($basePath . '/src/template.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testFixesUpperCaseLongOpenTag(): void
     {
         $basePath = $this->makeTempDir();
