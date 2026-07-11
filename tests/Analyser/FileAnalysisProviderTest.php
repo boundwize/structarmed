@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
+use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -14,6 +15,7 @@ use function base64_encode;
 
 #[CoversClass(FileAnalysis::class)]
 #[CoversClass(FileAnalysisProvider::class)]
+#[CoversClass(InlineHtmlOpeningTagMatcher::class)]
 final class FileAnalysisProviderTest extends TestCase
 {
     public function testAnalysesPsr1FactsAndCachesThemByFile(): void
@@ -92,8 +94,12 @@ final class FileAnalysisProviderTest extends TestCase
         yield 'invalid UTF-8' => ["<?php echo \"\xB1\";", false, false, null];
         yield 'short tag' => ['<? echo "short";', false, true, 1];
         yield 'uppercase tag' => ['<?PHP echo "upper";', false, true, 1];
+        yield 'PHP-like inline HTML' => ['<?php?>', false, true, null];
         yield 'valid tag' => ['<?php echo "valid";', false, true, null];
         yield 'echo tag' => ['<?= "echo";', false, true, null];
+        yield 'XML declaration' => ['<?xml version="1.0"?>', false, true, null];
+        yield 'XML stylesheet' => ['<?xml-stylesheet href="style.xsl"?>', false, true, null];
+        yield 'arbitrary XML processing instruction' => ['<?xml-custom value="x"?>', false, true, 1];
         yield 'plain text' => ['plain text', false, true, null];
     }
 

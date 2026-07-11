@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 
 use function file_get_contents;
 use function file_put_contents;
@@ -21,7 +22,6 @@ use function substr;
 use function substr_count;
 use function token_get_all;
 
-use const PREG_OFFSET_CAPTURE;
 use const T_INLINE_HTML;
 use const T_OPEN_TAG;
 
@@ -150,9 +150,8 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
 
         $searchOffset = 0;
 
-        while (preg_match('/<\?(?!php(?:\s|$)|=)/', $text, $matches, PREG_OFFSET_CAPTURE, $searchOffset) === 1) {
-            $tagOffset = $matches[0][1];
-            $tagLine   = $tokenLine + substr_count(substr($text, 0, $tagOffset), "\n");
+        while (($tagOffset = InlineHtmlOpeningTagMatcher::invalidInlineHtmlTagOffset($text, $searchOffset)) !== null) {
+            $tagLine = $tokenLine + substr_count(substr($text, 0, $tagOffset), "\n");
 
             if ($tagLine === $targetLine) {
                 return [
