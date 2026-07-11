@@ -342,6 +342,30 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testIgnoresShortTagExampleInsideString(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            $contents = "<?php\n\necho \"this is example of invalid code: <? echo \\\"test\\\"; ?>\";";
+            file_put_contents(
+                $basePath . '/src/template.php',
+                $contents
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame($contents, file_get_contents($basePath . '/src/template.php'));
+        } finally {
+            unlink($basePath . '/src/template.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testFixesUpperCaseLongOpenTag(): void
     {
         $basePath = $this->makeTempDir();
