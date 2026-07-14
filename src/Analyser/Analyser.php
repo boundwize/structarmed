@@ -219,13 +219,13 @@ final readonly class Analyser
                     ? $rule->evaluateAll($classNode)
                     : [$rule->evaluate($classNode)];
 
+                if ($violations === [null]) {
+                    continue;
+                }
+
                 $isFixable = $rule instanceof FixableInterface;
 
                 foreach ($violations as $violation) {
-                    if (! $violation instanceof RuleViolation) {
-                        continue;
-                    }
-
                     // Inject the rule key into the violation
                     $ruleViolationCollection->add(new RuleViolation(
                         message:   $violation->message,
