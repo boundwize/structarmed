@@ -82,6 +82,16 @@ final class MustHaveReturnTypeRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $mustHaveReturnTypeRule->evaluate($classNode));
     }
 
+    public function testIgnoresDestructor(): void
+    {
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([
+            $this->method('__destruct', hasReturnType: false),
+        ]);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mustHaveReturnTypeRule->evaluate($classNode));
+    }
+
     public function testIgnoresPrivateMethods(): void
     {
         $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');

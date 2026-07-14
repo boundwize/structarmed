@@ -45,7 +45,11 @@ final readonly class MustHaveReturnTypeRule implements MultipleRuleViolationInte
         $violations = [];
 
         foreach ($classNode->methods as $method) {
-            if (! $method->isPublic() || $method->isConstructor()) {
+            if (
+                ! $method->isPublic()
+                || $method->isConstructor()
+                || $method->isDestructor()
+            ) {
                 continue;
             }
 

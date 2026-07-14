@@ -28,4 +28,9 @@ final readonly class MethodNode
     {
         return $this->name === '__construct';
     }
+
+    public function isDestructor(): bool
+    {
+        return $this->name === '__destruct';
+    }
 }
