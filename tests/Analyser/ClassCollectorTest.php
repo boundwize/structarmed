@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\ClassCollector;
 use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
@@ -15,6 +16,8 @@ use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+
+use function array_column;
 
 #[CoversClass(ClassCollector::class)]
 #[CoversClass(ClassLikeAnalysis::class)]
@@ -171,6 +174,53 @@ final class ClassCollectorTest extends TestCase
         $this->assertCount(1, $classNode->methods);
         $this->assertTrue($classNode->methods[0]->hasReturnType);
         $this->assertSame('bar', $classNode->methods[0]->name);
+    }
+
+    public function testFiltersClassMethodsOncePerClassLike(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $classCollector         = new ClassCollector($namespaceLayerResolver);
+        $classLike              = new class ('Foo', [
+            'stmts' => [new ClassMethod('__construct'), new ClassMethod('bar')],
+        ]) extends Class_ {
+            public int $getMethodsCallCount = 0;
+
+            public function getMethods(): array
+            {
+                ++$this->getMethodsCallCount;
+
+                return parent::getMethods();
+            }
+        };
+
+        $classCollector->setCurrentFile('/fake/path/Foo.php');
+
+        (new NodeTraverser(new NameResolver(), $classCollector))->traverse([$classLike]);
+
+        $this->assertSame(1, $classLike->getMethodsCallCount);
+        $this->assertSame(
+            ['__construct', 'bar'],
+            array_column($classCollector->getNodes()[0]->methods, 'name'),
+        );
+    }
+
+    public function testMemoizesMethodsIndependentlyForSiblingClassLikesIncludingEmpty(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+            <?php
+
+            class First
+            {
+                public function one(): void {}
+                public function two(): void {}
+            }
+
+            class Second {}
+            PHP);
+
+        $this->assertCount(2, $nodes);
+        $this->assertSame(['one', 'two'], array_column($nodes[0]->methods, 'name'));
+        $this->assertSame([], $nodes[1]->methods);
     }
 
     public function testCollectsClassConstants(): void

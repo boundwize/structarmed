@@ -90,6 +90,9 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var array<int, ClassLikeAnalysis> */
     private array $classLikeAnalysis = [];
 
+    /** @var array<int, array<int, ClassMethod>> */
+    private array $classLikeMethods = [];
+
     /** @var list<ClassLikeAnalysis> */
     private array $activeClassLikeAnalyses = [];
 
@@ -111,6 +114,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->fileClassLikes          = [];
         $this->fileFunctions           = [];
         $this->classLikeAnalysis       = [];
+        $this->classLikeMethods        = [];
         $this->activeClassLikeAnalyses = [];
         $this->activeMethodIds         = [];
         $this->methodClassLikeAnalyses = [];
@@ -188,6 +192,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $this->fileClassLikes          = [];
         $this->classLikeAnalysis       = [];
+        $this->classLikeMethods        = [];
         $this->activeClassLikeAnalyses = [];
         $this->activeMethodIds         = [];
         $this->methodClassLikeAnalyses = [];
@@ -199,6 +204,7 @@ final class ClassCollector extends NodeVisitorAbstract
     {
         $classLikeId       = spl_object_id($classLike);
         $classLikeAnalysis = new ClassLikeAnalysis();
+        $classLikeMethods  = [];
 
         $classLikeAnalysis->dependencies = $this->currentNamespaceUses;
 
@@ -206,8 +212,13 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
 
         foreach ($classLike->getMethods() as $classMethod) {
-            $this->methodClassLikeAnalyses[spl_object_id($classMethod)] = $classLikeAnalysis;
+            $methodId = spl_object_id($classMethod);
+
+            $classLikeMethods[$methodId]              = $classMethod;
+            $this->methodClassLikeAnalyses[$methodId] = $classLikeAnalysis;
         }
+
+        $this->classLikeMethods[$classLikeId] = $classLikeMethods;
     }
 
     private function startMethodAnalysis(ClassMethod $classMethod): void
@@ -344,16 +355,18 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function collectClassLike(ClassLike $classLike): void
     {
-        $analysis         = $this->collectClassLikeAnalysis($classLike);
+        $classLikeId      = spl_object_id($classLike);
+        $analysis         = $this->collectClassLikeAnalysis($classLikeId);
         $className        = $this->resolveClassName($classLike);
         $layers           = $this->layerResolver->resolveAll($className, $this->currentFile);
         $layer            = $this->layerResolver->resolve($className, $this->currentFile);
-        $methods          = $this->collectMethods($classLike, $analysis['complexityByMethodId']);
+        $classLikeMethods = $this->classLikeMethods[$classLikeId];
+        $methods          = $this->collectMethods($classLikeMethods, $analysis['complexityByMethodId']);
         $implements       = $this->collectImplements($classLike);
         $interfaceExtends = $this->collectInterfaceExtends($classLike);
         $traits           = $this->collectTraits($classLike);
         $constants        = $this->collectConstants($classLike);
-        $properties       = $this->collectProperties($classLike);
+        $properties       = $this->collectProperties($classLike, $classLikeMethods);
 
         $this->nodes[] = new ClassNode(
             className:          $className,
@@ -412,9 +425,10 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
+     * @param array<int, ClassMethod> $classLikeMethods
      * @return PropertyNode[]
      */
-    private function collectProperties(ClassLike $classLike): array
+    private function collectProperties(ClassLike $classLike, array $classLikeMethods): array
     {
         $properties = [];
 
@@ -436,12 +450,12 @@ final class ClassCollector extends NodeVisitorAbstract
             }
         }
 
-        foreach ($classLike->getMethods() as $classMethod) {
-            if ($classMethod->name->toLowerString() !== '__construct') {
+        foreach ($classLikeMethods as $classLikeMethod) {
+            if ($classLikeMethod->name->toLowerString() !== '__construct') {
                 continue;
             }
 
-            foreach ($classMethod->params as $param) {
+            foreach ($classLikeMethod->params as $param) {
                 if ($param->flags === 0 || ! $param->var instanceof Variable || ! is_string($param->var->name)) {
                     continue;
                 }
@@ -477,9 +491,9 @@ final class ClassCollector extends NodeVisitorAbstract
      *     complexityByMethodId: array<int, int>
      * }
      */
-    private function collectClassLikeAnalysis(ClassLike $classLike): array
+    private function collectClassLikeAnalysis(int $classLikeId): array
     {
-        $analysis      = $this->classLikeAnalysis[spl_object_id($classLike)] ?? new ClassLikeAnalysis();
+        $analysis      = $this->classLikeAnalysis[$classLikeId] ?? new ClassLikeAnalysis();
         $functionCalls = [];
 
         foreach ($analysis->functionCallNames as $functionCallName) {
@@ -592,21 +606,22 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * @return MethodNode[]
+     * @param array<int, ClassMethod> $classLikeMethods
      * @param array<int, int> $complexityByMethodId
+     * @return MethodNode[]
      */
-    private function collectMethods(ClassLike $classLike, array $complexityByMethodId): array
+    private function collectMethods(array $classLikeMethods, array $complexityByMethodId): array
     {
         $methods = [];
 
-        foreach ($classLike->getMethods() as $classMethod) {
+        foreach ($classLikeMethods as $methodId => $classMethod) {
             $methods[] = new MethodNode(
                 name:                 (string) $classMethod->name,
                 visibility:           $this->resolveVisibilityFromFlags($classMethod->flags),
                 hasReturnType:        $classMethod->returnType !== null,
                 isStatic:             $classMethod->isStatic(),
                 paramCount:           count($classMethod->params),
-                cyclomaticComplexity: $complexityByMethodId[spl_object_id($classMethod)] ?? 1,
+                cyclomaticComplexity: $complexityByMethodId[$methodId] ?? 1,
                 lineCount:            $this->calculateMethodLineCount($classMethod),
                 hasExplicitVisibility: $this->hasExplicitVisibilityFlag($classMethod->flags),
                 line:                 $classMethod->getStartLine(),
