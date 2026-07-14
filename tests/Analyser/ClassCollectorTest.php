@@ -204,6 +204,25 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testMemoizesMethodsIndependentlyForSiblingClassLikesIncludingEmpty(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+            <?php
+
+            class First
+            {
+                public function one(): void {}
+                public function two(): void {}
+            }
+
+            class Second {}
+            PHP);
+
+        $this->assertCount(2, $nodes);
+        $this->assertSame(['one', 'two'], array_column($nodes[0]->methods, 'name'));
+        $this->assertSame([], $nodes[1]->methods);
+    }
+
     public function testCollectsClassConstants(): void
     {
         $classNode = $this->collect(
