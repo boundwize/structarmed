@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\ClassCollector;
 use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
@@ -171,6 +172,31 @@ final class ClassCollectorTest extends TestCase
         $this->assertCount(1, $classNode->methods);
         $this->assertTrue($classNode->methods[0]->hasReturnType);
         $this->assertSame('bar', $classNode->methods[0]->name);
+    }
+
+    public function testFiltersClassMethodsOncePerClassLike(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $classCollector         = new ClassCollector($namespaceLayerResolver);
+        $classLike              = new class ('Foo', [
+            'stmts' => [new ClassMethod('__construct'), new ClassMethod('bar')],
+        ]) extends Class_ {
+            public int $getMethodsCallCount = 0;
+
+            public function getMethods(): array
+            {
+                ++$this->getMethodsCallCount;
+
+                return parent::getMethods();
+            }
+        };
+
+        $classCollector->setCurrentFile('/fake/path/Foo.php');
+
+        (new NodeTraverser(new NameResolver(), $classCollector))->traverse([$classLike]);
+
+        $this->assertSame(1, $classLike->getMethodsCallCount);
+        $this->assertCount(2, $classCollector->getNodes()[0]->methods);
     }
 
     public function testCollectsClassConstants(): void
