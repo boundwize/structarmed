@@ -215,12 +215,15 @@ final readonly class Analyser
                     continue;
                 }
 
-                $violations = $rule instanceof MultipleRuleViolationInterface
-                    ? $rule->evaluateAll($classNode)
-                    : [$rule->evaluate($classNode)];
+                if ($rule instanceof MultipleRuleViolationInterface) {
+                    $violations = $rule->evaluateAll($classNode);
+                } else {
+                    $violation = $rule->evaluate($classNode);
+                    if (! $violation instanceof RuleViolation) {
+                        continue;
+                    }
 
-                if ($violations === [null]) {
-                    continue;
+                    $violations = [$violation];
                 }
 
                 $isFixable = $rule instanceof FixableInterface;
