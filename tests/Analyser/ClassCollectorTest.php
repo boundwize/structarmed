@@ -17,6 +17,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+use function array_column;
+
 #[CoversClass(ClassCollector::class)]
 #[CoversClass(ClassLikeAnalysis::class)]
 final class ClassCollectorTest extends TestCase
@@ -196,7 +198,10 @@ final class ClassCollectorTest extends TestCase
         (new NodeTraverser(new NameResolver(), $classCollector))->traverse([$classLike]);
 
         $this->assertSame(1, $classLike->getMethodsCallCount);
-        $this->assertCount(2, $classCollector->getNodes()[0]->methods);
+        $this->assertSame(
+            ['__construct', 'bar'],
+            array_column($classCollector->getNodes()[0]->methods, 'name'),
+        );
     }
 
     public function testCollectsClassConstants(): void
