@@ -7,12 +7,10 @@ namespace Boundwize\StructArmed\Analyser;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use PhpParser\Modifiers;
 use PhpParser\Node;
-use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
-use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\Empty_;
 use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\Exit_;
@@ -99,10 +97,11 @@ final class ClassCollector extends NodeVisitorAbstract
     private array $activeClassLikeAnalyses = [];
 
     /**
-     * Stack of enclosing function-like complexity scopes. Each entry is the
-     * spl_object_id of a counted ClassMethod, or null for a scope whose
-     * branches must not be counted (closure, arrow function, nested function
-     * or an unregistered method such as an anonymous class method).
+     * Stack of enclosing complexity scopes. Each entry is the spl_object_id of
+     * a counted ClassMethod, or null for a scope whose branches must not be
+     * counted (a nested named function, or an unregistered method such as an
+     * anonymous class method). Closures and arrow functions do not open a scope:
+     * their branches aggregate into the nearest enclosing method.
      *
      * @var list<int|null>
      */
@@ -167,7 +166,7 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->startMethodAnalysis($node);
         }
 
-        if ($node instanceof Closure || $node instanceof ArrowFunction || $node instanceof Function_) {
+        if ($node instanceof Function_) {
             $this->complexityScopeStack[] = null;
         }
 
@@ -178,12 +177,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function leaveNode(Node $node): null
     {
-        if (
-            $node instanceof ClassMethod
-            || $node instanceof Closure
-            || $node instanceof ArrowFunction
-            || $node instanceof Function_
-        ) {
+        if ($node instanceof ClassMethod || $node instanceof Function_) {
             array_pop($this->complexityScopeStack);
         }
 

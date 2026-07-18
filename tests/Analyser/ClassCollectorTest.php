@@ -698,6 +698,36 @@ PHP;
         $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
     }
 
+    public function testDoesNotCountMultipleIfsInsideClosureTowardEnclosingMethodComplexity(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function simple(array $list): array {
+        return array_filter($list, function ($x) {
+            if ($x < 0) {
+                return false;
+            }
+
+            if ($x > 100) {
+                return false;
+            }
+
+            if ($x === 42) {
+                return false;
+            }
+
+            return true;
+        });
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // The method body is a single linear return; all three ifs live in the closure.
+        $this->assertSame(1, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
     public function testCollectsDependencies(): void
     {
         $code      = <<<'PHP'
