@@ -11,7 +11,7 @@ final class Usage
         return <<<'TXT'
 Usage:
   structarmed --version
-  structarmed init [--preset=ddd|mvc|psr1|psr4|all]
+  structarmed init [--preset=ddd|mvc|psr1|psr12|psr15|psr4|all]
   structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php]
     [--report=console|json] [--no-progress] [--clear-cache] [--disable-parallel]
     [--fix] [--generate-baseline=structarmed-baseline.php]
