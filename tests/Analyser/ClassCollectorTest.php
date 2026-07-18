@@ -804,6 +804,32 @@ PHP;
         $this->assertContains('App\Domain\Order', $classNode->dependencies);
     }
 
+    public function testCollectsImportUsedOnlyInDocblockAsDependency(): void
+    {
+        // StructArmed does not read docblocks; it treats the `use` import itself as the
+        // dependency, so a class imported solely for a `@param`/`@return`/`@var` annotation
+        // is still collected — even though the symbol is never referenced in real code.
+        $code      = <<<'PHP'
+<?php
+namespace App\Domain;
+
+use App\Infrastructure\Persistence\OrderRepository;
+
+class Foo
+{
+    /**
+     * @param OrderRepository $repository
+     */
+    public function handle($repository): void
+    {
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertContains('App\Infrastructure\Persistence\OrderRepository', $classNode->dependencies);
+    }
+
     public function testDoesNotShareImportsAcrossNamespaceBlocks(): void
     {
         $nodes = $this->collectNodes(<<<'PHP'
