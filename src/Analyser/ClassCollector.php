@@ -7,10 +7,12 @@ namespace Boundwize\StructArmed\Analyser;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use PhpParser\Modifiers;
 use PhpParser\Node;
+use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\Empty_;
 use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\Exit_;
@@ -96,8 +98,15 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var list<ClassLikeAnalysis> */
     private array $activeClassLikeAnalyses = [];
 
-    /** @var list<int> */
-    private array $activeMethodIds = [];
+    /**
+     * Stack of enclosing function-like complexity scopes. Each entry is the
+     * spl_object_id of a counted ClassMethod, or null for a scope whose
+     * branches must not be counted (closure, arrow function, nested function
+     * or an unregistered method such as an anonymous class method).
+     *
+     * @var list<int|null>
+     */
+    private array $complexityScopeStack = [];
 
     /** @var array<int, ClassLikeAnalysis> */
     private array $methodClassLikeAnalyses = [];
@@ -116,7 +125,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->classLikeAnalysis       = [];
         $this->classLikeMethods        = [];
         $this->activeClassLikeAnalyses = [];
-        $this->activeMethodIds         = [];
+        $this->complexityScopeStack    = [];
         $this->methodClassLikeAnalyses = [];
     }
 
@@ -158,6 +167,10 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->startMethodAnalysis($node);
         }
 
+        if ($node instanceof Closure || $node instanceof ArrowFunction || $node instanceof Function_) {
+            $this->complexityScopeStack[] = null;
+        }
+
         $this->collectNodeAnalysis($node);
 
         return null;
@@ -165,8 +178,13 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function leaveNode(Node $node): null
     {
-        if ($node instanceof ClassMethod) {
-            $this->finishMethodAnalysis($node);
+        if (
+            $node instanceof ClassMethod
+            || $node instanceof Closure
+            || $node instanceof ArrowFunction
+            || $node instanceof Function_
+        ) {
+            array_pop($this->complexityScopeStack);
         }
 
         if (! $node instanceof ClassLike) {
@@ -194,7 +212,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->classLikeAnalysis       = [];
         $this->classLikeMethods        = [];
         $this->activeClassLikeAnalyses = [];
-        $this->activeMethodIds         = [];
+        $this->complexityScopeStack    = [];
         $this->methodClassLikeAnalyses = [];
 
         return null;
@@ -228,21 +246,16 @@ final class ClassCollector extends NodeVisitorAbstract
         $analysis = $this->methodClassLikeAnalyses[$methodId] ?? null;
 
         if (! $analysis instanceof ClassLikeAnalysis) {
+            // Unregistered method (e.g. one declared in an anonymous class): open
+            // an uncounted scope so its branches do not leak into an enclosing method.
+            $this->complexityScopeStack[] = null;
+
             return;
         }
 
-        $this->activeMethodIds[] = $methodId;
+        $this->complexityScopeStack[] = $methodId;
 
         $analysis->complexityByMethodId[$methodId] = 1;
-    }
-
-    private function finishMethodAnalysis(ClassMethod $classMethod): void
-    {
-        if (! isset($this->methodClassLikeAnalyses[spl_object_id($classMethod)])) {
-            return;
-        }
-
-        array_pop($this->activeMethodIds);
     }
 
     private function collectNodeAnalysis(Node $node): void
@@ -318,8 +331,10 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->addSuperglobal('$' . $node->name);
         }
 
-        if ($this->activeMethodIds !== [] && $this->isComplexityBranch($node)) {
-            foreach ($this->activeMethodIds as $activeMethodId) {
+        if ($this->complexityScopeStack !== [] && $this->isComplexityBranch($node)) {
+            $activeMethodId = $this->complexityScopeStack[count($this->complexityScopeStack) - 1];
+
+            if ($activeMethodId !== null) {
                 $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
             }
         }

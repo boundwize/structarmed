@@ -618,7 +618,60 @@ PHP;
         $classNode = $this->collect($code);
 
         // Base 1 + if + elseif = 3
-        $this->assertGreaterThanOrEqual(3, $classNode->methods[0]->cyclomaticComplexity);
+        $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testDoesNotCountNestedClosureBranchesTowardEnclosingMethodComplexity(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function simple(array $list): array {
+        return array_filter($list, function ($x) {
+            return $x > 0 && $x < 10;
+        });
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // The method body is a single linear return; the && lives in the closure.
+        $this->assertSame(1, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testDoesNotCountArrowFunctionBranchesTowardEnclosingMethodComplexity(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function simple(array $list): array {
+        return array_map(fn ($x) => $x > 0 ? 1 : 0, $list);
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertSame(1, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testCountsMethodBranchesButNotNestedClosureBranches(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function m($a, array $list): array {
+        if ($a) {
+            return array_filter($list, fn ($x) => $x > 0 && $x < 5);
+        }
+
+        return [];
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + own if = 2; the closure's && is excluded.
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
     }
 
     public function testCollectsDependencies(): void
