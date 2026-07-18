@@ -674,6 +674,30 @@ PHP;
         $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
     }
 
+    public function testCountsMethodBranchAfterAssignedClosureWithoutCountingClosureBranches(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function simple(array $list): array {
+        $data = array_filter($list, function ($x) {
+            return $x > 0 && $x < 10;
+        });
+
+        if ($data === []) {
+            return [1];
+        }
+
+        return $data;
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + own if = 2; the closure's && is excluded.
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
     public function testCollectsDependencies(): void
     {
         $code      = <<<'PHP'
