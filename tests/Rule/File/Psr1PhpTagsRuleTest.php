@@ -16,10 +16,12 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
+use function dirname;
 use function escapeshellarg;
 use function exec;
 use function file_get_contents;
 use function file_put_contents;
+use function implode;
 use function mkdir;
 use function random_bytes;
 use function realpath;
@@ -29,6 +31,7 @@ use function str_replace;
 use function symlink;
 use function sys_get_temp_dir;
 use function unlink;
+use function var_export;
 
 use const DIRECTORY_SEPARATOR;
 use const PHP_BINARY;
@@ -85,6 +88,59 @@ final class Psr1PhpTagsRuleTest extends TestCase
 
             $this->assertSame(0, $exitCode);
             $this->assertSame(['test'], $output);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testFixesShortOpenTagFollowedByCodeWhenShortOpenTagEnabled(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<?echo "hi";');
+
+            $fixedContent = $this->fixWithShortOpenTagEnabled($basePath);
+
+            // A bare `<?` short open tag tokenizes without the trailing character,
+            // so replacing it with `<?php` alone would yield `<?phpecho "hi";`.
+            $this->assertSame('<?php echo "hi";', $fixedContent);
+
+            $command = escapeshellarg(PHP_BINARY)
+                . ' -d short_open_tag=1 '
+                . escapeshellarg($basePath . '/src/Foo.php');
+            exec($command, $output, $exitCode);
+
+            $this->assertSame(0, $exitCode);
+            $this->assertSame(['hi'], $output);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testFixesShortOpenTagFollowedByVariableWhenShortOpenTagEnabled(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<?$value = 1; echo $value;');
+
+            $fixedContent = $this->fixWithShortOpenTagEnabled($basePath);
+
+            $this->assertSame('<?php $value = 1; echo $value;', $fixedContent);
+
+            $command = escapeshellarg(PHP_BINARY)
+                . ' -d short_open_tag=1 -l '
+                . escapeshellarg($basePath . '/src/Foo.php');
+            exec($command, $output, $exitCode);
+
+            $this->assertSame(0, $exitCode);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -586,5 +642,46 @@ final class Psr1PhpTagsRuleTest extends TestCase
         mkdir($path);
 
         return $path;
+    }
+
+    /**
+     * Runs the fixer in a subprocess with short_open_tag=On so that bare `<?`
+     * short open tags are tokenized as T_OPEN_TAG, then returns the fixed file
+     * contents. This is the only configuration under which the T_OPEN_TAG branch
+     * of the fixer is exercised.
+     */
+    private function fixWithShortOpenTagEnabled(string $basePath): string
+    {
+        $autoload = dirname(__DIR__, 3) . '/vendor/autoload.php';
+        $runner   = $basePath . '/run-fix.php';
+
+        file_put_contents($runner, <<<PHP
+            <?php
+            require {$this->exported($autoload)};
+
+            use Boundwize\\StructArmed\\Architecture;
+            use Boundwize\\StructArmed\\Rule\\Rules\\File\\Psr1PhpTagsRule;
+
+            \$rule       = new Psr1PhpTagsRule(['src/']);
+            \$violations = \$rule->evaluateProjectAll({$this->exported($basePath)}, Architecture::define());
+            \$rule->fix(\$violations[0]);
+            PHP);
+
+        $command = escapeshellarg(PHP_BINARY)
+            . ' -d short_open_tag=1 '
+            . escapeshellarg($runner);
+        exec($command, $output, $exitCode);
+
+        $this->assertSame(0, $exitCode, 'Fixer runner failed: ' . implode("\n", $output));
+
+        $fixedContent = (string) file_get_contents($basePath . '/src/Foo.php');
+        unlink($runner);
+
+        return $fixedContent;
+    }
+
+    private function exported(string $value): string
+    {
+        return var_export($value, true);
     }
 }
