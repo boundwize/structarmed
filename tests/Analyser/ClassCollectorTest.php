@@ -621,7 +621,7 @@ PHP;
         $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
     }
 
-    public function testDoesNotCountNestedClosureBranchesTowardEnclosingMethodComplexity(): void
+    public function testAggregatesNestedClosureBranchesIntoEnclosingMethodComplexity(): void
     {
         $code      = <<<'PHP'
 <?php
@@ -635,11 +635,11 @@ class Foo {
 PHP;
         $classNode = $this->collect($code);
 
-        // The method body is a single linear return; the && lives in the closure.
-        $this->assertSame(1, $classNode->methods[0]->cyclomaticComplexity);
+        // Base 1 + the closure's && = 2.
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
     }
 
-    public function testDoesNotCountArrowFunctionBranchesTowardEnclosingMethodComplexity(): void
+    public function testAggregatesArrowFunctionBranchesIntoEnclosingMethodComplexity(): void
     {
         $code      = <<<'PHP'
 <?php
@@ -651,10 +651,11 @@ class Foo {
 PHP;
         $classNode = $this->collect($code);
 
-        $this->assertSame(1, $classNode->methods[0]->cyclomaticComplexity);
+        // Base 1 + the arrow function's ternary = 2.
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
     }
 
-    public function testCountsMethodBranchesButNotNestedClosureBranches(): void
+    public function testAggregatesMethodBranchesAndNestedClosureBranches(): void
     {
         $code      = <<<'PHP'
 <?php
@@ -670,11 +671,11 @@ class Foo {
 PHP;
         $classNode = $this->collect($code);
 
-        // Base 1 + own if = 2; the closure's && is excluded.
-        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
+        // Base 1 + own if + the closure's && = 3.
+        $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
     }
 
-    public function testCountsMethodBranchAfterAssignedClosureWithoutCountingClosureBranches(): void
+    public function testAggregatesAssignedClosureBranchesWithSubsequentMethodBranch(): void
     {
         $code      = <<<'PHP'
 <?php
@@ -694,11 +695,11 @@ class Foo {
 PHP;
         $classNode = $this->collect($code);
 
-        // Base 1 + own if = 2; the closure's && is excluded.
-        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
+        // Base 1 + the closure's && + own if = 3.
+        $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
     }
 
-    public function testDoesNotCountMultipleIfsInsideClosureTowardEnclosingMethodComplexity(): void
+    public function testAggregatesMultipleIfsInsideClosureIntoEnclosingMethodComplexity(): void
     {
         $code      = <<<'PHP'
 <?php
@@ -724,7 +725,31 @@ class Foo {
 PHP;
         $classNode = $this->collect($code);
 
-        // The method body is a single linear return; all three ifs live in the closure.
+        // Base 1 + the closure's three ifs = 4.
+        $this->assertSame(4, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testDoesNotAggregateAnonymousClassMethodBranchesIntoEnclosingMethod(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function outer(): object {
+        return new class {
+            public function inner($x): int {
+                if ($x) {
+                    return 1;
+                }
+
+                return 0;
+            }
+        };
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // An anonymous class method is its own unit; its if does not leak into outer().
         $this->assertSame(1, $classNode->methods[0]->cyclomaticComplexity);
     }
 
