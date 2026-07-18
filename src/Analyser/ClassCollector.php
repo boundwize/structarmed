@@ -96,15 +96,8 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var list<ClassLikeAnalysis> */
     private array $activeClassLikeAnalyses = [];
 
-    /**
-     * Stack of enclosing complexity scopes. Each entry is the spl_object_id of a
-     * counted ClassMethod, or null for a nested named function whose branches must
-     * not be counted. Closures, arrow functions and anonymous class methods do not
-     * open a scope: their branches aggregate into the nearest enclosing method.
-     *
-     * @var list<int|null>
-     */
-    private array $complexityScopeStack = [];
+    /** @var list<int> */
+    private array $activeMethodIds = [];
 
     /** @var array<int, ClassLikeAnalysis> */
     private array $methodClassLikeAnalyses = [];
@@ -123,7 +116,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->classLikeAnalysis       = [];
         $this->classLikeMethods        = [];
         $this->activeClassLikeAnalyses = [];
-        $this->complexityScopeStack    = [];
+        $this->activeMethodIds         = [];
         $this->methodClassLikeAnalyses = [];
     }
 
@@ -165,10 +158,6 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->startMethodAnalysis($node);
         }
 
-        if ($node instanceof Function_) {
-            $this->complexityScopeStack[] = null;
-        }
-
         $this->collectNodeAnalysis($node);
 
         return null;
@@ -176,11 +165,8 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function leaveNode(Node $node): null
     {
-        if (
-            ($node instanceof ClassMethod && isset($this->methodClassLikeAnalyses[spl_object_id($node)]))
-            || $node instanceof Function_
-        ) {
-            array_pop($this->complexityScopeStack);
+        if ($node instanceof ClassMethod) {
+            $this->finishMethodAnalysis($node);
         }
 
         if (! $node instanceof ClassLike) {
@@ -208,7 +194,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->classLikeAnalysis       = [];
         $this->classLikeMethods        = [];
         $this->activeClassLikeAnalyses = [];
-        $this->complexityScopeStack    = [];
+        $this->activeMethodIds         = [];
         $this->methodClassLikeAnalyses = [];
 
         return null;
@@ -241,15 +227,22 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $analysis = $this->methodClassLikeAnalyses[$methodId] ?? null;
 
-        // Methods of an anonymous class are not collected as their own nodes, so
-        // they open no scope: their branches aggregate into the enclosing method.
         if (! $analysis instanceof ClassLikeAnalysis) {
             return;
         }
 
-        $this->complexityScopeStack[] = $methodId;
+        $this->activeMethodIds[] = $methodId;
 
         $analysis->complexityByMethodId[$methodId] = 1;
+    }
+
+    private function finishMethodAnalysis(ClassMethod $classMethod): void
+    {
+        if (! isset($this->methodClassLikeAnalyses[spl_object_id($classMethod)])) {
+            return;
+        }
+
+        array_pop($this->activeMethodIds);
     }
 
     private function collectNodeAnalysis(Node $node): void
@@ -325,10 +318,8 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->addSuperglobal('$' . $node->name);
         }
 
-        if ($this->complexityScopeStack !== [] && $this->isComplexityBranch($node)) {
-            $activeMethodId = $this->complexityScopeStack[count($this->complexityScopeStack) - 1];
-
-            if ($activeMethodId !== null) {
+        if ($this->activeMethodIds !== [] && $this->isComplexityBranch($node)) {
+            foreach ($this->activeMethodIds as $activeMethodId) {
                 $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
             }
         }
