@@ -618,7 +618,175 @@ PHP;
         $classNode = $this->collect($code);
 
         // Base 1 + if + elseif = 3
-        $this->assertGreaterThanOrEqual(3, $classNode->methods[0]->cyclomaticComplexity);
+        $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testAggregatesNestedClosureBranchesIntoEnclosingMethodComplexity(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function simple(array $list): array {
+        return array_filter($list, function ($x) {
+            return $x > 0 && $x < 10;
+        });
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + the closure's && = 2.
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testAggregatesArrowFunctionBranchesIntoEnclosingMethodComplexity(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function simple(array $list): array {
+        return array_map(fn ($x) => $x > 0 ? 1 : 0, $list);
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + the arrow function's ternary = 2.
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testAggregatesMethodBranchesAndNestedClosureBranches(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function m($a, array $list): array {
+        if ($a) {
+            return array_filter($list, fn ($x) => $x > 0 && $x < 5);
+        }
+
+        return [];
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + own if + the closure's && = 3.
+        $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testAggregatesAssignedClosureBranchesWithSubsequentMethodBranch(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function simple(array $list): array {
+        $data = array_filter($list, function ($x) {
+            return $x > 0 && $x < 10;
+        });
+
+        if ($data === []) {
+            return [1];
+        }
+
+        return $data;
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + the closure's && + own if = 3.
+        $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testAggregatesMultipleIfsInsideClosureIntoEnclosingMethodComplexity(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function simple(array $list): array {
+        return array_filter($list, function ($x) {
+            if ($x < 0) {
+                return false;
+            }
+
+            if ($x > 100) {
+                return false;
+            }
+
+            if ($x === 42) {
+                return false;
+            }
+
+            return true;
+        });
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + the closure's three ifs = 4.
+        $this->assertSame(4, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testAggregatesAnonymousClassMethodBranchesIntoEnclosingMethod(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function outer(): object {
+        return new class {
+            public function inner($x): int {
+                if ($x) {
+                    return 1;
+                }
+
+                return 0;
+            }
+        };
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + the anonymous class method's if = 2.
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testAggregatesOwnAndAnonymousClassMethodBranchesWithoutDoubleCounting(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function outer($a): ?object {
+        if ($a) {
+            return new class {
+                public function first($x): int {
+                    if ($x) {
+                        return 1;
+                    }
+
+                    return 0;
+                }
+
+                public function second($y): int {
+                    if ($y) {
+                        return 1;
+                    }
+
+                    return 0;
+                }
+            };
+        }
+
+        return null;
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + own if + first()'s if + second()'s if = 4, each counted once.
+        $this->assertSame(4, $classNode->methods[0]->cyclomaticComplexity);
     }
 
     public function testCollectsDependencies(): void
