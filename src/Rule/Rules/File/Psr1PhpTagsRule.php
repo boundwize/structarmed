@@ -17,6 +17,7 @@ use function is_array;
 use function is_file;
 use function preg_match;
 use function sprintf;
+use function str_ends_with;
 use function strlen;
 use function substr;
 use function substr_count;
@@ -135,8 +136,11 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
      */
     private function normalizedTagReplacement(string $text, string $nextChar): string
     {
-        if ($text === '<?php' && $nextChar !== '' && preg_match('/^\s/', $nextChar) !== 1) {
-            return '<?php ';
+        // The `<?php` open tag is only recognized when followed by whitespace or
+        // end of file, so any replacement ending in it needs a separator before
+        // adjacent code (e.g. `<?echo` must not become `<?phpecho`).
+        if (str_ends_with($text, '<?php') && $nextChar !== '' && preg_match('/^\s/', $nextChar) !== 1) {
+            return $text . ' ';
         }
 
         return $text;

@@ -672,10 +672,10 @@ final class Psr1PhpTagsRuleTest extends TestCase
             . escapeshellarg($runner);
         exec($command, $output, $exitCode);
 
-        $this->assertSame(0, $exitCode, 'Fixer runner failed: ' . implode("\n", $output));
-
         $fixedContent = (string) file_get_contents($basePath . '/src/Foo.php');
         unlink($runner);
+
+        $this->assertSame(0, $exitCode, 'Fixer runner failed: ' . implode("\n", $output));
 
         return $fixedContent;
     }
