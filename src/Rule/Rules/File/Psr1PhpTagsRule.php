@@ -113,9 +113,12 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
                 $replacement = $this->replacementForInvalidTag($token[0], $text, $token[2], $line);
 
                 if ($replacement !== null) {
-                    return substr($code, 0, $offset + $replacement['offset'])
-                        . $replacement['text']
-                        . substr($code, $offset + $replacement['offset'] + $replacement['length']);
+                    $replaceAt   = $offset + $replacement['offset'];
+                    $afterOffset = $replaceAt + $replacement['length'];
+
+                    return substr($code, 0, $replaceAt)
+                        . $this->normalizedTagReplacement($replacement['text'], substr($code, $afterOffset, 1))
+                        . substr($code, $afterOffset);
                 }
             }
 
@@ -123,6 +126,23 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
         }
 
         return null;
+    }
+
+    /**
+     * Ensures the replaced `<?php` tag keeps a separator before the following
+     * code. Short open tags such as `<?echo` tokenize as `<?` with the next
+     * character in a separate token, so `<?php` alone would produce `<?phpecho`.
+     */
+    private function normalizedTagReplacement(string $text, string $nextChar): string
+    {
+        // The `<?php` open tag is only recognized when followed by whitespace or
+        // end of file, so it needs a separator before adjacent code
+        // (e.g. `<?echo` must not become `<?phpecho`).
+        if ($text === '<?php' && $nextChar !== '' && preg_match('/^\s/', $nextChar) !== 1) {
+            return '<?php ';
+        }
+
+        return $text;
     }
 
     /**
@@ -157,7 +177,7 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
                 return [
                     'offset' => $tagOffset,
                     'length' => 2,
-                    'text'   => preg_match('/^\s/', substr($text, $tagOffset + 2)) === 1 ? '<?php' : '<?php ',
+                    'text'   => '<?php',
                 ];
             }
 
