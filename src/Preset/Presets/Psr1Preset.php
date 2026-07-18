@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\ClassConstantNameMustBeUpperCaseRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustBeStudlyCapsRule;
+use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1SymbolsOrSideEffectsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1Utf8WithoutBomRule;
@@ -48,12 +49,23 @@ final readonly class Psr1Preset implements PresetInterface
         $layerName = $this->resolveLayerName($architecture);
         $architecture->layer($layerName, $this->sourcePaths ?? []);
 
-        $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($this->sourcePaths));
-        $architecture->rule(self::FILES_MUST_USE_VALID_UTF8, new Psr1ValidUtf8Rule($this->sourcePaths));
-        $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($this->sourcePaths));
+        $phpFileFinder = new PhpFileFinder($this->sourcePaths);
+
+        $architecture->rule(
+            self::FILES_MUST_USE_VALID_TAGS,
+            new Psr1PhpTagsRule($this->sourcePaths, $phpFileFinder)
+        );
+        $architecture->rule(
+            self::FILES_MUST_USE_VALID_UTF8,
+            new Psr1ValidUtf8Rule($this->sourcePaths, $phpFileFinder)
+        );
+        $architecture->rule(
+            self::FILES_MUST_USE_UTF8_WITHOUT_BOM,
+            new Psr1Utf8WithoutBomRule($this->sourcePaths, $phpFileFinder)
+        );
         $architecture->rule(
             self::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS,
-            new Psr1SymbolsOrSideEffectsRule($this->sourcePaths)
+            new Psr1SymbolsOrSideEffectsRule($this->sourcePaths, $phpFileFinder)
         );
         $architecture->rule(self::CLASSES_MUST_BE_STUDLY_CAPS, new ClassNameMustBeStudlyCapsRule($layerName));
         $architecture->rule(

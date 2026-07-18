@@ -6,12 +6,20 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
+use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function base64_encode;
+use function bin2hex;
+use function file_put_contents;
+use function mkdir;
+use function random_bytes;
+use function rmdir;
+use function sys_get_temp_dir;
+use function unlink;
 
 #[CoversClass(FileAnalysis::class)]
 #[CoversClass(FileAnalysisProvider::class)]
@@ -66,6 +74,29 @@ final class FileAnalysisProviderTest extends TestCase
 
         $this->assertIsArray($fileAnalysisProvider->ast($this->source('<?php final class Foo {}'), false));
         $this->assertNull($fileAnalysisProvider->ast($this->source('<?php invalid !!!!!'), false));
+    }
+
+    public function testCachesPhpFileDiscoveryForTheLifetimeOfTheProvider(): void
+    {
+        $basePath = sys_get_temp_dir() . '/structarmed-file-provider-' . bin2hex(random_bytes(8));
+        mkdir($basePath . '/src', 0777, true);
+        file_put_contents($basePath . '/src/Foo.php', '<?php final class Foo {}');
+
+        $phpFileFinder        = new PhpFileFinder(['src/']);
+        $fileAnalysisProvider = new FileAnalysisProvider();
+
+        try {
+            $firstFiles = $fileAnalysisProvider->phpFiles($phpFileFinder, $basePath);
+            file_put_contents($basePath . '/src/Bar.php', '<?php final class Bar {}');
+
+            $this->assertSame($firstFiles, $fileAnalysisProvider->phpFiles($phpFileFinder, $basePath));
+            $this->assertCount(2, (new FileAnalysisProvider())->phpFiles($phpFileFinder, $basePath));
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            unlink($basePath . '/src/Bar.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
     }
 
     public function testReusesSeededAnalysisAcrossWindowsPathSeparators(): void

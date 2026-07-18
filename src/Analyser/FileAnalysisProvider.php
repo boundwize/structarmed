@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use Boundwize\StructArmed\Util\Path;
 use PhpParser\Error;
@@ -23,11 +24,13 @@ use PhpParser\Node\Stmt\Use_;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use PhpParser\Token;
+use WeakMap;
 
 use function array_key_exists;
 use function file_get_contents;
 use function is_array;
 use function preg_match;
+use function serialize;
 use function str_starts_with;
 use function substr;
 use function substr_count;
@@ -57,6 +60,9 @@ final class FileAnalysisProvider
     /** @var array<string, int|null> */
     private array $invalidPhpTagLines = [];
 
+    /** @var WeakMap<PhpFileFinder, array<string, list<string>>> */
+    private WeakMap $weakMap;
+
     /** @param array<string, FileAnalysis> $analyses */
     public function __construct(private array $analyses = [])
     {
@@ -67,6 +73,26 @@ final class FileAnalysisProvider
 
         $this->analyses = $normalisedAnalyses;
         $this->parser   = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->weakMap  = new WeakMap();
+    }
+
+    /**
+     * @param list<string> $skipPaths
+     * @return list<string>
+     */
+    public function phpFiles(PhpFileFinder $phpFileFinder, string $basePath, array $skipPaths = []): array
+    {
+        $key         = Path::normalise($basePath, canonicalise: true) . "\0" . serialize($skipPaths);
+        $cachedFiles = $this->weakMap[$phpFileFinder] ?? [];
+
+        if (isset($cachedFiles[$key])) {
+            return $cachedFiles[$key];
+        }
+
+        $cachedFiles[$key]             = $phpFileFinder->files($basePath, $skipPaths);
+        $this->weakMap[$phpFileFinder] = $cachedFiles;
+
+        return $cachedFiles[$key];
     }
 
     public function analyse(string $file): FileAnalysis
