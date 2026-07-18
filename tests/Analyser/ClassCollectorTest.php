@@ -729,7 +729,7 @@ PHP;
         $this->assertSame(4, $classNode->methods[0]->cyclomaticComplexity);
     }
 
-    public function testDoesNotAggregateAnonymousClassMethodBranchesIntoEnclosingMethod(): void
+    public function testAggregatesAnonymousClassMethodBranchesIntoEnclosingMethod(): void
     {
         $code      = <<<'PHP'
 <?php
@@ -749,8 +749,44 @@ class Foo {
 PHP;
         $classNode = $this->collect($code);
 
-        // An anonymous class method is its own unit; its if does not leak into outer().
-        $this->assertSame(1, $classNode->methods[0]->cyclomaticComplexity);
+        // Base 1 + the anonymous class method's if = 2.
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testAggregatesOwnAndAnonymousClassMethodBranchesWithoutDoubleCounting(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function outer($a): ?object {
+        if ($a) {
+            return new class {
+                public function first($x): int {
+                    if ($x) {
+                        return 1;
+                    }
+
+                    return 0;
+                }
+
+                public function second($y): int {
+                    if ($y) {
+                        return 1;
+                    }
+
+                    return 0;
+                }
+            };
+        }
+
+        return null;
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + own if + first()'s if + second()'s if = 4, each counted once.
+        $this->assertSame(4, $classNode->methods[0]->cyclomaticComplexity);
     }
 
     public function testCollectsDependencies(): void

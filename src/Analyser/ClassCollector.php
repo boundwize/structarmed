@@ -97,11 +97,10 @@ final class ClassCollector extends NodeVisitorAbstract
     private array $activeClassLikeAnalyses = [];
 
     /**
-     * Stack of enclosing complexity scopes. Each entry is the spl_object_id of
-     * a counted ClassMethod, or null for a scope whose branches must not be
-     * counted (a nested named function, or an unregistered method such as an
-     * anonymous class method). Closures and arrow functions do not open a scope:
-     * their branches aggregate into the nearest enclosing method.
+     * Stack of enclosing complexity scopes. Each entry is the spl_object_id of a
+     * counted ClassMethod, or null for a nested named function whose branches must
+     * not be counted. Closures, arrow functions and anonymous class methods do not
+     * open a scope: their branches aggregate into the nearest enclosing method.
      *
      * @var list<int|null>
      */
@@ -177,7 +176,10 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function leaveNode(Node $node): null
     {
-        if ($node instanceof ClassMethod || $node instanceof Function_) {
+        if (
+            ($node instanceof ClassMethod && isset($this->methodClassLikeAnalyses[spl_object_id($node)]))
+            || $node instanceof Function_
+        ) {
             array_pop($this->complexityScopeStack);
         }
 
@@ -239,11 +241,9 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $analysis = $this->methodClassLikeAnalyses[$methodId] ?? null;
 
+        // Methods of an anonymous class are not collected as their own nodes, so
+        // they open no scope: their branches aggregate into the enclosing method.
         if (! $analysis instanceof ClassLikeAnalysis) {
-            // Unregistered method (e.g. one declared in an anonymous class): open
-            // an uncounted scope so its branches do not leak into an enclosing method.
-            $this->complexityScopeStack[] = null;
-
             return;
         }
 
