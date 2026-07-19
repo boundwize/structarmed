@@ -13,6 +13,6 @@ namespace Boundwize\StructArmed\Rule;
  * Trade-off: only classes extended within the scanned paths are known. A class
  * extended solely by a consumer outside the scan is reported as if not extended.
  */
-interface ExtendedClassAwareRuleInterface
+interface ExtendedClassAwareRuleInterface extends RuleInterface
 {
 }

@@ -8,14 +8,11 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor;
-use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MustBeFinalRule extends AbstractPhpParserFixableRule implements
-    RuleInterface,
-    ExtendedClassAwareRuleInterface
+final readonly class MustBeFinalRule extends AbstractPhpParserFixableRule implements ExtendedClassAwareRuleInterface
 {
     public function __construct(
         private string $layer,
