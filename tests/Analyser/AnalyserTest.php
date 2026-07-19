@@ -141,6 +141,62 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\BaseHandler', $violations[0]->className);
     }
 
+    public function testMustBeFinalRuleReportsSameExtendedClassesOnCachedRun(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/BaseHandler.php'    => '<?php namespace App; class BaseHandler {}',
+            'src/OrderHandler.php'   => '<?php namespace App; final class OrderHandler extends BaseHandler {}',
+            'src/PaymentHandler.php' => '<?php namespace App; class PaymentHandler {}',
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        $this->assertCount(1, $coldViolations);
+        $this->assertSame('App\PaymentHandler', $coldViolations[0]->className);
+        $this->assertCount(1, $warmViolations);
+        $this->assertSame('App\PaymentHandler', $warmViolations[0]->className);
+    }
+
+    public function testMustBeFinalRuleFlagsCachedClassOnceItsExtendingClassIsRemoved(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/BaseHandler.php'  => '<?php namespace App; class BaseHandler {}',
+            'src/OrderHandler.php' => '<?php namespace App; final class OrderHandler extends BaseHandler {}',
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        $this->assertCount(0, $coldViolations);
+
+        // BaseHandler.php is untouched, so its class-node cache entry stays valid;
+        // the extended flag must still be recomputed against the shrunken class set.
+        unlink($basePath . '/src/OrderHandler.php');
+
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        $this->assertCount(1, $warmViolations);
+        $this->assertSame('App\BaseHandler', $warmViolations[0]->className);
+    }
+
     public function testAnalyserMarksFixableRuleViolations(): void
     {
         $basePath = $this->makeTempProject([
