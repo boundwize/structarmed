@@ -8,11 +8,14 @@ use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use Boundwize\StructArmed\Util\Path;
 use PhpParser\Error;
 use PhpParser\Node;
+use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\Const_;
 use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Else_;
+use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\GroupUse;
 use PhpParser\Node\Stmt\If_;
@@ -285,7 +288,21 @@ final class FileAnalysisProvider
     {
         return $stmt instanceof ClassLike
             || $stmt instanceof Function_
-            || $stmt instanceof Const_;
+            || $stmt instanceof Const_
+            || $this->isDefineCall($stmt);
+    }
+
+    /**
+     * A top-level `define('CONST', ...)` call declares a constant symbol under PSR-1,
+     * mirroring PHP_CodeSniffer's PSR1.Files.SideEffects sniff. Method calls such as
+     * `$obj->define(...)` or `Foo::define(...)` are not FuncCall nodes, so they never match.
+     */
+    private function isDefineCall(Stmt $stmt): bool
+    {
+        return $stmt instanceof Expression
+            && $stmt->expr instanceof FuncCall
+            && $stmt->expr->name instanceof Name
+            && $stmt->expr->name->toLowerString() === 'define';
     }
 
     private function isNeutralStatement(Stmt $stmt): bool
