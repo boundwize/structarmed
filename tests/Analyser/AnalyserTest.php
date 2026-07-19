@@ -95,6 +95,52 @@ final class AnalyserTest extends TestCase
         $this->assertCount(2, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnotherScannedClass(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/BaseHandler.php'    => '<?php namespace App; class BaseHandler {}',
+            'src/OrderHandler.php'   => '<?php namespace App; final class OrderHandler extends BaseHandler {}',
+            'src/PaymentHandler.php' => '<?php namespace App; class PaymentHandler {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        // BaseHandler is extended (must stay non-final); PaymentHandler is the
+        // only genuinely non-final leaf class.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\PaymentHandler', $violations[0]->className);
+    }
+
+    public function testMustBeFinalRuleFlagsExtendedClassWhenChildIsOutsideScannedPaths(): void
+    {
+        $order = '<?php namespace Consumer; use App\BaseHandler;' . "\n"
+            . 'final class OrderHandler extends BaseHandler {}';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseHandler.php'       => '<?php namespace App; class BaseHandler {}',
+            'consumer/OrderHandler.php' => $order,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        // The extending class lives outside the scanned paths, so BaseHandler is
+        // reported as if not extended — a false positive on purpose.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\BaseHandler', $violations[0]->className);
+    }
+
     public function testAnalyserMarksFixableRuleViolations(): void
     {
         $basePath = $this->makeTempProject([

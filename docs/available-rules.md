@@ -80,7 +80,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 | `ClassNameMustNotHavePrefixRule` | `new ClassNameMustNotHavePrefixRule(layer: 'Model', prefix: 'Model')` | Classes in a layer do not use a forbidden prefix. |
 | `MaxDependencyCountRule` | `new MaxDependencyCountRule(layer: 'Controller', maxCount: 5)` | Constructor dependency count stays below the configured limit. |
 | `MayNotImplementInterfaceRule` | `new MayNotImplementInterfaceRule(layer: 'Domain', interface: JsonSerializable::class)` | Classes in a layer do not implement a forbidden interface. |
-| `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. Supports `--fix`. |
+| `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. Classes extended by another scanned class are skipped (making them `final` would break the child). Supports `--fix`. |
 | `MustBeInterfaceRule` | `new MustBeInterfaceRule(layer: 'Contract', classNamePattern: '/Interface$/')` | Matching declarations in a layer are interfaces. |
 | `MustDeclareConstantVisibilityRule` | `new MustDeclareConstantVisibilityRule(layer: 'Source')` | Class constants declare `public`, `protected`, or `private`. Supports `--fix`. |
 | `MustDeclareMethodVisibilityRule` | `new MustDeclareMethodVisibilityRule(layer: 'Source')` | Methods declare `public`, `protected`, or `private`. Supports `--fix`. |

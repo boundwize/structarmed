@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
+use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
@@ -140,6 +141,10 @@ final readonly class Analyser
         );
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes);
+
+        if ($this->hasExtendedClassAwareRule($classRules)) {
+            $this->markExtendedClasses($classNodes);
+        }
 
         $fileAnalysisProvider = new FileAnalysisProvider($extractionResult->fileAnalyses);
 
@@ -644,6 +649,42 @@ final readonly class Analyser
         $cycleDetected = $cycleDetected || $hasCycle;
 
         return $resolvedDependencies;
+    }
+
+    /**
+     * @param array<string, RuleInterface> $classRules
+     */
+    private function hasExtendedClassAwareRule(array $classRules): bool
+    {
+        foreach ($classRules as $classRule) {
+            if ($classRule instanceof ExtendedClassAwareRuleInterface) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Flag every class that another scanned class extends, using the recursive
+     * parent chain resolved by {@see withRecursiveParents()}. A class name found
+     * among any node's parent classes is extended within the scanned paths.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markExtendedClasses(array $classNodes): void
+    {
+        $extended = [];
+
+        foreach ($classNodes as $classNode) {
+            foreach ($classNode->parentClasses as $parentClass) {
+                $extended[$parentClass] = true;
+            }
+        }
+
+        foreach ($classNodes as $classNode) {
+            $classNode->setExtended(isset($extended[$classNode->className]));
+        }
     }
 
     /**

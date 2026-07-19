@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
@@ -25,6 +26,7 @@ final class MustBeFinalRuleTest extends TestCase
         bool $isInterface = false,
         bool $isTrait = false,
         bool $isEnum = false,
+        bool $isExtended = false,
     ): ClassNode {
         return new ClassNode(
             className:  $className,
@@ -38,6 +40,7 @@ final class MustBeFinalRuleTest extends TestCase
             isReadonly: false,
             isTrait:    $isTrait,
             isEnum:     $isEnum,
+            isExtended: $isExtended,
         );
     }
 
@@ -58,6 +61,22 @@ final class MustBeFinalRuleTest extends TestCase
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('final', $violation->message);
+    }
+
+    public function testPassesWhenClassIsExtendedByAnotherClass(): void
+    {
+        $mustBeFinalRule = new MustBeFinalRule(layer: 'Domain');
+        $classNode       = $this->makeNode(isFinal: false, isExtended: true);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mustBeFinalRule->evaluate($classNode));
+    }
+
+    public function testIsExtendedClassAware(): void
+    {
+        $this->assertInstanceOf(
+            ExtendedClassAwareRuleInterface::class,
+            new MustBeFinalRule(layer: 'Domain')
+        );
     }
 
     public function testIsFixable(): void

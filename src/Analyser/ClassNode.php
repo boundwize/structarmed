@@ -58,6 +58,7 @@ final class ClassNode
         public readonly array $interfaceExtends = [],
         public array $parentClasses = [],
         public array $parentInterfaces = [],
+        public bool $isExtended = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
@@ -70,6 +71,15 @@ final class ClassNode
     {
         $this->parentClasses    = $parentClasses;
         $this->parentInterfaces = $parentInterfaces;
+    }
+
+    /**
+     * Whether another scanned class extends this class. Computed by the analyser
+     * for rules implementing ExtendedClassAwareRuleInterface; false otherwise.
+     */
+    public function setExtended(bool $isExtended): void
+    {
+        $this->isExtended = $isExtended;
     }
 
     public function shortName(): string
