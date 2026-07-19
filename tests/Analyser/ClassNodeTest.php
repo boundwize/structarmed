@@ -120,6 +120,45 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->usesLanguageConstruct('eval'));
     }
 
+    public function testUsesLanguageConstructResolvesExitDieAliases(): void
+    {
+        $usesExit = new ClassNode(
+            className:          'App\\Domain\\ExitService',
+            file:               '/src/ExitService.php',
+            line:               1,
+            layer:              'Domain',
+            extends:            null,
+            isAbstract:         false,
+            isFinal:            true,
+            isInterface:        false,
+            isReadonly:         false,
+            languageConstructs: ['exit'],
+        );
+
+        $usesDie = new ClassNode(
+            className:          'App\\Domain\\DieService',
+            file:               '/src/DieService.php',
+            line:               1,
+            layer:              'Domain',
+            extends:            null,
+            isAbstract:         false,
+            isFinal:            true,
+            isInterface:        false,
+            isReadonly:         false,
+            languageConstructs: ['die'],
+        );
+
+        // `die` is a pure alias of `exit`, so either query matches either spelling.
+        $this->assertTrue($usesExit->usesLanguageConstruct('exit'));
+        $this->assertTrue($usesExit->usesLanguageConstruct('die'));
+        $this->assertTrue($usesDie->usesLanguageConstruct('die'));
+        $this->assertTrue($usesDie->usesLanguageConstruct('exit'));
+
+        // Distinct constructs are not over-aliased.
+        $this->assertFalse($usesExit->usesLanguageConstruct('echo'));
+        $this->assertFalse($usesExit->usesLanguageConstruct('include'));
+    }
+
     public function testSetRecursiveParents(): void
     {
         $classNode = new ClassNode(

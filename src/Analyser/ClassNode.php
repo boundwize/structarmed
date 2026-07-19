@@ -147,7 +147,16 @@ final class ClassNode
 
     public function usesLanguageConstruct(string $construct): bool
     {
-        return in_array($construct, $this->languageConstructs, true);
+        if (in_array($construct, $this->languageConstructs, true)) {
+            return true;
+        }
+
+        // `die` is a pure alias of `exit`, so banning either spelling catches both.
+        return match ($construct) {
+            'exit'  => in_array('die', $this->languageConstructs, true),
+            'die'   => in_array('exit', $this->languageConstructs, true),
+            default => false,
+        };
     }
 
     public function accessesSuperglobals(): bool
