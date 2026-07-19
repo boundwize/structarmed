@@ -130,3 +130,5 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Usage`.
 {: .rule-table }
 
 `MayNotUseClassRule` and `MayNotUseNamespaceRule` also accept `classNamePattern` when only matching classes should be checked.
+
+`MayNotUseLanguageConstructRule` accepts one of the following `construct` names: `echo`, `print`, `eval`, `isset`, `empty`, `unset`, `list`, `exit`, `die`, `include`, `include_once`, `require`, `require_once`. `die` is a pure alias of `exit`, so banning either spelling catches both. The `include` / `include_once` / `require` / `require_once` constructs are distinct and are matched exactly.

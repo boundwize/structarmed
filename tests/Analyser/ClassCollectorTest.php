@@ -509,6 +509,20 @@ PHP;
         $this->assertSame(['exit'], $classNode->languageConstructs);
     }
 
+    public function testKeepsIncludeFamilyConstructsDistinct(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function bar(): void {'
+            . ' include "a.php"; include_once "b.php";'
+            . ' require "c.php"; require_once "d.php"; } }'
+        );
+
+        $this->assertSame(
+            ['include', 'include_once', 'require', 'require_once'],
+            $classNode->languageConstructs
+        );
+    }
+
     public function testCollectsEchoAsLanguageConstruct(): void
     {
         $classNode = $this->collect('<?php class Foo { public function bar(): void { echo "hello"; } }');
