@@ -674,7 +674,11 @@ final readonly class Analyser
         }
 
         foreach ($classNodes as $classNode) {
-            $classNode->setExtended(isset($extended[$classNode->className]));
+            // Only classes appear in parentClasses; traits, interfaces, and enums
+            // never do, so they are left with the default (not extended).
+            if (isset($extended[$classNode->className])) {
+                $classNode->setExtended(true);
+            }
         }
     }
 
