@@ -182,6 +182,29 @@ final class ClassNodeTest extends TestCase
         $this->assertSame(['App\\Contracts\\OrderService'], $classNode->parentInterfaces);
     }
 
+    public function testSetExtendedTogglesIsExtendedFlag(): void
+    {
+        $classNode = new ClassNode(
+            className:   'App\\Domain\\OrderService',
+            file:        '/src/OrderService.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     false,
+            isInterface: false,
+            isReadonly:  false,
+        );
+
+        $this->assertFalse($classNode->isExtended);
+
+        $classNode->setExtended(true);
+        $this->assertTrue($classNode->isExtended);
+
+        $classNode->setExtended(false);
+        $this->assertFalse($classNode->isExtended);
+    }
+
     public function testDependsOnMatchesExistingClassesExactly(): void
     {
         $classNode = new ClassNode(

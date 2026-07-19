@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
+use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
@@ -85,9 +86,10 @@ final readonly class Analyser
         $classRules       = $this->classRules($rules, $skippedRuleKeys);
         $ruleSkipMatchers = $this->ruleSkipMatchers($classRules, $globalSkipPaths, $ruleSkipPaths);
 
-        $projectRuleViolations = [];
-        $fileAnalysisRules     = [];
-        $layerAwareRules       = [];
+        $projectRuleViolations     = [];
+        $fileAnalysisRules         = [];
+        $layerAwareRules           = [];
+        $hasExtendedClassAwareRule = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -96,6 +98,10 @@ final readonly class Analyser
 
             if ($rule instanceof LayerAwareRuleInterface) {
                 $layerAwareRules[] = $rule;
+            }
+
+            if ($rule instanceof ExtendedClassAwareRuleInterface) {
+                $hasExtendedClassAwareRule = true;
             }
 
             if (! $rule instanceof ProjectRuleInterface) {
@@ -140,6 +146,10 @@ final readonly class Analyser
         );
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes);
+
+        if ($hasExtendedClassAwareRule) {
+            $this->markExtendedClasses($classNodes);
+        }
 
         $fileAnalysisProvider = new FileAnalysisProvider($extractionResult->fileAnalyses);
 
@@ -644,6 +654,32 @@ final readonly class Analyser
         $cycleDetected = $cycleDetected || $hasCycle;
 
         return $resolvedDependencies;
+    }
+
+    /**
+     * Flag every class that another scanned class extends, using the recursive
+     * parent chain resolved by {@see withRecursiveParents()}. A class name found
+     * among any node's parent classes is extended within the scanned paths.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markExtendedClasses(array $classNodes): void
+    {
+        $extended = [];
+
+        foreach ($classNodes as $classNode) {
+            foreach ($classNode->parentClasses as $parentClass) {
+                $extended[$parentClass] = true;
+            }
+        }
+
+        foreach ($classNodes as $classNode) {
+            // Only classes appear in parentClasses; traits, interfaces, and enums
+            // never do, so they are left with the default (not extended).
+            if (isset($extended[$classNode->className])) {
+                $classNode->setExtended(true);
+            }
+        }
     }
 
     /**
