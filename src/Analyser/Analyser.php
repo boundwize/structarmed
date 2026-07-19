@@ -86,9 +86,10 @@ final readonly class Analyser
         $classRules       = $this->classRules($rules, $skippedRuleKeys);
         $ruleSkipMatchers = $this->ruleSkipMatchers($classRules, $globalSkipPaths, $ruleSkipPaths);
 
-        $projectRuleViolations = [];
-        $fileAnalysisRules     = [];
-        $layerAwareRules       = [];
+        $projectRuleViolations     = [];
+        $fileAnalysisRules         = [];
+        $layerAwareRules           = [];
+        $hasExtendedClassAwareRule = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -97,6 +98,10 @@ final readonly class Analyser
 
             if ($rule instanceof LayerAwareRuleInterface) {
                 $layerAwareRules[] = $rule;
+            }
+
+            if ($rule instanceof ExtendedClassAwareRuleInterface) {
+                $hasExtendedClassAwareRule = true;
             }
 
             if (! $rule instanceof ProjectRuleInterface) {
@@ -142,7 +147,7 @@ final readonly class Analyser
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes);
 
-        if ($this->hasExtendedClassAwareRule($classRules)) {
+        if ($hasExtendedClassAwareRule) {
             $this->markExtendedClasses($classNodes);
         }
 
@@ -649,20 +654,6 @@ final readonly class Analyser
         $cycleDetected = $cycleDetected || $hasCycle;
 
         return $resolvedDependencies;
-    }
-
-    /**
-     * @param array<string, RuleInterface> $classRules
-     */
-    private function hasExtendedClassAwareRule(array $classRules): bool
-    {
-        foreach ($classRules as $classRule) {
-            if ($classRule instanceof ExtendedClassAwareRuleInterface) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
