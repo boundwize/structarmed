@@ -247,6 +247,31 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
+    public function testViolatesDefineMixedWithSideEffectCall(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                "<?php\ndefine('APP_VERSION', '1.2.3');\nsession_start();\n"
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(3, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testViolatesConditionalSideEffectNextToSymbol(): void
     {
         $basePath = $this->makeTempDir();
