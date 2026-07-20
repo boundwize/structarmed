@@ -253,8 +253,12 @@ final class FileAnalysisProvider
             if (($node instanceof Namespace_ || $node instanceof Declare_) && $node->stmts !== null) {
                 $state           = $this->fileState($node->stmts);
                 $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
-                $hasSideEffects  = $hasSideEffects || $state['hasSideEffects'];
-                $sideEffectLine  = $state['hasSideEffects'] ? $state['sideEffectLine'] : $sideEffectLine;
+
+                if (! $hasSideEffects && $state['hasSideEffects']) {
+                    $sideEffectLine = $state['sideEffectLine'];
+                }
+
+                $hasSideEffects = $hasSideEffects || $state['hasSideEffects'];
 
                 continue;
             }
@@ -273,8 +277,11 @@ final class FileAnalysisProvider
                 continue;
             }
 
+            if (! $hasSideEffects) {
+                $sideEffectLine = $node->getStartLine();
+            }
+
             $hasSideEffects = true;
-            $sideEffectLine = $node->getStartLine();
         }
 
         return [
