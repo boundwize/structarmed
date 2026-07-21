@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser;
 
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassCollector;
 use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 
 use function array_column;
 
+#[CoversClass(AnonymousClassNode::class)]
 #[CoversClass(ClassCollector::class)]
 #[CoversClass(ClassLikeAnalysis::class)]
 final class ClassCollectorTest extends TestCase
@@ -36,6 +38,17 @@ final class ClassCollectorTest extends TestCase
     /** @return ClassNode[] */
     private function collectNodes(string $code): array
     {
+        return $this->makeCollector($code)->getNodes();
+    }
+
+    /** @return list<AnonymousClassNode> */
+    private function collectAnonymousClassNodes(string $code): array
+    {
+        return $this->makeCollector($code)->getAnonymousClassNodes();
+    }
+
+    private function makeCollector(string $code): ClassCollector
+    {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
         $classCollector         = new ClassCollector($namespaceLayerResolver);
         $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
@@ -46,7 +59,7 @@ final class ClassCollectorTest extends TestCase
         $nodeTraverser = new NodeTraverser(new NameResolver(), $classCollector);
         $nodeTraverser->traverse($ast ?? []);
 
-        return $classCollector->getNodes();
+        return $classCollector;
     }
 
     public function testCollectsFinalClass(): void
@@ -114,6 +127,43 @@ final class ClassCollectorTest extends TestCase
         $nodes = $this->collectNodes('<?php $foo = new class {};');
 
         $this->assertSame([], $nodes);
+    }
+
+    public function testCollectsAnonymousClassNodeDeclaredInsideMethod(): void
+    {
+        $anonymousClassNodes = $this->collectAnonymousClassNodes('<?php
+        namespace App;
+        class HandlerFactory {
+            public function make(): BaseHandler { return new class extends BaseHandler {}; }
+        }');
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $this->assertSame('App\BaseHandler', $anonymousClassNodes[0]->extends);
+        $this->assertSame('/fake/path/Foo.php', $anonymousClassNodes[0]->file);
+    }
+
+    public function testCollectsTopLevelAnonymousClassNodeInFileWithoutNamedClasses(): void
+    {
+        $anonymousClassNodes = $this->collectAnonymousClassNodes('<?php
+        use App\BaseHandler;
+        return new class extends BaseHandler {};');
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $this->assertSame('App\BaseHandler', $anonymousClassNodes[0]->extends);
+    }
+
+    public function testCollectsAnonymousClassNodeWithoutExtends(): void
+    {
+        $anonymousClassNodes = $this->collectAnonymousClassNodes('<?php
+        namespace App;
+        class HandlerFactory {
+            public function make(): object { return new class implements \Stringable {
+                public function __toString(): string { return ""; }
+            }; }
+        }');
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $this->assertNull($anonymousClassNodes[0]->extends);
     }
 
     public function testCollectsExtendedClassAndImplementedInterfaces(): void

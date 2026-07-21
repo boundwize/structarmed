@@ -117,6 +117,138 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\PaymentHandler', $violations[0]->className);
     }
 
+    public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClass(): void
+    {
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class HandlerFactory {' . "\n"
+            . '    public function make(): BaseHandler { return new class extends BaseHandler {}; }' . "\n"
+            . '}';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseHandler.php'    => '<?php namespace App; class BaseHandler {}',
+            'src/HandlerFactory.php' => $factory,
+            'src/PaymentHandler.php' => '<?php namespace App; class PaymentHandler {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        // BaseHandler is extended by an anonymous class (must stay non-final);
+        // PaymentHandler is the only genuinely non-final leaf class.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\PaymentHandler', $violations[0]->className);
+    }
+
+    public function testMustBeFinalRuleDoesNotFlagClassExtendedByTopLevelAnonymousClass(): void
+    {
+        // Migration-style file: no named class at all, only a returned anonymous class.
+        $registration = '<?php use App\BaseHandler;' . "\n"
+            . 'return new class extends BaseHandler {};';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseHandler.php'          => '<?php namespace App; class BaseHandler {}',
+            'src/handler_registration.php' => $registration,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClassWithParallelRunner(): void
+    {
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class HandlerFactory {' . "\n"
+            . '    public function make(): BaseHandler { return new class extends BaseHandler {}; }' . "\n"
+            . '}';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseHandler.php'    => '<?php namespace App; class BaseHandler {}',
+            'src/HandlerFactory.php' => $factory,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::parallel())
+            ->forRule('source.must_be_final');
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClassOnCachedRun(): void
+    {
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class HandlerFactory {' . "\n"
+            . '    public function make(): BaseHandler { return new class extends BaseHandler {}; }' . "\n"
+            . '}';
+
+        $basePath            = $this->makeTempProject([
+            'src/BaseHandler.php'    => '<?php namespace App; class BaseHandler {}',
+            'src/HandlerFactory.php' => $factory,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        // The anonymous-class parent must survive the class-node cache round-trip.
+        $this->assertCount(0, $coldViolations);
+        $this->assertCount(0, $warmViolations);
+    }
+
+    public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClassOnCachedRunWithFileAnalysis(): void
+    {
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class HandlerFactory {' . "\n"
+            . '    public function make(): BaseHandler { return new class extends BaseHandler {}; }' . "\n"
+            . '}';
+
+        $basePath            = $this->makeTempProject([
+            'src/BaseHandler.php'    => '<?php namespace App; class BaseHandler {}',
+            'src/HandlerFactory.php' => $factory,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+
+        // A file-analysis rule makes the warm run load class nodes through the
+        // file-analysis cache path, which must also restore anonymous class nodes.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'))
+            ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']));
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        $this->assertCount(0, $coldViolations);
+        $this->assertCount(0, $warmViolations);
+    }
+
     public function testMustBeFinalRuleFlagsExtendedClassWhenChildIsOutsideScannedPaths(): void
     {
         $order = '<?php namespace Consumer; use App\BaseHandler;' . "\n"

@@ -148,7 +148,7 @@ final readonly class Analyser
         $classNodes       = $this->withRecursiveParents($classNodes);
 
         if ($hasExtendedClassAwareRule) {
-            $this->markExtendedClasses($classNodes);
+            $this->markExtendedClasses($classNodes, $extractionResult);
         }
 
         $fileAnalysisProvider = new FileAnalysisProvider($extractionResult->fileAnalyses);
@@ -663,13 +663,21 @@ final readonly class Analyser
      *
      * @param list<ClassNode> $classNodes
      */
-    private function markExtendedClasses(array $classNodes): void
+    private function markExtendedClasses(array $classNodes, ExtractionResult $extractionResult): void
     {
         $extended = [];
 
         foreach ($classNodes as $classNode) {
             foreach ($classNode->parentClasses as $parentClass) {
                 $extended[$parentClass] = true;
+            }
+        }
+
+        // Anonymous classes (`new class extends Foo {}`) have no ClassNode of
+        // their own, so the classes they extend are tracked separately.
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            if ($anonymousClassNode->extends !== null) {
+                $extended[$anonymousClassNode->extends] = true;
             }
         }
 
@@ -836,9 +844,10 @@ final readonly class Analyser
         ?AnalyserOptions $analyserOptions = null,
         bool $withFileAnalysis = true,
     ): ExtractionResult {
-        $classNodes   = [];
-        $fileAnalyses = [];
-        $filesToParse = [];
+        $classNodes          = [];
+        $fileAnalyses        = [];
+        $anonymousClassNodes = [];
+        $filesToParse        = [];
 
         foreach ($files as $file) {
             if ($withFileAnalysis) {
@@ -856,23 +865,31 @@ final readonly class Analyser
                     $classNodes[] = $cachedClassNode;
                 }
 
+                foreach ($cachedResult['anonymousClassNodes'] as $cachedAnonymousClassNode) {
+                    $anonymousClassNodes[] = $cachedAnonymousClassNode;
+                }
+
                 $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
 
                 continue;
             }
 
-            $cachedClassNodes = $this->analysisResultCache?->loadClassNodes(
+            $cachedResult = $this->analysisResultCache?->loadClassNodes(
                 $file,
                 $this->classNodeCacheNamespace,
             );
 
-            if ($cachedClassNodes === null) {
+            if ($cachedResult === null) {
                 $filesToParse[] = $file;
                 continue;
             }
 
-            foreach ($cachedClassNodes as $cachedClassNode) {
+            foreach ($cachedResult['classNodes'] as $cachedClassNode) {
                 $classNodes[] = $cachedClassNode;
+            }
+
+            foreach ($cachedResult['anonymousClassNodes'] as $cachedAnonymousClassNode) {
+                $anonymousClassNodes[] = $cachedAnonymousClassNode;
             }
         }
 
@@ -881,7 +898,7 @@ final readonly class Analyser
         if ($filesToParse === []) {
             $progressHandler?->finish();
 
-            return new ExtractionResult($classNodes, $fileAnalyses);
+            return new ExtractionResult($classNodes, $fileAnalyses, $anonymousClassNodes);
         }
 
         $options = $analyserOptions ?? AnalyserOptions::parallel();
@@ -911,6 +928,15 @@ final readonly class Analyser
             }
         }
 
+        $anonymousClassNodesByFile = array_fill_keys($filesToParse, []);
+        foreach ($parsedResult->anonymousClassNodes as $parsedAnonymousClassNode) {
+            $anonymousClassNodes[] = $parsedAnonymousClassNode;
+
+            if (isset($anonymousClassNodesByFile[$parsedAnonymousClassNode->file])) {
+                $anonymousClassNodesByFile[$parsedAnonymousClassNode->file][] = $parsedAnonymousClassNode;
+            }
+        }
+
         foreach ($parsedResult->fileAnalyses as $file => $fileAnalysis) {
             $fileAnalyses[$file] = $fileAnalysis;
         }
@@ -921,12 +947,13 @@ final readonly class Analyser
                 $this->classNodeCacheNamespace,
                 $fileClassNodes,
                 $fileAnalyses[$fileToParse] ?? null,
+                $anonymousClassNodesByFile[$fileToParse] ?? [],
             );
         }
 
         $progressHandler?->finish();
 
-        return new ExtractionResult($classNodes, $fileAnalyses);
+        return new ExtractionResult($classNodes, $fileAnalyses, $anonymousClassNodes);
     }
 
     /**

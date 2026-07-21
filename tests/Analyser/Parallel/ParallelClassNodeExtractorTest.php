@@ -399,4 +399,56 @@ PHP);
             $GLOBALS['mock_tracked_tempnam_files']     = [];
         }
     }
+
+    public function testExtractThrowsWhenAnonymousClassNodesPayloadIsNotAnArray(): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'               => [],
+            'fileAnalyses'        => [],
+            'anonymousClassNodes' => 'invalid',
+            'error'               => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid anonymous class nodes.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    public function testExtractThrowsWhenAnonymousClassNodeEntryIsInvalid(): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'               => [],
+            'fileAnalyses'        => [],
+            'anonymousClassNodes' => ['invalid'],
+            'error'               => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid anonymous class nodes.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
 }

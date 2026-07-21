@@ -60,17 +60,19 @@ final readonly class ClassNodeWorker
             );
 
             file_put_contents($outputFile, serialize([
-                'nodes'        => $result->classNodes,
-                'fileAnalyses' => $result->fileAnalyses,
-                'error'        => null,
+                'nodes'               => $result->classNodes,
+                'fileAnalyses'        => $result->fileAnalyses,
+                'anonymousClassNodes' => $result->anonymousClassNodes,
+                'error'               => null,
             ]));
 
             return 0;
         } catch (Throwable $throwable) {
             file_put_contents($outputFile, serialize([
-                'nodes'        => [],
-                'fileAnalyses' => [],
-                'error'        => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
+                'nodes'               => [],
+                'fileAnalyses'        => [],
+                'anonymousClassNodes' => [],
+                'error'               => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
             ]));
 
             return 1;

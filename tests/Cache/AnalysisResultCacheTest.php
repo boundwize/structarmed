@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Cache;
 
 use App\Foo;
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
@@ -15,6 +16,7 @@ use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Composer\InstalledVersions;
+use Iterator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -525,13 +527,123 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
 
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertStringNotContainsString(
                 "\n",
                 (string) file_get_contents($this->firstJsonFile($cacheDirectory))
             );
             $this->assertEquals($classNodes, $loaded);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testStoresAndLoadsAnonymousClassNodes(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $classNodes          = [$this->makeClassNode($sourceFile)];
+        $anonymousClassNodes = [
+            new AnonymousClassNode(
+                file:    $sourceFile,
+                line:    7,
+                extends: 'App\BaseHandler',
+            ),
+        ];
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes(
+                $sourceFile,
+                'config',
+                $classNodes,
+                null,
+                $anonymousClassNodes,
+            );
+
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertEquals($classNodes, $loaded['classNodes']);
+            $this->assertEquals($anonymousClassNodes, $loaded['anonymousClassNodes']);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClassNodesLoadOldCachePayloadWithoutAnonymousClassNodes(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $classNodes          = [$this->makeClassNode($sourceFile)];
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+
+            // Simulate a payload written before anonymous class nodes existed.
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true);
+            $this->assertIsArray($payload);
+            unset($payload['anonymousClassNodes']);
+            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
+
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertEquals($classNodes, $loaded['classNodes']);
+            $this->assertSame([], $loaded['anonymousClassNodes']);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /**
+     * @return Iterator<string, array{mixed}>
+     */
+    public static function corruptedAnonymousClassNodesProvider(): Iterator
+    {
+        yield 'not an array' => ['invalid'];
+        yield 'entry not an array' => [['invalid']];
+        yield 'entry with invalid field types' => [[['file' => 1, 'line' => 'x', 'extends' => null]]];
+    }
+
+    #[DataProvider('corruptedAnonymousClassNodesProvider')]
+    public function testLoadClassNodesRejectsCorruptedAnonymousClassNodesPayload(mixed $corrupted): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true);
+            $this->assertIsArray($payload);
+            $payload['anonymousClassNodes'] = $corrupted;
+            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
+
+            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -564,7 +676,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertStringContainsString("\xEF\xBF\xBD", $loaded[0]->className);
@@ -602,7 +714,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertTrue($loaded[0]->isTrait);
@@ -640,7 +752,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertTrue($loaded[0]->isEnum);
@@ -679,7 +791,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertSame(['App\BaseMiddleware'], $loaded[0]->interfaceExtends);
@@ -735,7 +847,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ], 'class-nodes-' . hash('xxh128', "config\0" . $sourceFile) . '.json');
 
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertSame([], $loaded[0]->interfaceExtends);
@@ -785,7 +897,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded);
@@ -827,7 +939,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded);
@@ -870,7 +982,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded);
@@ -899,7 +1011,7 @@ final class AnalysisResultCacheTest extends TestCase
 
             $this->assertInstanceOf(
                 ClassNode::class,
-                $analysisResultCache->loadClassNodes($sourceFile, 'config')[0] ?? null
+                $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'][0] ?? null
             );
         } finally {
             $analysisResultCache->clear();
@@ -1077,7 +1189,10 @@ final class AnalysisResultCacheTest extends TestCase
             $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
             touch($sourceFile, 1234567890);
 
-            $this->assertEquals($classNodes, $analysisResultCache->loadClassNodes($sourceFile, 'config'));
+            $this->assertEquals(
+                $classNodes,
+                $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null
+            );
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
