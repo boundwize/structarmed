@@ -76,6 +76,9 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var list<ClassNode> */
     private array $nodes = [];
 
+    /** @var list<AnonymousClassNode> */
+    private array $anonymousClassNodes = [];
+
     private string $currentFile = '';
 
     /** @var list<string> */
@@ -126,6 +129,12 @@ final class ClassCollector extends NodeVisitorAbstract
         return $this->nodes;
     }
 
+    /** @return list<AnonymousClassNode> */
+    public function getAnonymousClassNodes(): array
+    {
+        return $this->anonymousClassNodes;
+    }
+
     public function enterNode(Node $node): null
     {
         if ($node instanceof Namespace_) {
@@ -174,6 +183,16 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         if (! $node->name instanceof Identifier) {
+            // Anonymous classes never become ClassNodes, but the class they
+            // extend is still extended within the scanned paths.
+            if ($node instanceof Class_) {
+                $this->anonymousClassNodes[] = new AnonymousClassNode(
+                    file:    $this->currentFile,
+                    line:    $node->getStartLine(),
+                    extends: $node->extends instanceof Name ? $node->extends->toString() : null,
+                );
+            }
+
             return null;
         }
 

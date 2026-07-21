@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
@@ -128,10 +129,11 @@ final readonly class ParallelClassNodeExtractor
             ];
         }
 
-        $nodes        = [];
-        $fileAnalyses = [];
-        $failure      = null;
-        $pending      = $processes;
+        $nodes               = [];
+        $fileAnalyses        = [];
+        $anonymousClassNodes = [];
+        $failure             = null;
+        $pending             = $processes;
 
         while ($pending !== []) {
             $anyActivity = false;
@@ -220,6 +222,24 @@ final readonly class ParallelClassNodeExtractor
 
                         $fileAnalyses[$file] = $fileAnalysis;
                     }
+
+                    $workerAnonClassNodes = $result['anonymousClassNodes'] ?? [];
+
+                    if (! is_array($workerAnonClassNodes)) {
+                        throw new RuntimeException(
+                            'Parallel analysis worker returned invalid anonymous class nodes.'
+                        );
+                    }
+
+                    foreach ($workerAnonClassNodes as $workerAnonClassNode) {
+                        if (! $workerAnonClassNode instanceof AnonymousClassNode) {
+                            throw new RuntimeException(
+                                'Parallel analysis worker returned invalid anonymous class nodes.'
+                            );
+                        }
+
+                        $anonymousClassNodes[] = $workerAnonClassNode;
+                    }
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
                 } finally {
@@ -243,7 +263,7 @@ final readonly class ParallelClassNodeExtractor
             throw new RuntimeException($failure);
         }
 
-        return new ExtractionResult($nodes, $fileAnalyses);
+        return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes);
     }
 
     /**

@@ -53,6 +53,10 @@ final readonly class ClassNodeExtractor
             }
         }
 
-        return new ExtractionResult($classCollector->getNodes(), $fileAnalyses);
+        return new ExtractionResult(
+            $classCollector->getNodes(),
+            $fileAnalyses,
+            $classCollector->getAnonymousClassNodes(),
+        );
     }
 }
