@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Throwable;
 
 use function file_get_contents;
 use function file_put_contents;
 use function is_array;
+use function is_string;
 use function serialize;
 use function sprintf;
 use function unserialize;
@@ -58,6 +60,16 @@ final readonly class ClassNodeWorker
                 $progressHandler,
                 $withFileAnalysis,
             );
+
+            $cacheDirectory = $payload['cacheDirectory'] ?? null;
+            $cacheNamespace = $payload['cacheNamespace'] ?? null;
+
+            // Writing the per-file cache entries here spreads the JSON serialisation and
+            // disk writes across all workers instead of doing them serially afterwards.
+            if (is_string($cacheDirectory) && is_string($cacheNamespace)) {
+                (new AnalysisResultCache($basePath, $cacheDirectory))
+                    ->storeExtractionResult($files, $result, $cacheNamespace);
+            }
 
             file_put_contents($outputFile, serialize([
                 'nodes'               => $result->classNodes,

@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Cache;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
+use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
@@ -14,6 +15,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
 
+use function array_fill_keys;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
@@ -293,6 +295,47 @@ final readonly class AnalysisResultCache
         }
 
         return $nodes;
+    }
+
+    /**
+     * Stores one cache entry per extracted file, so a later run can reuse them individually.
+     *
+     * @param list<string> $files
+     */
+    public function storeExtractionResult(
+        array $files,
+        ExtractionResult $extractionResult,
+        string $namespace,
+    ): void {
+        $classNodesByFile = array_fill_keys($files, []);
+
+        foreach ($extractionResult->classNodes as $classNode) {
+            if (! isset($classNodesByFile[$classNode->file])) {
+                continue;
+            }
+
+            $classNodesByFile[$classNode->file][] = $classNode;
+        }
+
+        $anonymousClassNodesByFile = array_fill_keys($files, []);
+
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            if (! isset($anonymousClassNodesByFile[$anonymousClassNode->file])) {
+                continue;
+            }
+
+            $anonymousClassNodesByFile[$anonymousClassNode->file][] = $anonymousClassNode;
+        }
+
+        foreach ($classNodesByFile as $file => $fileClassNodes) {
+            $this->storeClassNodes(
+                $file,
+                $namespace,
+                $fileClassNodes,
+                $extractionResult->fileAnalyses[$file] ?? null,
+                $anonymousClassNodesByFile[$file] ?? [],
+            );
+        }
     }
 
     /**

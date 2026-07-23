@@ -29,7 +29,6 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-use function array_fill_keys;
 use function array_filter;
 use function array_intersect;
 use function array_key_exists;
@@ -904,12 +903,15 @@ final readonly class Analyser
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
         if ($options->isParallel()) {
+            // The parallel extractor (and its workers) store the per-file cache entries
+            // themselves, so the serialisation work happens in parallel too.
             $parsedResult = (new ParallelClassNodeExtractor(
                 $this->basePath,
                 $layers,
                 $layerPatterns,
                 $options->workerCount,
                 $this->analysisResultCache?->getCacheDirectory(),
+                $this->analysisResultCache instanceof AnalysisResultCache ? $this->classNodeCacheNamespace : null,
             ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         } else {
             $parsedResult = (new ClassNodeExtractor($chainLayerResolver))->extract(
@@ -917,38 +919,24 @@ final readonly class Analyser
                 $progressHandler,
                 $withFileAnalysis,
             );
+
+            $this->analysisResultCache?->storeExtractionResult(
+                $filesToParse,
+                $parsedResult,
+                $this->classNodeCacheNamespace,
+            );
         }
 
-        $classNodesByFile = array_fill_keys($filesToParse, []);
         foreach ($parsedResult->classNodes as $parsedClassNode) {
             $classNodes[] = $parsedClassNode;
-
-            if (isset($classNodesByFile[$parsedClassNode->file])) {
-                $classNodesByFile[$parsedClassNode->file][] = $parsedClassNode;
-            }
         }
 
-        $anonymousClassNodesByFile = array_fill_keys($filesToParse, []);
         foreach ($parsedResult->anonymousClassNodes as $parsedAnonymousClassNode) {
             $anonymousClassNodes[] = $parsedAnonymousClassNode;
-
-            if (isset($anonymousClassNodesByFile[$parsedAnonymousClassNode->file])) {
-                $anonymousClassNodesByFile[$parsedAnonymousClassNode->file][] = $parsedAnonymousClassNode;
-            }
         }
 
         foreach ($parsedResult->fileAnalyses as $file => $fileAnalysis) {
             $fileAnalyses[$file] = $fileAnalysis;
-        }
-
-        foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
-            $this->analysisResultCache?->storeClassNodes(
-                $fileToParse,
-                $this->classNodeCacheNamespace,
-                $fileClassNodes,
-                $fileAnalyses[$fileToParse] ?? null,
-                $anonymousClassNodesByFile[$fileToParse] ?? [],
-            );
         }
 
         $progressHandler?->finish();

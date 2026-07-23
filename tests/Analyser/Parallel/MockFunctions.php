@@ -19,14 +19,20 @@ $GLOBALS['mock_tracked_tempnam_files']     = [];
  * @param list<string>|string $command
  * @param array<int, list<string>|resource> $descriptorspec
  * @param array<int, resource> $pipes
+ * @param array<string, string>|null $envVars
  */
-function proc_open(array|string $command, array $descriptorspec, array|null &$pipes): mixed
-{
+function proc_open(
+    array|string $command,
+    array $descriptorspec,
+    array|null &$pipes,
+    string|null $cwd = null,
+    array|null $envVars = null,
+): mixed {
     if ($GLOBALS['mock_proc_open'] === true) {
         return false;
     }
 
-    return \proc_open($command, $descriptorspec, $pipes);
+    return \proc_open($command, $descriptorspec, $pipes, $cwd, $envVars);
 }
 
 function tempnam(string $directory, string $prefix): string|false

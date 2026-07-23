@@ -6,10 +6,14 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
+use Throwable;
 
 use function array_fill;
 use function array_key_exists;
@@ -24,6 +28,7 @@ use function feof;
 use function file_put_contents;
 use function filesize;
 use function fread;
+use function getenv;
 use function is_array;
 use function is_dir;
 use function is_resource;
@@ -33,6 +38,7 @@ use function mkdir;
 use function proc_close;
 use function serialize;
 use function sprintf;
+use function stream_select;
 use function stream_set_blocking;
 use function substr_count;
 use function sys_get_temp_dir;
@@ -40,6 +46,7 @@ use function unlink;
 use function unserialize;
 use function usleep;
 
+use const DIRECTORY_SEPARATOR;
 use const PHP_BINARY;
 
 final readonly class ParallelClassNodeExtractor
@@ -58,6 +65,7 @@ final readonly class ParallelClassNodeExtractor
         private array $layerPatterns,
         private int $workerCount,
         private ?string $cacheDirectory = null,
+        private ?string $cacheNamespace = null,
     ) {
     }
 
@@ -71,11 +79,17 @@ final readonly class ParallelClassNodeExtractor
             return new ExtractionResult([], []);
         }
 
-        $totalFiles   = count($files);
-        $workerCount  = min($this->workerCount, $totalFiles);
+        $totalFiles  = count($files);
+        $workerCount = min($this->workerCount, $totalFiles);
+
+        if ($workerCount === 1) {
+            return $this->extractInProcess($files, $progressHandler, $withFileAnalysis);
+        }
+
         $script       = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $processes    = [];
         $emitProgress = $progressHandler instanceof ProgressHandlerInterface;
+        $environment  = $this->workerEnvironment();
 
         foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             [
@@ -91,6 +105,8 @@ final readonly class ParallelClassNodeExtractor
                 'files'            => $chunk,
                 'emitProgress'     => $emitProgress,
                 'withFileAnalysis' => $withFileAnalysis,
+                'cacheDirectory'   => $this->cacheDirectory,
+                'cacheNamespace'   => $this->cacheNamespace,
             ]));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
@@ -104,6 +120,8 @@ final readonly class ParallelClassNodeExtractor
                     2 => ['file', $stderrFile, 'w'],
                 ],
                 $pipes,
+                null,
+                $environment,
             );
 
             if ($process === false) {
@@ -134,11 +152,34 @@ final readonly class ParallelClassNodeExtractor
         $anonymousClassNodes = [];
         $failure             = null;
         $pending             = $processes;
+        // stream_select() does not work on process pipes on Windows, so fall back to polling there.
+        $useSelect = DIRECTORY_SEPARATOR !== '\\';
 
         while ($pending !== []) {
             $anyActivity = false;
+            $readable    = [];
 
-            foreach (array_keys($pending) as $key) {
+            foreach ($pending as $key => $workerState) {
+                $readable[$key] = $workerState['stdoutPipe'];
+            }
+
+            if ($useSelect) {
+                $write  = null;
+                $except = null;
+
+                // Block until a worker writes progress or exits (pipe EOF is readable too).
+                if (@stream_select($readable, $write, $except, 0, 200_000) === false) {
+                    foreach ($pending as $key => $workerState) {
+                        $readable[$key] = $workerState['stdoutPipe'];
+                    }
+                }
+            }
+
+            foreach (array_keys($readable) as $key) {
+                if (! array_key_exists($key, $pending)) {
+                    continue;
+                }
+
                 $stdoutPipe = $pending[$key]['stdoutPipe'];
 
                 $data = fread($stdoutPipe, 8192);
@@ -254,7 +295,7 @@ final readonly class ParallelClassNodeExtractor
                 $anyActivity = true;
             }
 
-            if (! $anyActivity) {
+            if (! $useSelect && ! $anyActivity) {
                 usleep(5000);
             }
         }
@@ -264,6 +305,61 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes);
+    }
+
+    /**
+     * Analysing a single bucket in a worker process would only add the PHP boot cost
+     * (autoloading, process spawn) on top of the same sequential work, so run it inline.
+     * This is the common path for incremental runs where only a few files miss the cache.
+     *
+     * @param list<string> $files
+     */
+    private function extractInProcess(
+        array $files,
+        ?ProgressHandlerInterface $progressHandler,
+        bool $withFileAnalysis,
+    ): ExtractionResult {
+        try {
+            $layerResolver = ChainLayerResolver::fromLayerConfig($this->layers, $this->basePath, $this->layerPatterns);
+
+            $extractionResult = (new ClassNodeExtractor($layerResolver))->extract(
+                $files,
+                $progressHandler,
+                $withFileAnalysis,
+            );
+
+            if ($this->cacheDirectory !== null && $this->cacheNamespace !== null) {
+                (new AnalysisResultCache($this->basePath, $this->cacheDirectory))
+                    ->storeExtractionResult($files, $extractionResult, $this->cacheNamespace);
+            }
+
+            return $extractionResult;
+        } catch (Throwable $throwable) {
+            throw new RuntimeException(sprintf(
+                'Parallel analysis worker failed: %s: %s',
+                $throwable::class,
+                $throwable->getMessage(),
+            ), 0, $throwable);
+        }
+    }
+
+    /**
+     * Workers inherit the parent environment; when Xdebug is loaded it would slow every
+     * worker down considerably, so it is switched off unless the user opted in explicitly
+     * via the XDEBUG_MODE environment variable.
+     *
+     * @return array<string, string>|null
+     */
+    private function workerEnvironment(): ?array
+    {
+        if (getenv('XDEBUG_MODE') !== false) {
+            return null;
+        }
+
+        $environment                = getenv();
+        $environment['XDEBUG_MODE'] = 'off';
+
+        return $environment;
     }
 
     /**

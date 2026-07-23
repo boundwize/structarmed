@@ -142,6 +142,18 @@ final class Baz
 }
 PHP);
 
+        $file2 = $dir . '/Qux.php';
+
+        file_put_contents($file2, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Qux
+{
+}
+PHP);
+
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
@@ -150,10 +162,12 @@ PHP);
             cacheDirectory: $cacheDir,
         );
 
-        $extractionResult = $parallelClassNodeExtractor->extract([$file]);
+        $extractionResult = $parallelClassNodeExtractor->extract([$file, $file2]);
 
-        $this->assertCount(1, $extractionResult->classNodes);
-        $this->assertSame('App\\Domain\\Baz', $extractionResult->classNodes[0]->className);
+        $this->assertCount(2, $extractionResult->classNodes);
+        $classNames = [$extractionResult->classNodes[0]->className, $extractionResult->classNodes[1]->className];
+        $this->assertContains('App\\Domain\\Baz', $classNames);
+        $this->assertContains('App\\Domain\\Qux', $classNames);
     }
 
     public function testExtractWithLayerPatternsUsesChainResolver(): void
@@ -211,6 +225,80 @@ PHP);
         $this->assertSame('App\\Domain\\FooService', $extractionResult->classNodes[0]->className);
     }
 
+    public function testSingleFileExtractRunsInProcessAndStoresCacheEntry(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-parallel-cache');
+        $file     = $dir . '/Foo.php';
+
+        file_put_contents($file, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Foo
+{
+}
+PHP);
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+            basePath: $dir,
+            layers: ['Domain' => 'App\\Domain'],
+            layerPatterns: [],
+            workerCount: 4,
+            cacheDirectory: $cacheDir,
+            cacheNamespace: 'test-namespace',
+        );
+
+        $extractionResult = $parallelClassNodeExtractor->extract([$file]);
+
+        $this->assertCount(1, $extractionResult->classNodes);
+        $this->assertSame('App\\Domain\\Foo', $extractionResult->classNodes[0]->className);
+        $this->assertCount(1, glob($cacheDir . '/class-nodes-*.json') ?: []);
+    }
+
+    public function testParallelExtractStoresCacheEntriesFromWorkers(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-parallel-cache');
+        $file1    = $dir . '/Foo.php';
+        $file2    = $dir . '/Bar.php';
+
+        file_put_contents($file1, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Foo
+{
+}
+PHP);
+
+        file_put_contents($file2, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Bar
+{
+}
+PHP);
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+            basePath: $dir,
+            layers: ['Domain' => 'App\\Domain'],
+            layerPatterns: [],
+            workerCount: 2,
+            cacheDirectory: $cacheDir,
+            cacheNamespace: 'test-namespace',
+        );
+
+        $extractionResult = $parallelClassNodeExtractor->extract([$file1, $file2]);
+
+        $this->assertCount(2, $extractionResult->classNodes);
+        $this->assertCount(2, glob($cacheDir . '/class-nodes-*.json') ?: []);
+    }
+
     public function testExtractThrowsWhenWorkerFailsDueToNullByteInFilePath(): void
     {
         $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
@@ -218,6 +306,8 @@ PHP);
         // which is NOT caught by ClassNodeExtractor's catch(PhpParser\Error), so it
         // propagates to ClassNodeWorker's catch(Throwable) → worker exits with code 1
         $fileWithNullByte = $dir . "/foo\x00.php";
+        $validFile        = $dir . '/Valid.php';
+        file_put_contents($validFile, '<?php class Valid {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
             basePath: $dir,
@@ -227,7 +317,7 @@ PHP);
         );
 
         $this->expectException(RuntimeException::class);
-        $parallelClassNodeExtractor->extract([$fileWithNullByte]);
+        $parallelClassNodeExtractor->extract([$fileWithNullByte, $validFile]);
     }
 
     public function testExtractWithNonExistentCacheDirectoryCreatesIt(): void
@@ -246,6 +336,18 @@ final class Qux
 }
 PHP);
 
+        $file2 = $dir . '/Quux.php';
+
+        file_put_contents($file2, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Quux
+{
+}
+PHP);
+
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
@@ -255,8 +357,8 @@ PHP);
         );
 
         try {
-            $result = $parallelClassNodeExtractor->extract([$file]);
-            $this->assertCount(1, $result->classNodes);
+            $result = $parallelClassNodeExtractor->extract([$file, $file2]);
+            $this->assertCount(2, $result->classNodes);
         } finally {
             if (is_dir($cacheDir)) {
                 foreach (glob($cacheDir . '/*') ?: [] as $tmpFile) {
@@ -272,9 +374,13 @@ PHP);
     {
         $GLOBALS['mock_proc_open'] = true;
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        // two files so the extractor takes the multi-worker subprocess path
+        // (a single file is analysed in-process without spawning workers)
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
 
@@ -282,7 +388,7 @@ PHP);
         $this->expectExceptionMessage('Unable to start parallel analysis worker.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract([$file, $file2]);
         } finally {
             $GLOBALS['mock_proc_open'] = false;
         }
@@ -292,9 +398,13 @@ PHP);
     {
         $GLOBALS['mock_tempnam'] = true;
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        // two files so the extractor takes the multi-worker subprocess path
+        // (a single file is analysed in-process without spawning workers)
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
 
@@ -302,7 +412,7 @@ PHP);
         $this->expectExceptionMessage('Unable to create temporary file for parallel analysis.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract([$file, $file2]);
         } finally {
             $GLOBALS['mock_tempnam'] = false;
         }
@@ -312,9 +422,13 @@ PHP);
     {
         $GLOBALS['mock_file_get_contents_payload'] = ['invalid' => 'payload'];
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        // two files so the extractor takes the multi-worker subprocess path
+        // (a single file is analysed in-process without spawning workers)
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
 
@@ -322,7 +436,7 @@ PHP);
         $this->expectExceptionMessage('Parallel analysis worker returned an invalid payload.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract([$file, $file2]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -333,9 +447,13 @@ PHP);
     {
         $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => ['not_a_string']];
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        // two files so the extractor takes the multi-worker subprocess path
+        // (a single file is analysed in-process without spawning workers)
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
 
@@ -343,7 +461,7 @@ PHP);
         $this->expectExceptionMessage('Parallel analysis worker returned an invalid error payload.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract([$file, $file2]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -358,9 +476,13 @@ PHP);
             'error'        => null,
         ];
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        // two files so the extractor takes the multi-worker subprocess path
+        // (a single file is analysed in-process without spawning workers)
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
 
@@ -368,7 +490,7 @@ PHP);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid file analyses.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract([$file, $file2]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -383,9 +505,13 @@ PHP);
             'error'        => null,
         ];
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        // two files so the extractor takes the multi-worker subprocess path
+        // (a single file is analysed in-process without spawning workers)
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
 
@@ -393,7 +519,7 @@ PHP);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid file analyses.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract([$file, $file2]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -409,9 +535,13 @@ PHP);
             'error'               => null,
         ];
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        // two files so the extractor takes the multi-worker subprocess path
+        // (a single file is analysed in-process without spawning workers)
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
 
@@ -419,7 +549,7 @@ PHP);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid anonymous class nodes.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract([$file, $file2]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -435,9 +565,13 @@ PHP);
             'error'               => null,
         ];
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        // two files so the extractor takes the multi-worker subprocess path
+        // (a single file is analysed in-process without spawning workers)
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
 
@@ -445,7 +579,7 @@ PHP);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid anonymous class nodes.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelClassNodeExtractor->extract([$file, $file2]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
