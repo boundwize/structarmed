@@ -23,6 +23,7 @@ use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
+use Boundwize\StructArmed\Util\SkipMatcher;
 use FilesystemIterator;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
@@ -38,14 +39,12 @@ use function array_merge;
 use function array_unique;
 use function array_values;
 use function count;
-use function fnmatch;
 use function getcwd;
 use function in_array;
 use function is_dir;
 use function is_file;
 use function sprintf;
 use function str_starts_with;
-use function strpbrk;
 use function substr;
 
 use const ARRAY_FILTER_USE_BOTH;
@@ -189,8 +188,9 @@ final readonly class Analyser
         // violations so report ordering remains class rules before ruleset.
         $ruleset                    = $this->expandRuleset($architecture->getRuleset());
         $classViolationSkips        = $architecture->getClassViolationSkips();
-        $rulesetSkipPaths           = $this->mergedSkipPaths($globalSkipPaths, $architecture->getRulesetSkipPaths());
-        $rulesetSkipMatchers        = $this->compileSkipMatchers($rulesetSkipPaths);
+        $skipMatcher                = $this->compileSkipMatchers(
+            $this->mergedSkipPaths($globalSkipPaths, $architecture->getRulesetSkipPaths())
+        );
         $rulesetViolationCollection = new RuleViolationCollection();
         $hasRuleset                 = $ruleset !== [];
         $scanScopeLayerMap          = $hasRuleset ? $this->scanScopeLayerMap($architecture) : [];
@@ -217,7 +217,7 @@ final readonly class Analyser
 
         foreach ($classNodes as $classNode) {
             foreach ($classRules as $key => $rule) {
-                if ($this->isSkipped($classNode->file, $ruleSkipMatchers[$key])) {
+                if ($ruleSkipMatchers[$key]->isSkipped($classNode->file)) {
                     continue;
                 }
 
@@ -263,7 +263,7 @@ final readonly class Analyser
                 continue;
             }
 
-            if ($rulesetSkipPaths !== [] && $this->isSkipped($classNode->file, $rulesetSkipMatchers)) {
+            if ($skipMatcher->isSkipped($classNode->file)) {
                 continue;
             }
 
@@ -466,7 +466,7 @@ final readonly class Analyser
      * @param array<string, RuleInterface> $classRules
      * @param list<string>                 $globalSkipPaths
      * @param array<string, list<string>>  $ruleSkipPaths
-     * @return array<string, array{paths: list<string>, patterns: list<string>}>
+     * @return array<string, SkipMatcher>
      */
     private function ruleSkipMatchers(array $classRules, array $globalSkipPaths, array $ruleSkipPaths): array
     {
@@ -967,12 +967,12 @@ final readonly class Analyser
             return $violations;
         }
 
-        $skipMatchers = $this->compileSkipMatchers($skipPaths);
+        $skipMatcher = $this->compileSkipMatchers($skipPaths);
 
         return array_values(array_filter(
             $violations,
-            fn(RuleViolation $ruleViolation): bool => $ruleViolation->file === ''
-                || ! $this->isSkipped($ruleViolation->file, $skipMatchers),
+            static fn(RuleViolation $ruleViolation): bool => $ruleViolation->file === ''
+                || ! $skipMatcher->isSkipped($ruleViolation->file),
         ));
     }
 
@@ -983,11 +983,11 @@ final readonly class Analyser
      */
     public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
     {
-        $layers     ??= $this->resolveLayers($architecture);
-        $files        = [];
-        $skipPaths    = $architecture->getSkipPaths();
-        $skipMatchers = $this->compileSkipMatchers($skipPaths);
-        $scanPaths    = $this->scanPaths($layers, $scanPaths);
+        $layers    ??= $this->resolveLayers($architecture);
+        $files       = [];
+        $skipPaths   = $architecture->getSkipPaths();
+        $skipMatcher = $this->compileSkipMatchers($skipPaths);
+        $scanPaths   = $this->scanPaths($layers, $scanPaths);
 
         if ($this->shouldAnalyseComposerJson($architecture)) {
             $scanPaths[] = 'composer.json';
@@ -1002,7 +1002,7 @@ final readonly class Analyser
             if (is_file($fullPath)) {
                 if (
                     Path::isAnalysableFile($fullPath, $this->basePath)
-                    && ! $this->isSkipped($fullPath, $skipMatchers)
+                    && ! $skipMatcher->isSkipped($fullPath)
                 ) {
                     $files[] = $fullPath;
                 }
@@ -1014,11 +1014,11 @@ final readonly class Analyser
                 continue;
             }
 
-            if ($this->isSkipped($fullPath, $skipMatchers)) {
+            if ($skipMatcher->isSkipped($fullPath)) {
                 continue;
             }
 
-            foreach ($this->phpFiles($fullPath, $skipMatchers) as $file) {
+            foreach ($this->phpFiles($fullPath, $skipMatcher) as $file) {
                 $files[] = $file;
             }
         }
@@ -1064,9 +1064,8 @@ final readonly class Analyser
             return false;
         }
 
-        return $this->isSkipped(
-            Path::resolve('composer.json', $this->normalisedBasePath),
-            $this->compileSkipMatchers($skipPaths)
+        return $this->compileSkipMatchers($skipPaths)->isSkipped(
+            Path::resolve('composer.json', $this->normalisedBasePath)
         );
     }
 
@@ -1111,76 +1110,28 @@ final readonly class Analyser
 
     /**
      * @param list<string> $skipPaths
-     * @return array{paths: list<string>, patterns: list<string>}
      */
-    private function compileSkipMatchers(array $skipPaths): array
+    private function compileSkipMatchers(array $skipPaths): SkipMatcher
     {
-        $skipMatchers = [
-            'paths'    => [],
-            'patterns' => [],
-        ];
-
-        foreach ($skipPaths as $skipPath) {
-            $absoluteSkipPath = Path::resolve(
-                Path::normalise($skipPath),
-                $this->normalisedBasePath
-            );
-
-            if (strpbrk($absoluteSkipPath, '*?[') !== false) {
-                $skipMatchers['patterns'][] = $absoluteSkipPath;
-
-                continue;
-            }
-
-            $skipMatchers['paths'][] = Path::normalise($absoluteSkipPath, canonicalise: true);
-        }
-
-        return $skipMatchers;
+        return SkipMatcher::compile($skipPaths, $this->normalisedBasePath);
     }
 
     /**
-     * @param array{paths: list<string>, patterns: list<string>} $skipMatchers
-     */
-    private function isSkipped(string $path, array $skipMatchers): bool
-    {
-        if ($skipMatchers['paths'] === [] && $skipMatchers['patterns'] === []) {
-            return false;
-        }
-
-        $normalisedPath = Path::normalise($path, canonicalise: true);
-
-        foreach ($skipMatchers['paths'] as $skipPath) {
-            if ($normalisedPath === $skipPath || str_starts_with($normalisedPath, $skipPath . '/')) {
-                return true;
-            }
-        }
-
-        foreach ($skipMatchers['patterns'] as $skipPattern) {
-            if (fnmatch($skipPattern, $normalisedPath)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array{paths: list<string>, patterns: list<string>} $skipMatchers
      * @return string[]
      */
-    private function phpFiles(string $path, array $skipMatchers): array
+    private function phpFiles(string $path, SkipMatcher $skipMatcher): array
     {
         $files    = [];
         $iterator = new RecursiveIteratorIterator(
             new RecursiveCallbackFilterIterator(
                 new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
-                function (SplFileInfo $file) use ($skipMatchers): bool {
+                static function (SplFileInfo $file) use ($skipMatcher): bool {
                     $isRealDirectory = $file->isDir() && ! $file->isLink();
                     if (! $isRealDirectory && $file->getExtension() !== 'php') {
                         return false;
                     }
 
-                    return ! $this->isSkipped($file->getPathname(), $skipMatchers);
+                    return ! $skipMatcher->isSkipped($file->getPathname());
                 }
             ),
             RecursiveIteratorIterator::LEAVES_ONLY
