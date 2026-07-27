@@ -34,10 +34,10 @@ use function json_encode;
 use function mkdir;
 use function rmdir;
 use function sprintf;
-use function strval;
 use function sys_get_temp_dir;
 use function unlink;
 
+use const GLOB_NOSORT;
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_THROW_ON_ERROR;
 
@@ -114,7 +114,7 @@ final readonly class AnalysisResultCache
             return;
         }
 
-        foreach (array_map(strval(...), glob($this->cacheDirectory . '/*') ?: []) as $path) {
+        foreach (glob($this->cacheDirectory . '/*', GLOB_NOSORT) ?: [] as $path) {
             if (is_dir($path)) {
                 rmdir($path);
                 continue;
