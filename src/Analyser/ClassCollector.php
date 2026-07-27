@@ -62,15 +62,21 @@ use function strtolower;
 final class ClassCollector extends NodeVisitorAbstract
 {
     private const SUPERGLOBALS = [
-        '_GET',
-        '_POST',
-        '_REQUEST',
-        '_SESSION',
-        '_COOKIE',
-        '_SERVER',
-        '_ENV',
-        '_FILES',
-        'GLOBALS',
+        '_GET'     => true,
+        '_POST'    => true,
+        '_REQUEST' => true,
+        '_SESSION' => true,
+        '_COOKIE'  => true,
+        '_SERVER'  => true,
+        '_ENV'     => true,
+        '_FILES'   => true,
+        'GLOBALS'  => true,
+    ];
+
+    private const KEYWORD_CONSTANTS = [
+        'true'  => true,
+        'false' => true,
+        'null'  => true,
     ];
 
     /** @var list<ClassNode> */
@@ -272,7 +278,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
         if ($node instanceof FullyQualified) {
             $name = $node->toString();
-            if (! in_array(strtolower($name), ['true', 'false', 'null'], true)) {
+            if (! isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
                 $this->addDependency($name);
             }
         }
@@ -332,7 +338,7 @@ final class ClassCollector extends NodeVisitorAbstract
         if (
             $node instanceof Variable
             && is_string($node->name)
-            && in_array($node->name, self::SUPERGLOBALS, true)
+            && isset(self::SUPERGLOBALS[$node->name])
         ) {
             $this->addSuperglobal('$' . $node->name);
         }
