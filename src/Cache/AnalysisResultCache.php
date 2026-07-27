@@ -138,7 +138,8 @@ final readonly class AnalysisResultCache
             'composerGeneratedVersionHash' => $composerGeneratedVersionHash,
         ];
 
-        if ($this->readPath($this->statePath()) === $expectedState) {
+        $statePath = $this->statePath();
+        if ($this->readPath($statePath) === $expectedState) {
             return;
         }
 
@@ -151,7 +152,7 @@ final readonly class AnalysisResultCache
         }
 
         file_put_contents(
-            $this->statePath(),
+            $statePath,
             json_encode($expectedState, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)
         );
     }
