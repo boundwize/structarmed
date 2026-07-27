@@ -45,11 +45,14 @@ final readonly class AnalysisResultCache
 {
     private string $cacheDirectory;
 
+    private string $statePath;
+
     public function __construct(string $basePath, ?string $cacheDirectory = null)
     {
         $this->cacheDirectory = $cacheDirectory
             ? Path::resolve(Path::normalise($cacheDirectory), $basePath)
             : Path::normalise(sys_get_temp_dir()) . '/structarmed/cache/' . hash('xxh128', $basePath);
+        $this->statePath      = $this->cacheDirectory . '/cache-state.json';
     }
 
     /**
@@ -138,8 +141,7 @@ final readonly class AnalysisResultCache
             'composerGeneratedVersionHash' => $composerGeneratedVersionHash,
         ];
 
-        $statePath = $this->statePath();
-        if ($this->readPath($statePath) === $expectedState) {
+        if ($this->readPath($this->statePath) === $expectedState) {
             return;
         }
 
@@ -152,14 +154,9 @@ final readonly class AnalysisResultCache
         }
 
         file_put_contents(
-            $statePath,
+            $this->statePath,
             json_encode($expectedState, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)
         );
-    }
-
-    private function statePath(): string
-    {
-        return $this->cacheDirectory . '/cache-state.json';
     }
 
     /**
