@@ -128,74 +128,37 @@ final readonly class AnalysisResultCache
         return $this->cacheDirectory;
     }
 
-    public function hasDifferentConfig(string $configHash): bool
-    {
+    public function synchronizeState(
+        string $configHash,
+        string $composerGeneratedVersionHash,
+        bool $isAlreadyCleared = false
+    ): void {
+        $expectedState = [
+            'configHash'                   => $configHash,
+            'composerGeneratedVersionHash' => $composerGeneratedVersionHash,
+        ];
+
+        if ($this->readPath($this->statePath()) === $expectedState) {
+            return;
+        }
+
+        if (! $isAlreadyCleared) {
+            $this->clear();
+        }
+
         if (! is_dir($this->cacheDirectory)) {
-            return false;
+            mkdir($this->cacheDirectory, 0777, true);
         }
 
-        foreach (array_map(strval(...), glob($this->cacheDirectory . '/*') ?: []) as $path) {
-            if (is_dir($path)) {
-                continue;
-            }
-
-            $payload = $this->readPath($path);
-
-            if ($payload === null) {
-                continue;
-            }
-
-            $metadata = $payload['metadata'] ?? null;
-
-            if (! is_array($metadata)) {
-                continue;
-            }
-
-            if (! isset($metadata['configHash'])) {
-                continue;
-            }
-
-            if ($metadata['configHash'] !== $configHash) {
-                return true;
-            }
-        }
-
-        return false;
+        file_put_contents(
+            $this->statePath(),
+            json_encode($expectedState, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)
+        );
     }
 
-    public function hasDifferentComposerGeneratedVersion(string $composerGeneratedVersionHash): bool
+    private function statePath(): string
     {
-        if (! is_dir($this->cacheDirectory)) {
-            return false;
-        }
-
-        foreach (array_map(strval(...), glob($this->cacheDirectory . '/*') ?: []) as $path) {
-            if (is_dir($path)) {
-                continue;
-            }
-
-            $payload = $this->readPath($path);
-
-            if ($payload === null) {
-                continue;
-            }
-
-            $metadata = $payload['metadata'] ?? null;
-
-            if (! is_array($metadata)) {
-                continue;
-            }
-
-            if (! array_key_exists('composerGeneratedVersionHash', $metadata)) {
-                continue;
-            }
-
-            if ($metadata['composerGeneratedVersionHash'] !== $composerGeneratedVersionHash) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->cacheDirectory . '/cache-state.json';
     }
 
     /**

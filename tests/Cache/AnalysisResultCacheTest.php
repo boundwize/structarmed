@@ -268,19 +268,25 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testDetectsDifferentConfigHashAndClearsCache(): void
+    public function testSynchronizeStateCreatesStateFileAndKeepsMatchingCache(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
 
         try {
-            $analysisResultCache->store('key', ['configHash' => 'old'], new RuleViolationCollection());
+            $analysisResultCache->synchronizeState('config', 'version');
+            $analysisResultCache->store('key', ['configHash' => 'config'], new RuleViolationCollection());
 
-            $this->assertTrue($analysisResultCache->hasDifferentConfig('new'));
+            $analysisResultCache->synchronizeState('config', 'version');
 
-            $analysisResultCache->clear();
-
-            $this->assertDirectoryDoesNotExist($cacheDirectory);
+            $this->assertFileExists($cacheDirectory . '/key.json');
+            $this->assertSame(
+                json_encode([
+                    'configHash'                   => 'config',
+                    'composerGeneratedVersionHash' => 'version',
+                ], JSON_THROW_ON_ERROR),
+                file_get_contents($cacheDirectory . '/cache-state.json')
+            );
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -302,147 +308,75 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testConfigHashIsNotDifferentWhenCacheDirectoryIsMissing(): void
+    public function testSynchronizeStateCreatesMissingCacheDirectory(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
 
         $this->removeTempDirectory($cacheDirectory);
 
-        $this->assertFalse($analysisResultCache->hasDifferentConfig('new'));
-    }
-
-    public function testConfigHashIsNotDifferentWhenStoredHashMatches(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
         try {
-            $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
+            $analysisResultCache->synchronizeState('config', 'version');
 
-            $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
+            $this->assertFileExists($cacheDirectory . '/cache-state.json');
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testConfigHashSkipsUnreadableCachePayloadsAndDirectories(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        mkdir($cacheDirectory . '/nested');
-        file_put_contents($cacheDirectory . '/key.json', '["bad"]');
-        $this->writeCachePayload($cacheDirectory, [
-            'metadata'   => 'bad',
-            'violations' => [],
-        ], 'other.json');
-
-        try {
-            $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
-        } finally {
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    public function testConfigHashSkipsClassNodeCachePayloads(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        file_put_contents($sourceFile, '<?php class Foo {}');
-
-        try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
-
-            $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
-        } finally {
-            unlink($sourceFile);
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    public function testComposerGeneratedVersionHashIsNotDifferentWhenCacheDirectoryIsMissing(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        $this->removeTempDirectory($cacheDirectory);
-
-        $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('new'));
-    }
-
-    public function testComposerGeneratedVersionHashIsNotDifferentWhenNoCachedEntryHasTheField(): void
+    public function testSynchronizeStateClearsCacheWhenConfigHashChanges(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
 
         try {
-            $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
+            $analysisResultCache->synchronizeState('old', 'version');
+            $analysisResultCache->store('key', ['configHash' => 'old'], new RuleViolationCollection());
 
-            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
-        } finally {
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
+            $analysisResultCache->synchronizeState('new', 'version');
 
-    public function testComposerGeneratedVersionHashIsNotDifferentWhenStoredHashMatches(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        try {
-            $analysisResultCache->store(
-                'key',
-                ['composerGeneratedVersionHash' => 'same'],
-                new RuleViolationCollection()
+            $this->assertFileDoesNotExist($cacheDirectory . '/key.json');
+            $this->assertSame(
+                json_encode([
+                    'configHash'                   => 'new',
+                    'composerGeneratedVersionHash' => 'version',
+                ], JSON_THROW_ON_ERROR),
+                file_get_contents($cacheDirectory . '/cache-state.json')
             );
-
-            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('same'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testComposerGeneratedVersionHashIsDifferentWhenStoredHashDiffers(): void
+    public function testSynchronizeStateClearsCacheWhenComposerGeneratedVersionHashChanges(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
 
         try {
+            $analysisResultCache->synchronizeState('config', 'old');
             $analysisResultCache->store(
                 'key',
                 ['composerGeneratedVersionHash' => 'old'],
                 new RuleViolationCollection()
             );
 
-            $this->assertTrue($analysisResultCache->hasDifferentComposerGeneratedVersion('new'));
+            $analysisResultCache->synchronizeState('config', 'new');
+
+            $this->assertFileDoesNotExist($cacheDirectory . '/key.json');
+            $this->assertSame(
+                json_encode([
+                    'configHash'                   => 'config',
+                    'composerGeneratedVersionHash' => 'new',
+                ], JSON_THROW_ON_ERROR),
+                file_get_contents($cacheDirectory . '/cache-state.json')
+            );
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testComposerGeneratedVersionHashSkipsUnreadableCachePayloadsAndDirectories(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        mkdir($cacheDirectory . '/nested');
-        file_put_contents($cacheDirectory . '/key.json', '["bad"]');
-        $this->writeCachePayload($cacheDirectory, [
-            'metadata'   => 'bad',
-            'violations' => [],
-        ], 'other.json');
-
-        try {
-            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
-        } finally {
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    public function testComposerGeneratedVersionHashSkipsClassNodeCachePayloads(): void
+    public function testSynchronizeStateClearsLegacyCacheWithoutStateFile(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -452,10 +386,59 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
-
-            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
-        } finally {
             unlink($sourceFile);
+
+            $analysisResultCache->synchronizeState('config', 'version');
+
+            $this->assertFileExists($cacheDirectory . '/cache-state.json');
+            $this->assertSame([$cacheDirectory . '/cache-state.json'], glob($cacheDirectory . '/*'));
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testSynchronizeStateSkipsClearWhenCacheIsAlreadyCleared(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        try {
+            $analysisResultCache->store('key', ['configHash' => 'config'], new RuleViolationCollection());
+
+            $analysisResultCache->synchronizeState('config', 'version', true);
+
+            $this->assertFileExists($cacheDirectory . '/key.json');
+            $this->assertFileExists($cacheDirectory . '/cache-state.json');
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testSynchronizeStateClearsCacheWhenStateFileIsMalformed(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+        file_put_contents($cacheDirectory . '/cache-state.json', '["bad"]');
+
+        try {
+            $analysisResultCache->store('key', ['configHash' => 'config'], new RuleViolationCollection());
+
+            $analysisResultCache->synchronizeState('config', 'version');
+
+            $this->assertFileDoesNotExist($cacheDirectory . '/key.json');
+            $this->assertSame(
+                json_encode([
+                    'configHash'                   => 'config',
+                    'composerGeneratedVersionHash' => 'version',
+                ], JSON_THROW_ON_ERROR),
+                file_get_contents($cacheDirectory . '/cache-state.json')
+            );
+        } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
@@ -512,7 +495,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $analysisResultCache = new AnalysisResultCache(__DIR__, 'C:/structarmed/cache');
 
-        $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
+        $this->assertSame('C:/structarmed/cache', $analysisResultCache->getCacheDirectory());
     }
 
     public function testStoresAndLoadsClassNodes(): void

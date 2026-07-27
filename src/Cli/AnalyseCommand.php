@@ -152,13 +152,13 @@ final readonly class AnalyseCommand
         $analyser                     = new Analyser($basePath, $analysisResultCache, $configHash);
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
 
-        $shouldClearCache = isset($options['clear-cache'])
-            || $analysisResultCache->hasDifferentConfig($configHash)
-            || $analysisResultCache->hasDifferentComposerGeneratedVersion($composerGeneratedVersionHash);
+        $isCacheCleared = isset($options['clear-cache']);
 
-        if ($shouldClearCache) {
+        if ($isCacheCleared) {
             $analysisResultCache->clear();
         }
+
+        $analysisResultCache->synchronizeState($configHash, $composerGeneratedVersionHash, $isCacheCleared);
 
         $files           = $analyser->filesForAnalysis($architecture, $scanPaths);
         $metadata        = $analysisCacheMetadataFactory->metadata($basePath, $configFile, $scanPaths, $files);

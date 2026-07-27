@@ -46,12 +46,7 @@ final class StructArmedExtension implements Extension
         $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
 
-        if (
-            $analysisResultCache->hasDifferentConfig($configHash)
-            || $analysisResultCache->hasDifferentComposerGeneratedVersion($composerGeneratedVersionHash)
-        ) {
-            $analysisResultCache->clear();
-        }
+        $analysisResultCache->synchronizeState($configHash, $composerGeneratedVersionHash);
 
         $analyser = new Analyser($basePath, $analysisResultCache, $configHash);
 
