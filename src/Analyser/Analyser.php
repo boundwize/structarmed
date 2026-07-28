@@ -1095,7 +1095,7 @@ final readonly class Analyser
     private function scanPaths(array $layers, array $scanPaths): array
     {
         if ($scanPaths !== []) {
-            return array_values(array_unique($scanPaths));
+            return $scanPaths;
         }
 
         $paths = [];
@@ -1106,7 +1106,7 @@ final readonly class Analyser
             }
         }
 
-        return array_values(array_unique($paths));
+        return $paths;
     }
 
     /**
