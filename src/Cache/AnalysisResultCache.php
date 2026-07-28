@@ -128,7 +128,7 @@ final readonly class AnalysisResultCache
         return $this->cacheDirectory;
     }
 
-    public function hasDifferentConfig(string $configHash): bool
+    public function shouldInvalidate(string $configHash, string $composerGeneratedVersionHash): bool
     {
         if (! is_dir($this->cacheDirectory)) {
             return false;
@@ -151,46 +151,14 @@ final readonly class AnalysisResultCache
                 continue;
             }
 
-            if (! isset($metadata['configHash'])) {
-                continue;
-            }
-
-            if ($metadata['configHash'] !== $configHash) {
+            if (isset($metadata['configHash']) && $metadata['configHash'] !== $configHash) {
                 return true;
             }
-        }
 
-        return false;
-    }
-
-    public function hasDifferentComposerGeneratedVersion(string $composerGeneratedVersionHash): bool
-    {
-        if (! is_dir($this->cacheDirectory)) {
-            return false;
-        }
-
-        foreach (glob($this->cacheDirectory . '/*', GLOB_NOSORT) ?: [] as $path) {
-            if (is_dir($path)) {
-                continue;
-            }
-
-            $payload = $this->readPath($path);
-
-            if ($payload === null) {
-                continue;
-            }
-
-            $metadata = $payload['metadata'] ?? null;
-
-            if (! is_array($metadata)) {
-                continue;
-            }
-
-            if (! array_key_exists('composerGeneratedVersionHash', $metadata)) {
-                continue;
-            }
-
-            if ($metadata['composerGeneratedVersionHash'] !== $composerGeneratedVersionHash) {
+            if (
+                array_key_exists('composerGeneratedVersionHash', $metadata)
+                && $metadata['composerGeneratedVersionHash'] !== $composerGeneratedVersionHash
+            ) {
                 return true;
             }
         }
