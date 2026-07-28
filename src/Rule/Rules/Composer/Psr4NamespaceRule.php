@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Util\Path;
 
+use function array_key_exists;
 use function array_key_first;
 use function arsort;
 use function dirname;
@@ -28,6 +29,9 @@ final class Psr4NamespaceRule implements RuleInterface
 {
     /** @var array<string, array<string, list<string>>> */
     private array $mappingsByBasePath = [];
+
+    /** @var array<string, string|null> */
+    private array $basePathByDirectory = [];
 
     public function __construct(
         private readonly string $layer,
@@ -109,21 +113,40 @@ final class Psr4NamespaceRule implements RuleInterface
     {
         $directory = dirname(Path::normalise($file, canonicalise: true));
 
+        if (array_key_exists($directory, $this->basePathByDirectory)) {
+            return $this->basePathByDirectory[$directory];
+        }
+
+        $visited  = [];
+        $basePath = null;
+
         while ($directory !== '' && $directory !== '.') {
+            if (array_key_exists($directory, $this->basePathByDirectory)) {
+                $basePath = $this->basePathByDirectory[$directory];
+                break;
+            }
+
+            $visited[] = $directory;
+
             if (file_exists($directory . '/composer.json')) {
-                return $directory;
+                $basePath = $directory;
+                break;
             }
 
             $parent = dirname($directory);
 
             if ($parent === $directory) {
-                return null;
+                break;
             }
 
             $directory = $parent;
         }
 
-        return null;
+        foreach ($visited as $visitedDirectory) {
+            $this->basePathByDirectory[$visitedDirectory] = $basePath;
+        }
+
+        return $basePath;
     }
 
     /**
