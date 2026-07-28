@@ -69,7 +69,7 @@ final class ChainLayerResolver implements LayerResolverInterface
     {
         $key = $className . "\0" . $filePath;
 
-        if (array_key_exists($key, $this->resolveAllCachedLayers)) {
+        if (isset($this->resolveAllCachedLayers[$key])) {
             return $this->resolveAllCachedLayers[$key];
         }
 
