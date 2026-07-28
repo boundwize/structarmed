@@ -257,6 +257,41 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertTrue($fileAnalysisProvider->analyse($effectFile)->hasSideEffects);
     }
 
+    public function testConditionalWithoutDeclarationsDoesNotCountAsSymbolDeclaration(): void
+    {
+        $emptyIfFile   = $this->source(<<<'PHP'
+            <?php
+
+            if ($debug) {
+            }
+
+            echo 'boot';
+            PHP);
+        $neutralIfFile = $this->source(<<<'PHP'
+            <?php
+
+            if ($debug) {
+                ;
+            }
+
+            echo 'boot';
+            PHP);
+
+        $fileAnalysisProvider = new FileAnalysisProvider();
+
+        $emptyIfAnalysis = $fileAnalysisProvider->analyse($emptyIfFile);
+
+        $this->assertFalse($emptyIfAnalysis->declaresSymbols);
+        $this->assertTrue($emptyIfAnalysis->hasSideEffects);
+        $this->assertSame(6, $emptyIfAnalysis->sideEffectLine);
+
+        $neutralIfAnalysis = $fileAnalysisProvider->analyse($neutralIfFile);
+
+        $this->assertFalse($neutralIfAnalysis->declaresSymbols);
+        $this->assertTrue($neutralIfAnalysis->hasSideEffects);
+        $this->assertSame(7, $neutralIfAnalysis->sideEffectLine);
+    }
+
     private function source(string $contents): string
     {
         return 'data://text/plain;base64,' . base64_encode($contents);

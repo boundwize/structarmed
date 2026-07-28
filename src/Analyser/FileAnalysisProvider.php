@@ -277,7 +277,7 @@ final class FileAnalysisProvider
             }
 
             if ($node instanceof If_ && $this->containsOnlyDeclarations($node)) {
-                $declaresSymbols = true;
+                $declaresSymbols = $declaresSymbols || $this->containsSymbolDeclaration($node);
                 continue;
             }
 
@@ -338,5 +338,16 @@ final class FileAnalysisProvider
         }
 
         return true;
+    }
+
+    private function containsSymbolDeclaration(If_ $if): bool
+    {
+        foreach ($if->stmts as $statement) {
+            if ($this->isSymbolDeclaration($statement)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
