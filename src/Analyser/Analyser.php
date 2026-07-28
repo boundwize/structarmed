@@ -23,11 +23,7 @@ use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
-use FilesystemIterator;
-use RecursiveCallbackFilterIterator;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
+use Boundwize\StructArmed\Util\PhpFileWalker;
 
 use function array_fill_keys;
 use function array_filter;
@@ -1170,25 +1166,13 @@ final readonly class Analyser
      */
     private function phpFiles(string $path, array $skipMatchers): array
     {
-        $files    = [];
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveCallbackFilterIterator(
-                new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
-                function (SplFileInfo $file) use ($skipMatchers): bool {
-                    $isRealDirectory = $file->isDir() && ! $file->isLink();
-                    if (! $isRealDirectory && $file->getExtension() !== 'php') {
-                        return false;
-                    }
-
-                    return ! $this->isSkipped($file->getPathname(), $skipMatchers);
-                }
-            ),
-            RecursiveIteratorIterator::LEAVES_ONLY
+        $files = PhpFileWalker::files(
+            $path,
+            fn(string $file): bool => $this->isSkipped($file, $skipMatchers)
         );
 
-        /** @var SplFileInfo $file */
-        foreach ($iterator as $file) {
-            $files[] = Path::normalise($file->getPathname(), canonicalise: true);
+        foreach ($files as $index => $file) {
+            $files[$index] = Path::normalise($file, canonicalise: true);
         }
 
         return $files;

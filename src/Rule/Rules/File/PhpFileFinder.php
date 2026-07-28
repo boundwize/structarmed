@@ -4,14 +4,9 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Rules\File;
 
-use AppendIterator;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Util\Path;
-use FilesystemIterator;
-use RecursiveCallbackFilterIterator;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
+use Boundwize\StructArmed\Util\PhpFileWalker;
 
 use function array_unique;
 use function array_values;
@@ -43,7 +38,9 @@ final readonly class PhpFileFinder
     {
         $normalisedBase = Path::normalise($basePath, canonicalise: true);
         $skipMatchers   = $this->compileSkipMatchers($normalisedBase, $skipPaths);
-        $append         = new AppendIterator();
+        $isSkipped      = fn(string $file): bool => $this->isSkipped($file, $normalisedBase, $skipMatchers);
+
+        $files = [];
 
         $sourcePaths = array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath));
         foreach ($sourcePaths as $sourcePath) {
@@ -53,27 +50,9 @@ final readonly class PhpFileFinder
                 continue;
             }
 
-            $append->append(new RecursiveIteratorIterator(
-                new RecursiveCallbackFilterIterator(
-                    new RecursiveDirectoryIterator($fullPath, FilesystemIterator::SKIP_DOTS),
-                    function (SplFileInfo $file) use ($normalisedBase, $skipMatchers): bool {
-                        $isRealDirectory = $file->isDir() && ! $file->isLink();
-                        if (! $isRealDirectory && $file->getExtension() !== 'php') {
-                            return false;
-                        }
-
-                        return ! $this->isSkipped($file->getPathname(), $normalisedBase, $skipMatchers);
-                    }
-                ),
-                RecursiveIteratorIterator::LEAVES_ONLY
-            ));
-        }
-
-        $files = [];
-
-        /** @var SplFileInfo $file */
-        foreach ($append as $file) {
-            $files[] = $file->getPathname();
+            foreach (PhpFileWalker::files($fullPath, $isSkipped) as $file) {
+                $files[] = $file;
+            }
         }
 
         // ensure nothing duplicated once more
