@@ -276,8 +276,8 @@ final class FileAnalysisProvider
                 continue;
             }
 
-            if ($node instanceof If_ && $this->containsOnlyDeclarations($node)) {
-                $declaresSymbols = $declaresSymbols || $this->containsSymbolDeclaration($node);
+            if ($node instanceof If_ && $this->isConditionalSymbolDeclaration($node)) {
+                $declaresSymbols = true;
                 continue;
             }
 
@@ -325,29 +325,31 @@ final class FileAnalysisProvider
             || ($stmt instanceof InlineHTML && trim($stmt->value) === '');
     }
 
-    private function containsOnlyDeclarations(If_ $if): bool
+    /**
+     * A conditional counts as a symbol declaration only when it wraps at least
+     * one actual declaration and nothing else but neutral statements, mirroring
+     * guarded declarations like `if (! function_exists(...)) { function ... }`.
+     * A declaration-free conditional is executed logic, i.e. a side effect.
+     */
+    private function isConditionalSymbolDeclaration(If_ $if): bool
     {
         if ($if->elseifs !== [] || $if->else instanceof Else_) {
             return false;
         }
 
+        $containsDeclaration = false;
+
         foreach ($if->stmts as $statement) {
-            if (! $this->isSymbolDeclaration($statement) && ! $this->isNeutralStatement($statement)) {
+            if ($this->isSymbolDeclaration($statement)) {
+                $containsDeclaration = true;
+                continue;
+            }
+
+            if (! $this->isNeutralStatement($statement)) {
                 return false;
             }
         }
 
-        return true;
-    }
-
-    private function containsSymbolDeclaration(If_ $if): bool
-    {
-        foreach ($if->stmts as $statement) {
-            if ($this->isSymbolDeclaration($statement)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $containsDeclaration;
     }
 }
