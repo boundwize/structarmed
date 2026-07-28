@@ -302,21 +302,21 @@ final readonly class ParallelClassNodeExtractor
      */
     private function createWorkerFiles(): array
     {
-        return [
-            'inputFile'  => $this->temporaryFile(),
-            'outputFile' => $this->temporaryFile(),
-            'stderrFile' => $this->temporaryFile(),
-        ];
-    }
-
-    private function temporaryFile(): string
-    {
         $dir = $this->cacheDirectory ?? sys_get_temp_dir();
 
         if (! is_dir($dir)) {
             mkdir($dir, 0777, true);
         }
 
+        return [
+            'inputFile'  => $this->temporaryFile($dir),
+            'outputFile' => $this->temporaryFile($dir),
+            'stderrFile' => $this->temporaryFile($dir),
+        ];
+    }
+
+    private function temporaryFile(string $dir): string
+    {
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
         $file = tempnam($dir, 'structarmed-worker-');
