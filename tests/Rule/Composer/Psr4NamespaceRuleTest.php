@@ -179,6 +179,25 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
+    public function testReusesCachedAncestorBasePathForNestedDirectory(): void
+    {
+        $basePath          = $this->makeTempProject();
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        mkdir($basePath . '/tests/Sub', 0777, true);
+        file_put_contents($basePath . '/tests/Foo.php', '<?php namespace App\Tests; class Foo {}');
+        file_put_contents($basePath . '/tests/Sub/Bar.php', '<?php namespace App\Tests\Sub; class Bar {}');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $basePath . '/tests/Foo.php'))
+        );
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Sub\\Bar', $basePath . '/tests/Sub/Bar.php'))
+        );
+    }
+
     public function testSelectsLongestPrefixMatchNotFirstDeclared(): void
     {
         $basePath = $this->makeTemporaryDirectory('structarmed-psr4-longest-prefix');
