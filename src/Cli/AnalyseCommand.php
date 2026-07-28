@@ -153,8 +153,7 @@ final readonly class AnalyseCommand
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
 
         $shouldClearCache = isset($options['clear-cache'])
-            || $analysisResultCache->hasDifferentConfig($configHash)
-            || $analysisResultCache->hasDifferentComposerGeneratedVersion($composerGeneratedVersionHash);
+            || $analysisResultCache->shouldInvalidate($configHash, $composerGeneratedVersionHash);
 
         if ($shouldClearCache) {
             $analysisResultCache->clear();

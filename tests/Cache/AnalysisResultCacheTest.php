@@ -276,7 +276,7 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->store('key', ['configHash' => 'old'], new RuleViolationCollection());
 
-            $this->assertTrue($analysisResultCache->hasDifferentConfig('new'));
+            $this->assertTrue($analysisResultCache->shouldInvalidate('new', 'composer-hash'));
 
             $analysisResultCache->clear();
 
@@ -302,14 +302,14 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testConfigHashIsNotDifferentWhenCacheDirectoryIsMissing(): void
+    public function testCacheMetadataIsNotDifferentWhenCacheDirectoryIsMissing(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
 
         $this->removeTempDirectory($cacheDirectory);
 
-        $this->assertFalse($analysisResultCache->hasDifferentConfig('new'));
+        $this->assertFalse($analysisResultCache->shouldInvalidate('new', 'composer-hash'));
     }
 
     public function testConfigHashIsNotDifferentWhenStoredHashMatches(): void
@@ -320,13 +320,13 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
 
-            $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
+            $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'composer-hash'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testConfigHashSkipsUnreadableCachePayloadsAndDirectories(): void
+    public function testCacheMetadataScanSkipsUnreadableCachePayloadsAndDirectories(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
@@ -339,13 +339,13 @@ final class AnalysisResultCacheTest extends TestCase
         ], 'other.json');
 
         try {
-            $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
+            $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'composer-hash'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testConfigHashSkipsClassNodeCachePayloads(): void
+    public function testCacheMetadataScanSkipsClassNodeCachePayloads(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -356,21 +356,11 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
-            $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
+            $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'composer-hash'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
         }
-    }
-
-    public function testComposerGeneratedVersionHashIsNotDifferentWhenCacheDirectoryIsMissing(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        $this->removeTempDirectory($cacheDirectory);
-
-        $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('new'));
     }
 
     public function testComposerGeneratedVersionHashIsNotDifferentWhenNoCachedEntryHasTheField(): void
@@ -381,7 +371,7 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
 
-            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
+            $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'some-hash'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -399,7 +389,7 @@ final class AnalysisResultCacheTest extends TestCase
                 new RuleViolationCollection()
             );
 
-            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('same'));
+            $this->assertFalse($analysisResultCache->shouldInvalidate('config-hash', 'same'));
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -417,45 +407,8 @@ final class AnalysisResultCacheTest extends TestCase
                 new RuleViolationCollection()
             );
 
-            $this->assertTrue($analysisResultCache->hasDifferentComposerGeneratedVersion('new'));
+            $this->assertTrue($analysisResultCache->shouldInvalidate('config-hash', 'new'));
         } finally {
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    public function testComposerGeneratedVersionHashSkipsUnreadableCachePayloadsAndDirectories(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        mkdir($cacheDirectory . '/nested');
-        file_put_contents($cacheDirectory . '/key.json', '["bad"]');
-        $this->writeCachePayload($cacheDirectory, [
-            'metadata'   => 'bad',
-            'violations' => [],
-        ], 'other.json');
-
-        try {
-            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
-        } finally {
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    public function testComposerGeneratedVersionHashSkipsClassNodeCachePayloads(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
-
-        file_put_contents($sourceFile, '<?php class Foo {}');
-
-        try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
-
-            $this->assertFalse($analysisResultCache->hasDifferentComposerGeneratedVersion('some-hash'));
-        } finally {
-            unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
         }
     }
@@ -512,7 +465,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $analysisResultCache = new AnalysisResultCache(__DIR__, 'C:/structarmed/cache');
 
-        $this->assertFalse($analysisResultCache->hasDifferentConfig('same'));
+        $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'composer-hash'));
     }
 
     public function testStoresAndLoadsClassNodes(): void
