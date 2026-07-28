@@ -853,6 +853,63 @@ PHP;
         $this->assertSame(4, $classNode->methods[0]->cyclomaticComplexity);
     }
 
+    public function testCountsEachMatchArmAsComplexityBranch(): void
+    {
+        $code      = <<<'PHP'
+<?php
+class Foo {
+    public function bar(int $x): string {
+        return match ($x) {
+            1 => 'a',
+            2 => 'b',
+            3 => 'c',
+            default => 'd',
+        };
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // Base 1 + 4 match arms = 5.
+        $this->assertSame(5, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
+    public function testMatchAndEquivalentSwitchHaveEqualComplexity(): void
+    {
+        $matchCode  = <<<'PHP'
+<?php
+class Foo {
+    public function bar(int $x): string {
+        return match ($x) {
+            1 => 'a',
+            2 => 'b',
+            default => 'c',
+        };
+    }
+}
+PHP;
+        $switchCode = <<<'PHP'
+<?php
+class Foo {
+    public function bar(int $x): string {
+        switch ($x) {
+            case 1:
+                return 'a';
+            case 2:
+                return 'b';
+            default:
+                return 'c';
+        }
+    }
+}
+PHP;
+
+        $this->assertSame(
+            $this->collect($switchCode)->methods[0]->cyclomaticComplexity,
+            $this->collect($matchCode)->methods[0]->cyclomaticComplexity,
+        );
+    }
+
     public function testCollectsDependencies(): void
     {
         $code      = <<<'PHP'
