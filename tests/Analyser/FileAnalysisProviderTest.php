@@ -279,11 +279,11 @@ final class FileAnalysisProviderTest extends TestCase
 
         $fileAnalysisProvider = new FileAnalysisProvider();
 
-        $emptyIfAnalysis = $fileAnalysisProvider->analyse($emptyIfFile);
+        $fileAnalysis = $fileAnalysisProvider->analyse($emptyIfFile);
 
-        $this->assertFalse($emptyIfAnalysis->declaresSymbols);
-        $this->assertTrue($emptyIfAnalysis->hasSideEffects);
-        $this->assertSame(6, $emptyIfAnalysis->sideEffectLine);
+        $this->assertFalse($fileAnalysis->declaresSymbols);
+        $this->assertTrue($fileAnalysis->hasSideEffects);
+        $this->assertSame(6, $fileAnalysis->sideEffectLine);
 
         $neutralIfAnalysis = $fileAnalysisProvider->analyse($neutralIfFile);
 
