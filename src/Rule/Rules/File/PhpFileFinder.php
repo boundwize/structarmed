@@ -21,6 +21,7 @@ use function ltrim;
 use function realpath;
 use function str_starts_with;
 use function strlen;
+use function strpbrk;
 use function substr;
 
 final readonly class PhpFileFinder
@@ -82,7 +83,7 @@ final readonly class PhpFileFinder
 
     /**
      * @param list<string> $skipPaths
-     * @return list<array{absolutePath: string|null, baseRelativePath: string, pattern: string}>
+     * @return list<array{absolutePath: string|null, baseRelativePath: string, pattern: string|null}>
      */
     private function compileSkipMatchers(string $normalisedBase, array $skipPaths): array
     {
@@ -97,7 +98,9 @@ final readonly class PhpFileFinder
                     ? Path::normalise($skipPath, canonicalise: true)
                     : null,
                 'baseRelativePath' => Path::normalise($fullSkipPath, canonicalise: true),
-                'pattern'          => Path::normalise($skipPath),
+                'pattern'          => strpbrk($skipPath, '*?[') !== false
+                    ? Path::normalise($skipPath)
+                    : null,
             ];
         }
 
@@ -105,7 +108,7 @@ final readonly class PhpFileFinder
     }
 
     /**
-     * @param list<array{absolutePath: string|null, baseRelativePath: string, pattern: string}> $skipMatchers
+     * @param list<array{absolutePath: string|null, baseRelativePath: string, pattern: string|null}> $skipMatchers
      */
     private function isSkipped(string $filePath, string $normalisedBase, array $skipMatchers): bool
     {
@@ -135,8 +138,11 @@ final readonly class PhpFileFinder
             }
 
             if (
-                fnmatch($skipMatcher['pattern'], $normalisedFile)
-                || fnmatch($skipMatcher['pattern'], $relativePath)
+                $skipMatcher['pattern'] !== null
+                && (
+                    fnmatch($skipMatcher['pattern'], $normalisedFile)
+                    || fnmatch($skipMatcher['pattern'], $relativePath)
+                )
             ) {
                 return true;
             }
