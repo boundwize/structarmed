@@ -14,7 +14,6 @@ use SplFileInfo;
 
 use function bin2hex;
 use function file_put_contents;
-use function in_array;
 use function mkdir;
 use function random_bytes;
 use function rmdir;
@@ -90,6 +89,6 @@ final class PhpFileWalkerTest extends TestCase
 
         // A skipped directory is pruned before descending, so its children are
         // never even offered to the predicate.
-        $this->assertFalse(in_array($this->directory . '/sub/skipme/C.php', $checkedPaths, true));
+        $this->assertNotContains($this->directory . '/sub/skipme/C.php', $checkedPaths);
     }
 }
