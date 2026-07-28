@@ -18,11 +18,11 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\Include_;
 use PhpParser\Node\Expr\Isset_;
 use PhpParser\Node\Expr\List_;
-use PhpParser\Node\Expr\Match_;
 use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Stmt\Case_;
@@ -569,7 +569,7 @@ final class ClassCollector extends NodeVisitorAbstract
             || $node instanceof BooleanOr
             || $node instanceof LogicalAnd
             || $node instanceof LogicalOr
-            || $node instanceof Match_;
+            || $node instanceof MatchArm;
     }
 
     /**
