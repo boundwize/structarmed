@@ -24,7 +24,11 @@ final class InlineHtmlOpeningTagMatcher
             return null;
         }
 
-        return $matches[0][1];
-    }
+        /**
+         * @var non-negative-int $tagOffset
+         */
+        $tagOffset = $matches[0][1];
 
+        return $tagOffset;
+    }
 }
