@@ -997,7 +997,7 @@ final readonly class Analyser
             if (is_file($fullPath)) {
                 $isAnalysable = Path::isAnalysableFile($fullPath, $this->basePath);
                 if ($isAnalysable && ! $this->isSkipped($fullPath, $skipMatchers)) {
-                    $files[] = (string) realpath($fullPath);
+                    $files[] = (new \SplFileInfo($fullPath))->getPathname();
                 }
 
                 continue;
