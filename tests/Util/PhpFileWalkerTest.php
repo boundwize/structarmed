@@ -12,6 +12,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
+use function basename;
 use function bin2hex;
 use function file_put_contents;
 use function mkdir;
@@ -19,9 +20,10 @@ use function random_bytes;
 use function realpath;
 use function rmdir;
 use function sort;
-use function str_ends_with;
 use function sys_get_temp_dir;
 use function unlink;
+
+use const DIRECTORY_SEPARATOR;
 
 #[CoversClass(PhpFileWalker::class)]
 final class PhpFileWalkerTest extends TestCase
@@ -67,10 +69,11 @@ final class PhpFileWalkerTest extends TestCase
         sort($files);
 
         $this->assertSame([
-            $this->directory . '/A.php',
-            $this->directory . '/skipfile.php',
-            $this->directory . '/sub/B.php',
-            $this->directory . '/sub/skipme/C.php',
+            $this->directory . DIRECTORY_SEPARATOR . 'A.php',
+            $this->directory . DIRECTORY_SEPARATOR . 'skipfile.php',
+            $this->directory . DIRECTORY_SEPARATOR . 'sub' . DIRECTORY_SEPARATOR . 'B.php',
+            $this->directory . DIRECTORY_SEPARATOR . 'sub' . DIRECTORY_SEPARATOR . 'skipme'
+                . DIRECTORY_SEPARATOR . 'C.php',
         ], $files);
     }
 
@@ -80,7 +83,7 @@ final class PhpFileWalkerTest extends TestCase
         $isSkipped    = static function (string $file) use (&$checkedPaths): bool {
             $checkedPaths[] = $file;
 
-            return str_ends_with($file, '/skipme') || str_ends_with($file, '/skipfile.php');
+            return basename($file) === 'skipme' || basename($file) === 'skipfile.php';
         };
 
         $files = PhpFileWalker::files($this->directory, $isSkipped);
@@ -88,12 +91,16 @@ final class PhpFileWalkerTest extends TestCase
         sort($files);
 
         $this->assertSame([
-            $this->directory . '/A.php',
-            $this->directory . '/sub/B.php',
+            $this->directory . DIRECTORY_SEPARATOR . 'A.php',
+            $this->directory . DIRECTORY_SEPARATOR . 'sub' . DIRECTORY_SEPARATOR . 'B.php',
         ], $files);
 
         // A skipped directory is pruned before descending, so its children are
         // never even offered to the predicate.
-        $this->assertNotContains($this->directory . '/sub/skipme/C.php', $checkedPaths);
+        $this->assertNotContains(
+            $this->directory . DIRECTORY_SEPARATOR . 'sub' . DIRECTORY_SEPARATOR . 'skipme'
+                . DIRECTORY_SEPARATOR . 'C.php',
+            $checkedPaths,
+        );
     }
 }
