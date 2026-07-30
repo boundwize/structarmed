@@ -41,7 +41,7 @@ final class PhpFileWalkerTest extends TestCase
         file_put_contents($this->directory . '/sub/skipme/C.php', '<?php');
 
         $canonicalDirectory = realpath($this->directory);
-        self::assertIsString($canonicalDirectory);
+        $this->assertIsString($canonicalDirectory);
         $this->directory = $canonicalDirectory;
     }
 
