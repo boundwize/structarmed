@@ -99,23 +99,21 @@ final readonly class AnalysisResultCache
             mkdir($this->cacheDirectory, 0777, true);
         }
 
-        file_put_contents($this->path($key), json_encode([
-            'metadata'   => $metadata,
-            'violations' => $ruleViolationCollection->toArray(),
-        ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
-
         $configHash                   = $metadata['configHash'] ?? null;
         $composerGeneratedVersionHash = $metadata['composerGeneratedVersionHash'] ?? null;
 
         if (is_string($configHash)) {
             $this->storeHashFile($this->cacheDirectory . '/config-hash.json', $configHash);
-        }
-
-        if (is_string($composerGeneratedVersionHash)) {
+        } elseif (is_string($composerGeneratedVersionHash)) {
             $this->storeHashFile(
                 $this->cacheDirectory . '/composer-generated-version-hash.json',
                 $composerGeneratedVersionHash
             );
+        } else {
+            file_put_contents($this->path($key), json_encode([
+                'metadata'   => $metadata,
+                'violations' => $ruleViolationCollection->toArray(),
+            ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
         }
     }
 
