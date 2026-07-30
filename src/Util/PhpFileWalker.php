@@ -33,7 +33,7 @@ final class PhpFileWalker
                         return false;
                     }
 
-                    return ! $isSkipped($file->getPathname());
+                    return ! $isSkipped($file->getRealPath());
                 }
             ),
             RecursiveIteratorIterator::LEAVES_ONLY
@@ -43,7 +43,7 @@ final class PhpFileWalker
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            $files[] = $file->getPathname();
+            $files[] = $file->getRealPath();
         }
 
         return $files;
