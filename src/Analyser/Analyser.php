@@ -39,7 +39,9 @@ use function getcwd;
 use function in_array;
 use function is_dir;
 use function is_file;
+use function realpath;
 use function sprintf;
+use function str_ends_with;
 use function str_starts_with;
 use function strpbrk;
 use function substr;
@@ -990,17 +992,12 @@ final readonly class Analyser
         }
 
         foreach (array_values(array_unique($scanPaths)) as $layerPath) {
-            $fullPath = Path::normalise(
-                Path::resolve($layerPath, $this->basePath),
-                canonicalise: true
-            );
+            $fullPath = Path::normalise(Path::resolve($layerPath, $this->basePath));
 
             if (is_file($fullPath)) {
-                if (
-                    Path::isAnalysableFile($fullPath, $this->basePath)
-                    && ! $this->isSkipped($fullPath, $skipMatchers)
-                ) {
-                    $files[] = $fullPath;
+                $isAnalysable = Path::isAnalysableFile($fullPath, $this->basePath);
+                if ($isAnalysable && ! $this->isSkipped($fullPath, $skipMatchers)) {
+                    $files[] = (string) realpath($fullPath);
                 }
 
                 continue;
