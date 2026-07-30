@@ -103,6 +103,20 @@ final readonly class AnalysisResultCache
             'metadata'   => $metadata,
             'violations' => $ruleViolationCollection->toArray(),
         ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+
+        $configHash                   = $metadata['configHash'] ?? null;
+        $composerGeneratedVersionHash = $metadata['composerGeneratedVersionHash'] ?? null;
+
+        if (is_string($configHash)) {
+            $this->storeHashFile($this->cacheDirectory . '/config-hash.json', $configHash);
+        }
+
+        if (is_string($composerGeneratedVersionHash)) {
+            $this->storeHashFile(
+                $this->cacheDirectory . '/composer-generated-version-hash.json',
+                $composerGeneratedVersionHash
+            );
+        }
     }
 
     public function clear(): void
@@ -134,36 +148,32 @@ final readonly class AnalysisResultCache
             return false;
         }
 
-        foreach (glob($this->cacheDirectory . '/*', GLOB_NOSORT) ?: [] as $path) {
-            if (is_dir($path)) {
-                continue;
-            }
+        $configHashJson                   = $this->cacheDirectory . '/config-hash.json';
+        $composerGeneratedVersionHashJson = $this->cacheDirectory . '/composer-generated-version-hash.json';
 
-            $payload = $this->readPath($path);
+        return $this->storedHashDiffers($configHashJson, $configHash)
+            || $this->storedHashDiffers($composerGeneratedVersionHashJson, $composerGeneratedVersionHash);
+    }
 
-            if ($payload === null) {
-                continue;
-            }
+    private function storedHashDiffers(string $path, string $hash): bool
+    {
+        $payload = $this->readPath($path);
 
-            $metadata = $payload['metadata'] ?? null;
-
-            if (! is_array($metadata)) {
-                continue;
-            }
-
-            if (isset($metadata['configHash']) && $metadata['configHash'] !== $configHash) {
-                return true;
-            }
-
-            if (
-                array_key_exists('composerGeneratedVersionHash', $metadata)
-                && $metadata['composerGeneratedVersionHash'] !== $composerGeneratedVersionHash
-            ) {
-                return true;
-            }
+        if ($payload === null) {
+            return false;
         }
 
-        return false;
+        $storedHash = $payload['hash'] ?? null;
+
+        return is_string($storedHash) && $storedHash !== $hash;
+    }
+
+    private function storeHashFile(string $path, string $hash): void
+    {
+        file_put_contents(
+            $path,
+            json_encode(['hash' => $hash], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)
+        );
     }
 
     /**

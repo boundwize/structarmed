@@ -131,6 +131,10 @@ final class StructArmedExtensionTest extends TestCase
             'metadata'   => ['configHash' => 'stale-hash-that-will-not-match'],
             'violations' => [],
         ]));
+        file_put_contents(
+            $cacheDir . '/config-hash.json',
+            json_encode(['hash' => 'stale-hash-that-will-not-match'])
+        );
 
         chdir($basePath);
 
@@ -145,6 +149,8 @@ final class StructArmedExtensionTest extends TestCase
         } finally {
             chdir($previousPath);
         }
+
+        $this->assertFileDoesNotExist($cacheDir . '/stale.json');
     }
 
     public function testBootstrapThrowsWhenViolationsAreFound(): void
