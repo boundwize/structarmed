@@ -26,7 +26,6 @@ use function mkdir;
 use function random_bytes;
 use function realpath;
 use function rmdir;
-use function rtrim;
 use function str_replace;
 use function symlink;
 use function sys_get_temp_dir;
