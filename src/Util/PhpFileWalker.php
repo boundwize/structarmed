@@ -43,7 +43,7 @@ final class PhpFileWalker
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
-            $files[] = $file->getPathname();
+            $files[] = $file->getRealPath();
         }
 
         return $files;
