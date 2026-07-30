@@ -10,6 +10,8 @@ use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\File\PhpFileCollector;
+use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
@@ -44,6 +46,8 @@ use const DIRECTORY_SEPARATOR;
 
 #[CoversClass(Analyser::class)]
 #[CoversClass(ParallelClassNodeExtractor::class)]
+#[CoversClass(PhpFileCollector::class)]
+#[CoversClass(SkipPathMatcher::class)]
 final class AnalyserTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
@@ -1456,6 +1460,44 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
         $this->assertStringEndsWith(
             '/src/Foo.php',
+            $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
+        );
+    }
+
+    public function testAnalyserRootSkipPathSkipsAllFiles(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip(['/'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testAnalyserAppliesGlobSkipToScanPathOutsideBasePath(): void
+    {
+        $basePath    = $this->makeTempProject([]);
+        $outsidePath = $this->makeTempProject([
+            'Foo.php'               => '<?php namespace App; class Foo {}',
+            'Ignored.generated.php' => '<?php namespace App; class Ignored {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', $outsidePath . '/')
+            ->skip(['*.generated.php'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, [$outsidePath . '/']);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+        $this->assertStringEndsWith(
+            '/Foo.php',
             $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
         );
     }

@@ -6,11 +6,13 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Analyser::class)]
+#[CoversClass(SkipPathMatcher::class)]
 final class AnalyserSkipPathsTest extends TestCase
 {
     public function testAnalyserComposesGlobalAndRuleSpecificSkipsForClassRules(): void
