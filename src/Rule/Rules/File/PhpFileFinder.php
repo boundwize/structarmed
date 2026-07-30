@@ -73,7 +73,7 @@ final readonly class PhpFileFinder
 
         /** @var SplFileInfo $file */
         foreach ($append as $file) {
-            $files[] = $file->getPathname();
+            $files[] = Path::normalise($file->getPathname(), canonicalise: true);
         }
 
         // ensure nothing duplicated once more

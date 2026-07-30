@@ -357,8 +357,8 @@ final class Psr1PhpTagsRuleTest extends TestCase
             $this->assertCount(1, $violations);
             $this->assertSame(37, $violations[0]->line);
             $this->assertStringStartsWith(
-                rtrim(str_replace('\\', '/', $analysisBasePath), '/') . '/',
-                str_replace('\\', '/', $violations[0]->file),
+                realpath($analysisBasePath),
+                realpath($violations[0]->file),
             );
         } finally {
             if (DIRECTORY_SEPARATOR !== '\\') {
