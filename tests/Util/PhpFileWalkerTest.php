@@ -16,6 +16,7 @@ use function bin2hex;
 use function file_put_contents;
 use function mkdir;
 use function random_bytes;
+use function realpath;
 use function rmdir;
 use function sort;
 use function str_ends_with;
@@ -38,6 +39,10 @@ final class PhpFileWalkerTest extends TestCase
         file_put_contents($this->directory . '/skipfile.php', '<?php');
         file_put_contents($this->directory . '/sub/B.php', '<?php');
         file_put_contents($this->directory . '/sub/skipme/C.php', '<?php');
+
+        $canonicalDirectory = realpath($this->directory);
+        self::assertIsString($canonicalDirectory);
+        $this->directory = $canonicalDirectory;
     }
 
     protected function tearDown(): void

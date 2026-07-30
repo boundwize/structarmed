@@ -1001,10 +1001,12 @@ final class AnalyserTest extends TestCase
             AnalyserOptions::parallel(2)
         );
 
-        $fooFile       = $basePath . '/src/Foo.php';
-        $barFile       = $basePath . '/src/Bar.php';
+        $fooFile       = realpath($basePath . '/src/Foo.php');
+        $barFile       = realpath($basePath . '/src/Bar.php');
         $progressFiles = array_map($this->normalisePath(...), $progress->files);
 
+        $this->assertIsString($fooFile);
+        $this->assertIsString($barFile);
         $this->assertSame(2, $progress->total);
         $this->assertCount(2, $progressFiles);
         $this->assertContains($this->normalisePath($fooFile), $progressFiles);
@@ -1024,11 +1026,13 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->layer('Source', 'src/');
 
-        $files = (new Analyser($basePath))->filesForAnalysis($architecture);
+        $files   = (new Analyser($basePath))->filesForAnalysis($architecture);
+        $fooFile = realpath($basePath . '/src/Foo.php');
 
+        $this->assertIsString($fooFile);
         $this->assertCount(1, $files);
         $this->assertSame(
-            $this->normalisePath($basePath . '/src/Foo.php'),
+            $this->normalisePath($fooFile),
             $this->normalisePath($files[0]),
         );
     }

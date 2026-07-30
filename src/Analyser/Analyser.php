@@ -24,6 +24,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Util\PhpFileWalker;
+use SplFileInfo;
 
 use function array_fill_keys;
 use function array_filter;
@@ -39,9 +40,7 @@ use function getcwd;
 use function in_array;
 use function is_dir;
 use function is_file;
-use function realpath;
 use function sprintf;
-use function str_ends_with;
 use function str_starts_with;
 use function strpbrk;
 use function substr;
@@ -997,7 +996,7 @@ final readonly class Analyser
             if (is_file($fullPath)) {
                 $isAnalysable = Path::isAnalysableFile($fullPath, $this->basePath);
                 if ($isAnalysable && ! $this->isSkipped($fullPath, $skipMatchers)) {
-                    $files[] = (new \SplFileInfo($fullPath))->getRealPath();
+                    $files[] = (new SplFileInfo($fullPath))->getRealPath();
                 }
 
                 continue;
