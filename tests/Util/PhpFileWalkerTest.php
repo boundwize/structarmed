@@ -12,7 +12,6 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-use function basename;
 use function bin2hex;
 use function file_put_contents;
 use function mkdir;
@@ -20,6 +19,8 @@ use function random_bytes;
 use function realpath;
 use function rmdir;
 use function sort;
+use function str_ends_with;
+use function str_replace;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -82,8 +83,10 @@ final class PhpFileWalkerTest extends TestCase
         $checkedPaths = [];
         $isSkipped    = static function (string $file) use (&$checkedPaths): bool {
             $checkedPaths[] = $file;
+            $normalisedFile = str_replace('\\', '/', $file);
 
-            return basename($file) === 'skipme' || basename($file) === 'skipfile.php';
+            return str_ends_with($normalisedFile, '/skipme')
+                || str_ends_with($normalisedFile, '/skipfile.php');
         };
 
         $files = PhpFileWalker::files($this->directory, $isSkipped);
