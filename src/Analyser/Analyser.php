@@ -1014,8 +1014,12 @@ final readonly class Analyser
                 continue;
             }
 
-            foreach ($this->phpFiles($fullPath, $skipMatchers) as $file) {
-                $files[] = $file;
+            $phpFiles = PhpFileWalker::files(
+                $fullPath,
+                fn(string $file): bool => $this->isSkipped($file, $skipMatchers)
+            );
+            foreach ($phpFiles as $phpFile) {
+                $files[] = $phpFile;
             }
         }
 
@@ -1158,23 +1162,5 @@ final readonly class Analyser
         }
 
         return false;
-    }
-
-    /**
-     * @param array{paths: list<string>, patterns: list<string>} $skipMatchers
-     * @return string[]
-     */
-    private function phpFiles(string $path, array $skipMatchers): array
-    {
-        $files = PhpFileWalker::files(
-            $path,
-            fn(string $file): bool => $this->isSkipped($file, $skipMatchers)
-        );
-
-        foreach ($files as $index => $file) {
-            $files[$index] = Path::normalise($file, canonicalise: true);
-        }
-
-        return $files;
     }
 }
