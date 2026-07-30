@@ -20,10 +20,15 @@ use function substr;
 /**
  * Compiles skip paths once and decides whether a given path is skipped.
  *
- * A skip path may be:
- *  - a path that exists relative to the current working directory (or absolute),
- *  - a path relative to the base path (a leading slash is treated as base-relative),
- *  - a glob pattern, matched against both the absolute path and the base-relative path.
+ * A non-glob skip path is matched as every location it may refer to, all at once:
+ *  - the canonical path on disk, if it exists (resolved from the current working
+ *    directory, or absolute),
+ *  - the path resolved against the base path (absolute paths are kept as-is),
+ *  - the path, stripped of leading slashes, appended to the base path.
+ * A leading slash therefore matches both the absolute location and the
+ * base-relative one; it does not scope the path to the base path.
+ *
+ * A glob pattern is matched against both the absolute path and the base-relative path.
  *
  * Instances are cached per (base path, skip paths) pair and memoise per-path
  * results, since the same decision is requested for the same file by many rules.
