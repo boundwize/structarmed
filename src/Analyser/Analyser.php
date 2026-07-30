@@ -984,6 +984,7 @@ final readonly class Analyser
         $files        = [];
         $skipPaths    = $architecture->getSkipPaths();
         $skipMatchers = $this->compileSkipMatchers($skipPaths);
+        $isSkipped    = fn(string $path): bool => $this->isSkipped($path, $skipMatchers);
         $scanPaths    = $this->scanPaths($layers, $scanPaths);
 
         if ($this->shouldAnalyseComposerJson($architecture)) {
@@ -1010,12 +1011,8 @@ final readonly class Analyser
                 continue;
             }
 
-            $phpFiles = PhpFileWalker::files(
-                $fullPath,
-                fn(string $file): bool => $this->isSkipped($file, $skipMatchers)
-            );
-            foreach ($phpFiles as $phpFile) {
-                $files[] = $phpFile;
+            foreach (PhpFileWalker::files($fullPath, $isSkipped) as $file) {
+                $files[] = $file;
             }
         }
 
