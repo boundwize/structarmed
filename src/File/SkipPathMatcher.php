@@ -12,6 +12,7 @@ use function fnmatch;
 use function implode;
 use function ltrim;
 use function realpath;
+use function sort;
 use function str_starts_with;
 use function strlen;
 use function strpbrk;
@@ -30,7 +31,8 @@ use function substr;
  *
  * A glob pattern is matched against both the absolute path and the base-relative path.
  *
- * Instances are cached per (base path, skip paths) pair and memoise per-path
+ * Instances are cached per (base path, skip paths) pair, ignoring skip path
+ * order and duplicates, and memoise per-path
  * results, since the same decision is requested for the same file by many rules.
  */
 final class SkipPathMatcher
@@ -61,6 +63,9 @@ final class SkipPathMatcher
      */
     public static function compile(string $basePath, array $skipPaths): self
     {
+        $skipPaths = array_unique($skipPaths);
+        sort($skipPaths);
+
         $cacheKey = $basePath . "\0" . implode("\0", $skipPaths);
 
         return self::$instances[$cacheKey] ??= new self($basePath, $skipPaths);
