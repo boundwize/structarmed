@@ -26,7 +26,6 @@ use function mkdir;
 use function random_bytes;
 use function realpath;
 use function rmdir;
-use function rtrim;
 use function str_replace;
 use function symlink;
 use function sys_get_temp_dir;
@@ -356,9 +355,16 @@ final class Psr1PhpTagsRuleTest extends TestCase
 
             $this->assertCount(1, $violations);
             $this->assertSame(37, $violations[0]->line);
+
+            /** @var non-empty-string $realPathAnalysisBasePath */
+            $realPathAnalysisBasePath = realpath($analysisBasePath);
+
+            /** @var non-empty-string $realPathFile */
+            $realPathFile = realpath($violations[0]->file);
+
             $this->assertStringStartsWith(
-                rtrim(str_replace('\\', '/', $analysisBasePath), '/') . '/',
-                str_replace('\\', '/', $violations[0]->file),
+                $realPathAnalysisBasePath,
+                $realPathFile,
             );
         } finally {
             if (DIRECTORY_SEPARATOR !== '\\') {
