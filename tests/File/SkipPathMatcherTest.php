@@ -51,12 +51,12 @@ final class SkipPathMatcherTest extends TestCase
         );
     }
 
-    public function testLeadingSlashSkipPathMatchesAbsoluteAndBaseRelativeLocations(): void
+    public function testLeadingSlashSkipPathMatchesOnlyTheAbsoluteLocation(): void
     {
         $skipPathMatcher = SkipPathMatcher::compile('/project', ['/vendor']);
 
         $this->assertTrue($skipPathMatcher->isSkipped('/vendor/autoload.php'));
-        $this->assertTrue($skipPathMatcher->isSkipped('/project/vendor/autoload.php'));
+        $this->assertFalse($skipPathMatcher->isSkipped('/project/vendor/autoload.php'));
         $this->assertFalse($skipPathMatcher->isSkipped('/project/lib/Bar.php'));
     }
 
