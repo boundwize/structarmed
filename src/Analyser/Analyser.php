@@ -148,9 +148,9 @@ final readonly class Analyser
         }
 
         $fileAnalysisProvider = new FileAnalysisProvider(
-            $extractionResult->fileAnalyses,
-            $files,
-            $scanPaths !== [],
+            analyses: $extractionResult->fileAnalyses,
+            scopeFiles: $files,
+            scopeFilesEnabled: true,
         );
 
         foreach ($fileAnalysisRules as $key => $rule) {
