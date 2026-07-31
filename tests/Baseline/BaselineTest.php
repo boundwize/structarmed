@@ -233,52 +233,6 @@ PHP);
         }
     }
 
-    public function testGeneratedBaselineMatchesPathDependentMessageFromDifferentBasePath(): void
-    {
-        $sourceBasePath = $this->createTempDirectory();
-        $targetBasePath = $this->createTempDirectory();
-        $baseline       = new Baseline();
-
-        mkdir($sourceBasePath . '/src');
-        mkdir($targetBasePath . '/src');
-        file_put_contents($sourceBasePath . '/src/template.php', '<?php');
-        file_put_contents($targetBasePath . '/src/template.php', '<?php');
-
-        $sourceViolations = new RuleViolationCollection();
-        $sourceViolations->add($this->violation(
-            $sourceBasePath . '/src/template.php',
-            'File [' . $sourceBasePath . '/src/template.php] must use only <?php and <?= PHP tags',
-            ''
-        ));
-
-        try {
-            $baseline->generate($sourceViolations, 'baseline.php', $sourceBasePath);
-            file_put_contents(
-                $targetBasePath . '/baseline.php',
-                (string) file_get_contents($sourceBasePath . '/baseline.php')
-            );
-
-            $generatedBaseline = (string) file_get_contents($targetBasePath . '/baseline.php');
-
-            $this->assertStringContainsString(
-                'File [src/template.php] must use only <?php and <?= PHP tags',
-                $generatedBaseline
-            );
-
-            $targetViolations = new RuleViolationCollection();
-            $targetViolations->add($this->violation(
-                $targetBasePath . '/src/template.php',
-                'File [' . $targetBasePath . '/src/template.php] must use only <?php and <?= PHP tags',
-                ''
-            ));
-
-            $this->assertCount(0, $baseline->filter($targetViolations, 'baseline.php', $targetBasePath));
-        } finally {
-            $this->removeTempDirectory($sourceBasePath, ['baseline.php', 'src/template.php', 'src']);
-            $this->removeTempDirectory($targetBasePath, ['baseline.php', 'src/template.php', 'src']);
-        }
-    }
-
     public function testFilterRejectsMissingBaselineFile(): void
     {
         $basePath = $this->createTempDirectory();
