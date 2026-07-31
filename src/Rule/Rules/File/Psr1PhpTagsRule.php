@@ -73,7 +73,7 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
                 $basePath,
                 $skipPaths,
                 $fileAnalysisProvider->scopeFiles(),
-                $fileAnalysisProvider->scopeFilesEnabled(),
+                $fileAnalysisProvider->isScopeFilesEnabled(),
             ) as $file
         ) {
             $invalidPhpTagLine = $fileAnalysisProvider->invalidPhpTagLine($file);

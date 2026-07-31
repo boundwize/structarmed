@@ -68,7 +68,7 @@ final class FileAnalysisProvider
     public function __construct(
         private array $analyses = [],
         private array $scopeFiles = [],
-        private readonly bool $scopeFilesEnabled = false,
+        private readonly bool $isScopeFilesEnabled = false,
     ) {
         $normalisedAnalyses = [];
         foreach ($this->analyses as $file => $analysis) {
@@ -89,9 +89,9 @@ final class FileAnalysisProvider
         return $this->scopeFiles;
     }
 
-    public function scopeFilesEnabled(): bool
+    public function isScopeFilesEnabled(): bool
     {
-        return $this->scopeFilesEnabled;
+        return $this->isScopeFilesEnabled;
     }
 
     public function analyse(string $file): FileAnalysis

@@ -398,7 +398,7 @@ final class Psr1PhpTagsRuleTest extends TestCase
             $files = (new PhpFileFinder(['src/']))->files(
                 $basePath,
                 scopeFiles: [$fooFile],
-                scopeFilesEnabled: true,
+                isScopeFilesEnabled: true,
             );
 
             $this->assertSame([$fooFile], $files);

@@ -91,11 +91,11 @@ final class FileAnalysisProviderTest extends TestCase
     {
         $fileAnalysisProvider = new FileAnalysisProvider(
             scopeFiles: ['C:\\project\\src\\Foo.php'],
-            scopeFilesEnabled: true,
+            isScopeFilesEnabled: true,
         );
 
         $this->assertSame(['C:/project/src/Foo.php'], $fileAnalysisProvider->scopeFiles());
-        $this->assertTrue($fileAnalysisProvider->scopeFilesEnabled());
+        $this->assertTrue($fileAnalysisProvider->isScopeFilesEnabled());
     }
 
     /** @return iterable<string, array{string, bool, bool, int|null}> */

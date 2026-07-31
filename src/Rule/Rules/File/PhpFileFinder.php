@@ -36,11 +36,11 @@ final readonly class PhpFileFinder
         string $basePath,
         array $skipPaths = [],
         array $scopeFiles = [],
-        bool $scopeFilesEnabled = false,
+        bool $isScopeFilesEnabled = false,
     ): array {
         $skipPathMatcher = SkipPathMatcher::compile($basePath, $skipPaths);
         $files           = [];
-        $scopeFileMap    = $scopeFilesEnabled
+        $scopeFileMap    = $isScopeFilesEnabled
             ? array_fill_keys(array_map(
                 static fn(string $file): string => Path::normalise($file, canonicalise: true),
                 $scopeFiles,
@@ -56,7 +56,7 @@ final readonly class PhpFileFinder
             }
 
             foreach ($this->phpFileCollector->collect($fullPath, $skipPathMatcher) as $file) {
-                if ($scopeFilesEnabled && ! isset($scopeFileMap[$file])) {
+                if ($isScopeFilesEnabled && ! isset($scopeFileMap[$file])) {
                     continue;
                 }
 

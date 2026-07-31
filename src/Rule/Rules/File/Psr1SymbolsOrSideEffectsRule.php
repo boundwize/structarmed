@@ -59,7 +59,7 @@ final readonly class Psr1SymbolsOrSideEffectsRule implements FileAnalysisRuleInt
                 $basePath,
                 $skipPaths,
                 $fileAnalysisProvider->scopeFiles(),
-                $fileAnalysisProvider->scopeFilesEnabled(),
+                $fileAnalysisProvider->isScopeFilesEnabled(),
             ) as $file
         ) {
             $fileAnalysis = $fileAnalysisProvider->analyse($file);

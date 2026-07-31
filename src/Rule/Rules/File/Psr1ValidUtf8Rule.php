@@ -59,7 +59,7 @@ final readonly class Psr1ValidUtf8Rule implements FileAnalysisRuleInterface
                 $basePath,
                 $skipPaths,
                 $fileAnalysisProvider->scopeFiles(),
-                $fileAnalysisProvider->scopeFilesEnabled(),
+                $fileAnalysisProvider->isScopeFilesEnabled(),
             ) as $file
         ) {
             if (! $fileAnalysisProvider->hasValidUtf8($file)) {

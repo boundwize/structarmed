@@ -65,7 +65,7 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
                 $basePath,
                 $skipPaths,
                 $fileAnalysisProvider->scopeFiles(),
-                $fileAnalysisProvider->scopeFilesEnabled(),
+                $fileAnalysisProvider->isScopeFilesEnabled(),
             ) as $file
         ) {
             if ($fileAnalysisProvider->hasUtf8Bom($file)) {
