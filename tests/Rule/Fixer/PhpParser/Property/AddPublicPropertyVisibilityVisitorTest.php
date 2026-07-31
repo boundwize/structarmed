@@ -125,8 +125,9 @@ final class AddPublicPropertyVisibilityVisitorTest extends TestCase
 
     public function testSkipsMalformedParametersAndFixesMatchingPromotedProperty(): void
     {
+        $dynamicName                        = new Variable(new Variable('dynamic'));
         $errorParam                         = new Param(new Error());
-        $dynamicNameParam                   = new Param(new Variable(new Variable('dynamic')), flags: Modifiers::READONLY);
+        $dynamicNameParam                   = new Param($dynamicName, flags: Modifiers::READONLY);
         $param                              = new Param(new Variable('status'), flags: Modifiers::READONLY);
         $classMethod                        = new ClassMethod('__construct', [
             'params' => [$errorParam, $dynamicNameParam, $param],
