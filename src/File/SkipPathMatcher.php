@@ -102,14 +102,16 @@ final class SkipPathMatcher
             );
 
             $baseRelativePath = ltrim($normalisedSkipPath, '/');
-            if ($baseRelativePath !== $normalisedSkipPath) {
-                // Only paths with a leading slash produce a base-relative
-                // location distinct from the base-resolved one above.
-                $pathPrefixes[] = Path::normalise(
-                    $normalisedBasePath . '/' . $baseRelativePath,
-                    canonicalise: true
-                );
+            if ($baseRelativePath === $normalisedSkipPath) {
+                continue;
             }
+
+            // A skip path with a leading slash covers two locations:
+            // the absolute path itself (already added above) and the same
+            // path inside the base path. E.g. '/vendor' skips both
+            // '/vendor/autoload.php' and '<basePath>/vendor/autoload.php'.
+            $skipPathUnderBasePath = $normalisedBasePath . '/' . $baseRelativePath;
+            $pathPrefixes[]        = Path::normalise($skipPathUnderBasePath, canonicalise: true);
         }
 
         $pathPrefixesWithSlash = [];
