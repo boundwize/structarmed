@@ -10,7 +10,6 @@ use function array_unique;
 use function array_values;
 use function fnmatch;
 use function implode;
-use function ltrim;
 use function realpath;
 use function sort;
 use function str_starts_with;
@@ -24,10 +23,9 @@ use function substr;
  * A non-glob skip path is matched as every location it may refer to, all at once:
  *  - the canonical path on disk, if it exists (resolved from the current working
  *    directory, or absolute),
- *  - the path resolved against the base path (absolute paths are kept as-is),
- *  - the path, stripped of leading slashes, appended to the base path.
- * A leading slash therefore matches both the absolute location and the
- * base-relative one; it does not scope the path to the base path.
+ *  - the path resolved against the base path (absolute paths are kept as-is).
+ * An absolute path therefore matches only that absolute location; it is not
+ * re-anchored under the base path.
  *
  * A glob pattern is matched against both the absolute path and the base-relative path.
  *
@@ -98,14 +96,6 @@ final class SkipPathMatcher
 
             $pathPrefixes[] = Path::normalise(
                 Path::resolve($normalisedSkipPath, $normalisedBasePath),
-                canonicalise: true
-            );
-
-            $baseRelativePath = ltrim($normalisedSkipPath, '/');
-            $pathPrefixes[]   = Path::normalise(
-                $baseRelativePath === ''
-                    ? $normalisedBasePath
-                    : $normalisedBasePath . '/' . $baseRelativePath,
                 canonicalise: true
             );
         }

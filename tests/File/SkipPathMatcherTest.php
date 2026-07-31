@@ -51,6 +51,15 @@ final class SkipPathMatcherTest extends TestCase
         );
     }
 
+    public function testLeadingSlashSkipPathMatchesOnlyTheAbsoluteLocation(): void
+    {
+        $skipPathMatcher = SkipPathMatcher::compile('/project', ['/vendor']);
+
+        $this->assertTrue($skipPathMatcher->isSkipped('/vendor/autoload.php'));
+        $this->assertFalse($skipPathMatcher->isSkipped('/project/vendor/autoload.php'));
+        $this->assertFalse($skipPathMatcher->isSkipped('/project/lib/Bar.php'));
+    }
+
     public function testReorderedSkipPathsMatchIdentically(): void
     {
         $skipPathMatcher = SkipPathMatcher::compile('/project', ['vendor/', 'src/', 'src/']);
