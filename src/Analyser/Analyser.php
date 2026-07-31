@@ -149,7 +149,6 @@ final readonly class Analyser
 
         $fileAnalysisProvider = new FileAnalysisProvider(
             analyses: $extractionResult->fileAnalyses,
-            scopeFiles: $files,
             isScopeFilesEnabled: true,
         );
 

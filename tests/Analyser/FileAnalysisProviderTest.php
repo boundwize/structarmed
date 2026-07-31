@@ -87,15 +87,28 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse('C:/project/src/Foo.php'));
     }
 
-    public function testExposesNormalisedFileScope(): void
+    public function testFiltersFilesToAnalysedFilesWhenScopeIsEnabled(): void
     {
+        $fooFile      = $this->source('<?php final class Foo {}');
+        $barFile      = $this->source('<?php final class Bar {}');
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($fooFile);
+
         $fileAnalysisProvider = new FileAnalysisProvider(
-            scopeFiles: ['C:\\project\\src\\Foo.php'],
+            analyses: [$fooFile => $fileAnalysis],
             isScopeFilesEnabled: true,
         );
 
-        $this->assertSame(['C:/project/src/Foo.php'], $fileAnalysisProvider->getScopeFiles());
-        $this->assertTrue($fileAnalysisProvider->isScopeFilesEnabled());
+        $this->assertSame(
+            [$fooFile],
+            $fileAnalysisProvider->filesInScope([$fooFile, $barFile]),
+        );
+    }
+
+    public function testReturnsAllFilesWhenScopeIsDisabled(): void
+    {
+        $files = ['C:/project/src/Foo.php', 'C:/project/src/Bar.php'];
+
+        $this->assertSame($files, (new FileAnalysisProvider())->filesInScope($files));
     }
 
     /** @return iterable<string, array{string, bool, bool, int|null}> */

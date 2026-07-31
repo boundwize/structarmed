@@ -59,15 +59,9 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
     ): array {
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
         $violations    = [];
+        $files         = $fileAnalysisProvider->filesInScope($phpFileFinder->files($basePath, $skipPaths));
 
-        foreach (
-            $phpFileFinder->files(
-                $basePath,
-                $skipPaths,
-                $fileAnalysisProvider->getScopeFiles(),
-                $fileAnalysisProvider->isScopeFilesEnabled(),
-            ) as $file
-        ) {
+        foreach ($files as $file) {
             if ($fileAnalysisProvider->hasUtf8Bom($file)) {
                 $violations[] = new RuleViolation(
                     message: sprintf('File [%s] must use UTF-8 without BOM', $file),

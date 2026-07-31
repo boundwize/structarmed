@@ -27,8 +27,9 @@ use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use PhpParser\Token;
 
+use function array_filter;
 use function array_key_exists;
-use function array_map;
+use function array_values;
 use function file_get_contents;
 use function is_array;
 use function preg_match;
@@ -63,12 +64,10 @@ final class FileAnalysisProvider
 
     /**
      * @param array<string, FileAnalysis> $analyses
-     * @param list<string> $scopeFiles
      * @param bool $isScopeFilesEnabled False for standalone rule evaluation, which discovers configured paths.
      */
     public function __construct(
         private array $analyses = [],
-        private array $scopeFiles = [],
         private readonly bool $isScopeFilesEnabled = false,
     ) {
         $normalisedAnalyses = [];
@@ -76,23 +75,24 @@ final class FileAnalysisProvider
             $normalisedAnalyses[Path::normalise($file, canonicalise: true)] = $analysis;
         }
 
-        $this->analyses   = $normalisedAnalyses;
-        $this->scopeFiles = array_map(
-            static fn(string $file): string => Path::normalise($file, canonicalise: true),
-            $this->scopeFiles,
-        );
-        $this->parser     = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->analyses = $normalisedAnalyses;
+        $this->parser   = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
-    /** @return list<string> */
-    public function getScopeFiles(): array
+    /**
+     * @param list<string> $files
+     * @return list<string>
+     */
+    public function filesInScope(array $files): array
     {
-        return $this->scopeFiles;
-    }
+        if (! $this->isScopeFilesEnabled) {
+            return $files;
+        }
 
-    public function isScopeFilesEnabled(): bool
-    {
-        return $this->isScopeFilesEnabled;
+        return array_values(array_filter(
+            $files,
+            fn(string $file): bool => isset($this->analyses[Path::normalise($file, canonicalise: true)]),
+        ));
     }
 
     public function analyse(string $file): FileAnalysis

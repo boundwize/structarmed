@@ -53,15 +53,9 @@ final readonly class Psr1ValidUtf8Rule implements FileAnalysisRuleInterface
     ): array {
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
         $violations    = [];
+        $files         = $fileAnalysisProvider->filesInScope($phpFileFinder->files($basePath, $skipPaths));
 
-        foreach (
-            $phpFileFinder->files(
-                $basePath,
-                $skipPaths,
-                $fileAnalysisProvider->getScopeFiles(),
-                $fileAnalysisProvider->isScopeFilesEnabled(),
-            ) as $file
-        ) {
+        foreach ($files as $file) {
             if (! $fileAnalysisProvider->hasValidUtf8($file)) {
                 $violations[] = new RuleViolation(
                     message: sprintf('File [%s] must use valid UTF-8 encoding', $file),
