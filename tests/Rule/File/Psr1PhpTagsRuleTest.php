@@ -407,7 +407,7 @@ final class Psr1PhpTagsRuleTest extends TestCase
         $this->assertInstanceOf(FixableInterface::class, new Psr1PhpTagsRule(['src/']));
     }
 
-    public function testFixesInvalidPhpTagOnViolationLineOnly(): void
+    public function testFixKeepsShortTagInsideStringUntouched(): void
     {
         $basePath = $this->makeTempDir();
 
@@ -430,6 +430,76 @@ final class Psr1PhpTagsRuleTest extends TestCase
             );
         } finally {
             unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testFixesAllInvalidPhpTagsInFileIncludingSameLine(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/template.php',
+                "<? echo 'first'; ?> <? echo 'second'; ?>\n<? echo 'third'; ?>"
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame(1, $violation->line);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                "<?php echo 'first'; ?> <?php echo 'second'; ?>\n<?php echo 'third'; ?>",
+                file_get_contents($basePath . '/src/template.php')
+            );
+            $this->assertSame([], $psr1PhpTagsRule->evaluateProjectAll($basePath, Architecture::define()));
+        } finally {
+            unlink($basePath . '/src/template.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testFixesInvalidPhpTagsAtVariousLocationsAcrossLines(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/template.php',
+                "<html>\n"
+                . "<? echo 'top'; ?>\n"
+                . "<body>\n"
+                . "<div><? echo 'mid'; ?></div>\n"
+                . "<?= 'echo tag'; ?>\n"
+                . "<? echo 'end'; ?>\n"
+                . '</body>'
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame(2, $violation->line);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                "<html>\n"
+                . "<?php echo 'top'; ?>\n"
+                . "<body>\n"
+                . "<div><?php echo 'mid'; ?></div>\n"
+                . "<?= 'echo tag'; ?>\n"
+                . "<?php echo 'end'; ?>\n"
+                . '</body>',
+                file_get_contents($basePath . '/src/template.php')
+            );
+            $this->assertSame([], $psr1PhpTagsRule->evaluateProjectAll($basePath, Architecture::define()));
+        } finally {
+            unlink($basePath . '/src/template.php');
             rmdir($basePath . '/src');
             rmdir($basePath);
         }

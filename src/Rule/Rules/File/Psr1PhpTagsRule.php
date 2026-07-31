@@ -99,10 +99,16 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
             return false;
         }
 
+        // The violation is file-level and reports only the first invalid tag,
+        // so normalize every remaining invalid tag in the same fix pass.
+        while (($remainingFixedCode = $this->fixInvalidTagOnLine($fixedCode, null)) !== null) {
+            $fixedCode = $remainingFixedCode;
+        }
+
         return file_put_contents($ruleViolation->file, $fixedCode) !== false;
     }
 
-    private function fixInvalidTagOnLine(string $code, int $line): ?string
+    private function fixInvalidTagOnLine(string $code, ?int $line): ?string
     {
         $offset = 0;
 
@@ -148,10 +154,10 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
     /**
      * @return array{offset: int, length: int, text: string}|null
      */
-    private function replacementForInvalidTag(int $id, string $text, int $tokenLine, int $targetLine): ?array
+    private function replacementForInvalidTag(int $id, string $text, int $tokenLine, ?int $targetLine): ?array
     {
         if ($id === T_OPEN_TAG) {
-            if ($tokenLine !== $targetLine || ! $this->isInvalidOpenTag($text)) {
+            if (($targetLine !== null && $tokenLine !== $targetLine) || ! $this->isInvalidOpenTag($text)) {
                 return null;
             }
 
@@ -173,7 +179,7 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
         while (($tagOffset = InlineHtmlOpeningTagMatcher::invalidInlineHtmlTagOffset($text, $searchOffset)) !== null) {
             $tagLine = $tokenLine + substr_count(substr($text, 0, $tagOffset), "\n");
 
-            if ($tagLine === $targetLine) {
+            if ($targetLine === null || $tagLine === $targetLine) {
                 return [
                     'offset' => $tagOffset,
                     'length' => 2,
