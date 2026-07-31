@@ -401,7 +401,7 @@ final class Psr1PhpTagsRuleTest extends TestCase
                 isScopeFilesEnabled: true,
             );
 
-            $this->assertSame([$fooFile], $files);
+            $this->assertSame([str_replace('\\', '/', $fooFile)], $files);
         } finally {
             unlink($basePath . '/src/Foo.php');
             unlink($basePath . '/src/Bar.php');

@@ -30,6 +30,7 @@ final readonly class PhpFileFinder
     /**
      * @param list<string> $skipPaths
      * @param list<string> $scopeFiles
+     * @param bool $isScopeFilesEnabled Whether results should be restricted to $scopeFiles.
      * @return list<string>
      */
     public function files(

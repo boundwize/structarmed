@@ -64,6 +64,7 @@ final class FileAnalysisProvider
     /**
      * @param array<string, FileAnalysis> $analyses
      * @param list<string> $scopeFiles
+     * @param bool $isScopeFilesEnabled False for standalone rule evaluation, which discovers configured paths.
      */
     public function __construct(
         private array $analyses = [],
