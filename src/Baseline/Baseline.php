@@ -28,6 +28,7 @@ use function is_scalar;
 use function json_encode;
 use function ltrim;
 use function sprintf;
+use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -78,7 +79,7 @@ final readonly class Baseline
         foreach ($ruleViolationCollection as $violation) {
             $violations[] = [
                 'rule'    => $violation->ruleKey,
-                'message' => $violation->message,
+                'message' => $this->relativeMessagePath($violation->message, $violation->file, $basePath),
                 'file'    => $this->relativePath($violation->file, $basePath),
                 'class'   => $violation->className,
                 'layer'   => $violation->layer,
@@ -196,7 +197,11 @@ final readonly class Baseline
     {
         return (string) json_encode([
             'rule'    => $this->stringValue($violation['rule'] ?? null),
-            'message' => $this->stringValue($violation['message'] ?? null),
+            'message' => $this->relativeMessagePath(
+                $this->stringValue($violation['message'] ?? null),
+                $this->stringValue($violation['file'] ?? null),
+                $basePath
+            ),
             'file'    => $this->relativePath($this->stringValue($violation['file'] ?? null), $basePath),
             'class'   => $this->stringValue($violation['class'] ?? null),
             'layer'   => $violation['layer'] ?? null,
@@ -216,11 +221,16 @@ final readonly class Baseline
     {
         return (string) json_encode([
             'rule'    => $ruleViolation->ruleKey,
-            'message' => $ruleViolation->message,
+            'message' => $this->relativeMessagePath($ruleViolation->message, $ruleViolation->file, $basePath),
             'file'    => $this->relativePath($ruleViolation->file, $basePath),
             'class'   => $ruleViolation->className,
             'layer'   => $ruleViolation->layer,
         ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    private function relativeMessagePath(string $message, string $file, string $basePath): string
+    {
+        return str_replace($file, $this->relativePath($file, $basePath), $message);
     }
 
     private function relativePath(string $path, string $basePath): string
