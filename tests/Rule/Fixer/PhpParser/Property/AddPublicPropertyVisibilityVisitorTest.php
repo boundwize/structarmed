@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\Property;
 
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\Property\AddPublicPropertyVisibilityVisitor;
 use PhpParser\Modifiers;
+use PhpParser\Node\Expr\Error;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
 use PhpParser\Node\Param;
@@ -120,6 +121,24 @@ final class AddPublicPropertyVisibilityVisitorTest extends TestCase
         (new NodeTraverser($addPublicPropertyVisibilityVisitor))->traverse([$class]);
 
         $this->assertSame(Modifiers::READONLY, $param->flags);
+    }
+
+    public function testSkipsMalformedParametersAndFixesMatchingPromotedProperty(): void
+    {
+        $errorParam                         = new Param(new Error());
+        $dynamicNameParam                   = new Param(new Variable(new Variable('dynamic')), flags: Modifiers::READONLY);
+        $param                              = new Param(new Variable('status'), flags: Modifiers::READONLY);
+        $classMethod                        = new ClassMethod('__construct', [
+            'params' => [$errorParam, $dynamicNameParam, $param],
+        ]);
+        $class                              = new Class_('Order', ['stmts' => [$classMethod]]);
+        $addPublicPropertyVisibilityVisitor = new AddPublicPropertyVisibilityVisitor('App\\Order', 'status');
+        $class->namespacedName              = new Name('App\\Order');
+
+        (new NodeTraverser($addPublicPropertyVisibilityVisitor))->traverse([$class]);
+
+        $this->assertSame(Modifiers::PUBLIC | Modifiers::READONLY, $param->flags);
+        $this->assertSame(Modifiers::READONLY, $dynamicNameParam->flags);
     }
 
     public function testDoesNotChangePropertyInAnonymousClass(): void
