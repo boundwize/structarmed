@@ -383,6 +383,33 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testPhpFileFinderRestrictsFilesToEnabledScope(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/src/Foo.php', '<?php echo "foo";');
+            file_put_contents($basePath . '/src/Bar.php', '<?php echo "bar";');
+
+            $fooFile = realpath($basePath . '/src/Foo.php');
+            $this->assertIsString($fooFile);
+
+            $files = (new PhpFileFinder(['src/']))->files(
+                $basePath,
+                scopeFiles: [$fooFile],
+                scopeFilesEnabled: true,
+            );
+
+            $this->assertSame([$fooFile], $files);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            unlink($basePath . '/src/Bar.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testEvaluateProjectReturnsFirstViolation(): void
     {
         $basePath = $this->makeTempDir();
