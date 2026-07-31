@@ -64,7 +64,7 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
             $phpFileFinder->files(
                 $basePath,
                 $skipPaths,
-                $fileAnalysisProvider->scopeFiles(),
+                $fileAnalysisProvider->getScopeFiles(),
                 $fileAnalysisProvider->isScopeFilesEnabled(),
             ) as $file
         ) {

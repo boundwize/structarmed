@@ -58,7 +58,7 @@ final readonly class Psr1ValidUtf8Rule implements FileAnalysisRuleInterface
             $phpFileFinder->files(
                 $basePath,
                 $skipPaths,
-                $fileAnalysisProvider->scopeFiles(),
+                $fileAnalysisProvider->getScopeFiles(),
                 $fileAnalysisProvider->isScopeFilesEnabled(),
             ) as $file
         ) {

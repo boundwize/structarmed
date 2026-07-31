@@ -94,7 +94,7 @@ final class FileAnalysisProviderTest extends TestCase
             isScopeFilesEnabled: true,
         );
 
-        $this->assertSame(['C:/project/src/Foo.php'], $fileAnalysisProvider->scopeFiles());
+        $this->assertSame(['C:/project/src/Foo.php'], $fileAnalysisProvider->getScopeFiles());
         $this->assertTrue($fileAnalysisProvider->isScopeFilesEnabled());
     }
 

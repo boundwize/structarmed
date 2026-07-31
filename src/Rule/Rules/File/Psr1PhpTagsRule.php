@@ -72,7 +72,7 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
             $phpFileFinder->files(
                 $basePath,
                 $skipPaths,
-                $fileAnalysisProvider->scopeFiles(),
+                $fileAnalysisProvider->getScopeFiles(),
                 $fileAnalysisProvider->isScopeFilesEnabled(),
             ) as $file
         ) {

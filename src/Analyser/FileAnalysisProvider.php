@@ -84,7 +84,7 @@ final class FileAnalysisProvider
     }
 
     /** @return list<string> */
-    public function scopeFiles(): array
+    public function getScopeFiles(): array
     {
         return $this->scopeFiles;
     }
