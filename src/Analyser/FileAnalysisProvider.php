@@ -27,7 +27,11 @@ use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use PhpParser\Token;
 
+use function array_fill_keys;
+use function array_filter;
 use function array_key_exists;
+use function array_keys;
+use function array_values;
 use function file_get_contents;
 use function is_array;
 use function preg_match;
@@ -60,16 +64,41 @@ final class FileAnalysisProvider
     /** @var array<string, int|null> */
     private array $invalidPhpTagLines = [];
 
-    /** @param array<string, FileAnalysis> $analyses */
-    public function __construct(private array $analyses = [])
-    {
+    /** @var array<string, true> */
+    private readonly array $scopeFileMap;
+
+    /**
+     * @param array<string, FileAnalysis> $analyses
+     * @param bool $isScopeFilesEnabled False for standalone rule evaluation, which discovers configured paths.
+     */
+    public function __construct(
+        private array $analyses = [],
+        private readonly bool $isScopeFilesEnabled = false,
+    ) {
         $normalisedAnalyses = [];
         foreach ($this->analyses as $file => $analysis) {
             $normalisedAnalyses[Path::normalise($file, canonicalise: true)] = $analysis;
         }
 
-        $this->analyses = $normalisedAnalyses;
-        $this->parser   = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->analyses     = $normalisedAnalyses;
+        $this->scopeFileMap = array_fill_keys(array_keys($normalisedAnalyses), true);
+        $this->parser       = (new ParserFactory())->createForNewestSupportedVersion();
+    }
+
+    /**
+     * @param list<string> $files
+     * @return list<string>
+     */
+    public function filesInScope(array $files): array
+    {
+        if (! $this->isScopeFilesEnabled) {
+            return $files;
+        }
+
+        return array_values(array_filter(
+            $files,
+            fn(string $file): bool => isset($this->scopeFileMap[Path::normalise($file, canonicalise: true)]),
+        ));
     }
 
     public function analyse(string $file): FileAnalysis

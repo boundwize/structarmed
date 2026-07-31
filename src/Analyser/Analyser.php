@@ -147,7 +147,10 @@ final readonly class Analyser
             $this->markExtendedClasses($classNodes, $extractionResult);
         }
 
-        $fileAnalysisProvider = new FileAnalysisProvider($extractionResult->fileAnalyses);
+        $fileAnalysisProvider = new FileAnalysisProvider(
+            analyses: $extractionResult->fileAnalyses,
+            isScopeFilesEnabled: true,
+        );
 
         foreach ($fileAnalysisRules as $key => $rule) {
             $projectRuleViolations[$key] = $rule->evaluateProjectAllWithProvider(
