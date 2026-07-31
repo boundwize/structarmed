@@ -27,8 +27,10 @@ use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use PhpParser\Token;
 
+use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
+use function array_keys;
 use function array_values;
 use function file_get_contents;
 use function is_array;
@@ -62,6 +64,9 @@ final class FileAnalysisProvider
     /** @var array<string, int|null> */
     private array $invalidPhpTagLines = [];
 
+    /** @var array<string, true> */
+    private readonly array $scopeFileMap;
+
     /**
      * @param array<string, FileAnalysis> $analyses
      * @param bool $isScopeFilesEnabled False for standalone rule evaluation, which discovers configured paths.
@@ -75,8 +80,9 @@ final class FileAnalysisProvider
             $normalisedAnalyses[Path::normalise($file, canonicalise: true)] = $analysis;
         }
 
-        $this->analyses = $normalisedAnalyses;
-        $this->parser   = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->analyses     = $normalisedAnalyses;
+        $this->scopeFileMap = array_fill_keys(array_keys($normalisedAnalyses), true);
+        $this->parser       = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     /**
@@ -91,7 +97,7 @@ final class FileAnalysisProvider
 
         return array_values(array_filter(
             $files,
-            fn(string $file): bool => isset($this->analyses[Path::normalise($file, canonicalise: true)]),
+            fn(string $file): bool => isset($this->scopeFileMap[Path::normalise($file, canonicalise: true)]),
         ));
     }
 

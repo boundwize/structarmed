@@ -87,7 +87,7 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse('C:/project/src/Foo.php'));
     }
 
-    public function testFiltersFilesToAnalysedFilesWhenScopeIsEnabled(): void
+    public function testFiltersFilesToInitialAnalysedFileScopeWhenEnabled(): void
     {
         $fooFile      = $this->source('<?php final class Foo {}');
         $barFile      = $this->source('<?php final class Bar {}');
@@ -97,6 +97,8 @@ final class FileAnalysisProviderTest extends TestCase
             analyses: [$fooFile => $fileAnalysis],
             isScopeFilesEnabled: true,
         );
+
+        $fileAnalysisProvider->analyse($barFile);
 
         $this->assertSame(
             [$fooFile],
