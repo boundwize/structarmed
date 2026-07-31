@@ -6,9 +6,12 @@ namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\Property;
 
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\Property\AddPublicPropertyVisibilityVisitor;
 use PhpParser\Modifiers;
+use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
+use PhpParser\Node\Param;
 use PhpParser\Node\PropertyItem;
 use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
@@ -64,6 +67,59 @@ final class AddPublicPropertyVisibilityVisitorTest extends TestCase
         (new NodeTraverser($addPublicPropertyVisibilityVisitor))->traverse([$class]);
 
         $this->assertSame(0, $property->flags);
+    }
+
+    public function testAddsPublicVisibilityToPromotedReadonlyProperty(): void
+    {
+        $param                              = new Param(new Variable('status'), flags: Modifiers::READONLY);
+        $classMethod                        = new ClassMethod('__construct', ['params' => [$param]]);
+        $class                              = new Class_('Order', ['stmts' => [$classMethod]]);
+        $addPublicPropertyVisibilityVisitor = new AddPublicPropertyVisibilityVisitor('App\\Order', 'status');
+        $class->namespacedName              = new Name('App\\Order');
+
+        (new NodeTraverser($addPublicPropertyVisibilityVisitor))->traverse([$class]);
+
+        $this->assertSame(Modifiers::PUBLIC | Modifiers::READONLY, $param->flags);
+    }
+
+    public function testDoesNotChangePromotedPropertyWithExplicitVisibility(): void
+    {
+        $flags                              = Modifiers::PRIVATE | Modifiers::READONLY;
+        $param                              = new Param(new Variable('status'), flags: $flags);
+        $classMethod                        = new ClassMethod('__construct', ['params' => [$param]]);
+        $class                              = new Class_('Order', ['stmts' => [$classMethod]]);
+        $addPublicPropertyVisibilityVisitor = new AddPublicPropertyVisibilityVisitor('App\\Order', 'status');
+        $class->namespacedName              = new Name('App\\Order');
+
+        (new NodeTraverser($addPublicPropertyVisibilityVisitor))->traverse([$class]);
+
+        $this->assertSame(Modifiers::PRIVATE | Modifiers::READONLY, $param->flags);
+    }
+
+    public function testDoesNotPromoteRegularConstructorParameter(): void
+    {
+        $param                              = new Param(new Variable('status'));
+        $classMethod                        = new ClassMethod('__construct', ['params' => [$param]]);
+        $class                              = new Class_('Order', ['stmts' => [$classMethod]]);
+        $addPublicPropertyVisibilityVisitor = new AddPublicPropertyVisibilityVisitor('App\\Order', 'status');
+        $class->namespacedName              = new Name('App\\Order');
+
+        (new NodeTraverser($addPublicPropertyVisibilityVisitor))->traverse([$class]);
+
+        $this->assertSame(0, $param->flags);
+    }
+
+    public function testDoesNotChangeDifferentPromotedParameter(): void
+    {
+        $param                              = new Param(new Variable('state'), flags: Modifiers::READONLY);
+        $classMethod                        = new ClassMethod('__construct', ['params' => [$param]]);
+        $class                              = new Class_('Order', ['stmts' => [$classMethod]]);
+        $addPublicPropertyVisibilityVisitor = new AddPublicPropertyVisibilityVisitor('App\\Order', 'status');
+        $class->namespacedName              = new Name('App\\Order');
+
+        (new NodeTraverser($addPublicPropertyVisibilityVisitor))->traverse([$class]);
+
+        $this->assertSame(Modifiers::READONLY, $param->flags);
     }
 
     public function testDoesNotChangePropertyInAnonymousClass(): void
