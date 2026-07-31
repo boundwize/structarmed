@@ -985,6 +985,80 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandFiltersPathDependentBaselineFromDifferentBasePath(): void
+    {
+        $sourceBasePath = $this->createProjectDirectory();
+        $targetBasePath = $this->createProjectDirectory();
+        $config         = <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']));
+PHP;
+
+        try {
+            $source = '<? echo "x";';
+
+            file_put_contents($sourceBasePath . '/src/template.php', $source);
+            file_put_contents($targetBasePath . '/src/template.php', $source);
+            file_put_contents($sourceBasePath . '/structarmed.php', $config);
+            file_put_contents(
+                $targetBasePath . '/structarmed.php',
+                str_replace(
+                    "    ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']));",
+                    "    ->baseline('structarmed-baseline.php')\n"
+                    . "    ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']));",
+                    $config
+                )
+            );
+
+            [$generateExitCode, $generateOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $sourceBasePath . '/structarmed.php',
+                    '--no-progress',
+                    '--generate-baseline=structarmed-baseline.php',
+                ],
+                $sourceBasePath
+            );
+
+            $this->assertSame(0, $generateExitCode, $generateOutput);
+
+            file_put_contents(
+                $targetBasePath . '/structarmed-baseline.php',
+                (string) file_get_contents($sourceBasePath . '/structarmed-baseline.php')
+            );
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $targetBasePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $targetBasePath
+            );
+
+            $this->assertStringContainsString(
+                "'message' => 'File [src/template.php] must use only <?php and <?= PHP tags'",
+                (string) file_get_contents($sourceBasePath . '/structarmed-baseline.php')
+            );
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('No violations found', $output);
+        } finally {
+            $this->removeTempDirectory($sourceBasePath);
+            $this->removeTempDirectory($targetBasePath);
+        }
+    }
+
     public function testAnalyseCommandReportsConfiguredBaselineFailure(): void
     {
         $basePath = $this->createProjectDirectory();
