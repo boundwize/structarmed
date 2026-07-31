@@ -68,7 +68,14 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
         $violations    = [];
 
-        foreach ($phpFileFinder->files($basePath, $skipPaths) as $file) {
+        foreach (
+            $phpFileFinder->files(
+                $basePath,
+                $skipPaths,
+                $fileAnalysisProvider->scopeFiles(),
+                $fileAnalysisProvider->scopeFilesEnabled(),
+            ) as $file
+        ) {
             $invalidPhpTagLine = $fileAnalysisProvider->invalidPhpTagLine($file);
 
             if ($invalidPhpTagLine === null) {

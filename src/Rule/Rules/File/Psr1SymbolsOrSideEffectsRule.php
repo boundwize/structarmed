@@ -54,7 +54,14 @@ final readonly class Psr1SymbolsOrSideEffectsRule implements FileAnalysisRuleInt
         $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
         $violations    = [];
 
-        foreach ($phpFileFinder->files($basePath, $skipPaths) as $file) {
+        foreach (
+            $phpFileFinder->files(
+                $basePath,
+                $skipPaths,
+                $fileAnalysisProvider->scopeFiles(),
+                $fileAnalysisProvider->scopeFilesEnabled(),
+            ) as $file
+        ) {
             $fileAnalysis = $fileAnalysisProvider->analyse($file);
             $fileAnalysisProvider->releaseAst($file);
 

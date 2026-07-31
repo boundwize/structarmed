@@ -564,6 +564,43 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule('psr1.php_tags'));
     }
 
+    public function testAnalyserScopesFileProjectRulesToExplicitScanPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'       => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Alpha/Alpha.php' => '<? echo "alpha";',
+            'src/Beta/Beta.php'   => '<? echo "beta";',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR1());
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, ['src/Alpha'], analyserOptions: AnalyserOptions::sequential())
+            ->forRule(Psr1Preset::FILES_MUST_USE_VALID_TAGS);
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/Alpha/Alpha.php', $this->normalisePath($violations[0]->file));
+    }
+
+    public function testAnalyserPreservesAnExplicitEmptyFileScope(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'       => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Empty/readme.md' => 'No PHP files here.',
+            'src/Beta/Beta.php'   => '<? echo "beta";',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR1());
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, ['src/Empty'], analyserOptions: AnalyserOptions::sequential())
+            ->forRule(Psr1Preset::FILES_MUST_USE_VALID_TAGS);
+
+        $this->assertSame([], $violations);
+    }
+
     public function testAnalyserPsr1RuleFindsViolationsWithAbsoluteSourcePath(): void
     {
         $srcPath = $this->makeTempProject([

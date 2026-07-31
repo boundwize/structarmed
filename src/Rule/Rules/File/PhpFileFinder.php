@@ -9,6 +9,8 @@ use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Util\Path;
 
+use function array_fill_keys;
+use function array_map;
 use function array_unique;
 use function array_values;
 use function is_dir;
@@ -27,12 +29,23 @@ final readonly class PhpFileFinder
 
     /**
      * @param list<string> $skipPaths
+     * @param list<string> $scopeFiles
      * @return list<string>
      */
-    public function files(string $basePath, array $skipPaths = []): array
-    {
+    public function files(
+        string $basePath,
+        array $skipPaths = [],
+        array $scopeFiles = [],
+        bool $scopeFilesEnabled = false,
+    ): array {
         $skipPathMatcher = SkipPathMatcher::compile($basePath, $skipPaths);
         $files           = [];
+        $scopeFileMap    = $scopeFilesEnabled
+            ? array_fill_keys(array_map(
+                static fn(string $file): string => Path::normalise($file, canonicalise: true),
+                $scopeFiles,
+            ), true)
+            : [];
 
         $sourcePaths = array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath));
         foreach ($sourcePaths as $sourcePath) {
@@ -43,6 +56,10 @@ final readonly class PhpFileFinder
             }
 
             foreach ($this->phpFileCollector->collect($fullPath, $skipPathMatcher) as $file) {
+                if ($scopeFilesEnabled && ! isset($scopeFileMap[$file])) {
+                    continue;
+                }
+
                 $files[] = $file;
             }
         }

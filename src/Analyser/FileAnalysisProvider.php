@@ -28,6 +28,7 @@ use PhpParser\ParserFactory;
 use PhpParser\Token;
 
 use function array_key_exists;
+use function array_map;
 use function file_get_contents;
 use function is_array;
 use function preg_match;
@@ -60,16 +61,37 @@ final class FileAnalysisProvider
     /** @var array<string, int|null> */
     private array $invalidPhpTagLines = [];
 
-    /** @param array<string, FileAnalysis> $analyses */
-    public function __construct(private array $analyses = [])
-    {
+    /**
+     * @param array<string, FileAnalysis> $analyses
+     * @param list<string> $scopeFiles
+     */
+    public function __construct(
+        private array $analyses = [],
+        private array $scopeFiles = [],
+        private readonly bool $scopeFilesEnabled = false,
+    ) {
         $normalisedAnalyses = [];
         foreach ($this->analyses as $file => $analysis) {
             $normalisedAnalyses[Path::normalise($file, canonicalise: true)] = $analysis;
         }
 
-        $this->analyses = $normalisedAnalyses;
-        $this->parser   = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->analyses   = $normalisedAnalyses;
+        $this->scopeFiles = array_map(
+            static fn(string $file): string => Path::normalise($file, canonicalise: true),
+            $this->scopeFiles,
+        );
+        $this->parser     = (new ParserFactory())->createForNewestSupportedVersion();
+    }
+
+    /** @return list<string> */
+    public function scopeFiles(): array
+    {
+        return $this->scopeFiles;
+    }
+
+    public function scopeFilesEnabled(): bool
+    {
+        return $this->scopeFilesEnabled;
     }
 
     public function analyse(string $file): FileAnalysis
