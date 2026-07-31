@@ -102,12 +102,14 @@ final class SkipPathMatcher
             );
 
             $baseRelativePath = ltrim($normalisedSkipPath, '/');
-            $pathPrefixes[]   = Path::normalise(
-                $baseRelativePath === ''
-                    ? $normalisedBasePath
-                    : $normalisedBasePath . '/' . $baseRelativePath,
-                canonicalise: true
-            );
+            if ($baseRelativePath !== $normalisedSkipPath) {
+                // Only paths with a leading slash produce a base-relative
+                // location distinct from the base-resolved one above.
+                $pathPrefixes[] = Path::normalise(
+                    $normalisedBasePath . '/' . $baseRelativePath,
+                    canonicalise: true
+                );
+            }
         }
 
         $pathPrefixesWithSlash = [];
