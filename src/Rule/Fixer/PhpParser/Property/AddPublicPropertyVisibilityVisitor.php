@@ -62,7 +62,8 @@ final class AddPublicPropertyVisibilityVisitor extends NodeVisitorAbstract
                 continue;
             }
 
-            // only params already promoted (eg: readonly) may gain a visibility
+            // param names are unique, so the first name match decides:
+            // only a param already promoted (eg: readonly) may gain a visibility
             if (! $param->isPromoted() || ($param->flags & Modifiers::VISIBILITY_MASK) !== 0) {
                 return null;
             }
