@@ -164,6 +164,13 @@ JSON);
         $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($this->makeTempDir()));
     }
 
+    public function testSortsAndDeduplicatesExplicitSourcePaths(): void
+    {
+        $psr4SourcePathsRule = new Psr4SourcePathsRule(['tests/', './src', 'src/', 'tests']);
+
+        $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($this->makeTempDir()));
+    }
+
     public function testPassesWhenDotRelativeSourcePathsExistInComposerPsr4Autoloads(): void
     {
         $basePath = $this->makeTempProject(<<<'JSON'

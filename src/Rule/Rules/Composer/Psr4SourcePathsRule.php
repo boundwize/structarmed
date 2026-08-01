@@ -11,10 +11,13 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Util\Path;
 
 use function array_map;
+use function array_unique;
+use function array_values;
 use function file_exists;
 use function implode;
 use function in_array;
 use function rtrim;
+use function sort;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
@@ -98,7 +101,7 @@ final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
     {
         $normalisedBase = Path::normalise($basePath);
 
-        return array_map(
+        $normalisedPaths = array_values(array_unique(array_map(
             static function (string $path) use ($normalisedBase): string {
                 $path = Path::normalise(trim($path));
 
@@ -109,7 +112,11 @@ final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
                 return $path;
             },
             $paths
-        );
+        )));
+
+        sort($normalisedPaths);
+
+        return $normalisedPaths;
     }
 
     private function violation(string $message, string $file): RuleViolation

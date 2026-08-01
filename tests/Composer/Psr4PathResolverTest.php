@@ -44,9 +44,10 @@ final class Psr4PathResolverTest extends TestCase
 {
     "autoload": {
         "psr-4": {
-            "App\\": ["src/", "", "src\\"],
+            "App\\": ["src/", "", "src\\", "./src"],
             "CodeIgniter\\": "system/",
-            "Root\\": "."
+            "Root\\": ".",
+            "Dot\\": "./"
         }
     },
     "autoload-dev": {
