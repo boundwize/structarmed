@@ -413,6 +413,39 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testClassNodeCacheNamespaceDependsOnConfigAndComposerJson(): void
+    {
+        $basePath                     = $this->createTempDirectory();
+        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+
+        try {
+            $withoutComposer = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash');
+
+            $this->assertSame(
+                $withoutComposer,
+                $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash')
+            );
+            $this->assertNotSame(
+                $withoutComposer,
+                $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'other-config-hash')
+            );
+
+            file_put_contents($basePath . '/composer.json', '{"autoload":{"psr-4":{"App\\\\":"lib/"}}}');
+            $withComposer = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash');
+
+            $this->assertNotSame($withoutComposer, $withComposer);
+
+            file_put_contents($basePath . '/composer.json', '{"autoload":{"psr-4":{"App\\\\":"src/"}}}');
+
+            $this->assertNotSame(
+                $withComposer,
+                $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testStoreCreatesMissingCacheDirectory(): void
     {
         $basePath                = $this->createTempDirectory();
