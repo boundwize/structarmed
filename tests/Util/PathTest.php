@@ -19,6 +19,11 @@ final class PathTest extends TestCase
     public static function provideNormalise(): Iterator
     {
         yield 'relative' => ['src//Domain/', 'src/Domain'];
+        yield 'dot-relative' => ['./src', 'src'];
+        yield 'dot-relative backslash' => ['.\\src\\', 'src'];
+        yield 'repeated dot-relative' => ['././src/Domain', 'src/Domain'];
+        yield 'dot slash only' => ['./', '.'];
+        yield 'dot only' => ['.', '.'];
         yield 'unix absolute' => ['/project//src/', '/project/src'];
         yield 'windows absolute' => ['C:\\project\\src\\', 'C:/project/src'];
         yield 'windows UNC backslashes' => ['\\\\server\\share\\src\\', '//server/share/src'];

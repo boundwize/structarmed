@@ -12,6 +12,7 @@ use function str_ends_with;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
+use function substr;
 
 final class Path
 {
@@ -51,6 +52,14 @@ final class Path
 
         if ($isUnc) {
             $path = '//' . ltrim($path, '/');
+        } elseif (str_starts_with($path, './')) {
+            do {
+                $path = substr($path, 2);
+            } while (str_starts_with($path, './'));
+
+            if ($path === '') {
+                $path = '.';
+            }
         }
 
         return self::$normalisedPaths[$cacheKey] = rtrim($path, '/');
