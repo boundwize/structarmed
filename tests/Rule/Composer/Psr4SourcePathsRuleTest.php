@@ -164,6 +164,32 @@ JSON);
         $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($this->makeTempDir()));
     }
 
+    public function testPassesWhenDotRelativeSourcePathsExistInComposerPsr4Autoloads(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "App\\Tests\\": "tests/"
+        }
+    }
+}
+JSON);
+
+        $psr4SourcePathsRule = new Psr4SourcePathsRule(['./src', '.\\tests/']);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        );
+        $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($basePath));
+    }
+
     public function testPassesWhenAbsoluteSourcePathsExistInComposerPsr4Autoloads(): void
     {
         $basePath = $this->makeTempProject(<<<'JSON'
