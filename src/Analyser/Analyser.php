@@ -210,6 +210,12 @@ final readonly class Analyser
 
         $resolvedInheritedDependencies = [];
 
+        // Ruleset verdicts depend only on the (class layer, dependency) pair, and the
+        // same dependency recurs across many classes — resolve each pair once. `false`
+        // means "no violation" so permitted dependencies are remembered too.
+        /** @var array<string, string|false> $resolvedRulesetVerdicts */
+        $resolvedRulesetVerdicts = [];
+
         foreach ($layerAwareRules as $rule) {
             $rule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
         }
@@ -286,52 +292,18 @@ final readonly class Analyser
                     continue;
                 }
 
-                $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
-                $regexLayers  = $chainLayerResolver->resolveAll($dependency, '');
+                $violatingLayer = $resolvedRulesetVerdicts[$classNode->layer . "\0" . $dependency]
+                    ??= $this->rulesetViolatingLayer(
+                        $classNode->layer,
+                        $dependency,
+                        $allowedLayers,
+                        $classDependencyMaps,
+                        $chainLayerResolver,
+                        $scanScopeLayerMap,
+                    ) ?? false;
 
-                if ($regexLayers !== []) {
-                    $depLayers = $regexLayers;
-                } elseif ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
-                    // Scanned dep in a specific path-based layer (not a PSR4 catch-all).
-                    $depLayers = $classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer];
-                } else {
-                    $depLayers = [];
-                }
-
-                if ($depLayers === []) {
-                    // External / unregistered dependency — not restricted.
+                if ($violatingLayer === false) {
                     continue;
-                }
-
-                $isSameLayer = $primaryLayer !== null
-                    ? $primaryLayer === $classNode->layer
-                    : in_array($classNode->layer, $depLayers, true);
-
-                if ($isSameLayer) {
-                    continue;
-                }
-
-                if ($primaryLayer !== null) {
-                    // Scanned dependency: permitted if any of its layers is explicitly allowed.
-                    if (array_intersect($allowedLayers, $depLayers) !== []) {
-                        continue;
-                    }
-
-                    $violatingLayer = $primaryLayer;
-                } else {
-                    // Unscanned/regex-resolved dependency: report the first non-allowed layer.
-                    $violatingLayer = null;
-
-                    foreach ($depLayers as $depLayer) {
-                        if (! in_array($depLayer, $allowedLayers, true)) {
-                            $violatingLayer = $depLayer;
-                            break;
-                        }
-                    }
-
-                    if ($violatingLayer === null) {
-                        continue;
-                    }
                 }
 
                 $rulesetViolationCollection->add(new RuleViolation(
@@ -354,6 +326,72 @@ final readonly class Analyser
         $ruleViolationCollection->merge($rulesetViolationCollection);
 
         return $ruleViolationCollection;
+    }
+
+    /**
+     * Decide whether a dependency violates the ruleset for a class in the given layer,
+     * returning the violating layer name or null when the dependency is permitted.
+     * Deterministic per (class layer, dependency) pair, so callers can resolve each pair once.
+     *
+     * @param list<string> $allowedLayers
+     * @param array<string, array<string, mixed>> $classDependencyMaps
+     * @phpstan-param array{
+     *     dependencies: array<string, list<string>>,
+     *     inheritanceDependencies: array<string, list<string>>,
+     *     classLayerMap: array<string, list<string>>,
+     *     classPrimaryLayerMap: array<string, string>,
+     *     classNodeMap: array<string, ClassNode>
+     * } $classDependencyMaps
+     * @param array<string, true> $scanScopeLayerMap
+     */
+    private function rulesetViolatingLayer(
+        string $classLayer,
+        string $dependency,
+        array $allowedLayers,
+        array $classDependencyMaps,
+        ChainLayerResolver $chainLayerResolver,
+        array $scanScopeLayerMap,
+    ): ?string {
+        $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
+        $regexLayers  = $chainLayerResolver->resolveAll($dependency, '');
+
+        if ($regexLayers !== []) {
+            $depLayers = $regexLayers;
+        } elseif ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
+            // Scanned dep in a specific path-based layer (not a PSR4 catch-all).
+            $depLayers = $classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer];
+        } else {
+            $depLayers = [];
+        }
+
+        if ($depLayers === []) {
+            // External / unregistered dependency — not restricted.
+            return null;
+        }
+
+        $isSameLayer = $primaryLayer !== null
+            ? $primaryLayer === $classLayer
+            : in_array($classLayer, $depLayers, true);
+
+        if ($isSameLayer) {
+            return null;
+        }
+
+        if ($primaryLayer !== null) {
+            // Scanned dependency: permitted if any of its layers is explicitly allowed.
+            return array_intersect($allowedLayers, $depLayers) !== []
+                ? null
+                : $primaryLayer;
+        }
+
+        // Unscanned/regex-resolved dependency: report the first non-allowed layer.
+        foreach ($depLayers as $depLayer) {
+            if (! in_array($depLayer, $allowedLayers, true)) {
+                return $depLayer;
+            }
+        }
+
+        return null;
     }
 
     /**
