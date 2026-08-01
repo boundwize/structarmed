@@ -207,6 +207,8 @@ final readonly class Analyser
             ];
         $dependencyMap            = $classDependencyMaps['dependencies'];
         $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
+        $classLayerMap            = $classDependencyMaps['classLayerMap'];
+        $classPrimaryLayerMap     = $classDependencyMaps['classPrimaryLayerMap'];
 
         $resolvedInheritedDependencies = [];
 
@@ -297,10 +299,11 @@ final readonly class Analyser
                         $classNode->layer,
                         $dependency,
                         $allowedLayers,
-                        $classDependencyMaps,
+                        $classPrimaryLayerMap,
+                        $classLayerMap,
                         $chainLayerResolver,
                         $scanScopeLayerMap,
-                    ) ?? false;
+                    );
 
                 if ($violatingLayer === false) {
                     continue;
@@ -330,43 +333,38 @@ final readonly class Analyser
 
     /**
      * Decide whether a dependency violates the ruleset for a class in the given layer,
-     * returning the violating layer name or null when the dependency is permitted.
+     * returning the violating layer name, or false when the dependency is permitted.
      * Deterministic per (class layer, dependency) pair, so callers can resolve each pair once.
      *
-     * @param list<string> $allowedLayers
-     * @param array<string, array<string, mixed>> $classDependencyMaps
-     * @phpstan-param array{
-     *     dependencies: array<string, list<string>>,
-     *     inheritanceDependencies: array<string, list<string>>,
-     *     classLayerMap: array<string, list<string>>,
-     *     classPrimaryLayerMap: array<string, string>,
-     *     classNodeMap: array<string, ClassNode>
-     * } $classDependencyMaps
-     * @param array<string, true> $scanScopeLayerMap
+     * @param list<string>                $allowedLayers
+     * @param array<string, string>       $classPrimaryLayerMap
+     * @param array<string, list<string>> $classLayerMap
+     * @param array<string, true>         $scanScopeLayerMap
      */
     private function rulesetViolatingLayer(
         string $classLayer,
         string $dependency,
         array $allowedLayers,
-        array $classDependencyMaps,
+        array $classPrimaryLayerMap,
+        array $classLayerMap,
         ChainLayerResolver $chainLayerResolver,
         array $scanScopeLayerMap,
-    ): ?string {
-        $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
+    ): string|false {
+        $primaryLayer = $classPrimaryLayerMap[$dependency] ?? null;
         $regexLayers  = $chainLayerResolver->resolveAll($dependency, '');
 
         if ($regexLayers !== []) {
             $depLayers = $regexLayers;
         } elseif ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
             // Scanned dep in a specific path-based layer (not a PSR4 catch-all).
-            $depLayers = $classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer];
+            $depLayers = $classLayerMap[$dependency] ?? [$primaryLayer];
         } else {
             $depLayers = [];
         }
 
         if ($depLayers === []) {
             // External / unregistered dependency — not restricted.
-            return null;
+            return false;
         }
 
         $isSameLayer = $primaryLayer !== null
@@ -374,13 +372,13 @@ final readonly class Analyser
             : in_array($classLayer, $depLayers, true);
 
         if ($isSameLayer) {
-            return null;
+            return false;
         }
 
         if ($primaryLayer !== null) {
             // Scanned dependency: permitted if any of its layers is explicitly allowed.
             return array_intersect($allowedLayers, $depLayers) !== []
-                ? null
+                ? false
                 : $primaryLayer;
         }
 
@@ -391,7 +389,7 @@ final readonly class Analyser
             }
         }
 
-        return null;
+        return false;
     }
 
     /**
