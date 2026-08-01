@@ -325,6 +325,88 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandDetectsComposerPsr4ChangesWithoutClearCache(): void
+    {
+        $basePath = $this->createTempDirectory();
+        mkdir($basePath . '/src');
+
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+<?php
+
+namespace App;
+
+class Foo
+{
+}
+PHP);
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->layer('Source', [])
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+PHP);
+
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "lib/"
+        }
+    }
+}
+JSON);
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    'src',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertStringContainsString('No violations found', $firstOutput);
+
+            file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}
+JSON);
+
+            [$secondExitCode, $secondOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    'src',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $secondExitCode, $secondOutput);
+            $this->assertStringContainsString('Class [App\Foo] must be declared final', $secondOutput);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandOnlyParsesNewFilesAfterCacheWarmup(): void
     {
         $basePath = $this->createProjectDirectory();
