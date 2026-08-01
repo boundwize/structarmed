@@ -50,7 +50,11 @@ final class StructArmedExtension implements Extension
             $analysisResultCache->clear();
         }
 
-        $analyser = new Analyser($basePath, $analysisResultCache, $configHash);
+        $analyser = new Analyser(
+            $basePath,
+            $analysisResultCache,
+            $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, $configHash)
+        );
 
         $files    = $analyser->filesForAnalysis($architecture);
         $metadata = $analysisCacheMetadataFactory->metadata($basePath, $configFile, [], $files);

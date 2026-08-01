@@ -149,7 +149,8 @@ final readonly class AnalyseCommand
         $analysisResultCache          = new AnalysisResultCache($basePath, $architecture->getCacheDirectory());
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
         $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
-        $analyser                     = new Analyser($basePath, $analysisResultCache, $configHash);
+        $classNodeCacheNamespace      = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, $configHash);
+        $analyser                     = new Analyser($basePath, $analysisResultCache, $classNodeCacheNamespace);
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
 
         $shouldClearCache = isset($options['clear-cache'])
