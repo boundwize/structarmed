@@ -304,6 +304,9 @@ final readonly class Analyser
 
                 // Same-layer dependencies are always allowed, whether the shared
                 // layer is the dependency's primary layer or a secondary one.
+                // The explicit primary-layer check is not redundant: for a dep
+                // whose primary layer is a PSR-4 catch-all, $depLayers is
+                // regex-resolved only and need not contain the primary layer.
                 $isSameLayer = $primaryLayer === $classNode->layer
                     || in_array($classNode->layer, $depLayers, true);
 
