@@ -302,9 +302,10 @@ final readonly class Analyser
                     continue;
                 }
 
-                $isSameLayer = $primaryLayer !== null
-                    ? $primaryLayer === $classNode->layer
-                    : in_array($classNode->layer, $depLayers, true);
+                // Same-layer dependencies are always allowed, whether the shared
+                // layer is the dependency's primary layer or a secondary one.
+                $isSameLayer = $primaryLayer === $classNode->layer
+                    || in_array($classNode->layer, $depLayers, true);
 
                 if ($isSameLayer) {
                     continue;
