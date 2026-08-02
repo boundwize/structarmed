@@ -1753,6 +1753,164 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.Application'));
     }
 
+    public function testAnalyserRulesetAllowsSameLayerDependencyWhenCallerLayerIsSecondary(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/OrderService.php'      => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                final class OrderService
+                {
+                    public function __construct(private PlaceOrderHandler $handler)
+                    {
+                    }
+                }
+                PHP,
+            'src/Application/PlaceOrderHandler.php' => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                final class PlaceOrderHandler
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/Application/')
+            ->layerPattern('Handler', '/Handler$/')
+            ->ruleset([
+                'Application' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.Application'));
+    }
+
+    public function testAnalyserRulesetSameLayerAllowedWhenRegexLayerExcludesDependency(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/OrderService.php'      => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                final class OrderService
+                {
+                    public function __construct(private PlaceOrderHandler $handler)
+                    {
+                    }
+                }
+                PHP,
+            'src/Application/PlaceOrderHandler.php' => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                final class PlaceOrderHandler
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/Application/')
+            ->layerPattern('Handler', '/Handler$/', '/^App\\\\Application\\\\/')
+            ->ruleset([
+                'Application' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.Application'));
+    }
+
+    public function testAnalyserRulesetStillViolatesWhenSecondaryLayerDiffersFromCallerLayer(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/OrderService.php'         => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                use App\Infrastructure\PlaceOrderHandler;
+
+                final class OrderService
+                {
+                    public function __construct(private PlaceOrderHandler $handler)
+                    {
+                    }
+                }
+                PHP,
+            'src/Infrastructure/PlaceOrderHandler.php' => <<<'PHP'
+                <?php
+
+                namespace App\Infrastructure;
+
+                final class PlaceOrderHandler
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/Application/')
+            ->layer('Infrastructure', 'src/Infrastructure/')
+            ->layerPattern('Handler', '/Handler$/')
+            ->ruleset([
+                'Application' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.Application');
+        $this->assertCount(1, $violations);
+    }
+
+    public function testAnalyserRulesetViolatesWhenApplicationPatternExcludesHandler(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/OrderService.php'      => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                final class OrderService
+                {
+                    public function __construct(private PlaceOrderHandler $handler)
+                    {
+                    }
+                }
+                PHP,
+            'src/Application/PlaceOrderHandler.php' => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                final class PlaceOrderHandler
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('Application', '/^App\\\\Application\\\\/', '/Handler$/')
+            ->layerPattern('Handler', '/Handler$/')
+            ->ruleset([
+                'Application' => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.Application');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('Handler', $violations[0]->message);
+    }
+
     /**
      * @return iterable<string, array{string, list<string>}>
      */
