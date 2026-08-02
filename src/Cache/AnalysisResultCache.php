@@ -55,7 +55,7 @@ final class AnalysisResultCache
 
     private readonly string $cacheDirectory;
 
-    private bool $cacheDirectoryEnsured = false;
+    private bool $isCacheDirectoryEnsured = false;
 
     public function __construct(
         string $basePath,
@@ -122,7 +122,7 @@ final class AnalysisResultCache
 
     public function clear(): void
     {
-        $this->cacheDirectoryEnsured = false;
+        $this->isCacheDirectoryEnsured = false;
 
         if (! is_dir($this->cacheDirectory)) {
             return;
@@ -164,7 +164,7 @@ final class AnalysisResultCache
 
     private function ensureCacheDirectory(): void
     {
-        if ($this->cacheDirectoryEnsured) {
+        if ($this->isCacheDirectoryEnsured) {
             return;
         }
 
@@ -181,7 +181,7 @@ final class AnalysisResultCache
             ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
         }
 
-        $this->cacheDirectoryEnsured = true;
+        $this->isCacheDirectoryEnsured = true;
     }
 
     /**
