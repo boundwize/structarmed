@@ -43,10 +43,22 @@ use const JSON_THROW_ON_ERROR;
 
 final readonly class AnalysisResultCache
 {
+    /**
+     * Marker file recording the config and structarmed version hashes the cache
+     * contents were built with. Never collides with payload files: those are
+     * named by hex hash keys or a "class-nodes-" prefix.
+     */
+    private const METADATA_FILE = '_metadata.json';
+
     private string $cacheDirectory;
 
-    public function __construct(string $basePath, ?string $cacheDirectory = null)
-    {
+    public function __construct(
+        string $basePath,
+        ?string $cacheDirectory = null,
+        private string $configHash = '',
+        private string $composerGeneratedVersionHash = '',
+    ) {
+        $basePath             = Path::normalise($basePath);
         $this->cacheDirectory = $cacheDirectory
             ? Path::resolve(Path::normalise($cacheDirectory), $basePath)
             : Path::normalise(sys_get_temp_dir()) . '/structarmed/cache/' . hash('xxh128', $basePath);
@@ -95,9 +107,7 @@ final readonly class AnalysisResultCache
      */
     public function store(string $key, array $metadata, RuleViolationCollection $ruleViolationCollection): void
     {
-        if (! is_dir($this->cacheDirectory)) {
-            mkdir($this->cacheDirectory, 0777, true);
-        }
+        $this->ensureCacheDirectory();
 
         file_put_contents($this->path($key), json_encode([
             'metadata'   => $metadata,
@@ -128,42 +138,39 @@ final readonly class AnalysisResultCache
         return $this->cacheDirectory;
     }
 
-    public function shouldInvalidate(string $configHash, string $composerGeneratedVersionHash): bool
+    /**
+     * Compares against the single metadata marker instead of scanning every
+     * payload, so the check stays O(1) regardless of cache size. A populated
+     * cache without a marker predates this format and must be invalidated.
+     */
+    public function shouldInvalidate(): bool
     {
         if (! is_dir($this->cacheDirectory)) {
             return false;
         }
 
-        foreach (glob($this->cacheDirectory . '/*', GLOB_NOSORT) ?: [] as $path) {
-            if (is_dir($path)) {
-                continue;
-            }
+        $payload = $this->readPath($this->cacheDirectory . '/' . self::METADATA_FILE);
 
-            $payload = $this->readPath($path);
+        return ($payload['configHash'] ?? null) !== $this->configHash
+            || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash;
+    }
 
-            if ($payload === null) {
-                continue;
-            }
-
-            $metadata = $payload['metadata'] ?? null;
-
-            if (! is_array($metadata)) {
-                continue;
-            }
-
-            if (isset($metadata['configHash']) && $metadata['configHash'] !== $configHash) {
-                return true;
-            }
-
-            if (
-                array_key_exists('composerGeneratedVersionHash', $metadata)
-                && $metadata['composerGeneratedVersionHash'] !== $composerGeneratedVersionHash
-            ) {
-                return true;
-            }
+    private function ensureCacheDirectory(): void
+    {
+        if (! is_dir($this->cacheDirectory)) {
+            mkdir($this->cacheDirectory, 0777, true);
         }
 
-        return false;
+        $metadataFile = $this->cacheDirectory . '/' . self::METADATA_FILE;
+
+        if (file_exists($metadataFile)) {
+            return;
+        }
+
+        file_put_contents($metadataFile, json_encode([
+            'configHash'                   => $this->configHash,
+            'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash,
+        ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -274,9 +281,7 @@ final readonly class AnalysisResultCache
         ?FileAnalysis $fileAnalysis = null,
         array $anonymousClassNodes = [],
     ): void {
-        if (! is_dir($this->cacheDirectory)) {
-            mkdir($this->cacheDirectory, 0777, true);
-        }
+        $this->ensureCacheDirectory();
 
         $payload = [
             'metadata'            => $this->fileMetadata($file, $namespace),
