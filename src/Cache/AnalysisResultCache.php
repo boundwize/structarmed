@@ -55,7 +55,7 @@ final class AnalysisResultCache
 
     private readonly string $cacheDirectory;
 
-    private bool $isCacheDirectoryEnsured = false;
+    private bool $isCacheInitialised = false;
 
     public function __construct(
         string $basePath,
@@ -112,7 +112,7 @@ final class AnalysisResultCache
      */
     public function store(string $key, array $metadata, RuleViolationCollection $ruleViolationCollection): void
     {
-        $this->ensureCacheDirectory();
+        $this->ensureCacheInitialised();
 
         file_put_contents($this->path($key), json_encode([
             'metadata'   => $metadata,
@@ -122,7 +122,7 @@ final class AnalysisResultCache
 
     public function clear(): void
     {
-        $this->isCacheDirectoryEnsured = false;
+        $this->isCacheInitialised = false;
 
         if (! is_dir($this->cacheDirectory)) {
             return;
@@ -162,9 +162,9 @@ final class AnalysisResultCache
             || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash;
     }
 
-    private function ensureCacheDirectory(): void
+    private function ensureCacheInitialised(): void
     {
-        if ($this->isCacheDirectoryEnsured) {
+        if ($this->isCacheInitialised) {
             return;
         }
 
@@ -181,7 +181,7 @@ final class AnalysisResultCache
             ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
         }
 
-        $this->isCacheDirectoryEnsured = true;
+        $this->isCacheInitialised = true;
     }
 
     /**
@@ -292,7 +292,7 @@ final class AnalysisResultCache
         ?FileAnalysis $fileAnalysis = null,
         array $anonymousClassNodes = [],
     ): void {
-        $this->ensureCacheDirectory();
+        $this->ensureCacheInitialised();
 
         $payload = [
             'metadata'            => $this->fileMetadata($file, $namespace),
