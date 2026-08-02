@@ -44,7 +44,7 @@ use const JSON_THROW_ON_ERROR;
 /**
  * @internal
  */
-final readonly class AnalysisResultCache
+final class AnalysisResultCache
 {
     /**
      * Marker file recording the config and structarmed version hashes the cache
@@ -53,13 +53,15 @@ final readonly class AnalysisResultCache
      */
     private const METADATA_FILE = '_metadata.json';
 
-    private string $cacheDirectory;
+    private readonly string $cacheDirectory;
+
+    private bool $cacheDirectoryEnsured = false;
 
     public function __construct(
         string $basePath,
         ?string $cacheDirectory = null,
-        private string $configHash = '',
-        private string $composerGeneratedVersionHash = '',
+        private readonly string $configHash = '',
+        private readonly string $composerGeneratedVersionHash = '',
     ) {
         $basePath             = Path::normalise($basePath);
         $this->cacheDirectory = $cacheDirectory
@@ -120,6 +122,8 @@ final readonly class AnalysisResultCache
 
     public function clear(): void
     {
+        $this->cacheDirectoryEnsured = false;
+
         if (! is_dir($this->cacheDirectory)) {
             return;
         }
@@ -160,20 +164,24 @@ final readonly class AnalysisResultCache
 
     private function ensureCacheDirectory(): void
     {
+        if ($this->cacheDirectoryEnsured) {
+            return;
+        }
+
         if (! is_dir($this->cacheDirectory)) {
             mkdir($this->cacheDirectory, 0777, true);
         }
 
         $metadataFile = $this->cacheDirectory . '/' . self::METADATA_FILE;
 
-        if (file_exists($metadataFile)) {
-            return;
+        if (! file_exists($metadataFile)) {
+            file_put_contents($metadataFile, json_encode([
+                'configHash'                   => $this->configHash,
+                'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash,
+            ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
         }
 
-        file_put_contents($metadataFile, json_encode([
-            'configHash'                   => $this->configHash,
-            'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash,
-        ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+        $this->cacheDirectoryEnsured = true;
     }
 
     /**
