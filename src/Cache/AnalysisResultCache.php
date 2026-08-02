@@ -41,6 +41,9 @@ use const GLOB_NOSORT;
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_THROW_ON_ERROR;
 
+/**
+ * @internal
+ */
 final readonly class AnalysisResultCache
 {
     /**
