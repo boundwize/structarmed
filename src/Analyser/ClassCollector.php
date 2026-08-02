@@ -287,7 +287,15 @@ final class ClassCollector extends NodeVisitorAbstract
             $node instanceof FuncCall
             && $node->name instanceof Name
         ) {
-            $this->addFunctionCallName($node->name);
+            $functionName = $node->name->toLowerString();
+
+            // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
+            // FuncCall instead of Exit_, but remain language constructs
+            if ($functionName === 'exit' || $functionName === 'die') {
+                $this->addLanguageConstruct($functionName);
+            } else {
+                $this->addFunctionCallName($node->name);
+            }
         }
 
         if ($node instanceof Exit_) {

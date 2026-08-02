@@ -550,6 +550,37 @@ PHP;
         $this->assertNotContains('die', $classNode->functionCalls);
     }
 
+    public function testCollectsNamedArgumentExitAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function bar(): never { exit(status: 1); } }'
+        );
+
+        $this->assertContains('exit', $classNode->languageConstructs);
+        $this->assertNotContains('exit', $classNode->functionCalls);
+    }
+
+    public function testCollectsNamedArgumentDieAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function bar(): never { die(status: 1); } }'
+        );
+
+        $this->assertContains('die', $classNode->languageConstructs);
+        $this->assertNotContains('die', $classNode->functionCalls);
+    }
+
+    public function testCollectsUppercaseNamedArgumentExitAsLanguageConstruct(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function bar(): never { EXIT(status: 1); } }'
+        );
+
+        $this->assertContains('exit', $classNode->languageConstructs);
+        $this->assertNotContains('EXIT', $classNode->functionCalls);
+        $this->assertNotContains('exit', $classNode->functionCalls);
+    }
+
     public function testDeduplicatesLanguageConstructs(): void
     {
         $classNode = $this->collect(
