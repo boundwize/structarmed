@@ -287,15 +287,14 @@ final readonly class Analyser
                 }
 
                 $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
-                $regexLayers  = $chainLayerResolver->resolveAll($dependency, '');
 
-                if ($regexLayers !== []) {
-                    $depLayers = $regexLayers;
-                } elseif ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
-                    // Scanned dep in a specific path-based layer (not a PSR4 catch-all).
+                if ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
+                    // Scanned dep in a specific layer (not a PSR4 catch-all): keep every
+                    // layer collected at scan time, including path-based ones.
                     $depLayers = $classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer];
                 } else {
-                    $depLayers = [];
+                    // Unscanned or catch-all dep: only class-name regex layers can match.
+                    $depLayers = $chainLayerResolver->resolveAll($dependency, '');
                 }
 
                 if ($depLayers === []) {

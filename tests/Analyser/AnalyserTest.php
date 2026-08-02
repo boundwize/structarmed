@@ -1714,6 +1714,45 @@ final class AnalyserTest extends TestCase
         $this->assertStringContainsString('Database', $violations[0]->message);
     }
 
+    public function testAnalyserRulesetKeepsPathLayerWhenDependencyAlsoMatchesRegexLayer(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/PlaceOrderHandler.php' => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                use App\Domain\OrderRepository;
+
+                final class PlaceOrderHandler
+                {
+                    public function __construct(OrderRepository $orderRepository)
+                    {
+                    }
+                }
+                PHP,
+            'src/Domain/OrderRepository.php'        => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                interface OrderRepository {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/Application/')
+            ->layer('Domain', 'src/Domain/')
+            ->layerPattern('Repository', '/Repository$/')
+            ->ruleset([
+                'Application' => ['Domain'],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.Application'));
+    }
+
     /**
      * @return iterable<string, array{string, list<string>}>
      */
