@@ -22,6 +22,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 
+use function array_filter;
+use function array_values;
+use function basename;
 use function bin2hex;
 use function file_exists;
 use function file_get_contents;
@@ -271,16 +274,22 @@ final class AnalysisResultCacheTest extends TestCase
     public function testDetectsDifferentConfigHashAndClearsCache(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $staleCache          = new AnalysisResultCache(__DIR__, $cacheDirectory, 'old', 'composer-hash');
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'new', 'composer-hash');
 
         try {
-            $analysisResultCache->store('key', ['configHash' => 'old'], new RuleViolationCollection());
+            $staleCache->store('key', ['configHash' => 'old'], new RuleViolationCollection());
 
-            $this->assertTrue($analysisResultCache->shouldInvalidate('new', 'composer-hash'));
+            $this->assertTrue($analysisResultCache->shouldInvalidate());
 
             $analysisResultCache->clear();
 
             $this->assertDirectoryDoesNotExist($cacheDirectory);
+
+            $analysisResultCache->store('key', ['configHash' => 'new'], new RuleViolationCollection());
+
+            $this->assertDirectoryExists($cacheDirectory);
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -309,27 +318,27 @@ final class AnalysisResultCacheTest extends TestCase
 
         $this->removeTempDirectory($cacheDirectory);
 
-        $this->assertFalse($analysisResultCache->shouldInvalidate('new', 'composer-hash'));
+        $this->assertFalse($analysisResultCache->shouldInvalidate());
     }
 
     public function testConfigHashIsNotDifferentWhenStoredHashMatches(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'same', 'composer-hash');
 
         try {
             $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
 
-            $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'composer-hash'));
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testCacheMetadataScanSkipsUnreadableCachePayloadsAndDirectories(): void
+    public function testInvalidationIgnoresUnreadableCachePayloadsAndDirectories(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'same', 'composer-hash');
 
         mkdir($cacheDirectory . '/nested');
         file_put_contents($cacheDirectory . '/key.json', '["bad"]');
@@ -339,39 +348,45 @@ final class AnalysisResultCacheTest extends TestCase
         ], 'other.json');
 
         try {
-            $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'composer-hash'));
+            $analysisResultCache->store('valid', ['configHash' => 'same'], new RuleViolationCollection());
+
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testCacheMetadataScanSkipsClassNodeCachePayloads(): void
+    public function testInvalidationIgnoresStoredPayloadMetadata(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'same', 'composer-hash');
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->store('key', ['configHash' => 'other'], new RuleViolationCollection());
 
-            $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'composer-hash'));
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testComposerGeneratedVersionHashIsNotDifferentWhenNoCachedEntryHasTheField(): void
+    public function testPopulatedCacheWithoutMetadataMarkerIsInvalidated(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'same', 'composer-hash');
 
         try {
-            $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
+            $this->writeCachePayload($cacheDirectory, [
+                'metadata'   => ['configHash' => 'same'],
+                'violations' => [],
+            ]);
 
-            $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'some-hash'));
+            $this->assertTrue($analysisResultCache->shouldInvalidate());
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -380,16 +395,12 @@ final class AnalysisResultCacheTest extends TestCase
     public function testComposerGeneratedVersionHashIsNotDifferentWhenStoredHashMatches(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'config-hash', 'same');
 
         try {
-            $analysisResultCache->store(
-                'key',
-                ['composerGeneratedVersionHash' => 'same'],
-                new RuleViolationCollection()
-            );
+            $analysisResultCache->store('key', [], new RuleViolationCollection());
 
-            $this->assertFalse($analysisResultCache->shouldInvalidate('config-hash', 'same'));
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -398,16 +409,13 @@ final class AnalysisResultCacheTest extends TestCase
     public function testComposerGeneratedVersionHashIsDifferentWhenStoredHashDiffers(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $staleCache          = new AnalysisResultCache(__DIR__, $cacheDirectory, 'config-hash', 'old');
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'config-hash', 'new');
 
         try {
-            $analysisResultCache->store(
-                'key',
-                ['composerGeneratedVersionHash' => 'old'],
-                new RuleViolationCollection()
-            );
+            $staleCache->store('key', [], new RuleViolationCollection());
 
-            $this->assertTrue($analysisResultCache->shouldInvalidate('config-hash', 'new'));
+            $this->assertTrue($analysisResultCache->shouldInvalidate());
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
@@ -498,7 +506,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $analysisResultCache = new AnalysisResultCache(__DIR__, 'C:/structarmed/cache');
 
-        $this->assertFalse($analysisResultCache->shouldInvalidate('same', 'composer-hash'));
+        $this->assertFalse($analysisResultCache->shouldInvalidate());
     }
 
     public function testStoresAndLoadsClassNodes(): void
@@ -2056,7 +2064,10 @@ final class AnalysisResultCacheTest extends TestCase
 
     private function firstJsonFile(string $cacheDirectory): string
     {
-        $files = glob($cacheDirectory . '/*.json') ?: [];
+        $files = array_values(array_filter(
+            glob($cacheDirectory . '/*.json') ?: [],
+            static fn (string $file): bool => basename($file) !== '_metadata.json'
+        ));
         $this->assertNotSame([], $files);
 
         return $files[0];

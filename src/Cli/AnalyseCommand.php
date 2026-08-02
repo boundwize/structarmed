@@ -146,17 +146,19 @@ final readonly class AnalyseCommand
         }
 
         $start                        = microtime(true);
-        $analysisResultCache          = new AnalysisResultCache($basePath, $architecture->getCacheDirectory());
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
         $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
+        $analysisResultCache          = new AnalysisResultCache(
+            $basePath,
+            $architecture->getCacheDirectory(),
+            $configHash,
+            $composerGeneratedVersionHash
+        );
         $classNodeCacheNamespace      = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, $configHash);
         $analyser                     = new Analyser($basePath, $analysisResultCache, $classNodeCacheNamespace);
-        $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
 
-        $shouldClearCache = isset($options['clear-cache'])
-            || $analysisResultCache->shouldInvalidate($configHash, $composerGeneratedVersionHash);
-
-        if ($shouldClearCache) {
+        if (isset($options['clear-cache']) || $analysisResultCache->shouldInvalidate()) {
             $analysisResultCache->clear();
         }
 

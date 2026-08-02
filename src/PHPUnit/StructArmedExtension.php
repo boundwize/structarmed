@@ -41,12 +41,17 @@ final class StructArmedExtension implements Extension
 
         $architecture = ConfigLoader::load($configFile);
 
-        $analysisResultCache          = new AnalysisResultCache($basePath, $architecture->getCacheDirectory());
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
         $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
+        $analysisResultCache          = new AnalysisResultCache(
+            $basePath,
+            $architecture->getCacheDirectory(),
+            $configHash,
+            $composerGeneratedVersionHash
+        );
 
-        if ($analysisResultCache->shouldInvalidate($configHash, $composerGeneratedVersionHash)) {
+        if ($analysisResultCache->shouldInvalidate()) {
             $analysisResultCache->clear();
         }
 
