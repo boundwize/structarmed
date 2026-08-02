@@ -207,6 +207,8 @@ final readonly class Analyser
             ];
         $dependencyMap            = $classDependencyMaps['dependencies'];
         $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
+        $classLayerMap            = $classDependencyMaps['classLayerMap'];
+        $classPrimaryLayerMap     = $classDependencyMaps['classPrimaryLayerMap'];
 
         $resolvedInheritedDependencies = [];
 
@@ -286,12 +288,12 @@ final readonly class Analyser
                     continue;
                 }
 
-                $primaryLayer = $classDependencyMaps['classPrimaryLayerMap'][$dependency] ?? null;
+                $primaryLayer = $classPrimaryLayerMap[$dependency] ?? null;
 
                 if ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
                     // Scanned dep in a specific layer (not a PSR4 catch-all): keep every
                     // layer collected at scan time, including path-based ones.
-                    $depLayers = $classDependencyMaps['classLayerMap'][$dependency] ?? [$primaryLayer];
+                    $depLayers = $classLayerMap[$dependency] ?? [$primaryLayer];
                 } else {
                     // Unscanned or catch-all dep: only class-name regex layers can match.
                     $depLayers = $chainLayerResolver->resolveAll($dependency, '');
@@ -582,17 +584,18 @@ final readonly class Analyser
 
         foreach ($inheritanceDependencyMap[$className] ?? [] as $dependency) {
             $cycleDetected = false;
-            $dependencies  = [
-                ...$dependencies,
-                ...$this->dependenciesForInheritanceDependency(
-                    $dependency,
-                    $dependencyMap,
-                    $inheritanceDependencyMap,
-                    $resolvedInheritedDependencies,
-                    [$className => true],
-                    $cycleDetected
-                ),
-            ];
+            $resolved      = $this->dependenciesForInheritanceDependency(
+                $dependency,
+                $dependencyMap,
+                $inheritanceDependencyMap,
+                $resolvedInheritedDependencies,
+                [$className => true],
+                $cycleDetected
+            );
+
+            foreach ($resolved as $resolvedDependency) {
+                $dependencies[] = $resolvedDependency;
+            }
         }
 
         return array_values(array_unique($dependencies));
@@ -625,27 +628,30 @@ final readonly class Analyser
             return $resolvedInheritedDependencies[$dependency];
         }
 
-        $hasCycle             = false;
-        $resolvedDependencies = [
-            ...$resolvedDependencies,
-            ...$dependencyMap[$dependency] ?? [],
-        ];
-        $seen                += [$dependency => true];
+        $hasCycle = false;
+
+        foreach ($dependencyMap[$dependency] ?? [] as $mappedDependency) {
+            $resolvedDependencies[] = $mappedDependency;
+        }
+
+        $seen += [$dependency => true];
 
         foreach ($inheritanceDependencyMap[$dependency] ?? [] as $inheritedDependency) {
-            $childHasCycle        = false;
-            $resolvedDependencies = [
-                ...$resolvedDependencies,
-                ...$this->dependenciesForInheritanceDependency(
-                    $inheritedDependency,
-                    $dependencyMap,
-                    $inheritanceDependencyMap,
-                    $resolvedInheritedDependencies,
-                    $seen,
-                    $childHasCycle
-                ),
-            ];
-            $hasCycle             = $hasCycle || $childHasCycle;
+            $childHasCycle = false;
+            $resolved      = $this->dependenciesForInheritanceDependency(
+                $inheritedDependency,
+                $dependencyMap,
+                $inheritanceDependencyMap,
+                $resolvedInheritedDependencies,
+                $seen,
+                $childHasCycle
+            );
+
+            foreach ($resolved as $resolvedDependency) {
+                $resolvedDependencies[] = $resolvedDependency;
+            }
+
+            $hasCycle = $hasCycle || $childHasCycle;
         }
 
         $resolvedDependencies = array_values(array_unique($resolvedDependencies));
