@@ -46,6 +46,26 @@ final class MethodNameMustBeCamelCaseRuleTest extends TestCase
         ])));
     }
 
+    public function testIgnoresPhpExtensionMethodsStartingWithDoubleUnderscore(): void
+    {
+        $methodNameMustBeCamelCaseRule = new MethodNameMustBeCamelCaseRule('Source');
+
+        $this->assertSame([], $methodNameMustBeCamelCaseRule->evaluateAll($this->makeNode([
+            new MethodNode('__doRequest', 'public', true, false, 0, 1, 1),
+            new MethodNode('__getCookies', 'public', true, false, 0, 1, 1),
+            new MethodNode('__getFunctions', 'public', true, false, 0, 1, 1),
+            new MethodNode('__getLastRequest', 'public', true, false, 0, 1, 1),
+            new MethodNode('__getLastRequestHeaders', 'public', true, false, 0, 1, 1),
+            new MethodNode('__getLastResponse', 'public', true, false, 0, 1, 1),
+            new MethodNode('__getLastResponseHeaders', 'public', true, false, 0, 1, 1),
+            new MethodNode('__getTypes', 'public', true, false, 0, 1, 1),
+            new MethodNode('__setCookie', 'public', true, false, 0, 1, 1),
+            new MethodNode('__setLocation', 'public', true, false, 0, 1, 1),
+            new MethodNode('__setSoapHeaders', 'public', true, false, 0, 1, 1),
+            new MethodNode('__soapCall', 'public', true, false, 0, 1, 1),
+        ])));
+    }
+
     public function testViolatesNonMagicMethodsStartingWithDoubleUnderscore(): void
     {
         $methodNameMustBeCamelCaseRule = new MethodNameMustBeCamelCaseRule('Source');

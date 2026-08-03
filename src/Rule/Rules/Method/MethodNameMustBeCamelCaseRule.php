@@ -10,9 +10,28 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function preg_match;
 use function sprintf;
+use function strtolower;
 
 final readonly class MethodNameMustBeCamelCaseRule implements MultipleRuleViolationInterface
 {
+    /**
+     * PHP extension hooks allowed by the PSR-1 PHPCS sniff.
+     */
+    private const PHP_NON_MAGIC_DOUBLE_UNDERSCORE_METHODS = [
+        '__dorequest'              => true,
+        '__getcookies'             => true,
+        '__getfunctions'           => true,
+        '__getlastrequest'         => true,
+        '__getlastrequestheaders'  => true,
+        '__getlastresponse'        => true,
+        '__getlastresponseheaders' => true,
+        '__gettypes'               => true,
+        '__setcookie'              => true,
+        '__setlocation'            => true,
+        '__setsoapheaders'         => true,
+        '__soapcall'               => true,
+    ];
+
     public function __construct(
         private string $layer
     ) {
@@ -36,7 +55,10 @@ final readonly class MethodNameMustBeCamelCaseRule implements MultipleRuleViolat
         $violations = [];
 
         foreach ($classNode->methods as $method) {
-            if ($method->isMagic) {
+            if (
+                $method->isMagic
+                || isset(self::PHP_NON_MAGIC_DOUBLE_UNDERSCORE_METHODS[strtolower($method->name)])
+            ) {
                 continue;
             }
 
