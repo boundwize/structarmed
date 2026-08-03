@@ -25,6 +25,7 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\Case_;
 use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Class_;
@@ -441,7 +442,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 continue;
             }
 
-            $visibility            = $this->resolveVisibilityFromFlags($stmt->flags);
+            $visibility            = $this->resolveVisibilityName($stmt);
             $hasExplicitVisibility = $this->hasExplicitVisibilityFlag($stmt->flags);
 
             foreach ($stmt->consts as $const) {
@@ -470,7 +471,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 continue;
             }
 
-            $visibility            = $this->resolveVisibilityFromFlags($stmt->flags);
+            $visibility            = $this->resolveVisibilityName($stmt);
             $hasExplicitVisibility = $this->hasExplicitVisibilityFlag($stmt->flags);
 
             foreach ($stmt->props as $prop) {
@@ -495,7 +496,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
                 $properties[] = new PropertyNode(
                     name:                  (string) $param->var->name,
-                    visibility:            $this->resolveVisibilityFromFlags($param->flags),
+                    visibility:            $this->resolveVisibilityName($param),
                     hasExplicitVisibility: $this->hasExplicitVisibilityFlag($param->flags),
                     line:                  $param->getStartLine(),
                 );
@@ -650,7 +651,7 @@ final class ClassCollector extends NodeVisitorAbstract
         foreach ($classLikeMethods as $methodId => $classMethod) {
             $methods[] = new MethodNode(
                 name:                 (string) $classMethod->name,
-                visibility:           $this->resolveVisibilityFromFlags($classMethod->flags),
+                visibility:           $this->resolveVisibilityName($classMethod),
                 hasReturnType:        $classMethod->returnType !== null,
                 isStatic:             $classMethod->isStatic(),
                 paramCount:           count($classMethod->params),
@@ -665,13 +666,13 @@ final class ClassCollector extends NodeVisitorAbstract
         return $methods;
     }
 
-    private function resolveVisibilityFromFlags(int $flags): string
+    private function resolveVisibilityName(ClassMethod|ClassConst|Property|Param $node): string
     {
-        if (($flags & Modifiers::PROTECTED) !== 0) {
+        if ($node->isProtected()) {
             return 'protected';
         }
 
-        if (($flags & Modifiers::PRIVATE) !== 0) {
+        if ($node->isPrivate()) {
             return 'private';
         }
 
