@@ -22,19 +22,42 @@ use Boundwize\StructArmed\Util\Path;
 use RuntimeException;
 
 use function count;
+use function explode;
 use function in_array;
 use function is_dir;
 use function is_file;
 use function microtime;
 use function sprintf;
 use function str_starts_with;
-use function strlen;
-use function substr;
 
 use const PHP_EOL;
 
+/**
+ * @phpstan-type CommandOptions array{
+ *     report?: string,
+ *     config?: string,
+ *     generate-baseline?: string,
+ *     no-progress?: true,
+ *     clear-cache?: true,
+ *     disable-parallel?: true,
+ *     fix?: true
+ * }
+ */
 final readonly class AnalyseCommand
 {
+    private const VALUE_OPTIONS = [
+        '--report'            => 'report',
+        '--config'            => 'config',
+        '--generate-baseline' => 'generate-baseline',
+    ];
+
+    private const FLAG_OPTIONS = [
+        '--no-progress'      => 'no-progress',
+        '--clear-cache'      => 'clear-cache',
+        '--disable-parallel' => 'disable-parallel',
+        '--fix'              => 'fix',
+    ];
+
     public function __construct(private ?ProgressHandlerInterface $progressHandler = null)
     {
     }
@@ -44,74 +67,14 @@ final readonly class AnalyseCommand
      */
     public function run(array $arguments, string $basePath): int
     {
-        $options   = [];
-        $scanPaths = [];
-        $counter   = count($arguments);
+        $parsedArguments = $this->parseArguments($arguments);
 
-        for ($i = 0; $i < $counter; $i++) {
-            $argument = $arguments[$i];
-
-            if (str_starts_with($argument, '--report=')) {
-                $options['report'] = substr($argument, strlen('--report='));
-                continue;
-            }
-
-            if ($argument === '--report') {
-                $options['report'] = $arguments[++$i] ?? '';
-                continue;
-            }
-
-            if (str_starts_with($argument, '--config=')) {
-                $options['config'] = substr($argument, strlen('--config='));
-                continue;
-            }
-
-            if ($argument === '--config') {
-                $options['config'] = $arguments[++$i] ?? '';
-                continue;
-            }
-
-            if ($argument === '--no-progress') {
-                $options['progress'] = false;
-                continue;
-            }
-
-            if ($argument === '--clear-cache') {
-                $options['clear-cache'] = true;
-                continue;
-            }
-
-            if ($argument === '--disable-parallel') {
-                $options['disable-parallel'] = true;
-                continue;
-            }
-
-            if ($argument === '--fix') {
-                $options['fix'] = true;
-                continue;
-            }
-
-            if (str_starts_with($argument, '--generate-baseline=')) {
-                $options['generate-baseline'] = substr($argument, strlen('--generate-baseline='));
-                continue;
-            }
-
-            if ($argument === '--generate-baseline') {
-                $options['generate-baseline'] = $arguments[++$i] ?? '';
-                continue;
-            }
-
-            if (str_starts_with($argument, '--')) {
-                echo sprintf("Unknown option: %s\n\n", $argument);
-                echo Usage::render();
-
-                return 1;
-            }
-
-            $scanPaths[] = $argument;
+        if ($parsedArguments === null) {
+            return 1;
         }
 
-        $reportType = $options['report'] ?? 'console';
+        [$options, $scanPaths] = $parsedArguments;
+        $reportType            = $options['report'] ?? 'console';
 
         if (! in_array($reportType, ['console', 'json'], true)) {
             echo sprintf("Invalid report type: %s\n\n", $reportType);
@@ -123,11 +86,10 @@ final readonly class AnalyseCommand
         foreach ($scanPaths as $scanPath) {
             $fullScanPath = Path::resolve($scanPath, $basePath);
 
-            if (is_dir($fullScanPath)) {
-                continue;
-            }
-
-            if (is_file($fullScanPath) && Path::isAnalysableFile($fullScanPath, $basePath)) {
+            if (
+                is_dir($fullScanPath)
+                || (is_file($fullScanPath) && Path::isAnalysableFile($fullScanPath, $basePath))
+            ) {
                 continue;
             }
 
@@ -140,9 +102,7 @@ final readonly class AnalyseCommand
             $configFile   = $options['config'] ?? ConfigLoader::discover($basePath);
             $architecture = ConfigLoader::load($configFile);
         } catch (RuntimeException $runtimeException) {
-            echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
-
-            return 1;
+            return $this->reportError($runtimeException);
         }
 
         $start                        = microtime(true);
@@ -165,8 +125,7 @@ final readonly class AnalyseCommand
         $files           = $analyser->filesForAnalysis($architecture, $scanPaths);
         $metadata        = $analysisCacheMetadataFactory->metadata($basePath, $configFile, $scanPaths, $files);
         $cacheKey        = $analysisCacheMetadataFactory->key($metadata);
-        $progressEnabled = $options['progress'] ?? true;
-        $progress        = $reportType === 'console' && $progressEnabled
+        $progress        = $reportType === 'console' && ! isset($options['no-progress'])
             ? $this->progressHandler ?? new ConsoleProgressBar()
             : null;
         $analyserOptions = isset($options['disable-parallel']) ? AnalyserOptions::sequential() : null;
@@ -185,25 +144,22 @@ final readonly class AnalyseCommand
         }
 
         $elapsed                           = microtime(true) - $start;
-        $baseline                          = new Baseline();
         $unfilteredRuleViolationCollection = $ruleViolationCollection;
         $shouldGenerateBaseline            = isset($options['generate-baseline']);
         $fixedCount                        = 0;
 
+        try {
+            $ruleViolationCollection = $this->resolveRuleViolationCollection(
+                $unfilteredRuleViolationCollection,
+                $architecture,
+                $basePath,
+                $shouldGenerateBaseline
+            );
+        } catch (RuntimeException $runtimeException) {
+            return $this->reportError($runtimeException);
+        }
+
         if (isset($options['fix'])) {
-            try {
-                $ruleViolationCollection = $this->resolveRuleViolationCollection(
-                    $unfilteredRuleViolationCollection,
-                    $architecture,
-                    $basePath,
-                    $shouldGenerateBaseline
-                );
-            } catch (RuntimeException $runtimeException) {
-                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
-
-                return 1;
-            }
-
             $fixedCount = $this->fixViolations($architecture, $ruleViolationCollection);
 
             if ($fixedCount > 0) {
@@ -234,25 +190,10 @@ final readonly class AnalyseCommand
                         $shouldGenerateBaseline
                     );
                 } catch (RuntimeException $runtimeException) {
-                    echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
-
-                    return 1;
+                    return $this->reportError($runtimeException);
                 }
 
                 $elapsed = microtime(true) - $start;
-            }
-        } else {
-            try {
-                $ruleViolationCollection = $this->resolveRuleViolationCollection(
-                    $unfilteredRuleViolationCollection,
-                    $architecture,
-                    $basePath,
-                    $shouldGenerateBaseline
-                );
-            } catch (RuntimeException $runtimeException) {
-                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
-
-                return 1;
             }
         }
 
@@ -262,11 +203,13 @@ final readonly class AnalyseCommand
 
         if ($shouldGenerateBaseline) {
             try {
-                $baseline->generate($unfilteredRuleViolationCollection, $options['generate-baseline'], $basePath);
+                (new Baseline())->generate(
+                    $unfilteredRuleViolationCollection,
+                    $options['generate-baseline'],
+                    $basePath
+                );
             } catch (RuntimeException $runtimeException) {
-                echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
-
-                return 1;
+                return $this->reportError($runtimeException);
             }
 
             echo sprintf(
@@ -278,14 +221,54 @@ final readonly class AnalyseCommand
             return 0;
         }
 
-        $report = match ($reportType) {
+        echo match ($reportType) {
             'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
             default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
         };
 
-        echo $report;
-
         return $ruleViolationCollection->hasViolations() ? 1 : 0;
+    }
+
+    /**
+     * @param list<string> $arguments
+     * @return array{CommandOptions, list<string>}|null
+     */
+    private function parseArguments(array $arguments): ?array
+    {
+        /** @var CommandOptions $options */
+        $options   = [];
+        $scanPaths = [];
+        $counter   = count($arguments);
+
+        for ($index = 0; $index < $counter; $index++) {
+            $argument         = $arguments[$index];
+            [$option, $value] = explode('=', $argument, 2) + [1 => null];
+
+            if (isset(self::VALUE_OPTIONS[$option])) {
+                if ($value === null) {
+                    $value = $arguments[++$index] ?? '';
+                }
+
+                $options[self::VALUE_OPTIONS[$option]] = $value;
+                continue;
+            }
+
+            if (isset(self::FLAG_OPTIONS[$argument])) {
+                $options[self::FLAG_OPTIONS[$argument]] = true;
+                continue;
+            }
+
+            if (str_starts_with($argument, '--')) {
+                echo sprintf("Unknown option: %s\n\n", $argument);
+                echo Usage::render();
+
+                return null;
+            }
+
+            $scanPaths[] = $argument;
+        }
+
+        return [$options, $scanPaths];
     }
 
     private function resolveRuleViolationCollection(
@@ -309,16 +292,19 @@ final readonly class AnalyseCommand
         foreach ($ruleViolationCollection as $ruleViolation) {
             $rule = $rules[$ruleViolation->ruleKey] ?? null;
 
-            if (! $rule instanceof FixableInterface) {
-                continue;
-            }
-
-            if ($rule->fix($ruleViolation)) {
+            if ($rule instanceof FixableInterface && $rule->fix($ruleViolation)) {
                 $fixedCount++;
             }
         }
 
         return $fixedCount;
+    }
+
+    private function reportError(RuntimeException $runtimeException): int
+    {
+        echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+
+        return 1;
     }
 
     private function fixedViolationMessage(int $fixedCount): string
