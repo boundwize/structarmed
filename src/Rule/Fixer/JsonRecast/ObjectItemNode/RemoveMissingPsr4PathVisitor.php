@@ -36,22 +36,7 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 
     public function enterNode(NodeJson $nodeJson, NodeJsonPath $nodeJsonPath): ?int
     {
-        if ($nodeJson instanceof ObjectItemNode && $this->isPsr4Mapping($nodeJsonPath)) {
-            if (
-                $nodeJson->value instanceof StringNode
-                && ! $this->directoryExists($nodeJson->value->value)
-            ) {
-                return NodeJsonVisitor::REMOVE_NODE;
-            }
-
-            return null;
-        }
-
-        if (! $nodeJson instanceof ArrayItemNode || ! $this->isPsr4PathListItem($nodeJsonPath)) {
-            return null;
-        }
-
-        if (! $nodeJson->value instanceof StringNode || $this->directoryExists($nodeJson->value->value)) {
+        if (! $this->isMissingPsr4Path($nodeJson, $nodeJsonPath)) {
             return null;
         }
 
@@ -60,32 +45,9 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
 
     public function leaveNode(NodeJson $nodeJson, NodeJsonPath $nodeJsonPath): null|int
     {
-        if (! $nodeJson instanceof ObjectItemNode) {
-            return null;
-        }
-
-        if ($this->isPsr4Section($nodeJson, $nodeJsonPath)) {
-            if (
-                ! $nodeJson->value instanceof ObjectNode
-                || ! $this->becameEmpty($nodeJson->value)
-            ) {
-                return null;
-            }
-
-            return NodeJsonVisitor::REMOVE_NODE;
-        }
-
-        if ($this->isEmptyComposerAutoloadItem($nodeJson, $nodeJsonPath)) {
-            return NodeJsonVisitor::REMOVE_NODE;
-        }
-
-        if (! $this->isPsr4Mapping($nodeJsonPath)) {
-            return null;
-        }
-
         if (
-            ! $nodeJson->value instanceof ArrayNode
-            || ! $this->becameEmpty($nodeJson->value)
+            ! $nodeJson instanceof ObjectItemNode
+            || ! $this->becameEmptyPsr4Container($nodeJson, $nodeJsonPath)
         ) {
             return null;
         }
@@ -93,18 +55,43 @@ final class RemoveMissingPsr4PathVisitor extends NodeJsonVisitorAbstract
         return NodeJsonVisitor::REMOVE_NODE;
     }
 
-    private function isPsr4Section(ObjectItemNode $objectItemNode, NodeJsonPath $nodeJsonPath): bool
+    private function isMissingPsr4Path(NodeJson $nodeJson, NodeJsonPath $nodeJsonPath): bool
     {
-        return $objectItemNode->key->value === 'psr-4'
-            && $this->isComposerAutoloadPath($nodeJsonPath);
+        if ($nodeJson instanceof ObjectItemNode) {
+            return $this->isPsr4Mapping($nodeJsonPath)
+                && $this->isMissingDirectory($nodeJson->value);
+        }
+
+        return $nodeJson instanceof ArrayItemNode
+            && $this->isPsr4PathListItem($nodeJsonPath)
+            && $this->isMissingDirectory($nodeJson->value);
     }
 
-    private function isEmptyComposerAutoloadItem(ObjectItemNode $objectItemNode, NodeJsonPath $nodeJsonPath): bool
+    private function isMissingDirectory(NodeJson $nodeJson): bool
     {
+        return $nodeJson instanceof StringNode
+            && ! $this->directoryExists($nodeJson->value);
+    }
+
+    private function becameEmptyPsr4Container(ObjectItemNode $objectItemNode, NodeJsonPath $nodeJsonPath): bool
+    {
+        $value = $objectItemNode->value;
+
+        if ($value instanceof ArrayNode) {
+            return $this->isPsr4Mapping($nodeJsonPath)
+                && $this->becameEmpty($value);
+        }
+
+        if (! $value instanceof ObjectNode || ! $this->becameEmpty($value)) {
+            return false;
+        }
+
+        if ($objectItemNode->key->value === 'psr-4') {
+            return $this->isComposerAutoloadPath($nodeJsonPath);
+        }
+
         return $nodeJsonPath->isRoot()
-            && $this->isComposerAutoloadKey($objectItemNode->key->value)
-            && $objectItemNode->value instanceof ObjectNode
-            && $this->becameEmpty($objectItemNode->value);
+            && $this->isComposerAutoloadKey($objectItemNode->key->value);
     }
 
     private function isPsr4Mapping(NodeJsonPath $nodeJsonPath): bool
