@@ -241,8 +241,10 @@ final readonly class AnalyseCommand
         $counter   = count($arguments);
 
         for ($index = 0; $index < $counter; $index++) {
-            $argument         = $arguments[$index];
-            [$option, $value] = explode('=', $argument, 2) + [1 => null];
+            $argument       = $arguments[$index];
+            $optionAndValue = explode('=', $argument, 2);
+            $option         = $optionAndValue[0] ?? $argument;
+            $value          = $optionAndValue[1] ?? null;
 
             if (isset(self::VALUE_OPTIONS[$option])) {
                 if ($value === null) {
