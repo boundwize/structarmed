@@ -854,7 +854,7 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testClassNodesPreserveMethodExplicitVisibility(): void
+    public function testClassNodesPreserveMethodMetadata(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -875,8 +875,8 @@ final class AnalysisResultCacheTest extends TestCase
                 isReadonly:  false,
                 methods:     [
                     new MethodNode(
-                        name:                 'setUp',
-                        visibility:           'protected',
+                        name:                 '__invoke',
+                        visibility:           'public',
                         hasReturnType:        true,
                         isStatic:             false,
                         paramCount:           0,
@@ -884,6 +884,7 @@ final class AnalysisResultCacheTest extends TestCase
                         lineCount:            3,
                         hasExplicitVisibility: true,
                         line:                 10,
+                        isMagic:              true,
                     ),
                 ],
             ),
@@ -896,6 +897,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded);
             $this->assertTrue($loaded[0]->methods[0]->hasExplicitVisibility);
+            $this->assertTrue($loaded[0]->methods[0]->isMagic);
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -1483,6 +1485,7 @@ final class AnalysisResultCacheTest extends TestCase
                                 'lineCount'             => 1,
                                 'hasExplicitVisibility' => true,
                                 'line'                  => 'bad',
+                                'isMagic'               => false,
                             ],
                         ],
                         'constants'     => [],
@@ -1522,6 +1525,7 @@ final class AnalysisResultCacheTest extends TestCase
                                 'cyclomaticComplexity' => 1,
                                 'lineCount'            => 1,
                                 'line'                 => 1,
+                                'isMagic'              => false,
                             ],
                         ],
                         'constants'     => [],

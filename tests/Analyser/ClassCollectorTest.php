@@ -226,6 +226,16 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame('bar', $classNode->methods[0]->name);
     }
 
+    public function testCollectsMagicMethodFlag(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function __construct() {} public function __DoThing() {} }'
+        );
+
+        $this->assertTrue($classNode->methods[0]->isMagic);
+        $this->assertFalse($classNode->methods[1]->isMagic);
+    }
+
     public function testFiltersClassMethodsOncePerClassLike(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);

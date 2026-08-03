@@ -10,7 +10,6 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function preg_match;
 use function sprintf;
-use function str_starts_with;
 
 final readonly class MethodNameMustBeCamelCaseRule implements MultipleRuleViolationInterface
 {
@@ -37,7 +36,7 @@ final readonly class MethodNameMustBeCamelCaseRule implements MultipleRuleViolat
         $violations = [];
 
         foreach ($classNode->methods as $method) {
-            if (str_starts_with($method->name, '__')) {
+            if ($method->isMagic) {
                 continue;
             }
 
