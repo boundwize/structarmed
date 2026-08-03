@@ -24,26 +24,14 @@ final class Path
 
     public static function normalise(string $path, bool $canonicalise = false): string
     {
-        if ($canonicalise) {
-            $cacheKey = "1\0" . $path;
-
-            if (isset(self::$normalisedPaths[$cacheKey])) {
-                return self::$normalisedPaths[$cacheKey];
-            }
-
-            $canonicalPath = realpath($path);
-
-            if ($canonicalPath === false) {
-                return self::$normalisedPaths[$cacheKey] = self::normalise($path);
-            }
-
-            return self::$normalisedPaths[$cacheKey] = self::normalise($canonicalPath);
-        }
-
-        $cacheKey = "0\0" . $path;
+        $cacheKey = ($canonicalise ? "1\0" : "0\0") . $path;
 
         if (isset(self::$normalisedPaths[$cacheKey])) {
             return self::$normalisedPaths[$cacheKey];
+        }
+
+        if ($canonicalise) {
+            $path = realpath($path) ?: $path;
         }
 
         $isUnc = str_starts_with($path, '\\\\') || str_starts_with($path, '//');
@@ -94,12 +82,10 @@ final class Path
 
     private static function isAbsolute(string $path): bool
     {
-        if (str_starts_with($path, '/') || str_starts_with($path, '\\\\')) {
-            return true;
-        }
-
-        return strlen($path) >= 3
-            && $path[1] === ':'
-            && ($path[2] === '/' || $path[2] === '\\');
+        return str_starts_with($path, '/')
+            || str_starts_with($path, '\\\\')
+            || (strlen($path) >= 3
+                && $path[1] === ':'
+                && ($path[2] === '/' || $path[2] === '\\'));
     }
 }
