@@ -1087,6 +1087,11 @@ final readonly class Analyser
 
         foreach ($layers as $layerName => $layerPaths) {
             if ($layerPaths === [] && ($layerName === 'Source' || $layerName === 'Source[]')) {
+                if ($layerName === 'Source[]' && ($layers['Source'] ?? []) !== []) {
+                    $layers[$layerName] = $layers['Source'];
+                    continue;
+                }
+
                 $composerPaths    ??= (new Psr4PathResolver())->paths($this->basePath);
                 $layers[$layerName] = $composerPaths;
             }
