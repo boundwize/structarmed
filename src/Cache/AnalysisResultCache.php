@@ -617,6 +617,7 @@ final class AnalysisResultCache
             'lineCount'             => $methodNode->lineCount,
             'hasExplicitVisibility' => $methodNode->hasExplicitVisibility,
             'line'                  => $methodNode->line,
+            'isMagic'               => $methodNode->isMagic,
         ];
     }
 
@@ -665,6 +666,7 @@ final class AnalysisResultCache
             || ! is_int($method['lineCount'] ?? null)
             || ! is_bool($method['hasExplicitVisibility'] ?? null)
             || ! is_int($method['line'] ?? null)
+            || ! is_bool($method['isMagic'] ?? null)
         ) {
             return null;
         }
@@ -679,6 +681,7 @@ final class AnalysisResultCache
             lineCount:            $method['lineCount'],
             hasExplicitVisibility: $method['hasExplicitVisibility'],
             line:                 $method['line'],
+            isMagic:              $method['isMagic'],
         );
     }
 

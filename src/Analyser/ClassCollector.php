@@ -658,6 +658,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 lineCount:            $this->calculateMethodLineCount($classMethod),
                 hasExplicitVisibility: $this->hasExplicitVisibilityFlag($classMethod->flags),
                 line:                 $classMethod->getStartLine(),
+                isMagic:              $classMethod->isMagic(),
             );
         }
 

@@ -16,6 +16,7 @@ final readonly class MethodNode
         public int $lineCount,
         public bool $hasExplicitVisibility = false,
         public int $line = 0,
+        public bool $isMagic = false,
     ) {
     }
 
