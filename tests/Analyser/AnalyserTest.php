@@ -611,7 +611,7 @@ final class AnalyserTest extends TestCase
 
         $architecture = Architecture::define()
             ->layer('Source', 'src/Alpha/')
-            ->withPreset(Preset::PSR1());
+            ->withPreset(Preset::PSR1(sourcePaths: ['src/Alpha/']));
 
         $violations = (new Analyser($basePath))
             ->analyse($architecture, analyserOptions: AnalyserOptions::sequential())
@@ -768,6 +768,25 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testAnalyserUsesComposerPsr4PathsForDisambiguatedDefaultSourceLayer(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"app/"}}}',
+            'app/Foo.php'   => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->withPreset(Preset::PSR4())
+            ->rule('composer-source.must_be_final', new MustBeFinalRule('Source[]'));
+
+        $this->assertSame([], $architecture->getLayers()['Source[]']);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('composer-source.must_be_final'));
     }
 
     public function testAnalyserUsesComposerPsr4PathsForDefaultPsr15Preset(): void
