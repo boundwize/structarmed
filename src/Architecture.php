@@ -16,6 +16,7 @@ use function array_keys;
 use function array_merge;
 use function is_callable;
 use function is_int;
+use function realpath;
 use function sprintf;
 
 /**
