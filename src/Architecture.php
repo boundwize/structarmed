@@ -137,7 +137,7 @@ final class Architecture
     public function import(string $file): self
     {
         $file         = Path::normalise($file);
-        $resolvedFile = Path::normalise($file, canonicalise: true);
+        $resolvedFile = realpath($file);
 
         if ($resolvedFile === false) {
             throw new RuntimeException(sprintf(
@@ -146,6 +146,7 @@ final class Architecture
             ));
         }
 
+        $resolvedFile = Path::normalise($resolvedFile, canonicalise: true);
         if (isset($this->importedFiles[$resolvedFile])) {
             return $this;
         }
