@@ -70,6 +70,42 @@ final class ArchitectureImportTest extends TestCase
         $this->assertCount(2, $architecture->getImportedFiles());
     }
 
+    public function testImportOfFileImportingItselfIsAppliedOnce(): void
+    {
+        $architecture = Architecture::define()
+            ->import(__DIR__ . '/Fixtures/imports/self-importing.php');
+
+        $this->assertSame(
+            ['SelfImporting' => 'src/SelfImporting/'],
+            $architecture->getLayers()
+        );
+        $this->assertSame(
+            [(string) realpath(__DIR__ . '/Fixtures/imports/self-importing.php')],
+            $architecture->getImportedFiles()
+        );
+    }
+
+    public function testCircularImportsDoNotLoop(): void
+    {
+        $architecture = Architecture::define()
+            ->import(__DIR__ . '/Fixtures/imports/circular-a.php');
+
+        $this->assertSame(
+            [
+                'CircularB' => 'src/CircularB/',
+                'CircularA' => 'src/CircularA/',
+            ],
+            $architecture->getLayers()
+        );
+        $this->assertSame(
+            [
+                (string) realpath(__DIR__ . '/Fixtures/imports/circular-a.php'),
+                (string) realpath(__DIR__ . '/Fixtures/imports/circular-b.php'),
+            ],
+            $architecture->getImportedFiles()
+        );
+    }
+
     public function testImportThrowsWhenFileNotFound(): void
     {
         $this->expectException(RuntimeException::class);
