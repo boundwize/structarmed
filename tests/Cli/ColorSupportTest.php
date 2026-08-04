@@ -65,6 +65,38 @@ final class ColorSupportTest extends TestCase
         );
     }
 
+    public function testDetectIgnoresEmptyNoColor(): void
+    {
+        $this->withEnvironment(
+            ['NO_COLOR' => '', 'FORCE_COLOR' => '1'],
+            function (): void {
+                $this->assertTrue(ColorSupport::detect());
+            }
+        );
+    }
+
+    public function testDetectReturnsFalseWhenForceColorIsZero(): void
+    {
+        $this->withEnvironment(
+            ['FORCE_COLOR' => '0'],
+            function (): void {
+                $this->assertFalse(ColorSupport::detect());
+            }
+        );
+    }
+
+    public function testDetectIgnoresEmptyForceColor(): void
+    {
+        $this->withEnvironment(
+            ['FORCE_COLOR' => ''],
+            function (): void {
+                $stream = $this->openMemoryStream();
+
+                $this->assertFalse(ColorSupport::detect($stream));
+            }
+        );
+    }
+
     public function testDetectReturnsTrueWhenCliColorForceIsSet(): void
     {
         $this->withEnvironment(
@@ -79,6 +111,18 @@ final class ColorSupportTest extends TestCase
     {
         $this->withEnvironment(
             ['CLICOLOR_FORCE' => '0'],
+            function (): void {
+                $stream = $this->openMemoryStream();
+
+                $this->assertFalse(ColorSupport::detect($stream));
+            }
+        );
+    }
+
+    public function testDetectIgnoresEmptyCliColorForce(): void
+    {
+        $this->withEnvironment(
+            ['CLICOLOR_FORCE' => ''],
             function (): void {
                 $stream = $this->openMemoryStream();
 

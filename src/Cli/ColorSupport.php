@@ -29,16 +29,18 @@ final class ColorSupport
      */
     public static function detect(mixed $stream = null): bool
     {
-        if (getenv('NO_COLOR') !== false) {
+        $noColor = getenv('NO_COLOR');
+        if ($noColor !== false && $noColor !== '') {
             return false;
         }
 
-        if (getenv('FORCE_COLOR') !== false) {
-            return true;
+        $forceColor = getenv('FORCE_COLOR');
+        if ($forceColor !== false && $forceColor !== '') {
+            return $forceColor !== '0';
         }
 
         $cliColorForce = getenv('CLICOLOR_FORCE');
-        if ($cliColorForce !== false && $cliColorForce !== '0') {
+        if ($cliColorForce !== false && $cliColorForce !== '' && $cliColorForce !== '0') {
             return true;
         }
 
