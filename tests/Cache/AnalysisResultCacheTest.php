@@ -13,6 +13,7 @@ use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashCache;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Composer\InstalledVersions;
@@ -438,8 +439,10 @@ final class AnalysisResultCacheTest extends TestCase
                 $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'other-config-hash')
             );
 
+            // Content hashes are memoised per factory instance (one instance per
+            // run), so composer.json edits are observed by the next run's factory.
             file_put_contents($basePath . '/composer.json', '{"autoload":{"psr-4":{"App\\\\":"lib/"}}}');
-            $withComposer = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash');
+            $withComposer = (new AnalysisCacheMetadataFactory())->classNodeCacheNamespace($basePath, 'config-hash');
 
             $this->assertNotSame($withoutComposer, $withComposer);
 
@@ -447,7 +450,7 @@ final class AnalysisResultCacheTest extends TestCase
 
             $this->assertNotSame(
                 $withComposer,
-                $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash')
+                (new AnalysisCacheMetadataFactory())->classNodeCacheNamespace($basePath, 'config-hash')
             );
         } finally {
             $this->removeTempDirectory($basePath);
@@ -1164,6 +1167,35 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
             file_put_contents($sourceFile, '<?php class Foo { public function changed(): void {} }');
+
+            // A fresh instance models the next run, which hashes files anew.
+            $nextRunCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+            $this->assertNull($nextRunCache->loadClassNodes($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClassNodesHitStaleHashUntilSharedFileHashCacheIsCleared(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $fileHashCache       = new FileHashCache();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, '', '', $fileHashCache);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            file_put_contents($sourceFile, '<?php class Foo { public function changed(): void {} }');
+
+            // Hashes are memoised for the lifetime of the run, so the stale
+            // entry still hits until the hash cache is cleared (the --fix flow).
+            $this->assertNotNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+
+            $fileHashCache->clear();
 
             $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
         } finally {

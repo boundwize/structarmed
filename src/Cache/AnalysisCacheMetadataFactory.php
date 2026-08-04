@@ -10,7 +10,6 @@ use Composer\InstalledVersions;
 use function array_map;
 use function file_exists;
 use function hash;
-use function hash_file;
 use function json_encode;
 use function rtrim;
 use function sort;
@@ -20,6 +19,10 @@ use const JSON_THROW_ON_ERROR;
 
 final readonly class AnalysisCacheMetadataFactory
 {
+    public function __construct(private FileHashCache $fileHashCache = new FileHashCache())
+    {
+    }
+
     /**
      * @param list<string> $scanPaths
      * @param list<string> $files
@@ -57,7 +60,7 @@ final readonly class AnalysisCacheMetadataFactory
 
     public function fileHash(string $path): string
     {
-        return (string) hash_file('xxh128', $path);
+        return $this->fileHashCache->hash($path);
     }
 
     /**
@@ -75,9 +78,9 @@ final readonly class AnalysisCacheMetadataFactory
      */
     private function filesHash(array $files): string
     {
-        return hash('xxh128', json_encode(array_map(static fn(string $file): array => [
+        return hash('xxh128', json_encode(array_map(fn(string $file): array => [
             'file' => $file,
-            'hash' => (string) hash_file('xxh128', $file),
+            'hash' => $this->fileHashCache->hash($file),
         ], $files), JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 

@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashCache;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
@@ -106,14 +107,16 @@ final readonly class AnalyseCommand
         }
 
         $start                        = microtime(true);
-        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+        $fileHashCache                = new FileHashCache();
+        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashCache);
         $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,
             $architecture->getCacheDirectory(),
             $configHash,
-            $composerGeneratedVersionHash
+            $composerGeneratedVersionHash,
+            $fileHashCache
         );
         $classNodeCacheNamespace      = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, $configHash);
         $analyser                     = new Analyser($basePath, $analysisResultCache, $classNodeCacheNamespace);
@@ -164,6 +167,8 @@ final readonly class AnalyseCommand
 
             if ($fixedCount > 0) {
                 $analysisResultCache->clear();
+                // Fixes rewrote source files, so memoised content hashes are stale.
+                $fileHashCache->clear();
 
                 $files                             = $analyser->filesForAnalysis($architecture, $scanPaths);
                 $metadata                          = $analysisCacheMetadataFactory->metadata(
