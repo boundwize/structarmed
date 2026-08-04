@@ -569,6 +569,59 @@ PHP);
         }
     }
 
+    /**
+     * The post-fix re-analysis must store hashes of the rewritten files, not
+     * hashes memoised before the fix ran. If stale hashes were stored, the
+     * second run below would miss the cache and re-parse the fixed file.
+     */
+    public function testAnalyseCommandStoresFreshHashesAfterFix(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+        $progress = new class implements ProgressHandlerInterface {
+            public bool $started = false;
+
+            public function start(int $total): void
+            {
+                $this->started = true;
+            }
+
+            public function advance(string $file): void
+            {
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        try {
+            [$fixExitCode, $fixOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            [$secondExitCode, $secondOutput] = $this->runAnalyseCommand(
+                ['--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $fixExitCode, $fixOutput);
+            $this->assertSame(0, $secondExitCode, $secondOutput);
+            $this->assertStringContainsString('No violations found', $secondOutput);
+            $this->assertFalse($progress->started);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandTracksComposerJsonProgressAsSingleFile(): void
     {
         $basePath = $this->createProjectDirectoryWithMissingComposerPsr4Path();

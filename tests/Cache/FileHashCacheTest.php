@@ -60,4 +60,20 @@ final class FileHashCacheTest extends TestCase
 
         $this->assertSame('', @$fileHashCache->hash($this->file . '.missing'));
     }
+
+    public function testFailedHashIsNotMemoised(): void
+    {
+        $missingFile   = $this->file . '.late';
+        $fileHashCache = new FileHashCache();
+
+        $this->assertSame('', @$fileHashCache->hash($missingFile));
+
+        file_put_contents($missingFile, '<?php echo "late";');
+
+        try {
+            $this->assertSame((string) hash_file('xxh128', $missingFile), $fileHashCache->hash($missingFile));
+        } finally {
+            unlink($missingFile);
+        }
+    }
 }

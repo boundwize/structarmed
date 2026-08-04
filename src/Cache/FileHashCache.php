@@ -20,7 +20,19 @@ final class FileHashCache
 
     public function hash(string $file): string
     {
-        return $this->hashes[$file] ??= (string) hash_file('xxh128', $file);
+        if (isset($this->hashes[$file])) {
+            return $this->hashes[$file];
+        }
+
+        $hash = hash_file('xxh128', $file);
+
+        // Failures are not memoised: a file that becomes readable later in the
+        // run must hash fresh instead of being pinned to ''.
+        if ($hash === false) {
+            return '';
+        }
+
+        return $this->hashes[$file] = $hash;
     }
 
     public function clear(): void
