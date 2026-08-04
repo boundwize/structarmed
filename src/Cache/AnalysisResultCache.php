@@ -126,6 +126,9 @@ final class AnalysisResultCache
     public function clear(): void
     {
         $this->isCacheInitialised = false;
+        // Clearing usually means source files may have changed (e.g. --fix
+        // rewrote them), so memoised content hashes must not outlive the cache.
+        $this->fileHashCache->clear();
 
         if (! is_dir($this->cacheDirectory)) {
             return;

@@ -167,8 +167,6 @@ final readonly class AnalyseCommand
 
             if ($fixedCount > 0) {
                 $analysisResultCache->clear();
-                // Fixes rewrote source files, so memoised content hashes are stale.
-                $fileHashCache->clear();
 
                 $files                             = $analyser->filesForAnalysis($architecture, $scanPaths);
                 $metadata                          = $analysisCacheMetadataFactory->metadata(
