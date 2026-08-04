@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\Property;
 
+use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Variable;
@@ -34,7 +35,7 @@ final class AddPublicPropertyVisibilityVisitor extends NodeVisitorAbstract
 
         $property = $node->getProperty($this->propertyName);
         if ($property instanceof Property) {
-            if (($property->flags & Modifiers::VISIBILITY_MASK) !== 0) {
+            if (VisibilityFlagChecker::hasExplicitVisibilityFlag($property->flags)) {
                 return null;
             }
 
@@ -64,7 +65,7 @@ final class AddPublicPropertyVisibilityVisitor extends NodeVisitorAbstract
 
             // param names are unique, so the first name match decides:
             // only a param already promoted (eg: readonly) may gain a visibility
-            if (! $param->isPromoted() || ($param->flags & Modifiers::VISIBILITY_MASK) !== 0) {
+            if (! $param->isPromoted() || VisibilityFlagChecker::hasExplicitVisibilityFlag($param->flags)) {
                 return null;
             }
 
