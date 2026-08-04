@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Util\Path;
 use RuntimeException;
 
 use function array_filter;
@@ -136,6 +137,7 @@ final class Architecture
      */
     public function import(string $file): self
     {
+        $file         = Path::normalise($file);
         $resolvedFile = realpath($file);
 
         if ($resolvedFile === false) {
@@ -144,6 +146,8 @@ final class Architecture
                 $file
             ));
         }
+
+        $resolvedFile = Path::normalise($resolvedFile);
 
         if (isset($this->importedFiles[$resolvedFile])) {
             return $this;

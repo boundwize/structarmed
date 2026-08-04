@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests;
 
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Util\Path;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -24,7 +25,7 @@ final class ArchitectureImportTest extends TestCase
             $architecture->getLayers()
         );
         $this->assertSame(
-            [(string) realpath(__DIR__ . '/Fixtures/imports/layers.php')],
+            [$this->resolvedFixture('layers.php')],
             $architecture->getImportedFiles()
         );
     }
@@ -54,8 +55,8 @@ final class ArchitectureImportTest extends TestCase
         );
         $this->assertSame(
             [
-                (string) realpath(__DIR__ . '/Fixtures/imports/nested.php'),
-                (string) realpath(__DIR__ . '/Fixtures/imports/layers.php'),
+                $this->resolvedFixture('nested.php'),
+                $this->resolvedFixture('layers.php'),
             ],
             $architecture->getImportedFiles()
         );
@@ -80,7 +81,7 @@ final class ArchitectureImportTest extends TestCase
             $architecture->getLayers()
         );
         $this->assertSame(
-            [(string) realpath(__DIR__ . '/Fixtures/imports/self-importing.php')],
+            [$this->resolvedFixture('self-importing.php')],
             $architecture->getImportedFiles()
         );
     }
@@ -99,8 +100,8 @@ final class ArchitectureImportTest extends TestCase
         );
         $this->assertSame(
             [
-                (string) realpath(__DIR__ . '/Fixtures/imports/circular-a.php'),
-                (string) realpath(__DIR__ . '/Fixtures/imports/circular-b.php'),
+                $this->resolvedFixture('circular-a.php'),
+                $this->resolvedFixture('circular-b.php'),
             ],
             $architecture->getImportedFiles()
         );
@@ -120,5 +121,10 @@ final class ArchitectureImportTest extends TestCase
         $this->expectExceptionMessage('must return a callable');
 
         Architecture::define()->import(__DIR__ . '/Fixtures/imports/not-callable.php');
+    }
+
+    private function resolvedFixture(string $fixture): string
+    {
+        return Path::normalise((string) realpath(__DIR__ . '/Fixtures/imports/' . $fixture));
     }
 }
