@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
-use PhpParser\Modifiers;
+use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\Node;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
@@ -443,7 +443,7 @@ final class ClassCollector extends NodeVisitorAbstract
             }
 
             $visibility            = $this->resolveVisibilityName($stmt);
-            $hasExplicitVisibility = $this->hasExplicitVisibilityFlag($stmt->flags);
+            $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
 
             foreach ($stmt->consts as $const) {
                 $constants[] = new ConstantNode(
@@ -472,7 +472,7 @@ final class ClassCollector extends NodeVisitorAbstract
             }
 
             $visibility            = $this->resolveVisibilityName($stmt);
-            $hasExplicitVisibility = $this->hasExplicitVisibilityFlag($stmt->flags);
+            $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
 
             foreach ($stmt->props as $prop) {
                 $properties[] = new PropertyNode(
@@ -497,7 +497,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 $properties[] = new PropertyNode(
                     name:                  (string) $param->var->name,
                     visibility:            $this->resolveVisibilityName($param),
-                    hasExplicitVisibility: $this->hasExplicitVisibilityFlag($param->flags),
+                    hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($param->flags),
                     line:                  $param->getStartLine(),
                 );
             }
@@ -657,7 +657,7 @@ final class ClassCollector extends NodeVisitorAbstract
                 paramCount:           count($classMethod->params),
                 cyclomaticComplexity: $complexityByMethodId[$methodId] ?? 1,
                 lineCount:            $this->calculateMethodLineCount($classMethod),
-                hasExplicitVisibility: $this->hasExplicitVisibilityFlag($classMethod->flags),
+                hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($classMethod->flags),
                 line:                 $classMethod->getStartLine(),
                 isMagic:              $classMethod->isMagic(),
             );
@@ -677,11 +677,6 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         return 'public';
-    }
-
-    private function hasExplicitVisibilityFlag(int $flags): bool
-    {
-        return ($flags & Modifiers::VISIBILITY_MASK) !== 0;
     }
 
     private function calculateMethodLineCount(ClassMethod $classMethod): int

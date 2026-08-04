@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassMethod;
 
+use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\ClassLike;
@@ -33,7 +34,7 @@ final class AddPublicMethodVisibilityVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        if (($classMethod->flags & Modifiers::VISIBILITY_MASK) !== 0) {
+        if (VisibilityFlagChecker::hasExplicitVisibilityFlag($classMethod->flags)) {
             return null;
         }
 

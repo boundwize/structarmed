@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConst;
 
+use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\ClassConst;
@@ -33,7 +34,7 @@ final class AddPublicConstantVisibilityVisitor extends NodeVisitorAbstract
                 continue;
             }
 
-            if (($classConstant->flags & Modifiers::VISIBILITY_MASK) !== 0) {
+            if (VisibilityFlagChecker::hasExplicitVisibilityFlag($classConstant->flags)) {
                 return null;
             }
 
