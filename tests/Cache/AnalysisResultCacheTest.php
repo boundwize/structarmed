@@ -1178,12 +1178,14 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testClassNodesHitStaleHashUntilSharedFileHashCacheIsCleared(): void
+    public function testClearRestoresFreshHashesForSubsequentStores(): void
     {
-        $cacheDirectory      = $this->createTempDirectory();
-        $sourceFile          = $cacheDirectory . '/Foo.php';
-        $fileHashCache       = new FileHashCache();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, '', '', $fileHashCache);
+        $cacheDirectory = $this->createTempDirectory();
+        // The source file must live outside the cache directory: clear() wipes
+        // the cache directory, and the source must survive it.
+        $sourceDirectory     = $this->createTempDirectory();
+        $sourceFile          = $sourceDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, '', '', new FileHashCache());
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -1192,14 +1194,20 @@ final class AnalysisResultCacheTest extends TestCase
             file_put_contents($sourceFile, '<?php class Foo { public function changed(): void {} }');
 
             // Hashes are memoised for the lifetime of the run, so the stale
-            // entry still hits until the hash cache is cleared (the --fix flow).
+            // entry still hits until the cache is cleared (the --fix flow).
             $this->assertNotNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
 
-            $fileHashCache->clear();
+            $analysisResultCache->clear();
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
-            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+            // A next-run instance hashes the changed content anew; it only hits
+            // if the post-clear store recorded fresh hashes, not memoised ones.
+            $nextRunCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+            $this->assertNotNull($nextRunCache->loadClassNodes($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
+            $this->removeTempDirectory($sourceDirectory);
             $this->removeTempDirectory($cacheDirectory);
         }
     }

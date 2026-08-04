@@ -35,7 +35,7 @@ final class FileHashCacheTest extends TestCase
     {
         $fileHashCache = new FileHashCache();
 
-        self::assertSame((string) hash_file('xxh128', $this->file), $fileHashCache->hash($this->file));
+        $this->assertSame((string) hash_file('xxh128', $this->file), $fileHashCache->hash($this->file));
     }
 
     public function testHashIsMemoisedUntilCleared(): void
@@ -45,19 +45,19 @@ final class FileHashCacheTest extends TestCase
 
         file_put_contents($this->file, '<?php echo "changed";');
 
-        self::assertSame($originalHash, $fileHashCache->hash($this->file));
+        $this->assertSame($originalHash, $fileHashCache->hash($this->file));
 
         $fileHashCache->clear();
 
         $changedHash = $fileHashCache->hash($this->file);
-        self::assertNotSame($originalHash, $changedHash);
-        self::assertSame((string) hash_file('xxh128', $this->file), $changedHash);
+        $this->assertNotSame($originalHash, $changedHash);
+        $this->assertSame((string) hash_file('xxh128', $this->file), $changedHash);
     }
 
     public function testMissingFileHashesToEmptyString(): void
     {
         $fileHashCache = new FileHashCache();
 
-        self::assertSame('', @$fileHashCache->hash($this->file . '.missing'));
+        $this->assertSame('', @$fileHashCache->hash($this->file . '.missing'));
     }
 }
