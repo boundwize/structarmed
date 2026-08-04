@@ -35,6 +35,8 @@ final class ColorSupport
             return false;
         }
 
+        // FORCE_COLOR=0 disables color entirely, unlike CLICOLOR_FORCE=0
+        // which only means "don't force" and falls through to detection.
         if (getenv('FORCE_COLOR') === '0') {
             return false;
         }
