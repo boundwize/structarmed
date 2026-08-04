@@ -95,8 +95,6 @@ Each file is applied at most once, even when imported from multiple places. Use 
 
 `import()` throws a `RuntimeException` when the file does not exist or does not return a callable, so misconfigurations are caught immediately.
 
-Imported files participate in [cache invalidation](../cache/#cache-invalidation): changing any imported file invalidates the analysis cache, exactly like changing `structarmed.php` itself.
-
 ## Skipping Paths And Rules
 
 Inside `skip()`, string entries skip files or directories unless they match a registered rule key.
