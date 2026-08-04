@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use function getenv;
+use function in_array;
 use function stream_isatty;
 
 use const STDOUT;
@@ -34,14 +35,14 @@ final class ColorSupport
             return false;
         }
 
-        $forceColor = getenv('FORCE_COLOR');
-        if ($forceColor !== false && $forceColor !== '') {
-            return $forceColor !== '0';
+        if (getenv('FORCE_COLOR') === '0') {
+            return false;
         }
 
-        $cliColorForce = getenv('CLICOLOR_FORCE');
-        if ($cliColorForce !== false && $cliColorForce !== '' && $cliColorForce !== '0') {
-            return true;
+        foreach (['FORCE_COLOR', 'CLICOLOR_FORCE'] as $forceVariable) {
+            if (! in_array(getenv($forceVariable), [false, '', '0'], true)) {
+                return true;
+            }
         }
 
         if (getenv('CLICOLOR') === '0') {

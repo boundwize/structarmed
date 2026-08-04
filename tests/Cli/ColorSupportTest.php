@@ -85,6 +85,16 @@ final class ColorSupportTest extends TestCase
         );
     }
 
+    public function testDetectReturnsFalseWhenForceColorZeroTakesPrecedenceOverCliColorForce(): void
+    {
+        $this->withEnvironment(
+            ['FORCE_COLOR' => '0', 'CLICOLOR_FORCE' => '1'],
+            function (): void {
+                $this->assertFalse(ColorSupport::detect());
+            }
+        );
+    }
+
     public function testDetectIgnoresEmptyForceColor(): void
     {
         $this->withEnvironment(
