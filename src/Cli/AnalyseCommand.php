@@ -107,7 +107,10 @@ final readonly class AnalyseCommand
 
         $start                        = microtime(true);
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
-        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $importedConfigFiles          = $architecture->getImportedFiles();
+        $configHash                   = $analysisCacheMetadataFactory->configHash(
+            [$configFile, ...$importedConfigFiles]
+        );
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,
@@ -123,7 +126,13 @@ final readonly class AnalyseCommand
         }
 
         $files           = $analyser->filesForAnalysis($architecture, $scanPaths);
-        $metadata        = $analysisCacheMetadataFactory->metadata($basePath, $configFile, $scanPaths, $files);
+        $metadata        = $analysisCacheMetadataFactory->metadata(
+            $basePath,
+            $configFile,
+            $scanPaths,
+            $files,
+            $importedConfigFiles
+        );
         $cacheKey        = $analysisCacheMetadataFactory->key($metadata);
         $progress        = $reportType === 'console' && ! isset($options['no-progress'])
             ? $this->progressHandler ?? new ConsoleProgressBar()
@@ -170,7 +179,8 @@ final readonly class AnalyseCommand
                     $basePath,
                     $configFile,
                     $scanPaths,
-                    $files
+                    $files,
+                    $importedConfigFiles
                 );
                 $cacheKey                          = $analysisCacheMetadataFactory->key($metadata);
                 $unfilteredRuleViolationCollection = $analyser->analyse(

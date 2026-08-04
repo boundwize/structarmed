@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Version;
 use Composer\InstalledVersions;
 
 use function array_map;
+use function count;
 use function file_exists;
 use function hash;
 use function hash_file;
@@ -23,17 +24,23 @@ final readonly class AnalysisCacheMetadataFactory
     /**
      * @param list<string> $scanPaths
      * @param list<string> $files
+     * @param list<string> $importedConfigFiles
      * @return array<string, mixed>
      */
-    public function metadata(string $basePath, string $configPath, array $scanPaths, array $files): array
-    {
+    public function metadata(
+        string $basePath,
+        string $configPath,
+        array $scanPaths,
+        array $files,
+        array $importedConfigFiles = []
+    ): array {
         sort($files);
 
         return [
             'version'                      => 3,
             'basePath'                     => $basePath,
             'configPath'                   => $configPath,
-            'configHash'                   => $this->fileHash($configPath),
+            'configHash'                   => $this->configHash([$configPath, ...$importedConfigFiles]),
             'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash(),
             'composerHash'                 => $this->composerHash($basePath),
             'scanPaths'                    => $scanPaths,
@@ -58,6 +65,24 @@ final readonly class AnalysisCacheMetadataFactory
     public function fileHash(string $path): string
     {
         return (string) hash_file('xxh128', $path);
+    }
+
+    /**
+     * Combined hash of the entry config plus every imported configuration file,
+     * so a change to any file the configuration is composed from invalidates
+     * the cache. A single file hashes to the same value as fileHash().
+     *
+     * @param list<string> $configFiles
+     */
+    public function configHash(array $configFiles): string
+    {
+        $hashes = array_map($this->fileHash(...), $configFiles);
+
+        if (count($hashes) === 1) {
+            return $hashes[0];
+        }
+
+        return hash('xxh128', json_encode($hashes, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
     }
 
     /**

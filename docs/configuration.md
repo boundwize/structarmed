@@ -44,6 +44,59 @@ return Architecture::define()
     );
 ```
 
+## Importing Configuration Files
+
+Split a large configuration into focused files with `import()`. Each imported file returns a callable that receives the `Architecture` builder:
+
+```php
+<?php
+
+// structarmed.php
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->import(__DIR__ . '/config/layers.php')
+    ->import(__DIR__ . '/config/rules.php')
+    ->import(__DIR__ . '/config/skips.php');
+```
+
+```php
+<?php
+
+// config/layers.php
+use Boundwize\StructArmed\Architecture;
+
+return static function (Architecture $architecture): void {
+    $architecture
+        ->layer('Domain', 'src/Domain/')
+        ->layer('Application', 'src/Application/')
+        ->layer('Infrastructure', 'src/Infrastructure/');
+};
+```
+
+Because every imported file modifies the same builder, ordering and overrides behave exactly as if the calls were written inline in `structarmed.php`.
+
+Imports may nest — an imported file can import further files:
+
+```php
+<?php
+
+// config/rules.php
+use Boundwize\StructArmed\Architecture;
+
+return static function (Architecture $architecture): void {
+    $architecture
+        ->import(__DIR__ . '/rules/ddd.php')
+        ->import(__DIR__ . '/rules/quality.php');
+};
+```
+
+Each file is applied at most once, even when imported from multiple places. Use `imports([...])` to import several files in one call.
+
+`import()` throws a `RuntimeException` when the file does not exist or does not return a callable, so misconfigurations are caught immediately.
+
+Imported files participate in [cache invalidation](../cache/#cache-invalidation): changing any imported file invalidates the analysis cache, exactly like changing `structarmed.php` itself.
+
 ## Skipping Paths And Rules
 
 Inside `skip()`, string entries skip files or directories unless they match a registered rule key.

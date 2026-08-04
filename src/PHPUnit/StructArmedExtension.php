@@ -42,7 +42,10 @@ final class StructArmedExtension implements Extension
         $architecture = ConfigLoader::load($configFile);
 
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
-        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $importedConfigFiles          = $architecture->getImportedFiles();
+        $configHash                   = $analysisCacheMetadataFactory->configHash(
+            [$configFile, ...$importedConfigFiles]
+        );
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,
@@ -62,7 +65,7 @@ final class StructArmedExtension implements Extension
         );
 
         $files    = $analyser->filesForAnalysis($architecture);
-        $metadata = $analysisCacheMetadataFactory->metadata($basePath, $configFile, [], $files);
+        $metadata = $analysisCacheMetadataFactory->metadata($basePath, $configFile, [], $files, $importedConfigFiles);
         $cacheKey = $analysisCacheMetadataFactory->key($metadata);
 
         $start                   = microtime(true);

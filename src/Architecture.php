@@ -8,10 +8,14 @@ use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
+use RuntimeException;
 
 use function array_filter;
+use function array_keys;
 use function array_merge;
+use function is_callable;
 use function is_int;
+use function realpath;
 use function sprintf;
 
 /**
@@ -95,6 +99,15 @@ final class Architecture
 
     private ?string $baseline = null;
 
+    /**
+     * Imported configuration files, keyed by resolved absolute path.
+     * Tracked so the analysis cache can fingerprint every file the
+     * configuration is composed from, not just the entry config.
+     *
+     * @var array<string, true>
+     */
+    private array $importedFiles = [];
+
     private function __construct()
     {
     }
@@ -102,6 +115,66 @@ final class Architecture
     public static function define(): self
     {
         return new self();
+    }
+
+    // -------------------------------------------------------------------------
+    // Configuration composition
+    // -------------------------------------------------------------------------
+
+    /**
+     * Import a configuration file that returns a callable receiving this builder:
+     *
+     *   return static function (Architecture $architecture): void {
+     *       $architecture->layer('Domain', 'src/Domain/');
+     *   };
+     *
+     * Imports may nest (an imported file may import further files); each file is
+     * applied at most once. Imported files are exposed via getImportedFiles() so
+     * they participate in analysis cache invalidation.
+     *
+     * @throws RuntimeException When the file does not exist or does not return a callable.
+     */
+    public function import(string $file): self
+    {
+        $resolvedFile = realpath($file);
+
+        if ($resolvedFile === false) {
+            throw new RuntimeException(sprintf(
+                'Architecture import [%s] was not found.',
+                $file
+            ));
+        }
+
+        if (isset($this->importedFiles[$resolvedFile])) {
+            return $this;
+        }
+
+        $this->importedFiles[$resolvedFile] = true;
+
+        $configurator = require $resolvedFile;
+
+        if (! is_callable($configurator)) {
+            throw new RuntimeException(sprintf(
+                'Architecture import [%s] must return a callable.',
+                $resolvedFile
+            ));
+        }
+
+        $configurator($this);
+
+        return $this;
+    }
+
+    /**
+     * @param string|list<string> $files
+     */
+    public function imports(string|array $files): self
+    {
+        foreach ((array) $files as $file) {
+            $this->import($file);
+        }
+
+        return $this;
     }
 
     // -------------------------------------------------------------------------
@@ -394,6 +467,17 @@ final class Architecture
     public function getSkippedRuleKeys(): array
     {
         return $this->skippedRuleKeys;
+    }
+
+    /**
+     * Resolved absolute paths of all imported configuration files,
+     * in import order.
+     *
+     * @return list<string>
+     */
+    public function getImportedFiles(): array
+    {
+        return array_keys($this->importedFiles);
     }
 
     public function getCacheDirectory(): ?string
