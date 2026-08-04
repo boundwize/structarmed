@@ -12,6 +12,19 @@ use const STDOUT;
 final class ColorSupport
 {
     /**
+     * CI environments that render ANSI colors in their build logs.
+     */
+    private const CI_ENVIRONMENT_VARIABLES = [
+        'GITHUB_ACTIONS',
+        'GITLAB_CI',
+        'CIRCLECI',
+        'TRAVIS',
+        'BUILDKITE',
+        'APPVEYOR',
+        'TF_BUILD',
+    ];
+
+    /**
      * @param resource|null $stream
      */
     public static function detect(mixed $stream = null): bool
@@ -24,7 +37,26 @@ final class ColorSupport
             return true;
         }
 
-        if (getenv('GITHUB_ACTIONS') !== false) {
+        $cliColorForce = getenv('CLICOLOR_FORCE');
+        if ($cliColorForce !== false && $cliColorForce !== '0') {
+            return true;
+        }
+
+        if (getenv('CLICOLOR') === '0') {
+            return false;
+        }
+
+        foreach (self::CI_ENVIRONMENT_VARIABLES as $ciEnvironmentVariable) {
+            if (getenv($ciEnvironmentVariable) !== false) {
+                return true;
+            }
+        }
+
+        if (getenv('TERM') === 'dumb') {
+            return false;
+        }
+
+        if (getenv('ANSICON') !== false || getenv('ConEmuANSI') === 'ON') {
             return true;
         }
 

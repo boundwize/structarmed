@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Cli;
 use Boundwize\StructArmed\Cli\ColorSupport;
 use Boundwize\StructArmed\Tests\Support\InMemoryStreamTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function getenv;
@@ -17,12 +18,28 @@ final class ColorSupportTest extends TestCase
 {
     use InMemoryStreamTrait;
 
+    private const MANAGED_ENVIRONMENT_VARIABLES = [
+        'NO_COLOR',
+        'FORCE_COLOR',
+        'CLICOLOR_FORCE',
+        'CLICOLOR',
+        'GITHUB_ACTIONS',
+        'GITLAB_CI',
+        'CIRCLECI',
+        'TRAVIS',
+        'BUILDKITE',
+        'APPVEYOR',
+        'TF_BUILD',
+        'TERM',
+        'ANSICON',
+        'ConEmuANSI',
+    ];
+
     public function testDetectReturnsFalseWhenNoColorIsSet(): void
     {
         $this->withEnvironment(
-            noColor: '1',
-            forceColor: null,
-            callback: function (): void {
+            ['NO_COLOR' => '1'],
+            function (): void {
                 $this->assertFalse(ColorSupport::detect());
             }
         );
@@ -31,9 +48,8 @@ final class ColorSupportTest extends TestCase
     public function testDetectReturnsFalseWhenNoColorTakesPrecedenceOverForceColor(): void
     {
         $this->withEnvironment(
-            noColor: '1',
-            forceColor: '1',
-            callback: function (): void {
+            ['NO_COLOR' => '1', 'FORCE_COLOR' => '1'],
+            function (): void {
                 $this->assertFalse(ColorSupport::detect());
             }
         );
@@ -42,22 +58,108 @@ final class ColorSupportTest extends TestCase
     public function testDetectReturnsTrueWhenForceColorIsSet(): void
     {
         $this->withEnvironment(
-            noColor: null,
-            forceColor: '1',
-            callback: function (): void {
+            ['FORCE_COLOR' => '1'],
+            function (): void {
                 $this->assertTrue(ColorSupport::detect());
             }
         );
     }
 
-    public function testDetectReturnsTrueOnGithubActions(): void
+    public function testDetectReturnsTrueWhenCliColorForceIsSet(): void
     {
         $this->withEnvironment(
-            noColor: null,
-            forceColor: null,
-            callback: function (): void {
-                putenv('GITHUB_ACTIONS=true');
+            ['CLICOLOR_FORCE' => '1'],
+            function (): void {
                 $this->assertTrue(ColorSupport::detect());
+            }
+        );
+    }
+
+    public function testDetectIgnoresCliColorForceZero(): void
+    {
+        $this->withEnvironment(
+            ['CLICOLOR_FORCE' => '0'],
+            function (): void {
+                $stream = $this->openMemoryStream();
+
+                $this->assertFalse(ColorSupport::detect($stream));
+            }
+        );
+    }
+
+    public function testDetectReturnsFalseWhenCliColorIsZero(): void
+    {
+        $this->withEnvironment(
+            ['CLICOLOR' => '0'],
+            function (): void {
+                $this->assertFalse(ColorSupport::detect());
+            }
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideCiEnvironmentVariable(): iterable
+    {
+        yield 'GitHub Actions' => ['GITHUB_ACTIONS'];
+        yield 'GitLab CI' => ['GITLAB_CI'];
+        yield 'CircleCI' => ['CIRCLECI'];
+        yield 'Travis CI' => ['TRAVIS'];
+        yield 'Buildkite' => ['BUILDKITE'];
+        yield 'AppVeyor' => ['APPVEYOR'];
+        yield 'Azure Pipelines' => ['TF_BUILD'];
+    }
+
+    #[DataProvider('provideCiEnvironmentVariable')]
+    public function testDetectReturnsTrueOnCiEnvironment(string $ciEnvironmentVariable): void
+    {
+        $this->withEnvironment(
+            [$ciEnvironmentVariable => 'true'],
+            function (): void {
+                $this->assertTrue(ColorSupport::detect());
+            }
+        );
+    }
+
+    public function testDetectReturnsFalseOnDumbTerminal(): void
+    {
+        $this->withEnvironment(
+            ['TERM' => 'dumb'],
+            function (): void {
+                $this->assertFalse(ColorSupport::detect());
+            }
+        );
+    }
+
+    public function testDetectReturnsTrueWhenAnsiconIsSet(): void
+    {
+        $this->withEnvironment(
+            ['ANSICON' => '1'],
+            function (): void {
+                $this->assertTrue(ColorSupport::detect());
+            }
+        );
+    }
+
+    public function testDetectReturnsTrueWhenConEmuAnsiIsOn(): void
+    {
+        $this->withEnvironment(
+            ['ConEmuANSI' => 'ON'],
+            function (): void {
+                $this->assertTrue(ColorSupport::detect());
+            }
+        );
+    }
+
+    public function testDetectIgnoresConEmuAnsiOff(): void
+    {
+        $this->withEnvironment(
+            ['ConEmuANSI' => 'OFF'],
+            function (): void {
+                $stream = $this->openMemoryStream();
+
+                $this->assertFalse(ColorSupport::detect($stream));
             }
         );
     }
@@ -65,9 +167,8 @@ final class ColorSupportTest extends TestCase
     public function testDetectFallsBackToStreamIsatty(): void
     {
         $this->withEnvironment(
-            noColor: null,
-            forceColor: null,
-            callback: function (): void {
+            [],
+            function (): void {
                 $stream = $this->openMemoryStream();
 
                 $this->assertFalse(ColorSupport::detect($stream));
@@ -91,24 +192,25 @@ final class ColorSupportTest extends TestCase
     }
 
     /**
-     * @param callable(): void $callback
+     * @param array<string, string> $environment
+     * @param callable(): void      $callback
      */
-    private function withEnvironment(?string $noColor, ?string $forceColor, callable $callback): void
+    private function withEnvironment(array $environment, callable $callback): void
     {
-        $previousNoColor       = getenv('NO_COLOR');
-        $previousForceColor    = getenv('FORCE_COLOR');
-        $previousGithubActions = getenv('GITHUB_ACTIONS');
+        $previousValues = [];
 
-        $this->setEnvironment('NO_COLOR', $noColor);
-        $this->setEnvironment('FORCE_COLOR', $forceColor);
-        $this->setEnvironment('GITHUB_ACTIONS', null);
+        foreach (self::MANAGED_ENVIRONMENT_VARIABLES as $name) {
+            $previousValues[$name] = getenv($name);
+
+            $this->setEnvironment($name, $environment[$name] ?? null);
+        }
 
         try {
             $callback();
         } finally {
-            $this->setEnvironment('NO_COLOR', $previousNoColor === false ? null : $previousNoColor);
-            $this->setEnvironment('FORCE_COLOR', $previousForceColor === false ? null : $previousForceColor);
-            $this->setEnvironment('GITHUB_ACTIONS', $previousGithubActions === false ? null : $previousGithubActions);
+            foreach ($previousValues as $name => $previousValue) {
+                $this->setEnvironment($name, $previousValue === false ? null : $previousValue);
+            }
         }
     }
 
