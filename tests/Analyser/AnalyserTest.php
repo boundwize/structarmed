@@ -987,6 +987,15 @@ final class AnalyserTest extends TestCase
     {
         $basePath = $this->makeTempProject([
             'module/Blog/Controller/Post.php'      => '<?php namespace Module\Blog\Controller; final class Post {}',
+            'module/Blog/Controller/PostTest.php'  => <<<'PHP'
+                <?php
+
+                namespace Module\Blog\Controller;
+
+                final class PostTest
+                {
+                }
+                PHP,
             'module/Blog/Model/ModelPost.php'      => '<?php namespace Module\Blog\Model; final class ModelPost {}',
             'module/Blog/View/Page.php'            => <<<'PHP'
                 <?php
