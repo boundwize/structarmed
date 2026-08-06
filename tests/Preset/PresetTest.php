@@ -315,6 +315,43 @@ final class PresetTest extends TestCase
             viewMaxComplexity: 2,
         )->apply($architecture);
 
+        $this->assertSame(
+            [
+                'Controller' => [
+                    'src/Controller/',
+                    'src/Controllers/',
+                    'app/Controllers/',
+                    'app/Http/Controllers/',
+                ],
+                'Model'      => [
+                    'src/Model/',
+                    'src/Models/',
+                    'app/Models/',
+                ],
+                'View'       => 'src/View/',
+                'Service'    => 'src/Service/',
+            ],
+            $architecture->getLayers()
+        );
+        $this->assertSame([
+            'Controller' => [
+                'pattern'        => '/(?:^|\\\\)Controllers?(?:\\\\|$)/',
+                'excludePattern' => null,
+            ],
+            'Model'      => [
+                'pattern'        => '/(?:^|\\\\)Models?(?:\\\\|$)/',
+                'excludePattern' => null,
+            ],
+            'View'       => [
+                'pattern'        => '/(?:^|\\\\)Views?(?:\\\\|$)/',
+                'excludePattern' => null,
+            ],
+            'Service'    => [
+                'pattern'        => '/(?:^|\\\\)Services?(?:\\\\|$)/',
+                'excludePattern' => null,
+            ],
+        ], $architecture->getLayerPatterns());
+
         $rules = $architecture->getRules();
         $this->assertArrayHasKey(MvcPreset::CONTROLLER_NAME_MUST_END_WITH_CONTROLLER, $rules);
         $this->assertArrayHasKey(MvcPreset::CONTROLLER_MAX_COMPLEXITY, $rules);
@@ -324,5 +361,36 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(MvcPreset::SERVICE_MUST_HAVE_RETURN_TYPES, $rules);
         $this->assertArrayHasKey('mvc.safety.controller_no_dd', $rules);
         $this->assertArrayHasKey('mvc.safety.service_no_exit', $rules);
+    }
+
+    public function testMvcPresetDoesNotReplaceConfiguredLayersOrPatterns(): void
+    {
+        $architecture = Architecture::define()
+            ->layer('Controller', 'app/Http/Controllers/')
+            ->layerPattern('Controller', '/^Custom\\\\Http\\\\Controller\\\\/');
+
+        Preset::MVC()->apply($architecture);
+
+        $this->assertSame(
+            [
+                'Controller' => 'app/Http/Controllers/',
+                'Model'      => [
+                    'src/Model/',
+                    'src/Models/',
+                    'app/Models/',
+                ],
+                'View'       => 'src/View/',
+                'Service'    => 'src/Service/',
+            ],
+            $architecture->getLayers()
+        );
+        $this->assertSame(
+            '/^Custom\\\\Http\\\\Controller\\\\/',
+            $architecture->getLayerPatterns()['Controller']['pattern']
+        );
+        $this->assertSame(
+            '/(?:^|\\\\)Models?(?:\\\\|$)/',
+            $architecture->getLayerPatterns()['Model']['pattern']
+        );
     }
 }

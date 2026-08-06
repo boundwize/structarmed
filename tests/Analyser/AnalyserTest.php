@@ -13,6 +13,7 @@ use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
@@ -924,6 +925,110 @@ final class AnalyserTest extends TestCase
             0,
             $ruleViolationCollection->forRule('ddd.repository.implementation_in_infrastructure')
         );
+    }
+
+    public function testMvcPresetReportsViolationsAcrossConventionalDefaultLayerPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Controller/Dashboard.php'  => <<<'PHP'
+                <?php
+
+                namespace App\Controller;
+
+                final class Dashboard
+                {
+                }
+                PHP,
+            'src/Controllers/Account.php'   => '<?php namespace App\Controllers; final class Account {}',
+            'app/Controllers/Report.php'    => '<?php namespace App\Controllers; final class Report {}',
+            'app/Http/Controllers/Home.php' => <<<'PHP'
+                <?php
+
+                namespace App\Http\Controllers;
+
+                final class Home
+                {
+                }
+                PHP,
+            'src/Models/ModelOrder.php'     => '<?php namespace App\Models; final class ModelOrder {}',
+            'app/Models/ModelUser.php'      => '<?php namespace App\Models; final class ModelUser {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::MVC());
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, analyserOptions: AnalyserOptions::sequential());
+
+        $controllerClassNames = array_map(
+            static fn(RuleViolation $violation): string => $violation->className,
+            $ruleViolationCollection->forRule(MvcPreset::CONTROLLER_NAME_MUST_END_WITH_CONTROLLER)
+        );
+        $modelClassNames      = array_map(
+            static fn(RuleViolation $violation): string => $violation->className,
+            $ruleViolationCollection->forRule(MvcPreset::MODEL_NAME_MUST_NOT_START_WITH_MODEL)
+        );
+        sort($controllerClassNames);
+        sort($modelClassNames);
+
+        $this->assertSame([
+            'App\\Controller\\Dashboard',
+            'App\\Controllers\\Account',
+            'App\\Controllers\\Report',
+            'App\\Http\\Controllers\\Home',
+        ], $controllerClassNames);
+        $this->assertSame([
+            'App\\Models\\ModelOrder',
+            'App\\Models\\ModelUser',
+        ], $modelClassNames);
+    }
+
+    public function testMvcPresetLayerPatternsClassifyModularNamespacesWithinSourceScope(): void
+    {
+        $basePath = $this->makeTempProject([
+            'module/Blog/Controller/Post.php'      => '<?php namespace Module\Blog\Controller; final class Post {}',
+            'module/Blog/Model/ModelPost.php'      => '<?php namespace Module\Blog\Model; final class ModelPost {}',
+            'module/Blog/View/Page.php'            => <<<'PHP'
+                <?php
+
+                namespace Module\Blog\View;
+
+                final class Page
+                {
+                    public function render(): string
+                    {
+                        return $_GET['page'];
+                    }
+                }
+                PHP,
+            'module/Blog/Service/OrderService.php' => <<<'PHP'
+                <?php
+
+                namespace Module\Blog\Service;
+
+                class OrderService
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'module/')
+            ->withPreset(Preset::MVC());
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, analyserOptions: AnalyserOptions::sequential());
+
+        $this->assertCount(
+            1,
+            $ruleViolationCollection->forRule(MvcPreset::CONTROLLER_NAME_MUST_END_WITH_CONTROLLER)
+        );
+        $this->assertCount(
+            1,
+            $ruleViolationCollection->forRule(MvcPreset::MODEL_NAME_MUST_NOT_START_WITH_MODEL)
+        );
+        $this->assertCount(1, $ruleViolationCollection->forRule(MvcPreset::VIEW_NO_SUPERGLOBALS));
+        $this->assertCount(1, $ruleViolationCollection->forRule(MvcPreset::SERVICE_MUST_BE_FINAL));
     }
 
     public function testAnalyserCanLimitScanToSpecificFile(): void
