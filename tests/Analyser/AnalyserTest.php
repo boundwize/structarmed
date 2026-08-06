@@ -961,11 +961,11 @@ final class AnalyserTest extends TestCase
             ->analyse($architecture, analyserOptions: AnalyserOptions::sequential());
 
         $controllerClassNames = array_map(
-            static fn(RuleViolation $violation): string => $violation->className,
+            static fn(RuleViolation $ruleViolation): string => $ruleViolation->className,
             $ruleViolationCollection->forRule(MvcPreset::CONTROLLER_NAME_MUST_END_WITH_CONTROLLER)
         );
         $modelClassNames      = array_map(
-            static fn(RuleViolation $violation): string => $violation->className,
+            static fn(RuleViolation $ruleViolation): string => $ruleViolation->className,
             $ruleViolationCollection->forRule(MvcPreset::MODEL_NAME_MUST_NOT_START_WITH_MODEL)
         );
         sort($controllerClassNames);
