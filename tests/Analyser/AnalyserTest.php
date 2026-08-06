@@ -1010,10 +1010,19 @@ final class AnalyserTest extends TestCase
                 {
                 }
                 PHP,
+            'tests/AlbumTest/Controller/Fake.php'  => <<<'PHP'
+                <?php
+
+                namespace AlbumTest\Controller;
+
+                final class Fake
+                {
+                }
+                PHP,
         ]);
 
         $architecture = Architecture::define()
-            ->layer('Source', 'module/')
+            ->layer('Source', ['module/', 'tests/'])
             ->withPreset(Preset::MVC());
 
         $ruleViolationCollection = (new Analyser($basePath))

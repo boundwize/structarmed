@@ -149,21 +149,22 @@ final readonly class MvcPreset implements PresetInterface
 
     private function applyDefaultLayerPatterns(Architecture $architecture): self
     {
-        $layers          = $architecture->getLayers();
-        $layerPatterns   = $architecture->getLayerPatterns();
-        $defaultPatterns = [
+        $layers               = $architecture->getLayers();
+        $layerPatterns        = $architecture->getLayerPatterns();
+        $defaultPatterns      = [
             'Controller' => '/(?:^|\\\\)Controllers?(?:\\\\|$)/',
             'Model'      => '/(?:^|\\\\)Models?(?:\\\\|$)/',
             'View'       => '/(?:^|\\\\)Views?(?:\\\\|$)/',
             'Service'    => '/(?:^|\\\\)Services?(?:\\\\|$)/',
         ];
+        $testNamespacePattern = '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/';
 
         foreach ($defaultPatterns as $layer => $pattern) {
             if (isset($layers[$layer]) || isset($layerPatterns[$layer])) {
                 continue;
             }
 
-            $architecture->layerPattern($layer, $pattern);
+            $architecture->layerPattern($layer, $pattern, $testNamespacePattern);
         }
 
         return $this;

@@ -336,19 +336,19 @@ final class PresetTest extends TestCase
         $this->assertSame([
             'Controller' => [
                 'pattern'        => '/(?:^|\\\\)Controllers?(?:\\\\|$)/',
-                'excludePattern' => null,
+                'excludePattern' => '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/',
             ],
             'Model'      => [
                 'pattern'        => '/(?:^|\\\\)Models?(?:\\\\|$)/',
-                'excludePattern' => null,
+                'excludePattern' => '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/',
             ],
             'View'       => [
                 'pattern'        => '/(?:^|\\\\)Views?(?:\\\\|$)/',
-                'excludePattern' => null,
+                'excludePattern' => '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/',
             ],
             'Service'    => [
                 'pattern'        => '/(?:^|\\\\)Services?(?:\\\\|$)/',
-                'excludePattern' => null,
+                'excludePattern' => '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/',
             ],
         ], $architecture->getLayerPatterns());
 
