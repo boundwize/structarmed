@@ -107,6 +107,8 @@ final readonly class MvcPreset implements PresetInterface
     public function apply(Architecture $architecture): void
     {
         $this
+            ->applyDefaultLayerPatterns($architecture)
+            ->applyDefaultLayers($architecture)
             ->applyLayerRules($architecture)
             ->applyControllerRules($architecture)
             ->applyModelRules($architecture)
@@ -115,26 +117,79 @@ final readonly class MvcPreset implements PresetInterface
             ->applySafetyRules($architecture);
     }
 
+    private function applyDefaultLayers(Architecture $architecture): self
+    {
+        $layers        = $architecture->getLayers();
+        $defaultLayers = [
+            'Controller' => [
+                'src/Controller/',
+                'src/Controllers/',
+                'app/Controllers/',
+                'app/Http/Controllers/',
+            ],
+            'Model'      => [
+                'src/Model/',
+                'src/Models/',
+                'app/Models/',
+            ],
+            'View'       => 'src/View/',
+            'Service'    => 'src/Service/',
+        ];
+
+        foreach ($defaultLayers as $layer => $path) {
+            if (isset($layers[$layer])) {
+                continue;
+            }
+
+            $architecture->layer($layer, $path);
+        }
+
+        return $this;
+    }
+
+    private function applyDefaultLayerPatterns(Architecture $architecture): self
+    {
+        $layers                      = $architecture->getLayers();
+        $layerPatterns               = $architecture->getLayerPatterns();
+        $defaultPatterns             = [
+            'Controller' => '/(?:^|\\\\)Controllers?(?:\\\\|$)/',
+            'Model'      => '/(?:^|\\\\)Models?(?:\\\\|$)/',
+            'View'       => '/(?:^|\\\\)Views?(?:\\\\|$)/',
+            'Service'    => '/(?:^|\\\\)Services?(?:\\\\|$)/',
+        ];
+        $testNamespaceOrClassPattern = '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/';
+
+        foreach ($defaultPatterns as $layer => $pattern) {
+            if (isset($layers[$layer]) || isset($layerPatterns[$layer])) {
+                continue;
+            }
+
+            $architecture->layerPattern($layer, $pattern, $testNamespaceOrClassPattern);
+        }
+
+        return $this;
+    }
+
     private function applyLayerRules(Architecture $architecture): self
     {
         $architecture->rule(
             self::MODEL_NOT_DEPEND_CONTROLLER,
-            new MayNotDependOnRule(from: 'Model', to: 'Controller', toPath: 'Controller')
+            new MayNotDependOnRule(from: 'Model', to: 'Controller')
         );
 
         $architecture->rule(
             self::MODEL_NOT_DEPEND_VIEW,
-            new MayNotDependOnRule(from: 'Model', to: 'View', toPath: 'View')
+            new MayNotDependOnRule(from: 'Model', to: 'View')
         );
 
         $architecture->rule(
             self::VIEW_NOT_DEPEND_CONTROLLER,
-            new MayNotDependOnRule(from: 'View', to: 'Controller', toPath: 'Controller')
+            new MayNotDependOnRule(from: 'View', to: 'Controller')
         );
 
         $architecture->rule(
             self::VIEW_NOT_DEPEND_MODEL,
-            new MayNotDependOnRule(from: 'View', to: 'Model', toPath: 'Model')
+            new MayNotDependOnRule(from: 'View', to: 'Model')
         );
 
         return $this;
