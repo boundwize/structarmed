@@ -43,7 +43,6 @@ use function trim;
 
 use const T_INLINE_HTML;
 use const T_OPEN_TAG;
-use const T_OPEN_TAG_WITH_ECHO;
 
 final class FileAnalysisProvider
 {
@@ -243,10 +242,6 @@ final class FileAnalysisProvider
 
     private function invalidPhpTagLineForToken(int $id, string $text, int $tokenLine): ?int
     {
-        if ($id === T_OPEN_TAG_WITH_ECHO) {
-            return null;
-        }
-
         if ($id === T_OPEN_TAG) {
             return preg_match('/^<\?php(?:\s|$)/', $text) === 1 ? null : $tokenLine;
         }
