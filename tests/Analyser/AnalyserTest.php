@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Preset\Preset;
@@ -205,7 +206,7 @@ final class AnalyserTest extends TestCase
             'src/BaseHandler.php'    => '<?php namespace App; class BaseHandler {}',
             'src/HandlerFactory.php' => $factory,
         ]);
-        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
 
         $architecture = Architecture::define()
             ->layer('Source', 'src/')
@@ -234,7 +235,7 @@ final class AnalyserTest extends TestCase
             'src/BaseHandler.php'    => '<?php namespace App; class BaseHandler {}',
             'src/HandlerFactory.php' => $factory,
         ]);
-        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
 
         // A file-analysis rule makes the warm run load class nodes through the
         // file-analysis cache path, which must also restore anonymous class nodes.
@@ -285,7 +286,7 @@ final class AnalyserTest extends TestCase
             'src/OrderHandler.php'   => '<?php namespace App; final class OrderHandler extends BaseHandler {}',
             'src/PaymentHandler.php' => '<?php namespace App; class PaymentHandler {}',
         ]);
-        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
 
         $architecture = Architecture::define()
             ->layer('Source', 'src/')
@@ -310,7 +311,7 @@ final class AnalyserTest extends TestCase
             'src/BaseHandler.php'  => '<?php namespace App; class BaseHandler {}',
             'src/OrderHandler.php' => '<?php namespace App; final class OrderHandler extends BaseHandler {}',
         ]);
-        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
 
         $architecture = Architecture::define()
             ->layer('Source', 'src/')
@@ -1287,7 +1288,7 @@ final class AnalyserTest extends TestCase
             'src/Foo.php' => '<?php namespace App; final class Foo {}',
             'src/Bar.php' => '<?php namespace App; final class Bar {}',
         ]);
-        $analysisResultCache = new AnalysisResultCache($basePath, 'cache');
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
         $progress            = new class implements ProgressHandlerInterface {
             public int $total = 0;
 

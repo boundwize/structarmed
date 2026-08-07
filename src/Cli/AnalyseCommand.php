@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
@@ -106,11 +107,13 @@ final readonly class AnalyseCommand
         }
 
         $start                        = microtime(true);
-        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+        $fileHashProvider             = new FileHashProvider();
+        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
         $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,
+            $fileHashProvider,
             $architecture->getCacheDirectory(),
             $configHash,
             $composerGeneratedVersionHash
