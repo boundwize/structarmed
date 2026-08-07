@@ -114,9 +114,8 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
         $offset = 0;
 
         foreach (token_get_all($code) as $token) {
-            $text = is_array($token) ? $token[1] : $token;
-
             if (is_array($token)) {
+                $text        = $token[1];
                 $replacement = $this->replacementForInvalidTag($token[0], $text, $token[2], $line);
 
                 if ($replacement !== null) {
@@ -127,6 +126,8 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
                         . $this->normalizedTagReplacement($replacement['text'], substr($code, $afterOffset, 1))
                         . substr($code, $afterOffset);
                 }
+            } else {
+                $text = $token;
             }
 
             $offset += strlen($text);
