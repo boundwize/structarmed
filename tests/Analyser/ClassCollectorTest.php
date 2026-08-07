@@ -704,6 +704,28 @@ PHP;
         $this->assertContains('list', $classNode->languageConstructs);
     }
 
+    public function testEarlyReturnsPreserveChildNodeAnalysis(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            class Foo
+            {
+                public function run(): void
+                {
+                    if (isset($_GET['enabled'])) {
+                        process(new \DateTimeImmutable());
+                    }
+                }
+            }
+            PHP);
+
+        $this->assertSame(2, $classNode->methods[0]->cyclomaticComplexity);
+        $this->assertContains('isset', $classNode->languageConstructs);
+        $this->assertContains('$_GET', $classNode->superglobals);
+        $this->assertContains('process', $classNode->functionCalls);
+        $this->assertContains('DateTimeImmutable', $classNode->dependencies);
+    }
+
     public function testCalculatesCyclomaticComplexity(): void
     {
         $code      = <<<'PHP'

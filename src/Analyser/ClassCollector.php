@@ -146,12 +146,16 @@ final class ClassCollector extends NodeVisitorAbstract
     {
         if ($node instanceof Namespace_) {
             $this->currentNamespaceUses = [];
+
+            return null;
         }
 
         if ($node instanceof Use_) {
             foreach ($node->uses as $use) {
                 $this->currentNamespaceUses[] = $use->name->toString();
             }
+
+            return null;
         }
 
         if ($node instanceof GroupUse) {
@@ -160,18 +164,30 @@ final class ClassCollector extends NodeVisitorAbstract
             foreach ($node->uses as $use) {
                 $this->currentNamespaceUses[] = $prefix . '\\' . $use->name->toString();
             }
+
+            return null;
         }
 
-        if ($node instanceof Function_ && isset($node->namespacedName)) {
-            $this->fileFunctions[] = $node->namespacedName->toString();
+        if ($node instanceof Function_) {
+            if (isset($node->namespacedName)) {
+                $this->fileFunctions[] = $node->namespacedName->toString();
+            }
+
+            return null;
         }
 
-        if ($node instanceof ClassLike && $node->name instanceof Identifier) {
-            $this->startClassLikeAnalysis($node);
+        if ($node instanceof ClassLike) {
+            if ($node->name instanceof Identifier) {
+                $this->startClassLikeAnalysis($node);
+            }
+
+            return null;
         }
 
         if ($node instanceof ClassMethod) {
             $this->startMethodAnalysis($node);
+
+            return null;
         }
 
         $this->collectNodeAnalysis($node);
@@ -183,6 +199,8 @@ final class ClassCollector extends NodeVisitorAbstract
     {
         if ($node instanceof ClassMethod) {
             $this->finishMethodAnalysis($node);
+
+            return null;
         }
 
         if (! $node instanceof ClassLike) {
@@ -282,21 +300,24 @@ final class ClassCollector extends NodeVisitorAbstract
             if (! isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
                 $this->addDependency($name);
             }
+
+            return;
         }
 
-        if (
-            $node instanceof FuncCall
-            && $node->name instanceof Name
-        ) {
-            $functionName = $node->name->toLowerString();
+        if ($node instanceof FuncCall) {
+            if ($node->name instanceof Name) {
+                $functionName = $node->name->toLowerString();
 
-            // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
-            // FuncCall instead of Exit_, but remain language constructs
-            if ($functionName === 'exit' || $functionName === 'die') {
-                $this->addLanguageConstruct($functionName);
-            } else {
-                $this->addFunctionCallName($node->name);
+                // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
+                // FuncCall instead of Exit_, but remain language constructs
+                if ($functionName === 'exit' || $functionName === 'die') {
+                    $this->addLanguageConstruct($functionName);
+                } else {
+                    $this->addFunctionCallName($node->name);
+                }
             }
+
+            return;
         }
 
         if ($node instanceof Exit_) {
@@ -305,14 +326,20 @@ final class ClassCollector extends NodeVisitorAbstract
                     ? 'die'
                     : 'exit'
             );
+
+            return;
         }
 
         if ($node instanceof Echo_) {
             $this->addLanguageConstruct('echo');
+
+            return;
         }
 
         if ($node instanceof Print_) {
             $this->addLanguageConstruct('print');
+
+            return;
         }
 
         if ($node instanceof Include_) {
@@ -322,34 +349,46 @@ final class ClassCollector extends NodeVisitorAbstract
                 Include_::TYPE_REQUIRE_ONCE => 'require_once',
                 default                     => 'include',
             });
+
+            return;
         }
 
         if ($node instanceof Isset_) {
             $this->addLanguageConstruct('isset');
+
+            return;
         }
 
         if ($node instanceof Empty_) {
             $this->addLanguageConstruct('empty');
+
+            return;
         }
 
         if ($node instanceof Unset_) {
             $this->addLanguageConstruct('unset');
+
+            return;
         }
 
         if ($node instanceof Eval_) {
             $this->addLanguageConstruct('eval');
+
+            return;
         }
 
         if ($node instanceof List_) {
             $this->addLanguageConstruct('list');
+
+            return;
         }
 
-        if (
-            $node instanceof Variable
-            && is_string($node->name)
-            && isset(self::SUPERGLOBALS[$node->name])
-        ) {
-            $this->addSuperglobal('$' . $node->name);
+        if ($node instanceof Variable) {
+            if (is_string($node->name) && isset(self::SUPERGLOBALS[$node->name])) {
+                $this->addSuperglobal('$' . $node->name);
+            }
+
+            return;
         }
 
         if ($this->activeMethodIds !== [] && $this->isComplexityBranch($node)) {
