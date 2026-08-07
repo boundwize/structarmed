@@ -13,6 +13,7 @@ use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Composer\InstalledVersions;
@@ -31,6 +32,7 @@ use function file_get_contents;
 use function file_put_contents;
 use function glob;
 use function hash;
+use function hash_file;
 use function is_dir;
 use function json_decode;
 use function json_encode;
@@ -447,7 +449,7 @@ final class AnalysisResultCacheTest extends TestCase
 
             $this->assertNotSame(
                 $withComposer,
-                $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash')
+                (new AnalysisCacheMetadataFactory())->classNodeCacheNamespace($basePath, 'config-hash')
             );
         } finally {
             $this->removeTempDirectory($basePath);
@@ -1165,9 +1167,38 @@ final class AnalysisResultCacheTest extends TestCase
             $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
             file_put_contents($sourceFile, '<?php class Foo { public function changed(): void {} }');
 
-            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+            $nextRunCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+
+            $this->assertNull($nextRunCache->loadClassNodes($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClearResetsSharedFileHashes(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceDirectory     = $this->createTempDirectory();
+        $sourceFile          = $sourceDirectory . '/Foo.php';
+        $fileHashProvider    = new FileHashProvider();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, '', '', $fileHashProvider);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $originalHash = $fileHashProvider->hash($sourceFile);
+            file_put_contents($sourceFile, '<?php final class Foo {}');
+
+            $this->assertSame($originalHash, $fileHashProvider->hash($sourceFile));
+
+            $analysisResultCache->clear();
+
+            $this->assertSame(hash_file('xxh128', $sourceFile), $fileHashProvider->hash($sourceFile));
+            $this->assertNotSame($originalHash, $fileHashProvider->hash($sourceFile));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($sourceDirectory);
             $this->removeTempDirectory($cacheDirectory);
         }
     }

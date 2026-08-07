@@ -23,7 +23,6 @@ use function file_get_contents;
 use function file_put_contents;
 use function glob;
 use function hash;
-use function hash_file;
 use function is_array;
 use function is_bool;
 use function is_dir;
@@ -62,6 +61,7 @@ final class AnalysisResultCache
         ?string $cacheDirectory = null,
         private readonly string $configHash = '',
         private readonly string $composerGeneratedVersionHash = '',
+        private readonly FileHashProvider $fileHashProvider = new FileHashProvider(),
     ) {
         $basePath             = Path::normalise($basePath);
         $this->cacheDirectory = $cacheDirectory
@@ -123,6 +123,7 @@ final class AnalysisResultCache
     public function clear(): void
     {
         $this->isCacheInitialised = false;
+        $this->fileHashProvider->clear();
 
         if (! is_dir($this->cacheDirectory)) {
             return;
@@ -833,7 +834,7 @@ final class AnalysisResultCache
         return [
             'namespace' => $namespace,
             'file'      => $file,
-            'hash'      => (string) hash_file('xxh128', $file),
+            'hash'      => $this->fileHashProvider->hash($file),
         ];
     }
 }
