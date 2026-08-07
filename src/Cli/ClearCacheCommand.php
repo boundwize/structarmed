@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use RuntimeException;
 
@@ -58,7 +59,7 @@ final readonly class ClearCacheCommand
             }
         }
 
-        (new AnalysisResultCache($basePath, $cacheDirectory))->clear();
+        (new AnalysisResultCache($basePath, new FileHashProvider(), $cacheDirectory))->clear();
 
         echo "StructArmed cache cleared.\n";
 

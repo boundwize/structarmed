@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Cli;
 
 use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Cli\AnalyseCommand;
 use Boundwize\StructArmed\Cli\ClearCacheCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
@@ -1630,7 +1631,7 @@ PHP;
 
     private function removeTempDirectory(string $basePath): void
     {
-        (new AnalysisResultCache($basePath))->clear();
+        (new AnalysisResultCache($basePath, new FileHashProvider()))->clear();
 
         if (file_exists($basePath . '/structarmed.php')) {
             unlink($basePath . '/structarmed.php');

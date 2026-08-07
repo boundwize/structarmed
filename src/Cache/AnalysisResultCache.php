@@ -58,10 +58,10 @@ final class AnalysisResultCache
 
     public function __construct(
         string $basePath,
+        private readonly FileHashProvider $fileHashProvider,
         ?string $cacheDirectory = null,
         private readonly string $configHash = '',
         private readonly string $composerGeneratedVersionHash = '',
-        private readonly FileHashProvider $fileHashProvider = new FileHashProvider(),
     ) {
         $basePath             = Path::normalise($basePath);
         $this->cacheDirectory = $cacheDirectory

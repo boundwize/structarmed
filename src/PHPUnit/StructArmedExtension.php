@@ -48,10 +48,10 @@ final class StructArmedExtension implements Extension
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,
+            $fileHashProvider,
             $architecture->getCacheDirectory(),
             $configHash,
-            $composerGeneratedVersionHash,
-            $fileHashProvider
+            $composerGeneratedVersionHash
         );
 
         if ($analysisResultCache->shouldInvalidate()) {

@@ -17,9 +17,12 @@ use function sort;
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_THROW_ON_ERROR;
 
+/**
+ * @internal
+ */
 final readonly class AnalysisCacheMetadataFactory
 {
-    public function __construct(private FileHashProvider $fileHashProvider = new FileHashProvider())
+    public function __construct(private FileHashProvider $fileHashProvider)
     {
     }
 

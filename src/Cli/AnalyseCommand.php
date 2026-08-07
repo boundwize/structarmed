@@ -113,10 +113,10 @@ final readonly class AnalyseCommand
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,
+            $fileHashProvider,
             $architecture->getCacheDirectory(),
             $configHash,
-            $composerGeneratedVersionHash,
-            $fileHashProvider
+            $composerGeneratedVersionHash
         );
         $classNodeCacheNamespace      = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, $configHash);
         $analyser                     = new Analyser($basePath, $analysisResultCache, $classNodeCacheNamespace);

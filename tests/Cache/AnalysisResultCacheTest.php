@@ -55,7 +55,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testGetCacheDirectoryReturnsConfiguredDirectory(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         try {
             $this->assertSame($cacheDirectory, $analysisResultCache->getCacheDirectory());
@@ -67,7 +67,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testStoresAndLoadsViolationCollection(): void
     {
         $cacheDirectory          = $this->createTempDirectory();
-        $analysisResultCache     = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache     = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $metadata                = ['configHash' => 'same', 'filesHash' => 'same'];
         $ruleViolationCollection = new RuleViolationCollection();
         $ruleViolationCollection->add(new RuleViolation(
@@ -104,7 +104,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testStoresViolationCollectionWithInvalidUtf8Text(): void
     {
         $cacheDirectory          = $this->createTempDirectory();
-        $analysisResultCache     = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache     = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $metadata                = ['configHash' => 'same', 'filesHash' => 'same'];
         $ruleViolationCollection = new RuleViolationCollection();
         $ruleViolationCollection->add(new RuleViolation(
@@ -133,7 +133,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testMissesWhenMetadataChanges(): void
     {
         $cacheDirectory          = $this->createTempDirectory();
-        $analysisResultCache     = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache     = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $ruleViolationCollection = new RuleViolationCollection();
 
         try {
@@ -151,7 +151,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testMissesWhenCacheFileDoesNotExist(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         try {
             $this->assertNotInstanceOf(
@@ -166,7 +166,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testMissesWhenCachePayloadIsNotObject(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($cacheDirectory . '/key.json', '["bad"]');
 
@@ -184,7 +184,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $metadata            = ['configHash' => 'same'];
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         $this->writeCachePayload($cacheDirectory, [
             'metadata'   => $metadata,
@@ -205,7 +205,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $metadata            = ['configHash' => 'same'];
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         $this->writeCachePayload($cacheDirectory, [
             'metadata'   => $metadata,
@@ -226,7 +226,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $metadata            = ['configHash' => 'same'];
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         $this->writeCachePayload($cacheDirectory, [
             'metadata'   => $metadata,
@@ -247,7 +247,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $metadata            = ['configHash' => 'same'];
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         $this->writeCachePayload($cacheDirectory, [
             'metadata'   => $metadata,
@@ -276,8 +276,20 @@ final class AnalysisResultCacheTest extends TestCase
     public function testDetectsDifferentConfigHashAndClearsCache(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $staleCache          = new AnalysisResultCache(__DIR__, $cacheDirectory, 'old', 'composer-hash');
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'new', 'composer-hash');
+        $staleCache          = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'old',
+            'composer-hash',
+        );
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'new',
+            'composer-hash',
+        );
 
         try {
             $staleCache->store('key', ['configHash' => 'old'], new RuleViolationCollection());
@@ -300,7 +312,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testClearRemovesEmptyCacheSubdirectories(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         mkdir($cacheDirectory . '/nested');
 
@@ -316,7 +328,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testCacheMetadataIsNotDifferentWhenCacheDirectoryIsMissing(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         $this->removeTempDirectory($cacheDirectory);
 
@@ -326,7 +338,13 @@ final class AnalysisResultCacheTest extends TestCase
     public function testConfigHashIsNotDifferentWhenStoredHashMatches(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'same', 'composer-hash');
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'same',
+            'composer-hash',
+        );
 
         try {
             $analysisResultCache->store('key', ['configHash' => 'same'], new RuleViolationCollection());
@@ -340,7 +358,13 @@ final class AnalysisResultCacheTest extends TestCase
     public function testInvalidationIgnoresUnreadableCachePayloadsAndDirectories(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'same', 'composer-hash');
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'same',
+            'composer-hash',
+        );
 
         mkdir($cacheDirectory . '/nested');
         file_put_contents($cacheDirectory . '/key.json', '["bad"]');
@@ -362,7 +386,13 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'same', 'composer-hash');
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'same',
+            'composer-hash',
+        );
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -380,7 +410,13 @@ final class AnalysisResultCacheTest extends TestCase
     public function testPopulatedCacheWithoutMetadataMarkerIsInvalidated(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'same', 'composer-hash');
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'same',
+            'composer-hash',
+        );
 
         try {
             $this->writeCachePayload($cacheDirectory, [
@@ -397,7 +433,13 @@ final class AnalysisResultCacheTest extends TestCase
     public function testComposerGeneratedVersionHashIsNotDifferentWhenStoredHashMatches(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'config-hash', 'same');
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'config-hash',
+            'same',
+        );
 
         try {
             $analysisResultCache->store('key', [], new RuleViolationCollection());
@@ -411,8 +453,20 @@ final class AnalysisResultCacheTest extends TestCase
     public function testComposerGeneratedVersionHashIsDifferentWhenStoredHashDiffers(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
-        $staleCache          = new AnalysisResultCache(__DIR__, $cacheDirectory, 'config-hash', 'old');
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, 'config-hash', 'new');
+        $staleCache          = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'config-hash',
+            'old',
+        );
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'config-hash',
+            'new',
+        );
 
         try {
             $staleCache->store('key', [], new RuleViolationCollection());
@@ -426,7 +480,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testClassNodeCacheNamespaceDependsOnConfigAndComposerJson(): void
     {
         $basePath                     = $this->createTempDirectory();
-        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+        $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory(new FileHashProvider());
 
         try {
             $withoutComposer = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash');
@@ -447,9 +501,11 @@ final class AnalysisResultCacheTest extends TestCase
 
             file_put_contents($basePath . '/composer.json', '{"autoload":{"psr-4":{"App\\\\":"src/"}}}');
 
+            $nextRunMetadataFactory = new AnalysisCacheMetadataFactory(new FileHashProvider());
+
             $this->assertNotSame(
                 $withComposer,
-                (new AnalysisCacheMetadataFactory())->classNodeCacheNamespace($basePath, 'config-hash')
+                $nextRunMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash')
             );
         } finally {
             $this->removeTempDirectory($basePath);
@@ -459,7 +515,7 @@ final class AnalysisResultCacheTest extends TestCase
     public function testStoreCreatesMissingCacheDirectory(): void
     {
         $basePath                = $this->createTempDirectory();
-        $analysisResultCache     = new AnalysisResultCache($basePath);
+        $analysisResultCache     = new AnalysisResultCache($basePath, new FileHashProvider());
         $ruleViolationCollection = new RuleViolationCollection();
 
         try {
@@ -480,7 +536,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $basePath            = $this->createTempDirectory();
         $cacheDirectory      = $basePath . '/var/cache/structarmed';
-        $analysisResultCache = new AnalysisResultCache($basePath, 'var/cache/structarmed');
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'var/cache/structarmed');
 
         try {
             mkdir($basePath . '/var');
@@ -506,7 +562,7 @@ final class AnalysisResultCacheTest extends TestCase
 
     public function testConfiguredWindowsAbsoluteCacheDirectoryIsUsedAsIs(): void
     {
-        $analysisResultCache = new AnalysisResultCache(__DIR__, 'C:/structarmed/cache');
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), 'C:/structarmed/cache');
 
         $this->assertFalse($analysisResultCache->shouldInvalidate());
     }
@@ -515,7 +571,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $classNodes          = [$this->makeClassNode($sourceFile)];
 
         file_put_contents($sourceFile, '<?php class Foo {}');
@@ -543,7 +599,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $classNodes          = [$this->makeClassNode($sourceFile)];
         $anonymousClassNodes = [
             new AnonymousClassNode(
@@ -582,7 +638,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $classNodes          = [$this->makeClassNode($sourceFile)];
 
         file_put_contents($sourceFile, '<?php class Foo {}');
@@ -626,7 +682,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -653,7 +709,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $classNodes          = [
             new ClassNode(
                 className:   "App\\Invalid\xB1Name",
@@ -689,7 +745,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/FooTrait.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php trait FooTrait {}');
 
@@ -727,7 +783,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Status.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php enum Status: string { case Draft = "draft"; }');
 
@@ -766,7 +822,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Middleware.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php interface Middleware extends BaseMiddleware {}');
 
@@ -805,7 +861,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -860,7 +916,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -913,7 +969,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -956,7 +1012,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -999,7 +1055,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $basePath            = $this->createTempDirectory();
         $sourceFile          = $basePath . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache($basePath);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider());
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -1022,7 +1078,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -1039,7 +1095,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $fileAnalysis        = new FileAnalysis(
             file: $sourceFile,
             hasUtf8Bom: false,
@@ -1072,7 +1128,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -1130,7 +1186,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -1159,7 +1215,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -1167,7 +1223,7 @@ final class AnalysisResultCacheTest extends TestCase
             $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
             file_put_contents($sourceFile, '<?php class Foo { public function changed(): void {} }');
 
-            $nextRunCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+            $nextRunCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
             $this->assertNull($nextRunCache->loadClassNodes($sourceFile, 'config'));
         } finally {
@@ -1182,7 +1238,7 @@ final class AnalysisResultCacheTest extends TestCase
         $sourceDirectory     = $this->createTempDirectory();
         $sourceFile          = $sourceDirectory . '/Foo.php';
         $fileHashProvider    = new FileHashProvider();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory, '', '', $fileHashProvider);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $fileHashProvider, $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -1207,7 +1263,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
         $classNodes          = [$this->makeClassNode($sourceFile)];
 
         file_put_contents($sourceFile, '<?php class Foo {}');
@@ -1816,7 +1872,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, $cacheDirectory);
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
@@ -1850,7 +1906,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($source, '<?php class Example {}');
 
         try {
-            $metadata = (new AnalysisCacheMetadataFactory())->metadata(
+            $metadata = (new AnalysisCacheMetadataFactory(new FileHashProvider()))->metadata(
                 $directory,
                 $config,
                 ['src'],
@@ -1864,8 +1920,8 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertIsString($metadata['composerGeneratedVersionHash']);
             $this->assertIsString($metadata['filesHash']);
             $this->assertSame(
-                (new AnalysisCacheMetadataFactory())->key($metadata),
-                (new AnalysisCacheMetadataFactory())->key($metadata)
+                (new AnalysisCacheMetadataFactory(new FileHashProvider()))->key($metadata),
+                (new AnalysisCacheMetadataFactory(new FileHashProvider()))->key($metadata)
             );
         } finally {
             if (file_exists($config)) {
@@ -1892,7 +1948,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         $this->assertMatchesRegularExpression(
             '/^[a-f0-9]{32}$/',
-            (new AnalysisCacheMetadataFactory())->key($metadata)
+            (new AnalysisCacheMetadataFactory(new FileHashProvider()))->key($metadata)
         );
     }
 
@@ -1906,7 +1962,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($source, '<?php class Example {}');
 
         try {
-            $metadata = (new AnalysisCacheMetadataFactory())->metadata(
+            $metadata = (new AnalysisCacheMetadataFactory(new FileHashProvider()))->metadata(
                 $directory,
                 $config,
                 ['src'],
@@ -1953,7 +2009,7 @@ final class AnalysisResultCacheTest extends TestCase
 
             $this->assertSame(
                 hash('xxh128', json_encode(InstalledVersions::getRootPackage(), JSON_THROW_ON_ERROR)),
-                (new AnalysisCacheMetadataFactory())->composerGeneratedVersionHash()
+                (new AnalysisCacheMetadataFactory(new FileHashProvider()))->composerGeneratedVersionHash()
             );
         } finally {
             $installed->setValue(null, $origInstalled);
@@ -1972,7 +2028,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($source, '<?php class Example {}');
 
         try {
-            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
+            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory(new FileHashProvider());
             $metadataBefore               = $analysisCacheMetadataFactory->metadata(
                 $directory,
                 $config,
@@ -2012,8 +2068,8 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($source, '<?php class Example {}');
 
         try {
-            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory();
-            $analysisResultCache          = new AnalysisResultCache($directory, $cacheDir);
+            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory(new FileHashProvider());
+            $analysisResultCache          = new AnalysisResultCache($directory, new FileHashProvider(), $cacheDir);
             $metadataBefore               = $analysisCacheMetadataFactory->metadata(
                 $directory,
                 $config,
