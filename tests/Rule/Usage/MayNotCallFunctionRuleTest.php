@@ -49,6 +49,14 @@ final class MayNotCallFunctionRuleTest extends TestCase
         $this->assertStringContainsString('var_dump', $violation->message);
     }
 
+    public function testFunctionComparisonIsCaseInsensitive(): void
+    {
+        $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
+        $classNode              = $this->makeNode(['VAR_DUMP']);
+
+        $this->assertInstanceOf(RuleViolation::class, $mayNotCallFunctionRule->evaluate($classNode));
+    }
+
     public function testViolatesForDdFunction(): void
     {
         $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'dd');
