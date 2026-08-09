@@ -12,6 +12,7 @@ use function preg_match;
 use function rtrim;
 use function str_ends_with;
 use function str_starts_with;
+use function strcasecmp;
 
 final class ClassNode
 {
@@ -152,7 +153,13 @@ final class ClassNode
 
     public function callsFunction(string $function): bool
     {
-        return in_array($function, $this->functionCalls, true);
+        foreach ($this->functionCalls as $functionCall) {
+            if (strcasecmp($functionCall, $function) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function usesLanguageConstruct(string $construct): bool
