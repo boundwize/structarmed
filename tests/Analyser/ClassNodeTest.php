@@ -115,6 +115,8 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->extendsInterface('App\\Contracts\\BaseOrderService'));
         $this->assertTrue($classNode->extendsInterface('App\\Contracts\\RootOrderService'));
         $this->assertTrue($classNode->callsFunction('var_dump'));
+        $this->assertTrue($classNode->callsFunction('VAR_DUMP'));
+        $this->assertFalse($classNode->callsFunction('array_map'));
         $this->assertTrue($classNode->accessesSuperglobals());
         $this->assertTrue($classNode->usesLanguageConstruct('exit'));
         $this->assertFalse($classNode->usesLanguageConstruct('eval'));
