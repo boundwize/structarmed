@@ -13,6 +13,7 @@ use RuntimeException;
 
 use function bin2hex;
 use function file_put_contents;
+use function getenv;
 use function glob;
 use function is_dir;
 use function random_bytes;
@@ -108,6 +109,19 @@ PHP);
         $classNames = [$extractionResult->classNodes[0]->className, $extractionResult->classNodes[1]->className];
         $this->assertContains('App\\Domain\\Foo', $classNames);
         $this->assertContains('App\\Domain\\Bar', $classNames);
+    }
+
+    public function testWorkersDisableXdebugUnlessExplicitlyConfigured(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php final class Foo {}');
+
+        (new ParallelClassNodeExtractor($dir, [], [], 2))->extract([$file]);
+
+        $environment = $GLOBALS['mock_proc_open_environment'];
+        $this->assertIsArray($environment);
+        $this->assertSame(getenv('XDEBUG_MODE') ?: 'off', $environment['XDEBUG_MODE']);
     }
 
     public function testExtractReturnsWorkerFacts(): void

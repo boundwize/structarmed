@@ -24,6 +24,7 @@ use function feof;
 use function file_put_contents;
 use function filesize;
 use function fread;
+use function getenv;
 use function is_array;
 use function is_dir;
 use function is_resource;
@@ -76,6 +77,7 @@ final readonly class ParallelClassNodeExtractor
         $script       = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $processes    = [];
         $emitProgress = $progressHandler instanceof ProgressHandlerInterface;
+        $environment  = $this->workerEnvironment();
 
         foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             [
@@ -104,6 +106,8 @@ final readonly class ParallelClassNodeExtractor
                     2 => ['file', $stderrFile, 'w'],
                 ],
                 $pipes,
+                null,
+                $environment,
             );
 
             if ($process === false) {
@@ -264,6 +268,14 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes);
+    }
+
+    /** @return array<string, string> */
+    private function workerEnvironment(): array
+    {
+        $environment = getenv();
+
+        return $environment + ['XDEBUG_MODE' => 'off'];
     }
 
     /**
