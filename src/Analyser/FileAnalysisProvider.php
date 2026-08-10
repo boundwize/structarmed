@@ -211,7 +211,7 @@ final class FileAnalysisProvider
             $this->ast($file);
         }
 
-        return $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineFromTokens($this->tokens[$file]);
+        return $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineFromTokens($this->tokens[$file] ?? []);
     }
 
     /** @param array<Token> $tokens */
