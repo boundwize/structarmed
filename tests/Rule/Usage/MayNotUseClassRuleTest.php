@@ -61,6 +61,14 @@ final class MayNotUseClassRuleTest extends TestCase
         $this->assertStringContainsString('DateTime', $violation->message);
     }
 
+    public function testViolatesWhenForbiddenClassUsesDifferentCase(): void
+    {
+        $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: 'Vendor\\ForbiddenService');
+        $classNode          = $this->makeNode(['vendor\\forbiddenservice']);
+
+        $this->assertInstanceOf(RuleViolation::class, $mayNotUseClassRule->evaluate($classNode));
+    }
+
     public function testDoesNotApplyToWrongLayer(): void
     {
         $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class);
