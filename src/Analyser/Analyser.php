@@ -41,6 +41,7 @@ use function is_dir;
 use function is_file;
 use function sprintf;
 use function str_starts_with;
+use function strtolower;
 use function substr;
 
 use const ARRAY_FILTER_USE_BOTH;
@@ -678,7 +679,7 @@ final readonly class Analyser
 
         foreach ($classNodes as $classNode) {
             foreach ($classNode->parentClasses as $parentClass) {
-                $extended[$parentClass] = true;
+                $extended[strtolower($parentClass)] = true;
             }
         }
 
@@ -686,14 +687,14 @@ final readonly class Analyser
         // their own, so the classes they extend are tracked separately.
         foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
             if ($anonymousClassNode->extends !== null) {
-                $extended[$anonymousClassNode->extends] = true;
+                $extended[strtolower($anonymousClassNode->extends)] = true;
             }
         }
 
         foreach ($classNodes as $classNode) {
             // Only classes appear in parentClasses; traits, interfaces, and enums
             // never do, so they are left with the default (not extended).
-            if (isset($extended[$classNode->className])) {
+            if (isset($extended[strtolower($classNode->className)])) {
                 $classNode->setExtended(true);
             }
         }
@@ -710,29 +711,32 @@ final readonly class Analyser
         $parentsCache       = [];
 
         foreach ($classNodes as $classNode) {
-            $parentClassMap[$classNode->className]     = $classNode->extends !== null
+            $classNameKey                      = strtolower($classNode->className);
+            $parentClassMap[$classNameKey]     = $classNode->extends !== null
                 ? [$classNode->extends]
                 : [];
-            $parentInterfaceMap[$classNode->className] = $classNode->interfaceExtends !== []
+            $parentInterfaceMap[$classNameKey] = $classNode->interfaceExtends !== []
                 ? array_values(array_unique([...$classNode->implements, ...$classNode->interfaceExtends]))
                 : array_values($classNode->implements);
         }
 
         foreach ($classNodes as $classNode) {
+            $classNameKey = strtolower($classNode->className);
+
             if (
-                $parentClassMap[$classNode->className] === []
-                && $parentInterfaceMap[$classNode->className] === []
+                $parentClassMap[$classNameKey] === []
+                && $parentInterfaceMap[$classNameKey] === []
             ) {
                 continue;
             }
 
             $cycleDetected = false;
             $result        = $this->recursiveParents(
-                $classNode->className,
+                $classNameKey,
                 $parentClassMap,
                 $parentInterfaceMap,
                 $parentsCache,
-                [$classNode->className => true],
+                [$classNameKey => true],
                 $cycleDetected
             );
 
@@ -754,23 +758,25 @@ final readonly class Analyser
      * @return array{classes: list<string>, interfaces: list<string>}
      */
     private function recursiveParents(
-        string $className,
+        string $classNameKey,
         array $parentClassMap,
         array $parentInterfaceMap,
         array &$cache,
         array $seen,
         bool &$cycleDetected
     ): array {
-        if (isset($cache[$className])) {
-            return $cache[$className];
+        if (isset($cache[$classNameKey])) {
+            return $cache[$classNameKey];
         }
 
         $classesSet    = [];
         $interfacesSet = [];
         $hasCycle      = false;
 
-        foreach ($parentClassMap[$className] ?? [] as $parentClass) {
-            if (isset($seen[$parentClass])) {
+        foreach ($parentClassMap[$classNameKey] ?? [] as $parentClass) {
+            $parentClassKey = strtolower($parentClass);
+
+            if (isset($seen[$parentClassKey])) {
                 $hasCycle = true;
                 continue;
             }
@@ -778,11 +784,11 @@ final readonly class Analyser
             $childHasCycle            = false;
             $classesSet[$parentClass] = true;
             $result                   = $this->recursiveParents(
-                $parentClass,
+                $parentClassKey,
                 $parentClassMap,
                 $parentInterfaceMap,
                 $cache,
-                $seen + [$parentClass => true],
+                $seen + [$parentClassKey => true],
                 $childHasCycle
             );
 
@@ -797,8 +803,10 @@ final readonly class Analyser
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        foreach ($parentInterfaceMap[$className] ?? [] as $parentInterface) {
-            if (isset($seen[$parentInterface])) {
+        foreach ($parentInterfaceMap[$classNameKey] ?? [] as $parentInterface) {
+            $parentInterfaceKey = strtolower($parentInterface);
+
+            if (isset($seen[$parentInterfaceKey])) {
                 $hasCycle = true;
                 continue;
             }
@@ -806,11 +814,11 @@ final readonly class Analyser
             $childHasCycle                   = false;
             $interfacesSet[$parentInterface] = true;
             $result                          = $this->recursiveParents(
-                $parentInterface,
+                $parentInterfaceKey,
                 $parentClassMap,
                 $parentInterfaceMap,
                 $cache,
-                $seen + [$parentInterface => true],
+                $seen + [$parentInterfaceKey => true],
                 $childHasCycle
             );
 
@@ -827,7 +835,7 @@ final readonly class Analyser
         ];
 
         if (! $hasCycle) {
-            $cache[$className] = $result;
+            $cache[$classNameKey] = $result;
         }
 
         $cycleDetected = $cycleDetected || $hasCycle;

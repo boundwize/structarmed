@@ -123,6 +123,38 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\PaymentHandler', $violations[0]->className);
     }
 
+    public function testMustBeFinalRuleRecognizesExtendedClassCaseInsensitively(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Entities.php' => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                class BaseEntity
+                {
+                }
+
+                class ChildEntity extends baseentity
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/')
+            ->rule(
+                'domain.base_must_be_final',
+                new MustBeFinalRule(layer: 'Domain', classNamePattern: '/BaseEntity$/'),
+            );
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('domain.base_must_be_final');
+
+        $this->assertCount(0, $violations);
+    }
+
     public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClass(): void
     {
         $factory = '<?php namespace App;' . "\n"
