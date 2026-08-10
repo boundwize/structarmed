@@ -634,6 +634,33 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testFixesInvalidTagWhenPhpParserReportsSyntaxError(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                '<? echo "x"; ?><?php function broken('
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                '<?php echo "x"; ?><?php function broken(',
+                file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testDoesNotFixValidPhpTag(): void
     {
         $basePath = $this->makeTempDir();

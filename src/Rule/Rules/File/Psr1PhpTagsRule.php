@@ -10,23 +10,26 @@ use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
+use PhpParser\Error;
+use PhpParser\Parser;
+use PhpParser\ParserFactory;
 
 use function file_get_contents;
 use function file_put_contents;
-use function is_array;
 use function is_file;
 use function preg_match;
 use function sprintf;
 use function strlen;
 use function substr;
 use function substr_count;
-use function token_get_all;
 
 use const T_INLINE_HTML;
 use const T_OPEN_TAG;
 
 final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, FixableInterface
 {
+    private Parser $parser;
+
     /**
      * @param list<string>|null $sourcePaths
      */
@@ -34,6 +37,7 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
         private ?array $sourcePaths = null,
         private ?PhpFileFinder $phpFileFinder = null,
     ) {
+        $this->parser = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
@@ -111,26 +115,24 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
 
     private function fixInvalidTagOnLine(string $code, ?int $line): ?string
     {
-        $offset = 0;
+        try {
+            $this->parser->parse($code);
+        } catch (Error) {
+            // Tokens remain available when parsing fails, allowing this file-level
+            // fixer to normalize tags independently of unrelated syntax errors.
+        }
 
-        foreach (token_get_all($code) as $token) {
-            if (is_array($token)) {
-                $text        = $token[1];
-                $replacement = $this->replacementForInvalidTag($token[0], $text, $token[2], $line);
+        foreach ($this->parser->getTokens() as $token) {
+            $replacement = $this->replacementForInvalidTag($token->id, $token->text, $token->line, $line);
 
-                if ($replacement !== null) {
-                    $replaceAt   = $offset + $replacement['offset'];
-                    $afterOffset = $replaceAt + $replacement['length'];
+            if ($replacement !== null) {
+                $replaceAt   = $token->pos + $replacement['offset'];
+                $afterOffset = $replaceAt + $replacement['length'];
 
-                    return substr($code, 0, $replaceAt)
-                        . $this->normalizedTagReplacement($replacement['text'], substr($code, $afterOffset, 1))
-                        . substr($code, $afterOffset);
-                }
-            } else {
-                $text = $token;
+                return substr($code, 0, $replaceAt)
+                    . $this->normalizedTagReplacement($replacement['text'], substr($code, $afterOffset, 1))
+                    . substr($code, $afterOffset);
             }
-
-            $offset += strlen($text);
         }
 
         return null;
