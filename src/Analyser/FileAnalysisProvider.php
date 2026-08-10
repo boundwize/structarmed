@@ -33,12 +33,10 @@ use function array_key_exists;
 use function array_keys;
 use function array_values;
 use function file_get_contents;
-use function is_array;
 use function preg_match;
 use function str_starts_with;
 use function substr;
 use function substr_count;
-use function token_get_all;
 use function trim;
 
 use const T_INLINE_HTML;
@@ -209,25 +207,11 @@ final class FileAnalysisProvider
             return $this->invalidPhpTagLines[$file];
         }
 
-        if (isset($this->tokens[$file])) {
-            return $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineFromTokens($this->tokens[$file]);
+        if (! isset($this->tokens[$file])) {
+            $this->ast($file);
         }
 
-        foreach (token_get_all($this->contents($file)) as $token) {
-            if (! is_array($token)) {
-                continue;
-            }
-
-            $invalidLine = $this->invalidPhpTagLineForToken($token[0], $token[1], $token[2]);
-
-            if ($invalidLine !== null) {
-                return $this->invalidPhpTagLines[$file] = $invalidLine;
-            }
-        }
-
-        $this->invalidPhpTagLines[$file] = null;
-
-        return null;
+        return $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineFromTokens($this->tokens[$file] ?? []);
     }
 
     /** @param array<Token> $tokens */
