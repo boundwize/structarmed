@@ -121,7 +121,7 @@ final class FileAnalysisProvider
             file: $file,
             hasUtf8Bom: str_starts_with($code, "\xEF\xBB\xBF"),
             hasValidUtf8: preg_match('//u', $code) === 1,
-            invalidPhpTagLine: $this->invalidPhpTagLineFromTokens($this->tokens[$file]),
+            invalidPhpTagLine: $this->invalidPhpTagLine($file),
             hasValidAst: $hasValidAst,
             declaresSymbols: $fileState['declaresSymbols'],
             hasSideEffects: $fileState['hasSideEffects'],
@@ -207,6 +207,10 @@ final class FileAnalysisProvider
 
         if (array_key_exists($file, $this->invalidPhpTagLines)) {
             return $this->invalidPhpTagLines[$file];
+        }
+
+        if (isset($this->tokens[$file])) {
+            return $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineFromTokens($this->tokens[$file]);
         }
 
         foreach (token_get_all($this->contents($file)) as $token) {
