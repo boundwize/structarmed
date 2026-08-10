@@ -223,7 +223,6 @@ final class ClassNodeTest extends TestCase
         );
 
         $this->assertTrue($classNode->dependsOn(DateTimeImmutable::class));
-        $this->assertTrue($classNode->dependsOn('datetimeimmutable'));
         $this->assertFalse($classNode->dependsOn(DateTime::class));
     }
 

@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function preg_match;
 use function sprintf;
+use function strcasecmp;
 
 final readonly class MayNotUseClassRule implements RuleInterface
 {
@@ -35,20 +36,22 @@ final readonly class MayNotUseClassRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if (! $classNode->dependsOn($this->forbiddenClass)) {
-            return null;
+        foreach ($classNode->dependencies as $dependency) {
+            if (strcasecmp($dependency, $this->forbiddenClass) === 0) {
+                return new RuleViolation(
+                    message:   sprintf(
+                        'Class [%s] must not use [%s]',
+                        $classNode->className,
+                        $this->forbiddenClass
+                    ),
+                    file:      $classNode->file,
+                    line:      $classNode->line,
+                    className: $classNode->className,
+                    layer:     $classNode->layer,
+                );
+            }
         }
 
-        return new RuleViolation(
-            message:   sprintf(
-                'Class [%s] must not use [%s]',
-                $classNode->className,
-                $this->forbiddenClass
-            ),
-            file:      $classNode->file,
-            line:      $classNode->line,
-            className: $classNode->className,
-            layer:     $classNode->layer,
-        );
+        return null;
     }
 }

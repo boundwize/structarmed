@@ -117,13 +117,7 @@ final class ClassNode
 
     public function dependsOn(string $class): bool
     {
-        foreach ($this->dependencies as $dependency) {
-            if (strcasecmp($dependency, $class) === 0) {
-                return true;
-            }
-        }
-
-        return false;
+        return in_array($class, $this->dependencies, true);
     }
 
     public function dependsOnNamespace(string $namespace): bool
