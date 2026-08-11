@@ -251,7 +251,7 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertSame(4, $fileAnalysis->sideEffectLine);
     }
 
-    public function testRejectsConditionalDeclarationsWithBranchesOrSideEffects(): void
+    public function testIfElseBranchesWithOnlyDeclarationsAreNotSideEffects(): void
     {
         $elseIfFile = $this->source(<<<'PHP'
             <?php
@@ -278,8 +278,14 @@ final class FileAnalysisProviderTest extends TestCase
 
         $fileAnalysisProvider = new FileAnalysisProvider();
 
-        $this->assertTrue($fileAnalysisProvider->analyse($elseIfFile)->hasSideEffects);
-        $this->assertTrue($fileAnalysisProvider->analyse($elseFile)->hasSideEffects);
+        $fileAnalysis = $fileAnalysisProvider->analyse($elseIfFile);
+        $this->assertFalse($fileAnalysis->hasSideEffects);
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+
+        $elseAnalysis = $fileAnalysisProvider->analyse($elseFile);
+        $this->assertFalse($elseAnalysis->hasSideEffects);
+        $this->assertTrue($elseAnalysis->declaresSymbols);
+
         $this->assertTrue($fileAnalysisProvider->analyse($effectFile)->hasSideEffects);
     }
 

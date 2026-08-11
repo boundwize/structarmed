@@ -297,7 +297,7 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
-    public function testViolatesIfElseDeclarationAsSideEffectNextToSymbol(): void
+    public function testPassesIfElseConditionalDeclarationNextToSymbol(): void
     {
         $basePath = $this->makeTempDir();
 
@@ -313,8 +313,57 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
                 Architecture::define()
             );
 
+            $this->assertSame([], $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testViolatesIfElseConditionalDeclarationWithTopLevelSideEffect(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                "<?php\nif (PHP_VERSION_ID >= 80400) {\n    function modern(): void {}\n} else {\n    function legacy(): void {}\n}\necho 'boot';\n"
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
             $this->assertCount(1, $violations);
-            $this->assertSame(2, $violations[0]->line);
+            $this->assertSame(7, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testViolatesIfElseWithSideEffectInBranchNextToSymbolDeclaration(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                "<?php\nfunction always(): void {}\nif (PHP_VERSION_ID >= 80400) {\n    function modern(): void {}\n} else {\n    echo 'legacy';\n}\n"
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(3, $violations[0]->line);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');

@@ -31,6 +31,7 @@ use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
+use function array_merge;
 use function array_values;
 use function file_get_contents;
 use function preg_match;
@@ -288,8 +289,23 @@ final class FileAnalysisProvider
                 continue;
             }
 
-            if ($node instanceof If_ && $this->containsOnlyDeclarations($node)) {
-                $declaresSymbols = true;
+            if ($node instanceof If_) {
+                $branchStmts = $node->stmts;
+                foreach ($node->elseifs as $elseif) {
+                    $branchStmts = array_merge($branchStmts, $elseif->stmts);
+                }
+
+                if ($node->else instanceof Else_) {
+                    $branchStmts = array_merge($branchStmts, $node->else->stmts);
+                }
+
+                $state           = $this->fileState($branchStmts);
+                $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
+                if (! $hasSideEffects && $state['hasSideEffects']) {
+                    $sideEffectLine = $node->getStartLine();
+                }
+
+                $hasSideEffects = $hasSideEffects || $state['hasSideEffects'];
                 continue;
             }
 
@@ -335,20 +351,5 @@ final class FileAnalysisProvider
             || $stmt instanceof GroupUse
             || $stmt instanceof Nop
             || ($stmt instanceof InlineHTML && trim($stmt->value) === '');
-    }
-
-    private function containsOnlyDeclarations(If_ $if): bool
-    {
-        if ($if->elseifs !== [] || $if->else instanceof Else_) {
-            return false;
-        }
-
-        foreach ($if->stmts as $statement) {
-            if (! $this->isSymbolDeclaration($statement) && ! $this->isNeutralStatement($statement)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 }
