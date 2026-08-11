@@ -39,6 +39,12 @@ Documentation is available online, with source files kept in this repository:
 - Documentation site: <https://boundwize.github.io/structarmed/>
 - Documentation source: [docs/](docs/index.md) for local edits and GitHub Pages publishing.
 
+## Community Ecosystem
+
+Explore community projects built around StructArmed.
+
+- [StructArmed Explorer](https://skie.github.io/structarmed-vizualize/): visualize your "structarmed.php" configuration as an interactive layer-dependency graph directly in the browser, with no installation required.
+
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tooling, and pull request expectations.
