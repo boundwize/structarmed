@@ -8,6 +8,12 @@ use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use Boundwize\StructArmed\Util\Path;
 use PhpParser\Error;
 use PhpParser\Node;
+use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\BinaryOp\BooleanOr;
+use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
+use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
@@ -328,7 +334,8 @@ final class FileAnalysisProvider
         return $stmt instanceof ClassLike
             || $stmt instanceof Function_
             || $stmt instanceof Const_
-            || $this->isDefineCall($stmt);
+            || $this->isDefineCall($stmt)
+            || $this->isConditionalDefineStatement($stmt);
     }
 
     /**
@@ -342,6 +349,57 @@ final class FileAnalysisProvider
             && $stmt->expr instanceof FuncCall
             && $stmt->expr->name instanceof Name
             && $stmt->expr->name->toLowerString() === 'define';
+    }
+
+    /** `defined('X') || define('X', ...)` and `!defined('X') && define('X', ...)` patterns */
+    private function isConditionalDefineStatement(Stmt $stmt): bool
+    {
+        if (! $stmt instanceof Expression) {
+            return false;
+        }
+
+        $expr = $stmt->expr;
+
+        if (
+            ! ($expr instanceof BooleanOr || $expr instanceof LogicalOr
+            || $expr instanceof BooleanAnd || $expr instanceof LogicalAnd)
+        ) {
+            return false;
+        }
+
+        return ($this->isDefineFuncCall($expr->right) && $this->isDefinedCondition($expr->left))
+            || ($this->isDefineFuncCall($expr->left) && $this->isDefinedCondition($expr->right));
+    }
+
+    private function isDefineFuncCall(Expr $expr): bool
+    {
+        return $expr instanceof FuncCall
+            && $expr->name instanceof Name
+            && $expr->name->toLowerString() === 'define';
+    }
+
+    private function isDefinedCondition(Expr $expr): bool
+    {
+        if (
+            $expr instanceof FuncCall
+            && $expr->name instanceof Name
+            && $expr->name->toLowerString() === 'defined'
+        ) {
+            return true;
+        }
+
+        if ($expr instanceof BooleanNot) {
+            return $this->isDefinedCondition($expr->expr);
+        }
+
+        if (
+            $expr instanceof BooleanAnd || $expr instanceof LogicalAnd
+            || $expr instanceof BooleanOr || $expr instanceof LogicalOr
+        ) {
+            return $this->isDefinedCondition($expr->left) && $this->isDefinedCondition($expr->right);
+        }
+
+        return false;
     }
 
     private function isNeutralStatement(Stmt $stmt): bool

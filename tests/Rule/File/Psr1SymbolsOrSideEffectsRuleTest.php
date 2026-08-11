@@ -222,6 +222,92 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
+    public function testPassesDefinedOrDefineShortCircuitNextToClass(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+                defined('APP_VERSION') || define('APP_VERSION', '1.2.3');
+                class Bootstrap {}
+                PHP
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertSame([], $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testPassesNotDefinedAndDefineShortCircuitNextToClass(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+                ! defined('APP_VERSION') && define('APP_VERSION', '1.2.3');
+                class Bootstrap {}
+                PHP
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertSame([], $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testViolatesDefinedOrDefineShortCircuitWithSideEffect(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+                defined('APP_VERSION') || define('APP_VERSION', '1.2.3');
+                echo 'x';
+                class Bootstrap {}
+                PHP
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(3, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testViolatesEchoNextToDefineAndClass(): void
     {
         $basePath = $this->makeTempDir();
