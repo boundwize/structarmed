@@ -45,7 +45,7 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
-    public function testPassesConditionalDeclaration(): void
+    public function testPassesFunctionExistsGuardedConditionalDeclaration(): void
     {
         $basePath = $this->makeTempDir();
 
@@ -53,7 +53,12 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents(
                 $basePath . '/src/Foo.php',
-                "<?php\nif (! function_exists('foo')) {\n    function foo(): void {}\n}\n"
+                <<<'PHP'
+                <?php
+                if (! function_exists('foo')) {
+                    function foo() {}
+                }
+                PHP
             );
 
             $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
@@ -382,6 +387,36 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
 
             $this->assertCount(1, $violations);
             $this->assertSame(3, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testViolatesSideEffectInConditionalExpressionNextToDeclaration(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+                if (include 'bootstrap.php') {
+                    class Foo {}
+                }
+                PHP
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(2, $violations[0]->line);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
