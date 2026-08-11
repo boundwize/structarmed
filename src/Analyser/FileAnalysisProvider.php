@@ -8,6 +8,12 @@ use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use Boundwize\StructArmed\Util\Path;
 use PhpParser\Error;
 use PhpParser\Node;
+use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
+use PhpParser\Node\Expr\BinaryOp\BooleanOr;
+use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
+use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
@@ -31,6 +37,7 @@ use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
+use function array_merge;
 use function array_values;
 use function file_get_contents;
 use function preg_match;
@@ -288,8 +295,23 @@ final class FileAnalysisProvider
                 continue;
             }
 
-            if ($node instanceof If_ && $this->containsOnlyDeclarations($node)) {
-                $declaresSymbols = true;
+            if ($node instanceof If_) {
+                $branchStmts = $node->stmts;
+                foreach ($node->elseifs as $elseif) {
+                    $branchStmts = array_merge($branchStmts, $elseif->stmts);
+                }
+
+                if ($node->else instanceof Else_) {
+                    $branchStmts = array_merge($branchStmts, $node->else->stmts);
+                }
+
+                $state           = $this->fileState($branchStmts);
+                $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
+                if (! $hasSideEffects && $state['hasSideEffects']) {
+                    $sideEffectLine = $state['sideEffectLine'];
+                }
+
+                $hasSideEffects = $hasSideEffects || $state['hasSideEffects'];
                 continue;
             }
 
@@ -312,7 +334,8 @@ final class FileAnalysisProvider
         return $stmt instanceof ClassLike
             || $stmt instanceof Function_
             || $stmt instanceof Const_
-            || $this->isDefineCall($stmt);
+            || $this->isDefineCall($stmt)
+            || $this->isConditionalDefineStatement($stmt);
     }
 
     /**
@@ -328,6 +351,57 @@ final class FileAnalysisProvider
             && $stmt->expr->name->toLowerString() === 'define';
     }
 
+    /** `defined('X') || define('X', ...)` and `!defined('X') && define('X', ...)` patterns */
+    private function isConditionalDefineStatement(Stmt $stmt): bool
+    {
+        if (! $stmt instanceof Expression) {
+            return false;
+        }
+
+        $expr = $stmt->expr;
+
+        if (
+            ! ($expr instanceof BooleanOr || $expr instanceof LogicalOr
+            || $expr instanceof BooleanAnd || $expr instanceof LogicalAnd)
+        ) {
+            return false;
+        }
+
+        return ($this->isDefineFuncCall($expr->right) && $this->isDefinedCondition($expr->left))
+            || ($this->isDefineFuncCall($expr->left) && $this->isDefinedCondition($expr->right));
+    }
+
+    private function isDefineFuncCall(Expr $expr): bool
+    {
+        return $expr instanceof FuncCall
+            && $expr->name instanceof Name
+            && $expr->name->toLowerString() === 'define';
+    }
+
+    private function isDefinedCondition(Expr $expr): bool
+    {
+        if (
+            $expr instanceof FuncCall
+            && $expr->name instanceof Name
+            && $expr->name->toLowerString() === 'defined'
+        ) {
+            return true;
+        }
+
+        if ($expr instanceof BooleanNot) {
+            return $this->isDefinedCondition($expr->expr);
+        }
+
+        if (
+            $expr instanceof BooleanAnd || $expr instanceof LogicalAnd
+            || $expr instanceof BooleanOr || $expr instanceof LogicalOr
+        ) {
+            return $this->isDefinedCondition($expr->left) && $this->isDefinedCondition($expr->right);
+        }
+
+        return false;
+    }
+
     private function isNeutralStatement(Stmt $stmt): bool
     {
         return $stmt instanceof Declare_
@@ -335,20 +409,5 @@ final class FileAnalysisProvider
             || $stmt instanceof GroupUse
             || $stmt instanceof Nop
             || ($stmt instanceof InlineHTML && trim($stmt->value) === '');
-    }
-
-    private function containsOnlyDeclarations(If_ $if): bool
-    {
-        if ($if->elseifs !== [] || $if->else instanceof Else_) {
-            return false;
-        }
-
-        foreach ($if->stmts as $statement) {
-            if (! $this->isSymbolDeclaration($statement) && ! $this->isNeutralStatement($statement)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 }
