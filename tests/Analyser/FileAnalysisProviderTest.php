@@ -289,6 +289,154 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertTrue($fileAnalysisProvider->analyse($effectFile)->hasSideEffects);
     }
 
+    /** @return iterable<string, array{string, bool, bool, int}> */
+    public static function conditionExpressionProvider(): iterable
+    {
+        yield 'include in condition' => [
+            <<<'PHP'
+            <?php
+            if (include 'bootstrap.php') {
+                class Foo {}
+            }
+            PHP,
+            true,
+            true,
+            2,
+        ];
+
+        yield 'assignment in condition' => [
+            <<<'PHP'
+            <?php
+            if ($bootstrapped = boot()) {
+                class Foo {}
+            }
+            PHP,
+            true,
+            true,
+            2,
+        ];
+
+        yield 'post decrement in condition' => [
+            <<<'PHP'
+            <?php
+            if ($attempts--) {
+                class Foo {}
+            }
+            PHP,
+            true,
+            true,
+            2,
+        ];
+
+        yield 'require in elseif condition' => [
+            <<<'PHP'
+            <?php
+            if (PHP_VERSION_ID >= 80400) {
+                class Modern {}
+            } elseif (require 'legacy.php') {
+                class Legacy {}
+            }
+            PHP,
+            true,
+            true,
+            4,
+        ];
+
+        yield 'function_exists guard' => [
+            <<<'PHP'
+            <?php
+            if (! function_exists('helper')) {
+                function helper(): void {}
+            }
+            PHP,
+            true,
+            false,
+            1,
+        ];
+
+        yield 'version guard' => [
+            <<<'PHP'
+            <?php
+            if (PHP_VERSION_ID >= 80400) {
+                function modern(): void {}
+            }
+            PHP,
+            true,
+            false,
+            1,
+        ];
+
+        yield 'closure body in condition is not executed' => [
+            <<<'PHP'
+            <?php
+            if (is_callable(static function (): int {
+                $count = 1;
+
+                return $count;
+            })) {
+                class Foo {}
+            }
+            PHP,
+            true,
+            false,
+            1,
+        ];
+
+        yield 'condition side effect precedes branch side effect' => [
+            <<<'PHP'
+            <?php
+            if (include 'bootstrap.php') {
+                echo 'booted';
+            }
+            class Foo {}
+            PHP,
+            true,
+            true,
+            2,
+        ];
+
+        yield 'branch side effect precedes elseif condition side effect' => [
+            <<<'PHP'
+            <?php
+            if (true) {
+                echo 'booted';
+            } elseif (include 'bootstrap.php') {
+                class Foo {}
+            }
+            PHP,
+            true,
+            true,
+            3,
+        ];
+
+        yield 'earlier top level side effect wins' => [
+            <<<'PHP'
+            <?php
+            echo 'booted';
+            if (include 'bootstrap.php') {
+                class Foo {}
+            }
+            PHP,
+            true,
+            true,
+            2,
+        ];
+    }
+
+    #[DataProvider('conditionExpressionProvider')]
+    public function testDetectsSideEffectsInConditionExpressionsOfConditionalDeclarations(
+        string $contents,
+        bool $declaresSymbols,
+        bool $hasSideEffects,
+        int $sideEffectLine,
+    ): void {
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($this->source($contents));
+
+        $this->assertSame($declaresSymbols, $fileAnalysis->declaresSymbols);
+        $this->assertSame($hasSideEffects, $fileAnalysis->hasSideEffects);
+        $this->assertSame($sideEffectLine, $fileAnalysis->sideEffectLine);
+    }
+
     /** @return iterable<string, array{string, bool, bool}> */
     public static function defineStatementProvider(): iterable
     {

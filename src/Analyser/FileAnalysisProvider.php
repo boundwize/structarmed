@@ -9,12 +9,26 @@ use Boundwize\StructArmed\Util\Path;
 use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\AssignOp;
+use PhpParser\Node\Expr\AssignRef;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
 use PhpParser\Node\Expr\BooleanNot;
+use PhpParser\Node\Expr\Eval_;
+use PhpParser\Node\Expr\Exit_;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Include_;
+use PhpParser\Node\Expr\PostDec;
+use PhpParser\Node\Expr\PostInc;
+use PhpParser\Node\Expr\PreDec;
+use PhpParser\Node\Expr\PreInc;
+use PhpParser\Node\Expr\Print_;
+use PhpParser\Node\Expr\ShellExec;
+use PhpParser\Node\Expr\Throw_;
+use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassLike;
@@ -29,6 +43,9 @@ use PhpParser\Node\Stmt\InlineHTML;
 use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Use_;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor;
+use PhpParser\NodeVisitorAbstract;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use PhpParser\Token;
@@ -40,6 +57,7 @@ use function array_keys;
 use function array_merge;
 use function array_values;
 use function file_get_contents;
+use function min;
 use function preg_match;
 use function str_starts_with;
 use function substr;
@@ -296,9 +314,11 @@ final class FileAnalysisProvider
             }
 
             if ($node instanceof If_) {
+                $conditions  = [$node->cond];
                 $branchStmts = $node->stmts;
                 foreach ($node->elseifs as $elseif) {
-                    $branchStmts = array_merge($branchStmts, $elseif->stmts);
+                    $conditions[] = $elseif->cond;
+                    $branchStmts  = array_merge($branchStmts, $elseif->stmts);
                 }
 
                 if ($node->else instanceof Else_) {
@@ -307,11 +327,21 @@ final class FileAnalysisProvider
 
                 $state           = $this->fileState($branchStmts);
                 $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
-                if (! $hasSideEffects && $state['hasSideEffects']) {
-                    $sideEffectLine = $state['sideEffectLine'];
+
+                $branchLines   = $state['hasSideEffects'] ? [$state['sideEffectLine']] : [];
+                $conditionLine = $this->conditionSideEffectLine($conditions);
+                if ($conditionLine !== null) {
+                    $branchLines[] = $conditionLine;
                 }
 
-                $hasSideEffects = $hasSideEffects || $state['hasSideEffects'];
+                if ($branchLines !== []) {
+                    if (! $hasSideEffects) {
+                        $sideEffectLine = min($branchLines);
+                    }
+
+                    $hasSideEffects = true;
+                }
+
                 continue;
             }
 
@@ -327,6 +357,58 @@ final class FileAnalysisProvider
             'hasSideEffects'  => $hasSideEffects,
             'sideEffectLine'  => $sideEffectLine,
         ];
+    }
+
+    /**
+     * PSR-1 allows conditional symbol declarations, but the condition itself is still executed:
+     * `if (include 'bootstrap.php')` performs an include, which PSR-1 names as a side effect.
+     * Only unambiguous effects are reported, so declaration guards such as `function_exists()`
+     * or `PHP_VERSION_ID >= 80400` stay neutral. Bodies of closures and anonymous classes are
+     * skipped, as declaring them executes nothing.
+     *
+     * @param list<Expr> $conditions
+     */
+    private function conditionSideEffectLine(array $conditions): ?int
+    {
+        $nodeVisitor = new class extends NodeVisitorAbstract {
+            public ?int $sideEffectLine = null;
+
+            public function enterNode(Node $node): ?int
+            {
+                if ($node instanceof FunctionLike || $node instanceof ClassLike) {
+                    return NodeVisitor::DONT_TRAVERSE_CHILDREN;
+                }
+
+                if (! $this->isSideEffectExpression($node)) {
+                    return null;
+                }
+
+                $this->sideEffectLine = $node->getStartLine();
+
+                return NodeVisitor::STOP_TRAVERSAL;
+            }
+
+            private function isSideEffectExpression(Node $node): bool
+            {
+                return $node instanceof Include_
+                    || $node instanceof Eval_
+                    || $node instanceof Exit_
+                    || $node instanceof Print_
+                    || $node instanceof ShellExec
+                    || $node instanceof Throw_
+                    || $node instanceof Assign
+                    || $node instanceof AssignRef
+                    || $node instanceof AssignOp
+                    || $node instanceof PreInc
+                    || $node instanceof PreDec
+                    || $node instanceof PostInc
+                    || $node instanceof PostDec;
+            }
+        };
+
+        (new NodeTraverser($nodeVisitor))->traverse($conditions);
+
+        return $nodeVisitor->sideEffectLine;
     }
 
     private function isSymbolDeclaration(Stmt $stmt): bool
