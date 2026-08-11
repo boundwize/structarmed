@@ -9,12 +9,26 @@ use Boundwize\StructArmed\Util\Path;
 use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\AssignOp;
+use PhpParser\Node\Expr\AssignRef;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
 use PhpParser\Node\Expr\BooleanNot;
+use PhpParser\Node\Expr\Eval_;
+use PhpParser\Node\Expr\Exit_;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Include_;
+use PhpParser\Node\Expr\PostDec;
+use PhpParser\Node\Expr\PostInc;
+use PhpParser\Node\Expr\PreDec;
+use PhpParser\Node\Expr\PreInc;
+use PhpParser\Node\Expr\Print_;
+use PhpParser\Node\Expr\ShellExec;
+use PhpParser\Node\Expr\Throw_;
+use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassLike;
@@ -40,6 +54,8 @@ use function array_keys;
 use function array_merge;
 use function array_values;
 use function file_get_contents;
+use function is_array;
+use function min;
 use function preg_match;
 use function str_starts_with;
 use function substr;
@@ -296,8 +312,16 @@ final class FileAnalysisProvider
             }
 
             if ($node instanceof If_) {
-                $branchStmts = $node->stmts;
+                $conditionSideEffectLine = $this->intrinsicSideEffectLineInExpression($node->cond);
+                $branchStmts             = $node->stmts;
                 foreach ($node->elseifs as $elseif) {
+                    $elseifSideEffectLine = $this->intrinsicSideEffectLineInExpression($elseif->cond);
+                    if ($elseifSideEffectLine !== null) {
+                        $conditionSideEffectLine = $conditionSideEffectLine === null
+                            ? $elseifSideEffectLine
+                            : min($conditionSideEffectLine, $elseifSideEffectLine);
+                    }
+
                     $branchStmts = array_merge($branchStmts, $elseif->stmts);
                 }
 
@@ -307,6 +331,13 @@ final class FileAnalysisProvider
 
                 $state           = $this->fileState($branchStmts);
                 $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
+                if ($conditionSideEffectLine !== null) {
+                    $state['sideEffectLine'] = $state['hasSideEffects']
+                        ? min($conditionSideEffectLine, $state['sideEffectLine'])
+                        : $conditionSideEffectLine;
+                    $state['hasSideEffects'] = true;
+                }
+
                 if (! $hasSideEffects && $state['hasSideEffects']) {
                     $sideEffectLine = $state['sideEffectLine'];
                 }
@@ -327,6 +358,68 @@ final class FileAnalysisProvider
             'hasSideEffects'  => $hasSideEffects,
             'sideEffectLine'  => $sideEffectLine,
         ];
+    }
+
+    /**
+     * Detect syntax that intrinsically causes side effects. Determining whether an
+     * arbitrary call is effectful requires semantic analysis and is intentionally out of scope.
+     */
+    private function intrinsicSideEffectLineInExpression(Expr $expr): ?int
+    {
+        $nodes          = [$expr];
+        $sideEffectLine = null;
+
+        for ($index = 0; isset($nodes[$index]); ++$index) {
+            $node = $nodes[$index];
+
+            if ($node instanceof Expr && $this->isIntrinsicSideEffectExpression($node)) {
+                $sideEffectLine = $sideEffectLine === null
+                    ? $node->getStartLine()
+                    : min($sideEffectLine, $node->getStartLine());
+            }
+
+            if ($node instanceof FunctionLike || $node instanceof ClassLike) {
+                continue;
+            }
+
+            foreach ($node->getSubNodeNames() as $subNodeName) {
+                $subNode = $node->{$subNodeName};
+
+                if ($subNode instanceof Node) {
+                    $nodes[] = $subNode;
+                    continue;
+                }
+
+                if (! is_array($subNode)) {
+                    continue;
+                }
+
+                foreach ($subNode as $childNode) {
+                    if ($childNode instanceof Node) {
+                        $nodes[] = $childNode;
+                    }
+                }
+            }
+        }
+
+        return $sideEffectLine;
+    }
+
+    private function isIntrinsicSideEffectExpression(Expr $expr): bool
+    {
+        return $expr instanceof Assign
+            || $expr instanceof AssignOp
+            || $expr instanceof AssignRef
+            || $expr instanceof Eval_
+            || $expr instanceof Exit_
+            || $expr instanceof Include_
+            || $expr instanceof PostDec
+            || $expr instanceof PostInc
+            || $expr instanceof PreDec
+            || $expr instanceof PreInc
+            || $expr instanceof Print_
+            || $expr instanceof ShellExec
+            || $expr instanceof Throw_;
     }
 
     private function isSymbolDeclaration(Stmt $stmt): bool

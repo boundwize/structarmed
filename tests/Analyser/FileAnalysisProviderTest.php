@@ -289,6 +289,101 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertTrue($fileAnalysisProvider->analyse($effectFile)->hasSideEffects);
     }
 
+    /** @return iterable<string, array{string, bool, int}> */
+    public static function conditionalExpressionProvider(): iterable
+    {
+        yield 'assignment' => [
+            <<<'PHP'
+                <?php
+                if ($enabled = true) {
+                    class Conditional {}
+                }
+                PHP,
+            true,
+            2,
+        ];
+        yield 'include nested in an argument' => [
+            <<<'PHP'
+                <?php
+                if (is_bool(include 'bootstrap.php')) {
+                    class Conditional {}
+                }
+                PHP,
+            true,
+            2,
+        ];
+        yield 'effectful elseif after neutral condition' => [
+            <<<'PHP'
+                <?php
+                if (true) {
+                    class First {}
+                } elseif (include 'bootstrap.php') {
+                    class Second {}
+                }
+                PHP,
+            true,
+            4,
+        ];
+        yield 'multiple effectful conditions' => [
+            <<<'PHP'
+                <?php
+                if (include 'first.php') {
+                    class First {}
+                } elseif (include 'second.php') {
+                    class Second {}
+                }
+                PHP,
+            true,
+            2,
+        ];
+        yield 'multiple effects in one condition' => [
+            <<<'PHP'
+                <?php
+                if ((include 'first.php') && (include 'second.php')) {
+                    class Conditional {}
+                }
+                PHP,
+            true,
+            2,
+        ];
+        yield 'effectful condition and branch' => [
+            <<<'PHP'
+                <?php
+                if (include 'bootstrap.php') {
+                    echo 'side effect';
+                    class Conditional {}
+                }
+                PHP,
+            true,
+            2,
+        ];
+        yield 'closure body is not evaluated' => [
+            <<<'PHP'
+                <?php
+                if (static function (): bool {
+                    return $enabled = true;
+                }) {
+                    class Conditional {}
+                }
+                PHP,
+            false,
+            1,
+        ];
+    }
+
+    #[DataProvider('conditionalExpressionProvider')]
+    public function testAnalysesConditionalExpressions(
+        string $contents,
+        bool $hasSideEffects,
+        int $sideEffectLine,
+    ): void {
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($this->source($contents));
+
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertSame($hasSideEffects, $fileAnalysis->hasSideEffects);
+        $this->assertSame($sideEffectLine, $fileAnalysis->sideEffectLine);
+    }
+
     /** @return iterable<string, array{string, bool, bool}> */
     public static function defineStatementProvider(): iterable
     {
