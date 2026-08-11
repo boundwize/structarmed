@@ -329,7 +329,15 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents(
                 $basePath . '/src/Foo.php',
-                "<?php\nif (PHP_VERSION_ID >= 80400) {\n    function modern(): void {}\n} else {\n    function legacy(): void {}\n}\necho 'boot';\n"
+                <<<'PHP_WRAP'
+                <?php
+                if (PHP_VERSION_ID >= 80400) {
+                    function modern(): void {}
+                } else {
+                    function legacy(): void {}
+                }
+                echo 'boot';
+                PHP_WRAP
             );
 
             $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
@@ -354,7 +362,15 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents(
                 $basePath . '/src/Foo.php',
-                "<?php\nfunction always(): void {}\nif (PHP_VERSION_ID >= 80400) {\n    function modern(): void {}\n} else {\n    echo 'legacy';\n}\n"
+                <<<'PHP'
+                <?php
+                function always(): void {}
+                if (PHP_VERSION_ID >= 80400) {
+                    function modern(): void {}
+                } else {
+                    echo 'legacy';
+                }
+                PHP
             );
 
             $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
