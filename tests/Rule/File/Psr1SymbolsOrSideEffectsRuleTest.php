@@ -362,7 +362,7 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents(
                 $basePath . '/src/Foo.php',
-                <<<'PHP'
+                <<<'PHP_WRAP'
                 <?php
                 function always(): void {}
                 if (PHP_VERSION_ID >= 80400) {
@@ -370,7 +370,7 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
                 } else {
                     echo 'legacy';
                 }
-                PHP
+                PHP_WRAP
             );
 
             $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
