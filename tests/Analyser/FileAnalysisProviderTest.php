@@ -329,14 +329,14 @@ final class FileAnalysisProviderTest extends TestCase
         ];
 
         yield 'require in elseif condition' => [
-            <<<'PHP'
+            <<<'PHP_WRAP'
             <?php
             if (PHP_VERSION_ID >= 80400) {
                 class Modern {}
             } elseif (require 'legacy.php') {
                 class Legacy {}
             }
-            PHP,
+            PHP_WRAP,
             true,
             true,
             4,
@@ -355,12 +355,12 @@ final class FileAnalysisProviderTest extends TestCase
         ];
 
         yield 'version guard' => [
-            <<<'PHP'
+            <<<'PHP_WRAP'
             <?php
             if (PHP_VERSION_ID >= 80400) {
                 function modern(): void {}
             }
-            PHP,
+            PHP_WRAP,
             true,
             false,
             1,
