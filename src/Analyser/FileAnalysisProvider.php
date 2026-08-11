@@ -312,10 +312,10 @@ final class FileAnalysisProvider
             }
 
             if ($node instanceof If_) {
-                $conditionSideEffectLine = $this->sideEffectLineInExpression($node->cond);
+                $conditionSideEffectLine = $this->intrinsicSideEffectLineInExpression($node->cond);
                 $branchStmts             = $node->stmts;
                 foreach ($node->elseifs as $elseif) {
-                    $elseifSideEffectLine = $this->sideEffectLineInExpression($elseif->cond);
+                    $elseifSideEffectLine = $this->intrinsicSideEffectLineInExpression($elseif->cond);
                     if ($elseifSideEffectLine !== null) {
                         $conditionSideEffectLine = $conditionSideEffectLine === null
                             ? $elseifSideEffectLine
@@ -360,7 +360,11 @@ final class FileAnalysisProvider
         ];
     }
 
-    private function sideEffectLineInExpression(Expr $expr): ?int
+    /**
+     * Detect syntax that intrinsically causes side effects. Determining whether an
+     * arbitrary call is effectful requires semantic analysis and is intentionally out of scope.
+     */
+    private function intrinsicSideEffectLineInExpression(Expr $expr): ?int
     {
         $nodes          = [$expr];
         $sideEffectLine = null;
@@ -368,7 +372,7 @@ final class FileAnalysisProvider
         for ($index = 0; isset($nodes[$index]); ++$index) {
             $node = $nodes[$index];
 
-            if ($node instanceof Expr && $this->isSideEffectExpression($node)) {
+            if ($node instanceof Expr && $this->isIntrinsicSideEffectExpression($node)) {
                 $sideEffectLine = $sideEffectLine === null
                     ? $node->getStartLine()
                     : min($sideEffectLine, $node->getStartLine());
@@ -401,7 +405,7 @@ final class FileAnalysisProvider
         return $sideEffectLine;
     }
 
-    private function isSideEffectExpression(Expr $expr): bool
+    private function isIntrinsicSideEffectExpression(Expr $expr): bool
     {
         return $expr instanceof Assign
             || $expr instanceof AssignOp
