@@ -39,14 +39,11 @@ Documentation is available online, with source files kept in this repository:
 - Documentation site: <https://boundwize.github.io/structarmed/>
 - Documentation source: [docs/](docs/index.md) for local edits and GitHub Pages publishing.
 
-## Visualize
+## Community Ecosystem
 
-[**StructArmed Explorer**](https://skie.github.io/structarmed-vizualize/) turns
-any `structarmed.php` into an explorable layer-dependency graph right in the
-browser — no install, no build step, no server. Click any layer to inspect its
-members, dependencies, and exceptions, or switch to the Mermaid view to get the
-generated markdown. Drag & drop your own `structarmed.php` file to try it.
-````
+Explore community projects built around StructArmed.
+
+- [StructArmed Explorer](https://skie.github.io/structarmed-vizualize/): visualize your "structarmed.php" configuration as an interactive layer-dependency graph directly in the browser, with no installation required.
 
 ## Contributing
 
