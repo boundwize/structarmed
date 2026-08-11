@@ -366,7 +366,13 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents(
                 $basePath . '/src/Foo.php',
-                "<?php\nif (true) {\n    echo 'x';\n}\nclass Foo {}\n"
+                <<<'PHP'
+                <?php
+                if (true) {
+                    echo 'x';
+                }
+                class Foo {}
+                PHP
             );
 
             $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
@@ -375,7 +381,7 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             );
 
             $this->assertCount(1, $violations);
-            $this->assertSame(2, $violations[0]->line);
+            $this->assertSame(3, $violations[0]->line);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');
@@ -465,7 +471,7 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
             );
 
             $this->assertCount(1, $violations);
-            $this->assertSame(3, $violations[0]->line);
+            $this->assertSame(6, $violations[0]->line);
         } finally {
             unlink($basePath . '/src/Foo.php');
             rmdir($basePath . '/src');

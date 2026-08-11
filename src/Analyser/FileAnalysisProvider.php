@@ -308,7 +308,7 @@ final class FileAnalysisProvider
                 $state           = $this->fileState($branchStmts);
                 $declaresSymbols = $declaresSymbols || $state['declaresSymbols'];
                 if (! $hasSideEffects && $state['hasSideEffects']) {
-                    $sideEffectLine = $node->getStartLine();
+                    $sideEffectLine = $state['sideEffectLine'];
                 }
 
                 $hasSideEffects = $hasSideEffects || $state['hasSideEffects'];
