@@ -289,6 +289,37 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertTrue($fileAnalysisProvider->analyse($effectFile)->hasSideEffects);
     }
 
+    /** @return iterable<string, array{string, bool, bool}> */
+    public static function defineStatementProvider(): iterable
+    {
+        yield 'defined() || define()' => ["defined('X') || define('X', 1);", true, false];
+        yield '! defined() && define()' => ["! defined('X') && define('X', 1);", true, false];
+        yield 'defined() or define()' => ["defined('X') or define('X', 1);", true, false];
+        yield '! defined() and define()' => ["! defined('X') and define('X', 1);", true, false];
+        yield 'define() || defined()' => ["define('X', 1) || defined('X');", true, false];
+        yield 'nested defined() conditions' => ["defined('A') && defined('B') && define('C', 1);", true, false];
+        yield 'unrelated call guarding define()' => ["foo() || define('X', 1);", false, true];
+        yield 'defined() guarding unrelated call' => ["defined('X') || foo();", false, true];
+        yield 'static define() call' => ["Foo::define('X', 1);", false, true];
+        yield 'define() method call' => ["\$container->define('X', 1);", false, true];
+        yield 'defined() on a variable' => ["\$guard || define('X', 1);", false, true];
+        yield 'assignment' => ['$version = 1;', false, true];
+    }
+
+    #[DataProvider('defineStatementProvider')]
+    public function testDistinguishesGuardedDefineDeclarationsFromSideEffects(
+        string $statement,
+        bool $declaresSymbols,
+        bool $hasSideEffects,
+    ): void {
+        $file = $this->source("<?php\n" . $statement . "\n");
+
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($file);
+
+        $this->assertSame($declaresSymbols, $fileAnalysis->declaresSymbols);
+        $this->assertSame($hasSideEffects, $fileAnalysis->hasSideEffects);
+    }
+
     private function source(string $contents): string
     {
         return 'data://text/plain;base64,' . base64_encode($contents);
