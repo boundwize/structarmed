@@ -253,6 +253,18 @@ final class PresetTest extends TestCase
         $this->assertSame(['lib/'], $layers['Source[lib/]']);
     }
 
+    public function testInheritedPresetLayerNameDescribesItsEffectiveSourcePaths(): void
+    {
+        $architecture = Architecture::define()
+            ->withPreset(Preset::PSR12(sourcePaths: ['tests/']))
+            ->withPreset(Preset::PSR1(sourcePaths: ['src/']));
+
+        $layers = $architecture->getLayers();
+
+        $this->assertArrayNotHasKey('Source[src/]', $layers);
+        $this->assertSame(['tests/', 'src/'], $layers['Source[src/,tests/]']);
+    }
+
     public function testSourceLayerIsReusedWhenSourcePathsMatchRegardlessOfTrailingSlash(): void
     {
         $architecture = Architecture::define();

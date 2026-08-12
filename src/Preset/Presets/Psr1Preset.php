@@ -51,7 +51,7 @@ final readonly class Psr1Preset implements PresetInterface
         // Only the inherited PSR-4 preset receives the combined scope. The PSR-1
         // rules intentionally use this preset's configured paths so a standalone
         // PSR-4 scope cannot broaden PSR-1 enforcement.
-        $layerName = $this->resolveLayerName($architecture);
+        $layerName = $this->resolveLayerName($architecture, $sourcePathsForPsr1);
         $architecture->layer($layerName, $sourcePathsForPsr1 ?? []);
 
         $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($sourcePathsForPsr1));

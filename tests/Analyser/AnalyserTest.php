@@ -756,6 +756,22 @@ final class AnalyserTest extends TestCase
                 ->withPreset(Preset::PSR1(sourcePaths: ['psr1/']))
                 ->withPreset(Preset::PSR12(sourcePaths: ['psr12/'])),
             Architecture::define()
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/']))
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/']))
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/']))
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/']))
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/']))
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/']))
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/'])),
+            Architecture::define()
                 ->withPreset(Preset::PSR12(sourcePaths: ['psr12/']))
                 ->withPreset(Preset::PSR1(sourcePaths: ['psr1/']))
                 ->withPreset(Preset::PSR4(sourcePaths: ['psr4/'])),

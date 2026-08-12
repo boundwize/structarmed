@@ -39,7 +39,7 @@ final readonly class Psr12Preset implements PresetInterface
         // Only the inherited PSR-1 preset receives the combined scope. The PSR-12
         // rules intentionally use this preset's configured paths so standalone
         // PSR-1 or PSR-4 scopes cannot broaden PSR-12 enforcement.
-        $layerName = $this->resolveLayerName($architecture);
+        $layerName = $this->resolveLayerName($architecture, $sourcePathsForPsr12);
         $architecture->layer($layerName, $sourcePathsForPsr12 ?? []);
 
         $architecture->rule(
