@@ -12,6 +12,8 @@ use Boundwize\StructArmed\Rule\RuleInterface;
 use function array_filter;
 use function array_key_exists;
 use function array_merge;
+use function array_unique;
+use function array_values;
 use function is_int;
 use function sprintf;
 
@@ -309,6 +311,7 @@ final class Architecture
         if ($existing === null || $sourcePaths === null) {
             return $this->presetSourcePaths[$preset] = null;
         }
+
         $merged = [...$existing, ...$sourcePaths];
 
         return $this->presetSourcePaths[$preset] = array_values(array_unique($merged));
