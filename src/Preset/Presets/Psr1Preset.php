@@ -46,15 +46,15 @@ final readonly class Psr1Preset implements PresetInterface
         $psr4Preset      = new Psr4Preset($psr1SourcePaths);
         $psr4Preset->apply($architecture);
 
-        $layerName = $this->resolveLayerName($architecture, $psr1SourcePaths ?? []);
-        $architecture->layer($layerName, $psr1SourcePaths ?? []);
+        $layerName = $this->resolveLayerName($architecture, $this->sourcePaths ?? []);
+        $architecture->layer($layerName, $this->sourcePaths ?? []);
 
-        $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($psr1SourcePaths));
-        $architecture->rule(self::FILES_MUST_USE_VALID_UTF8, new Psr1ValidUtf8Rule($psr1SourcePaths));
-        $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($psr1SourcePaths));
+        $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($this->sourcePaths));
+        $architecture->rule(self::FILES_MUST_USE_VALID_UTF8, new Psr1ValidUtf8Rule($this->sourcePaths));
+        $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($this->sourcePaths));
         $architecture->rule(
             self::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS,
-            new Psr1SymbolsOrSideEffectsRule($psr1SourcePaths)
+            new Psr1SymbolsOrSideEffectsRule($this->sourcePaths)
         );
         $architecture->rule(self::CLASSES_MUST_BE_STUDLY_CAPS, new ClassNameMustBeStudlyCapsRule($layerName));
         $architecture->rule(
