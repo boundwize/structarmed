@@ -15,6 +15,7 @@ use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
+use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
@@ -730,6 +731,72 @@ final class AnalyserTest extends TestCase
             $this->assertCount(1, $tagViolations);
             $this->assertStringEndsWith('/tests/InvalidTag.php', $this->normalisePath($tagViolations[0]->file));
             $this->assertStringNotContainsString('/src/', $this->normalisePath($tagViolations[0]->file));
+        }
+    }
+
+    public function testPsr4Psr1AndPsr12PreserveInheritedSourceScopesRegardlessOfPresetOrder(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'        => '{"autoload":{"psr-4":{"Psr4\\\\":"psr4/",'
+                . '"Psr1\\\\":"psr1/","Psr12\\\\":"psr12/"}}}',
+            'psr4/Invalid.php'     => '<?php namespace Wrong; final class Psr4Invalid {'
+                . ' function missingVisibility() {} }',
+            'psr4/InvalidTag.php'  => '<? echo "psr4";',
+            'psr1/Invalid.php'     => '<?php namespace Wrong; final class Psr1Invalid {'
+                . ' function missingVisibility() {} }',
+            'psr1/InvalidTag.php'  => '<? echo "psr1";',
+            'psr12/Invalid.php'    => '<?php namespace Wrong; final class Psr12Invalid {'
+                . ' function missingVisibility() {} }',
+            'psr12/InvalidTag.php' => '<? echo "psr12";',
+        ]);
+
+        $architectures = [
+            Architecture::define()
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/']))
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/']))
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/']))
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/']))
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/']))
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/']))
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/']))
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR12(sourcePaths: ['psr12/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['psr1/']))
+                ->withPreset(Preset::PSR4(sourcePaths: ['psr4/'])),
+        ];
+
+        foreach ($architectures as $architecture) {
+            $result = (new Analyser($basePath))
+                ->analyse($architecture, analyserOptions: AnalyserOptions::sequential());
+
+            $psr4Violations = $result->forRule(Psr4Preset::CLASSES_MUST_MATCH_COMPOSER);
+            $this->assertCount(3, $psr4Violations);
+
+            $psr1Violations = $result->forRule(Psr1Preset::FILES_MUST_USE_VALID_TAGS);
+            $this->assertCount(2, $psr1Violations);
+            $psr1ViolationFiles = array_map(
+                fn (RuleViolation $ruleViolation): string => $this->normalisePath($ruleViolation->file),
+                $psr1Violations,
+            );
+            sort($psr1ViolationFiles);
+            $this->assertStringEndsWith('/psr1/InvalidTag.php', $psr1ViolationFiles[0]);
+            $this->assertStringEndsWith('/psr12/InvalidTag.php', $psr1ViolationFiles[1]);
+
+            $psr12Violations = $result->forRule(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY);
+            $this->assertCount(1, $psr12Violations);
+            $this->assertStringEndsWith('/psr12/Invalid.php', $this->normalisePath($psr12Violations[0]->file));
         }
     }
 
