@@ -42,19 +42,19 @@ final readonly class Psr1Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        $sourcePaths = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
-        $psr4Preset  = new Psr4Preset($sourcePaths);
+        $psr1SourcePaths = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
+        $psr4Preset      = new Psr4Preset($psr1SourcePaths);
         $psr4Preset->apply($architecture);
 
-        $layerName = $this->resolveLayerName($architecture, $sourcePaths ?? []);
-        $architecture->layer($layerName, $sourcePaths ?? []);
+        $layerName = $this->resolveLayerName($architecture, $psr1SourcePaths ?? []);
+        $architecture->layer($layerName, $psr1SourcePaths ?? []);
 
-        $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($sourcePaths));
-        $architecture->rule(self::FILES_MUST_USE_VALID_UTF8, new Psr1ValidUtf8Rule($sourcePaths));
-        $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($sourcePaths));
+        $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($psr1SourcePaths));
+        $architecture->rule(self::FILES_MUST_USE_VALID_UTF8, new Psr1ValidUtf8Rule($psr1SourcePaths));
+        $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($psr1SourcePaths));
         $architecture->rule(
             self::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS,
-            new Psr1SymbolsOrSideEffectsRule($sourcePaths)
+            new Psr1SymbolsOrSideEffectsRule($psr1SourcePaths)
         );
         $architecture->rule(self::CLASSES_MUST_BE_STUDLY_CAPS, new ClassNameMustBeStudlyCapsRule($layerName));
         $architecture->rule(

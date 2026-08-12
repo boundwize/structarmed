@@ -700,10 +700,10 @@ final class AnalyserTest extends TestCase
     public function testPsr1AndPsr4PreserveBothSourceScopesRegardlessOfPresetOrder(): void
     {
         $basePath = $this->makeTempProject([
-            'composer.json'   => '{"autoload":{"psr-4":{"App\\\\":"src/"}},'
+            'composer.json'        => '{"autoload":{"psr-4":{"App\\\\":"src/"}},'
                 . '"autoload-dev":{"psr-4":{"Tests\\\\":"tests/"}}}',
-            'src/Invalid.php' => '<?php namespace Wrong; final class Invalid {}',
-            'tests/Valid.php' => '<?php namespace Tests; final class Valid {}',
+            'src/Invalid.php'      => '<?php namespace Wrong; final class Invalid {}',
+            'tests/InvalidTag.php' => '<? echo "tests";',
         ]);
 
         $architectures = [
@@ -716,12 +716,18 @@ final class AnalyserTest extends TestCase
         ];
 
         foreach ($architectures as $architecture) {
-            $violations = (new Analyser($basePath))
-                ->analyse($architecture, analyserOptions: AnalyserOptions::sequential())
-                ->forRule(Psr4Preset::CLASSES_MUST_MATCH_COMPOSER);
+            $result = (new Analyser($basePath))
+                ->analyse($architecture, analyserOptions: AnalyserOptions::sequential());
+
+            $violations = $result->forRule(Psr4Preset::CLASSES_MUST_MATCH_COMPOSER);
 
             $this->assertCount(1, $violations);
             $this->assertStringEndsWith('/src/Invalid.php', $this->normalisePath($violations[0]->file));
+
+            $tagViolations = $result->forRule(Psr1Preset::FILES_MUST_USE_VALID_TAGS);
+
+            $this->assertCount(1, $tagViolations);
+            $this->assertStringEndsWith('/tests/InvalidTag.php', $this->normalisePath($tagViolations[0]->file));
         }
     }
 
