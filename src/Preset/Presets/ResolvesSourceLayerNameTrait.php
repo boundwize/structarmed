@@ -15,7 +15,7 @@ trait ResolvesSourceLayerNameTrait
 {
     public const SOURCE_LAYER = 'Source';
 
-    /** @param list<string> $sourcePaths */
+    /** @param list<string>|null $sourcePaths */
     public function resolveLayerName(Architecture $architecture, ?array $sourcePaths = null): string
     {
         $sourcePaths    = $this->normalizePaths($sourcePaths ?? $this->sourcePaths ?? []);

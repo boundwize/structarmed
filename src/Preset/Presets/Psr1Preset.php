@@ -46,7 +46,7 @@ final readonly class Psr1Preset implements PresetInterface
         $psr4Preset      = new Psr4Preset($psr1SourcePaths);
         $psr4Preset->apply($architecture);
 
-        $layerName = $this->resolveLayerName($architecture, $this->sourcePaths ?? []);
+        $layerName = $this->resolveLayerName($architecture);
         $architecture->layer($layerName, $this->sourcePaths ?? []);
 
         $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($this->sourcePaths));
