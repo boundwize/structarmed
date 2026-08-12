@@ -881,6 +881,25 @@ final class AnalyserTest extends TestCase
         }
     }
 
+    public function testEmptySourceArrayLayerUsesExistingSourcePaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php' => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', ['src/'])
+            ->layer('Source[]', [])
+            ->rule('source_array.must_be_final', new MustBeFinalRule('Source[]'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, analyserOptions: AnalyserOptions::sequential())
+            ->forRule('source_array.must_be_final');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($violations[0]->file));
+    }
+
     public function testPsr15PresetAcceptsInterfaceExtendingMiddlewareInterfaceWithMiddlewareSuffix(): void
     {
         $basePath = $this->makeTempProject([
