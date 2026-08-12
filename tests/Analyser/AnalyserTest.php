@@ -1992,6 +1992,50 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testAnalyserRulesetUsesPathLayerWhenCallerIsExcludedFromPatternLayer(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/OrderHandler.php'  => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                use App\Infrastructure\Repository;
+
+                final class OrderHandler
+                {
+                    public function __construct(Repository $repository)
+                    {
+                    }
+                }
+                PHP,
+            'src/Infrastructure/Repository.php' => <<<'PHP'
+                <?php
+
+                namespace App\Infrastructure;
+
+                final class Repository
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/Application/')
+            ->layer('Infrastructure', 'src/Infrastructure/')
+            ->layerPattern('Handler', '/Handler$/', '/^App\\\\Application\\\\/')
+            ->ruleset([
+                'Application' => [],
+            ]);
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture)
+            ->forRule('ruleset.Application');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('which belongs to layer [Infrastructure]', $violations[0]->message);
+    }
+
     public function testAnalyserRulesetSameLayerAllowedWhenRegexLayerExcludesDependency(): void
     {
         $basePath = $this->makeTempProject([
