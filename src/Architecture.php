@@ -290,9 +290,21 @@ final class Architecture
     }
 
     /**
-     * Accumulate source paths for repeated or composed applications of a preset.
-     * A null scope means all Composer-discovered source paths and therefore wins
-     * over any explicit subset.
+     * Combine source paths contributed through preset inheritance.
+     *
+     * This preserves an inherited preset's existing scope when another preset
+     * extends it, such as PSR-12 -> PSR-1 -> PSR-4. Applying the same top-level
+     * preset more than once is not a supported configuration.
+     *
+     * For example:
+     *
+     *   ->withPreset(Preset::PSR4(sourcePaths: ['src/']))
+     *   ->withPreset(Preset::PSR1(sourcePaths: ['tests/']))
+     *
+     * PSR-4 applies to both src/ and tests/, while PSR-1 remains scoped to tests/.
+     *
+     * A null scope represents all Composer-discovered source paths and therefore
+     * takes precedence over any explicit subset.
      *
      * @internal Used by scoped presets while they are applied.
      *
