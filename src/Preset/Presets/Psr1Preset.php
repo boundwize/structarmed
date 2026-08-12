@@ -42,22 +42,24 @@ final readonly class Psr1Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        $sourcePathsForPsr4 = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
-        $psr4Preset         = new Psr4Preset($sourcePathsForPsr4);
+        $sourcePathsForPsr1 = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
+        $sourcePathsForPsr4 = $architecture->registerPresetSourcePaths(Psr4Preset::class, $this->sourcePaths);
+
+        $psr4Preset = new Psr4Preset($sourcePathsForPsr4);
         $psr4Preset->apply($architecture);
 
         // Only the inherited PSR-4 preset receives the combined scope. The PSR-1
         // rules intentionally use this preset's configured paths so a standalone
         // PSR-4 scope cannot broaden PSR-1 enforcement.
         $layerName = $this->resolveLayerName($architecture);
-        $architecture->layer($layerName, $this->sourcePaths ?? []);
+        $architecture->layer($layerName, $sourcePathsForPsr1 ?? []);
 
-        $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($this->sourcePaths));
-        $architecture->rule(self::FILES_MUST_USE_VALID_UTF8, new Psr1ValidUtf8Rule($this->sourcePaths));
-        $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($this->sourcePaths));
+        $architecture->rule(self::FILES_MUST_USE_VALID_TAGS, new Psr1PhpTagsRule($sourcePathsForPsr1));
+        $architecture->rule(self::FILES_MUST_USE_VALID_UTF8, new Psr1ValidUtf8Rule($sourcePathsForPsr1));
+        $architecture->rule(self::FILES_MUST_USE_UTF8_WITHOUT_BOM, new Psr1Utf8WithoutBomRule($sourcePathsForPsr1));
         $architecture->rule(
             self::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS,
-            new Psr1SymbolsOrSideEffectsRule($this->sourcePaths)
+            new Psr1SymbolsOrSideEffectsRule($sourcePathsForPsr1)
         );
         $architecture->rule(self::CLASSES_MUST_BE_STUDLY_CAPS, new ClassNameMustBeStudlyCapsRule($layerName));
         $architecture->rule(
