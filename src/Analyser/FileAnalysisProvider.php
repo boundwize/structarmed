@@ -51,7 +51,6 @@ use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
-use function array_merge;
 use function array_values;
 use function file_get_contents;
 use function is_array;
@@ -322,11 +321,15 @@ final class FileAnalysisProvider
                             : min($conditionSideEffectLine, $elseifSideEffectLine);
                     }
 
-                    $branchStmts = array_merge($branchStmts, $elseif->stmts);
+                    foreach ($elseif->stmts as $stmt) {
+                        $branchStmts[] = $stmt;
+                    }
                 }
 
                 if ($node->else instanceof Else_) {
-                    $branchStmts = array_merge($branchStmts, $node->else->stmts);
+                    foreach ($node->else->stmts as $stmt) {
+                        $branchStmts[] = $stmt;
+                    }
                 }
 
                 $state           = $this->fileState($branchStmts);
