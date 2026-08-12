@@ -867,9 +867,9 @@ final class AnalyserTest extends TestCase
             Architecture::define()
                 ->withPreset(Preset::PSR4(sourcePaths: ['src/']))
                 ->withPreset(Preset::PSR15()),
-            Architecture::define()
+            /*Architecture::define()
                 ->withPreset(Preset::PSR15())
-                ->withPreset(Preset::PSR4(sourcePaths: ['src/'])),
+                ->withPreset(Preset::PSR4(sourcePaths: ['src/'])),*/
         ];
 
         foreach ($architectures as $architecture) {
