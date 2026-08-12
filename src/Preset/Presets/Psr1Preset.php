@@ -48,9 +48,8 @@ final readonly class Psr1Preset implements PresetInterface
         $psr4Preset = new Psr4Preset($sourcePathsForPsr4);
         $psr4Preset->apply($architecture);
 
-        // Only the inherited PSR-4 preset receives the combined scope. The PSR-1
-        // rules intentionally use this preset's configured paths so a standalone
-        // PSR-4 scope cannot broaden PSR-1 enforcement.
+        // PSR-1 rules use only paths accumulated for PSR-1. Paths registered
+        // exclusively for PSR-4 must not broaden PSR-1 enforcement.
         $layerName = $this->resolveLayerName($architecture, $sourcePathsForPsr1);
         $architecture->layer($layerName, $sourcePathsForPsr1 ?? []);
 
