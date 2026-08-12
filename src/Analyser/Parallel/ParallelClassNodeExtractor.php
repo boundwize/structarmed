@@ -74,7 +74,7 @@ final readonly class ParallelClassNodeExtractor
         $totalFiles   = count($files);
         $workerCount  = min($this->workerCount, $totalFiles);
         $script       = dirname(__DIR__, 3) . '/bin/structarmed.php';
-        $processes    = [];
+        $pending      = [];
         $emitProgress = $progressHandler instanceof ProgressHandlerInterface;
 
         foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
@@ -118,7 +118,7 @@ final readonly class ParallelClassNodeExtractor
             $stdoutPipe = $pipes[1];
             stream_set_blocking($stdoutPipe, false);
 
-            $processes[] = [
+            $pending[] = [
                 'process'       => $process,
                 'files'         => $chunk,
                 'filesAdvanced' => 0,
@@ -133,7 +133,6 @@ final readonly class ParallelClassNodeExtractor
         $fileAnalyses        = [];
         $anonymousClassNodes = [];
         $failure             = null;
-        $pending             = $processes;
 
         while ($pending !== []) {
             $anyActivity = false;
