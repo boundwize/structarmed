@@ -8,14 +8,13 @@ use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Util\Path;
 
 use function array_filter;
 use function array_key_exists;
 use function array_merge;
 use function is_int;
-use function rtrim;
 use function sprintf;
-use function str_replace;
 
 /**
  * Fluent architecture definition builder.
@@ -316,7 +315,7 @@ final class Architecture
         $normalised = [];
 
         foreach ([...$existing, ...$sourcePaths] as $sourcePath) {
-            $normalisedPath = rtrim(str_replace('\\', '/', $sourcePath), '/');
+            $normalisedPath = Path::normalise($sourcePath, canonicalise: true);
 
             if (array_key_exists($normalisedPath, $normalised)) {
                 continue;
