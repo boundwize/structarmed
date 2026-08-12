@@ -703,6 +703,7 @@ final class AnalyserTest extends TestCase
             'composer.json'        => '{"autoload":{"psr-4":{"App\\\\":"src/"}},'
                 . '"autoload-dev":{"psr-4":{"Tests\\\\":"tests/"}}}',
             'src/Invalid.php'      => '<?php namespace Wrong; final class Invalid {}',
+            'src/InvalidTag.php'   => '<? echo "src";',
             'tests/InvalidTag.php' => '<? echo "tests";',
         ]);
 
@@ -728,6 +729,7 @@ final class AnalyserTest extends TestCase
 
             $this->assertCount(1, $tagViolations);
             $this->assertStringEndsWith('/tests/InvalidTag.php', $this->normalisePath($tagViolations[0]->file));
+            $this->assertStringNotContainsString('/src/', $this->normalisePath($tagViolations[0]->file));
         }
     }
 
