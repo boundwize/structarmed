@@ -46,6 +46,9 @@ final readonly class Psr1Preset implements PresetInterface
         $psr4Preset         = new Psr4Preset($sourcePathsForPsr4);
         $psr4Preset->apply($architecture);
 
+        // Combined paths are only forwarded to the inherited PSR-4 preset so its
+        // shared rule keys retain earlier scopes. PSR-1 rules must remain limited
+        // to the paths explicitly configured for this PSR-1 preset instance.
         $layerName = $this->resolveLayerName($architecture);
         $architecture->layer($layerName, $this->sourcePaths ?? []);
 
