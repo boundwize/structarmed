@@ -33,8 +33,9 @@ final readonly class Psr12Preset implements PresetInterface
         $psr1Preset = new Psr1Preset($this->sourcePaths);
         $psr1Preset->apply($architecture);
 
-        $layerName = $this->resolveLayerName($architecture);
-        $architecture->layer($layerName, $this->sourcePaths ?? []);
+        $sourcePaths = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
+        $layerName   = $this->resolveLayerName($architecture, $sourcePaths ?? []);
+        $architecture->layer($layerName, $sourcePaths ?? []);
 
         $architecture->rule(
             self::METHODS_MUST_DECLARE_VISIBILITY,

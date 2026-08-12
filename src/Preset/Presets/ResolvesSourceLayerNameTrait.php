@@ -15,9 +15,10 @@ trait ResolvesSourceLayerNameTrait
 {
     public const SOURCE_LAYER = 'Source';
 
-    public function resolveLayerName(Architecture $architecture): string
+    /** @param list<string> $sourcePaths */
+    public function resolveLayerName(Architecture $architecture, ?array $sourcePaths = null): string
     {
-        $sourcePaths    = $this->normalizePaths($this->sourcePaths ?? []);
+        $sourcePaths    = $this->normalizePaths($sourcePaths ?? $this->sourcePaths ?? []);
         $existingLayers = $architecture->getLayers();
 
         if (! isset($existingLayers[self::SOURCE_LAYER])) {

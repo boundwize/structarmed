@@ -697,6 +697,34 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testPsr1AndPsr4PreserveBothSourceScopesRegardlessOfPresetOrder(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'   => '{"autoload":{"psr-4":{"App\\\\":"src/"}},'
+                . '"autoload-dev":{"psr-4":{"Tests\\\\":"tests/"}}}',
+            'src/Invalid.php' => '<?php namespace Wrong; final class Invalid {}',
+            'tests/Valid.php' => '<?php namespace Tests; final class Valid {}',
+        ]);
+
+        $architectures = [
+            Architecture::define()
+                ->withPreset(Preset::PSR4(sourcePaths: ['src/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['tests/'])),
+            Architecture::define()
+                ->withPreset(Preset::PSR1(sourcePaths: ['tests/']))
+                ->withPreset(Preset::PSR4(sourcePaths: ['src/'])),
+        ];
+
+        foreach ($architectures as $architecture) {
+            $violations = (new Analyser($basePath))
+                ->analyse($architecture, analyserOptions: AnalyserOptions::sequential())
+                ->forRule(Psr4Preset::CLASSES_MUST_MATCH_COMPOSER);
+
+            $this->assertCount(1, $violations);
+            $this->assertStringEndsWith('/src/Invalid.php', $this->normalisePath($violations[0]->file));
+        }
+    }
+
     public function testFilesForAnalysisIgnoresMissingRootComposerJsonCandidate(): void
     {
         $basePath = $this->makeTempProject([

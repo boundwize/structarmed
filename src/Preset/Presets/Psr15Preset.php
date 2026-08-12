@@ -39,8 +39,9 @@ final readonly class Psr15Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        $layerName = $this->resolveLayerName($architecture);
-        $architecture->layer($layerName, $this->sourcePaths ?? []);
+        $sourcePaths = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
+        $layerName   = $this->resolveLayerName($architecture, $sourcePaths ?? []);
+        $architecture->layer($layerName, $sourcePaths ?? []);
         $architecture->rule(
             self::MIDDLEWARE_MUST_IMPLEMENT_MIDDLEWARE_INTERFACE,
             new MustImplementInterfaceRule(

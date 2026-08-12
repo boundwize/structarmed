@@ -10,9 +10,12 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 
 use function array_filter;
+use function array_key_exists;
 use function array_merge;
 use function is_int;
+use function rtrim;
 use function sprintf;
+use function str_replace;
 
 /**
  * Fluent architecture definition builder.
@@ -44,6 +47,9 @@ final class Architecture
 
     /** @var array<string, RuleInterface|ProjectRuleInterface> key → rule */
     private array $rules = [];
+
+    /** @var array<class-string<PresetInterface>, list<string>|null> */
+    private array $presetSourcePaths = [];
 
     /** @var list<string> */
     private array $skipPaths = [];
@@ -281,6 +287,46 @@ final class Architecture
         }
 
         return $this;
+    }
+
+    /**
+     * Accumulate source paths for repeated or composed applications of a preset.
+     * A null scope means all Composer-discovered source paths and therefore wins
+     * over any explicit subset.
+     *
+     * @internal Used by scoped presets while they are applied.
+     *
+     * @param class-string<PresetInterface> $preset
+     * @param list<string>|null              $sourcePaths
+     * @return list<string>|null
+     */
+    public function registerPresetSourcePaths(string $preset, ?array $sourcePaths): ?array
+    {
+        if (! array_key_exists($preset, $this->presetSourcePaths)) {
+            return $this->presetSourcePaths[$preset] = $sourcePaths;
+        }
+
+        $existing = $this->presetSourcePaths[$preset];
+
+        if ($existing === null || $sourcePaths === null) {
+            return $this->presetSourcePaths[$preset] = null;
+        }
+
+        $merged     = [];
+        $normalised = [];
+
+        foreach ([...$existing, ...$sourcePaths] as $sourcePath) {
+            $normalisedPath = rtrim(str_replace('\\', '/', $sourcePath), '/');
+
+            if (array_key_exists($normalisedPath, $normalised)) {
+                continue;
+            }
+
+            $normalised[$normalisedPath] = true;
+            $merged[]                    = $sourcePath;
+        }
+
+        return $this->presetSourcePaths[$preset] = $merged;
     }
 
     // -------------------------------------------------------------------------
