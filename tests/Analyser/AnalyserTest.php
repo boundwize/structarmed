@@ -856,6 +856,31 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testPsr15UsesComposerSourcePathsRegardlessOfPresetOrder(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'      => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/FooHandler.php' => '<?php namespace App; final class FooHandler {}',
+        ]);
+
+        $architectures = [
+            Architecture::define()
+                ->withPreset(Preset::PSR4(sourcePaths: ['src/']))
+                ->withPreset(Preset::PSR15()),
+            Architecture::define()
+                ->withPreset(Preset::PSR15())
+                ->withPreset(Preset::PSR4(sourcePaths: ['src/'])),
+        ];
+
+        foreach ($architectures as $architecture) {
+            $violations = (new Analyser($basePath))
+                ->analyse($architecture, analyserOptions: AnalyserOptions::sequential())
+                ->forRule(Psr15Preset::HANDLER_MUST_IMPLEMENT_REQUEST_HANDLER_INTERFACE);
+
+            $this->assertCount(1, $violations);
+        }
+    }
+
     public function testPsr15PresetAcceptsInterfaceExtendingMiddlewareInterfaceWithMiddlewareSuffix(): void
     {
         $basePath = $this->makeTempProject([

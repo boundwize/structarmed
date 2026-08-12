@@ -1075,11 +1075,21 @@ final readonly class Analyser
      */
     private function resolveLayers(Architecture $architecture): array
     {
-        $layers = $architecture->getLayers();
+        $layers           = $architecture->getLayers();
+        $incrementSources = 0;
 
         foreach ($layers as $layerName => $layerPaths) {
-            if ($layerName === 'Source' && $layerPaths === []) {
+            if (! in_array($layerName, ['Source', 'Source[]'], true)) {
+                continue;
+            }
+
+            if ($layerPaths === []) {
                 $layers[$layerName] = (new Psr4PathResolver())->paths($this->basePath);
+            }
+
+            $incrementSources++;
+
+            if ($incrementSources === 2) {
                 break;
             }
         }
