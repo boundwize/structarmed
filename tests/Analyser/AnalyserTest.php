@@ -1947,6 +1947,51 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.Application'));
     }
 
+    public function testAnalyserRulesetUsesPrimaryLayerWhenCallerAlsoMatchesSecondaryLayer(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/OrderHandler.php'  => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                use App\Infrastructure\Repository;
+
+                final class OrderHandler
+                {
+                    public function __construct(Repository $repository)
+                    {
+                    }
+                }
+                PHP,
+            'src/Infrastructure/Repository.php' => <<<'PHP'
+                <?php
+
+                namespace App\Infrastructure;
+
+                final class Repository
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/Application/')
+            ->layer('Infrastructure', 'src/Infrastructure/')
+            ->layerPattern('Handler', '/Handler$/')
+            ->ruleset([
+                'Application' => [],
+            ]);
+
+        // layerPattern() resolvers take precedence over path resolvers, so OrderHandler's
+        // primary layer is Handler. Application is secondary and its ruleset does not apply.
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture)
+            ->forRule('ruleset.Application');
+
+        $this->assertCount(0, $violations);
+    }
+
     public function testAnalyserRulesetSameLayerAllowedWhenRegexLayerExcludesDependency(): void
     {
         $basePath = $this->makeTempProject([
@@ -3400,7 +3445,7 @@ class Order {
         $this->assertStringContainsString('Auth', $violations[0]->message);
     }
 
-    public function testAnalyserRulesetDetectsViolationWhenDependencyMatchesSecondaryForbiddenLayer(): void
+    public function testAnalyserRulesetAllowsUnscannedDependencyWhenFirstMatchedLayerIsAllowed(): void
     {
         $basePath = $this->makeTempProject([
             'src/HTTP/LoginController.php' => <<<'PHP'
@@ -3417,25 +3462,51 @@ class Order {
                 PHP,
         ]);
 
-        // AuthTokenStore matches both Support (primary, allowed for HTTP) and Auth
-        // (secondary, forbidden for HTTP). No file is needed for AuthTokenStore:
+        // AuthTokenStore matches both Support and Auth. No file is needed for AuthTokenStore:
         // the ruleset path resolves dependency layers directly from the class name via
-        // layerPattern(), so the class does not need to be scanned. Only resolving the
-        // primary layer silently allows the violation.
+        // layerPattern(), so the class does not need to be scanned. Support is allowed for
+        // HTTP, so the dependency must be permitted even though Auth is not allowed.
         $architecture = Architecture::define()
             ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
             ->layerPattern('Support', '/^App\\\\Support\\\\.*$/')
             ->layerPattern('Auth', '/Auth/')
             ->ruleset([
-                'HTTP' => ['Support'], // Auth is NOT in the allowed list
+                'HTTP' => ['Support'],
             ]);
 
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
 
-        $this->assertTrue($ruleViolationCollection->hasViolations());
-        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
-        $this->assertCount(1, $violations);
-        $this->assertStringContainsString('Auth', $violations[0]->message);
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.HTTP'));
+    }
+
+    public function testAnalyserRulesetAllowsUnscannedDependencyWhenSecondMatchedLayerIsAllowed(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/Foo.php' => <<<'PHP'
+                <?php
+
+                namespace App\Application;
+
+                use Vendor\Shared\Service;
+
+                final class Foo
+                {
+                    public function __construct(private Service $service) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Application', 'src/Application/')
+            ->layerPattern('Vendor', '/^Vendor\\\\/')
+            ->layerPattern('Service', '/Service$/')
+            ->ruleset([
+                'Application' => ['Service'],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(0, $ruleViolationCollection->forRule('ruleset.Application'));
     }
 
     public function testAnalyserRulesetDetectsViolationForScannedDepWithRegexLayerInMixedConfig(): void

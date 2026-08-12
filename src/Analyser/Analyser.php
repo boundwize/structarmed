@@ -317,28 +317,13 @@ final readonly class Analyser
                     continue;
                 }
 
-                if ($primaryLayer !== null) {
-                    // Scanned dependency: permitted if any of its layers is explicitly allowed.
-                    if (array_intersect($allowedLayers, $depLayers) !== []) {
-                        continue;
-                    }
-
-                    $violatingLayer = $primaryLayer;
-                } else {
-                    // Unscanned/regex-resolved dependency: report the first non-allowed layer.
-                    $violatingLayer = null;
-
-                    foreach ($depLayers as $depLayer) {
-                        if (! in_array($depLayer, $allowedLayers, true)) {
-                            $violatingLayer = $depLayer;
-                            break;
-                        }
-                    }
-
-                    if ($violatingLayer === null) {
-                        continue;
-                    }
+                // A dependency is permitted when any of its layers is explicitly allowed,
+                // regardless of whether the dependency was scanned or regex-resolved.
+                if (array_intersect($allowedLayers, $depLayers) !== []) {
+                    continue;
                 }
+
+                $violatingLayer = $primaryLayer ?? $depLayers[0];
 
                 $rulesetViolationCollection->add(new RuleViolation(
                     message:   sprintf(
