@@ -10,7 +10,10 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 
 use function array_filter;
+use function array_key_exists;
 use function array_merge;
+use function array_unique;
+use function array_values;
 use function is_int;
 use function sprintf;
 
@@ -44,6 +47,9 @@ final class Architecture
 
     /** @var array<string, RuleInterface|ProjectRuleInterface> key → rule */
     private array $rules = [];
+
+    /** @var array<class-string<PresetInterface>, list<string>|null> */
+    private array $presetSourcePaths = [];
 
     /** @var list<string> */
     private array $skipPaths = [];
@@ -281,6 +287,46 @@ final class Architecture
         }
 
         return $this;
+    }
+
+    /**
+     * Combine source paths contributed through preset inheritance.
+     *
+     * This preserves an inherited preset's existing scope when another preset
+     * extends it, such as PSR-12 -> PSR-1 -> PSR-4. Applying the same top-level
+     * preset more than once is not a supported configuration.
+     *
+     * For example:
+     *
+     *   ->withPreset(Preset::PSR4(sourcePaths: ['src/']))
+     *   ->withPreset(Preset::PSR1(sourcePaths: ['tests/']))
+     *
+     * PSR-4 applies to both src/ and tests/, while PSR-1 remains scoped to tests/.
+     *
+     * A null scope represents all Composer-discovered source paths and therefore
+     * takes precedence over any explicit subset.
+     *
+     * @internal Used by scoped presets while they are applied.
+     *
+     * @param class-string<PresetInterface> $preset
+     * @param list<string>|null              $sourcePaths
+     * @return list<string>|null
+     */
+    public function registerPresetSourcePaths(string $preset, ?array $sourcePaths): ?array
+    {
+        if (! array_key_exists($preset, $this->presetSourcePaths)) {
+            return $this->presetSourcePaths[$preset] = $sourcePaths;
+        }
+
+        $existing = $this->presetSourcePaths[$preset];
+
+        if ($existing === null || $sourcePaths === null) {
+            return $this->presetSourcePaths[$preset] = null;
+        }
+
+        $merged = [...$existing, ...$sourcePaths];
+
+        return $this->presetSourcePaths[$preset] = array_values(array_unique($merged));
     }
 
     // -------------------------------------------------------------------------

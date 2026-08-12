@@ -36,8 +36,9 @@ final readonly class Psr4Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        $layerName = $this->resolveLayerName($architecture);
-        $architecture->layer($layerName, $this->sourcePaths ?? []);
+        $sourcePaths = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
+        $layerName   = $this->resolveLayerName($architecture, $sourcePaths ?? []);
+        $architecture->layer($layerName, $sourcePaths ?? []);
 
         $architecture->rule(
             self::CLASSES_MUST_MATCH_COMPOSER,
@@ -45,7 +46,7 @@ final readonly class Psr4Preset implements PresetInterface
         );
         $architecture->rule(
             self::SOURCE_PATHS_MUST_BE_IN_COMPOSER,
-            new Psr4SourcePathsRule($this->sourcePaths)
+            new Psr4SourcePathsRule($sourcePaths)
         );
         $architecture->rule(self::SOURCE_PATHS_MUST_EXIST_ON_DISK, new Psr4DirectoryExistsRule());
         $architecture->rule(self::SOURCE_PATHS_MUST_NOT_BE_ROOT, new Psr4RootPathRule());

@@ -30,9 +30,13 @@ final readonly class Psr12Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        $psr1Preset = new Psr1Preset($this->sourcePaths);
+        $sourcePathsForPsr1 = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
+        $psr1Preset         = new Psr1Preset($sourcePathsForPsr1);
         $psr1Preset->apply($architecture);
 
+        // Only the inherited PSR-1 preset receives the combined scope. The PSR-12
+        // rules intentionally use this preset's configured paths so standalone
+        // PSR-1 or PSR-4 scopes cannot broaden PSR-12 enforcement.
         $layerName = $this->resolveLayerName($architecture);
         $architecture->layer($layerName, $this->sourcePaths ?? []);
 

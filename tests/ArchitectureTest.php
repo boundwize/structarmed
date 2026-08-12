@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
+use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -167,6 +168,44 @@ final class ArchitectureTest extends TestCase
             ->withPresets(Preset::DDD(), Preset::MVC());
 
         $this->assertArrayHasKey(DddPreset::ENTITY_MUST_BE_FINAL, $architecture->getRules());
+    }
+
+    public function testRegisterPresetSourcePathsMergesAndDeduplicatesPaths(): void
+    {
+        $architecture = Architecture::define();
+
+        $this->assertSame(
+            ['src/'],
+            $architecture
+                ->registerPresetSourcePaths(Psr1Preset::class, ['src/'])
+        );
+
+        $this->assertSame(
+            ['src/', 'tests/'],
+            $architecture->registerPresetSourcePaths(Psr1Preset::class, ['tests/', 'src/'])
+        );
+    }
+
+    public function testRegisterPresetSourcePathsKeepsPresetScopesIndependent(): void
+    {
+        $architecture = Architecture::define();
+
+        $architecture->registerPresetSourcePaths(Psr1Preset::class, ['src/']);
+
+        $this->assertSame(
+            ['tests/'],
+            $architecture->registerPresetSourcePaths(Psr4Preset::class, ['tests/'])
+        );
+    }
+
+    public function testRegisterPresetSourcePathsNullScopeOverridesExplicitPaths(): void
+    {
+        $architecture = Architecture::define();
+
+        $architecture->registerPresetSourcePaths(Psr1Preset::class, ['src/']);
+
+        $this->assertNull($architecture->registerPresetSourcePaths(Psr1Preset::class, null));
+        $this->assertNull($architecture->registerPresetSourcePaths(Psr1Preset::class, ['tests/']));
     }
 
     public function testReplaceRuleReplacesExistingRule(): void
