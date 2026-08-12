@@ -30,8 +30,8 @@ final readonly class Psr12Preset implements PresetInterface
 
     public function apply(Architecture $architecture): void
     {
-        $psr12SourcePaths = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
-        $psr1Preset       = new Psr1Preset($psr12SourcePaths);
+        $sourcePathsForPsr1 = $architecture->registerPresetSourcePaths(self::class, $this->sourcePaths);
+        $psr1Preset         = new Psr1Preset($sourcePathsForPsr1);
         $psr1Preset->apply($architecture);
 
         $layerName = $this->resolveLayerName($architecture);
