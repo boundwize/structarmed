@@ -32,7 +32,7 @@ return Architecture::define()
         'Cli'           => ['Baseline', '+Cache', 'Config', 'Progress', 'Report', 'Util'],
         'Composer'      => ['Util'],
         'Config'        => ['Core'],
-        'Core'          => ['Exception', 'Preset', 'Rule', 'Util'],
+        'Core'          => ['Exception', 'Preset', 'Rule'],
         'Exception'     => [],
         'LayerResolver' => ['Util'],
         'PHPUnit'       => ['Analyser', 'Baseline', 'Cache', 'Config', 'Exception', 'Progress', 'Report', 'Rule'],

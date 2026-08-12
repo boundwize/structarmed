@@ -8,7 +8,6 @@ use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
-use Boundwize\StructArmed\Util\Path;
 
 use function array_filter;
 use function array_key_exists;
@@ -310,22 +309,9 @@ final class Architecture
         if ($existing === null || $sourcePaths === null) {
             return $this->presetSourcePaths[$preset] = null;
         }
+        $merged = [...$existing, ...$sourcePaths];
 
-        $merged     = [];
-        $normalised = [];
-
-        foreach ([...$existing, ...$sourcePaths] as $sourcePath) {
-            $normalisedPath = Path::normalise($sourcePath, canonicalise: true);
-
-            if (array_key_exists($normalisedPath, $normalised)) {
-                continue;
-            }
-
-            $normalised[$normalisedPath] = true;
-            $merged[]                    = $sourcePath;
-        }
-
-        return $this->presetSourcePaths[$preset] = $merged;
+        return $this->presetSourcePaths[$preset] = array_values(array_unique($merged));
     }
 
     // -------------------------------------------------------------------------
