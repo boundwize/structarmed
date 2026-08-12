@@ -288,10 +288,10 @@ final readonly class ParallelClassNodeExtractor
         $buckets     = array_fill(0, $workerCount, []);
         $bucketSizes = array_fill(0, $workerCount, 0);
 
-        foreach (array_keys($fileSizes) as $file) {
+        foreach ($fileSizes as $file => $fileSize) {
             $minIdx                = (int) array_search(min($bucketSizes), $bucketSizes, true);
             $buckets[$minIdx][]    = $file;
-            $bucketSizes[$minIdx] += $fileSizes[$file];
+            $bucketSizes[$minIdx] += $fileSize;
         }
 
         return $buckets;
