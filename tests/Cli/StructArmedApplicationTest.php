@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Cli\AnalyseCommand;
 use Boundwize\StructArmed\Cli\ClearCacheCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
+use Boundwize\StructArmed\Cli\LayersCommand;
 use Boundwize\StructArmed\Cli\StructArmedApplication;
 use Boundwize\StructArmed\Cli\Usage;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
@@ -42,6 +43,7 @@ use function unlink;
 #[CoversClass(AnalyseCommand::class)]
 #[CoversClass(ClearCacheCommand::class)]
 #[CoversClass(InitCommand::class)]
+#[CoversClass(LayersCommand::class)]
 #[CoversClass(StructArmedApplication::class)]
 #[CoversClass(Usage::class)]
 #[CoversClass(Version::class)]
@@ -183,6 +185,80 @@ PHP);
             . "        Preset::MVC()\n"
             . "    );",
         ];
+    }
+
+    public function testApplicationPrintsLayersFromDiscoveredConfig(): void
+    {
+        $basePath = $this->createTempDirectory();
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+    ->layer('Domain', 'src/Domain/')
+    ->withPreset(Preset::MVC());
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(['structarmed', 'layers'], $basePath);
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('Domain', $output);
+            $this->assertStringContainsString('src/Domain/', $output);
+            $this->assertStringContainsString('Controller', $output);
+            $this->assertStringContainsString('src/Controller/', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationPrintsLayersFromExplicitConfig(): void
+    {
+        $basePath = $this->createTempDirectory();
+        file_put_contents($basePath . '/structarmed-custom.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->layerPattern('API', '/^App\\\\API\\\\.*$/');
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', 'layers', '--config=' . $basePath . '/structarmed-custom.php'],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('API', $output);
+            $this->assertStringContainsString('/^App\\\\API\\\\.*$/', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationReportsMissingConfigForLayersCommand(): void
+    {
+        $basePath = $this->createTempDirectory();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(['structarmed', 'layers'], $basePath);
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString(
+                'Could not find a structarmed.php config file.',
+                $output
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
     }
 
     /**

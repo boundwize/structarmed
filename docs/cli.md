@@ -77,6 +77,20 @@ StructArmed runs in parallel by default. Disable parallel processing when debugg
 vendor/bin/structarmed analyse --disable-parallel
 ```
 
+## Layers Commands
+
+List every layer registered in the config, including layers contributed by presets, without running an analysis.
+
+```bash
+# Layers from the discovered config.
+vendor/bin/structarmed layers
+
+# Custom config path.
+vendor/bin/structarmed layers --config=path/to/structarmed.php
+```
+
+Both path-based layers (`Architecture::layer()`) and namespace/regex layers (`Architecture::layerPattern()`) are printed. Preset-contributed layers are included automatically. Exits with code `1` and an error message when no config file is found.
+
 ## Version Commands
 
 ```bash

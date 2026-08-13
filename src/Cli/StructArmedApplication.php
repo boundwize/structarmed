@@ -42,6 +42,10 @@ final readonly class StructArmedApplication
             return (new InitCommand())->run(array_slice($argv, 2), $basePath);
         }
 
+        if ($command === 'layers') {
+            return (new LayersCommand())->run(array_slice($argv, 2), $basePath);
+        }
+
         if ($command === '--clear-cache') {
             return (new ClearCacheCommand())->run(array_slice($argv, 2), $basePath);
         }

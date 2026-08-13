@@ -12,6 +12,7 @@ final class Usage
 Usage:
   structarmed --version
   structarmed init [--preset=ddd|mvc|psr1|psr12|psr15|psr4|all]
+  structarmed layers [--config=path/to/structarmed.php]
   structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php]
     [--report=console|json] [--no-progress] [--clear-cache] [--disable-parallel]
     [--fix] [--generate-baseline=structarmed-baseline.php]
