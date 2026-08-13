@@ -129,8 +129,7 @@ final readonly class Analyser
             }
         }
 
-        $ruleSkipMatchers = $this->ruleSkipMatchers($classRules, $globalSkipPaths, $ruleSkipPaths);
-
+        $ruleSkipMatchers   = $this->ruleSkipMatchers($classRules, $globalSkipPaths, $ruleSkipPaths);
         $layerPatterns      = $architecture->getLayerPatterns();
         $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
 
