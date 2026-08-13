@@ -312,7 +312,15 @@ final class FileAnalysisProvider
 
             if ($node instanceof If_) {
                 $conditionSideEffectLine = $this->intrinsicSideEffectLineInExpression($node->cond);
-                $branchStmts             = $node->stmts;
+
+                if ($declaresSymbols && $conditionSideEffectLine !== null) {
+                    $hasSideEffects = true;
+                    $sideEffectLine = $conditionSideEffectLine;
+
+                    break;
+                }
+
+                $branchStmts = $node->stmts;
                 foreach ($node->elseifs as $elseif) {
                     $elseifSideEffectLine = $this->intrinsicSideEffectLineInExpression($elseif->cond);
                     if ($elseifSideEffectLine !== null) {

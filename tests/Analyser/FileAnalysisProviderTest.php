@@ -292,6 +292,17 @@ final class FileAnalysisProviderTest extends TestCase
     /** @return iterable<string, array{string, bool, int}> */
     public static function conditionalExpressionProvider(): iterable
     {
+        yield 'effectful condition after declaration' => [
+            <<<'PHP'
+                <?php
+                final class Existing {}
+                if (include 'bootstrap.php') {
+                    class Conditional {}
+                }
+                PHP,
+            true,
+            3,
+        ];
         yield 'assignment' => [
             <<<'PHP'
                 <?php
