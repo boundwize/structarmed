@@ -44,8 +44,6 @@ use function str_starts_with;
 use function strtolower;
 use function substr;
 
-use const ARRAY_FILTER_USE_BOTH;
-
 final readonly class Analyser
 {
     private string $basePath;
@@ -75,22 +73,25 @@ final readonly class Analyser
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
 
-        $layers           = $this->resolveLayers($architecture);
-        $rules            = $architecture->getRules();
-        $globalSkipPaths  = $architecture->getSkipPaths();
-        $ruleSkipPaths    = $architecture->getRuleSkipPaths();
-        $skippedRuleKeys  = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
-        $classRules       = $this->classRules($rules, $skippedRuleKeys);
-        $ruleSkipMatchers = $this->ruleSkipMatchers($classRules, $globalSkipPaths, $ruleSkipPaths);
+        $layers          = $this->resolveLayers($architecture);
+        $rules           = $architecture->getRules();
+        $globalSkipPaths = $architecture->getSkipPaths();
+        $ruleSkipPaths   = $architecture->getRuleSkipPaths();
+        $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
 
         $projectRuleViolations     = [];
         $fileAnalysisRules         = [];
+        $classRules                = [];
         $layerAwareRules           = [];
         $hasExtendedClassAwareRule = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
                 continue;
+            }
+
+            if ($rule instanceof RuleInterface) {
+                $classRules[$key] = $rule;
             }
 
             if ($rule instanceof LayerAwareRuleInterface) {
@@ -128,6 +129,7 @@ final readonly class Analyser
             }
         }
 
+        $ruleSkipMatchers   = $this->ruleSkipMatchers($classRules, $globalSkipPaths, $ruleSkipPaths);
         $layerPatterns      = $architecture->getLayerPatterns();
         $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
 
@@ -435,21 +437,6 @@ final readonly class Analyser
         }
 
         return $scanScopeLayerMap;
-    }
-
-    /**
-     * @param array<string, ProjectRuleInterface|RuleInterface> $rules
-     * @param array<string, true> $skippedRuleKeys
-     * @return array<string, RuleInterface>
-     */
-    private function classRules(array $rules, array $skippedRuleKeys): array
-    {
-        return array_filter(
-            $rules,
-            static fn(ProjectRuleInterface|RuleInterface $rule, string $key): bool => $rule instanceof RuleInterface
-                && ! array_key_exists($key, $skippedRuleKeys),
-            ARRAY_FILTER_USE_BOTH,
-        );
     }
 
     /**
