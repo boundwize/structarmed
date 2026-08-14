@@ -106,6 +106,8 @@ final readonly class Analyser
                 continue;
             }
 
+            $projectRuleViolations[$key] = [];
+
             if ($rule instanceof FileAnalysisRuleInterface) {
                 $fileAnalysisRules[$key] = $rule;
                 continue;
@@ -134,6 +136,7 @@ final readonly class Analyser
         $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
 
         $files          ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
+        $withFileAnalysis = $fileAnalysisRules !== [];
         $extractionResult = $this->collectClassNodes(
             $files,
             $progressHandler,
@@ -141,7 +144,7 @@ final readonly class Analyser
             $layerPatterns,
             $chainLayerResolver,
             $analyserOptions ?? AnalyserOptions::parallel(),
-            $fileAnalysisRules !== [],
+            $withFileAnalysis,
         );
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes);
@@ -150,28 +153,26 @@ final readonly class Analyser
             $this->markExtendedClasses($classNodes, $extractionResult);
         }
 
-        $fileAnalysisProvider = new FileAnalysisProvider(
-            analyses: $extractionResult->fileAnalyses,
-            isScopeFilesEnabled: true,
-        );
-
-        foreach ($fileAnalysisRules as $key => $rule) {
-            $projectRuleViolations[$key] = $rule->evaluateProjectAllWithProvider(
-                $this->basePath,
-                $architecture,
-                $fileAnalysisProvider,
-                $this->mergedSkipPaths($globalSkipPaths, $ruleSkipPaths[$key] ?? []),
+        if ($withFileAnalysis) {
+            $fileAnalysisProvider = new FileAnalysisProvider(
+                analyses: $extractionResult->fileAnalyses,
+                isScopeFilesEnabled: true,
             );
+
+            foreach ($fileAnalysisRules as $key => $rule) {
+                $projectRuleViolations[$key] = $rule->evaluateProjectAllWithProvider(
+                    $this->basePath,
+                    $architecture,
+                    $fileAnalysisProvider,
+                    $this->mergedSkipPaths($globalSkipPaths, $ruleSkipPaths[$key] ?? []),
+                );
+            }
         }
 
-        foreach ($rules as $key => $rule) {
-            if (! $rule instanceof ProjectRuleInterface || ! isset($projectRuleViolations[$key])) {
-                continue;
-            }
+        foreach ($projectRuleViolations as $key => $violations) {
+            $isFixable = $rules[$key] instanceof FixableInterface;
 
-            $isFixable = $rule instanceof FixableInterface;
-
-            foreach ($projectRuleViolations[$key] as $violation) {
+            foreach ($violations as $violation) {
                 $ruleViolationCollection->add(new RuleViolation(
                     message:   $violation->message,
                     file:      $violation->file,
