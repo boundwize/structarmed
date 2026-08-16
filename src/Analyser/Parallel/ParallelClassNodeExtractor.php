@@ -71,18 +71,23 @@ final readonly class ParallelClassNodeExtractor
             return new ExtractionResult([], []);
         }
 
-        $totalFiles   = count($files);
-        $workerCount  = min($this->workerCount, $totalFiles);
-        $script       = dirname(__DIR__, 3) . '/bin/structarmed.php';
-        $pending      = [];
-        $emitProgress = $progressHandler instanceof ProgressHandlerInterface;
+        $totalFiles     = count($files);
+        $workerCount    = min($this->workerCount, $totalFiles);
+        $script         = dirname(__DIR__, 3) . '/bin/structarmed.php';
+        $pending        = [];
+        $emitProgress   = $progressHandler instanceof ProgressHandlerInterface;
+        $cacheDirectory = $this->cacheDirectory ?? sys_get_temp_dir();
+
+        if (! is_dir($cacheDirectory)) {
+            mkdir($cacheDirectory, 0777, true);
+        }
 
         foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             [
                 'inputFile'  => $inputFile,
                 'outputFile' => $outputFile,
                 'stderrFile' => $stderrFile,
-            ] = $this->createWorkerFiles();
+            ] = $this->createWorkerFiles($cacheDirectory);
 
             file_put_contents($inputFile, serialize([
                 'basePath'         => $this->basePath,
@@ -299,14 +304,8 @@ final readonly class ParallelClassNodeExtractor
     /**
      * @return array{inputFile: string, outputFile: string, stderrFile: string}
      */
-    private function createWorkerFiles(): array
+    private function createWorkerFiles(string $dir): array
     {
-        $dir = $this->cacheDirectory ?? sys_get_temp_dir();
-
-        if (! is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
-
         return [
             'inputFile'  => $this->temporaryFile($dir),
             'outputFile' => $this->temporaryFile($dir),
