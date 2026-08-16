@@ -155,8 +155,8 @@ final class ClassNode
     }
 
     /**
-     * Class-like names are case-insensitive in PHP, unlike function and
-     * constant dependencies, so matching must not be case-sensitive.
+     * Class-like names are case-insensitive in PHP. This matching is kept
+     * separate from dependencies, which may also contain constants.
      *
      * @param string[] $classLikes
      */
