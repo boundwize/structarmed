@@ -87,16 +87,25 @@ final readonly class AnalyseCommand
         foreach ($scanPaths as $scanPath) {
             $fullScanPath = Path::resolve($scanPath, $basePath);
 
-            if (
-                is_dir($fullScanPath)
-                || (is_file($fullScanPath) && Path::isAnalysableFile($fullScanPath, $basePath))
-            ) {
+            if (is_dir($fullScanPath)) {
                 continue;
             }
 
-            echo sprintf("Error: path [%s] not found.\n", $scanPath);
+            if (! is_file($fullScanPath)) {
+                echo sprintf("Error: path [%s] not found.\n", $scanPath);
 
-            return 1;
+                return 1;
+            }
+
+            if (! Path::isAnalysableFile($fullScanPath, $basePath)) {
+                echo sprintf(
+                    'Error: path [%s] is not analysable. '
+                        . "Expected a directory, a .php file, or the project composer.json.\n",
+                    $scanPath
+                );
+
+                return 1;
+            }
         }
 
         try {

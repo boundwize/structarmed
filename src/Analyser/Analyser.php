@@ -988,11 +988,12 @@ final readonly class Analyser
                 canonicalise: true
             );
 
+            if ($skipPathMatcher->isSkipped($fullPath)) {
+                continue;
+            }
+
             if (is_file($fullPath)) {
-                if (
-                    Path::isAnalysableFile($fullPath, $this->basePath)
-                    && ! $skipPathMatcher->isSkipped($fullPath)
-                ) {
+                if (Path::isAnalysableFile($fullPath, $this->basePath)) {
                     $files[] = $fullPath;
                 }
 
@@ -1000,10 +1001,6 @@ final readonly class Analyser
             }
 
             if (! is_dir($fullPath)) {
-                continue;
-            }
-
-            if ($skipPathMatcher->isSkipped($fullPath)) {
                 continue;
             }
 
