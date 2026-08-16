@@ -664,7 +664,7 @@ PHP);
             );
 
             $this->assertSame(1, $nestedExitCode, $nestedOutput);
-            $this->assertStringContainsString('Error: path [nested/composer.json] not found.', $nestedOutput);
+            $this->assertStringContainsString('Error: path [nested/composer.json] is not analysable.', $nestedOutput);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -1399,7 +1399,10 @@ PHP);
             );
 
             $this->assertSame(1, $exitCode);
-            $this->assertStringContainsString('Error: path [readme.md] not found.', $output);
+            $this->assertStringContainsString(
+                'Error: path [readme.md] is not analysable. Expected a directory, a .php file, or the project composer.json.',
+                $output
+            );
         } finally {
             unlink($readmePath);
             rmdir($basePath);
