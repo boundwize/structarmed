@@ -99,7 +99,8 @@ final readonly class AnalyseCommand
 
             if (! Path::isAnalysableFile($fullScanPath, $basePath)) {
                 echo sprintf(
-                    "Error: path [%s] is not analysable. Expected a directory, a .php file, or the project composer.json.\n",
+                    'Error: path [%s] is not analysable. '
+                        . "Expected a directory, a .php file, or the project composer.json.\n",
                     $scanPath
                 );
 

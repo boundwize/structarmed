@@ -1400,7 +1400,8 @@ PHP);
 
             $this->assertSame(1, $exitCode);
             $this->assertStringContainsString(
-                'Error: path [readme.md] is not analysable. Expected a directory, a .php file, or the project composer.json.',
+                'Error: path [readme.md] is not analysable. '
+                    . 'Expected a directory, a .php file, or the project composer.json.',
                 $output
             );
         } finally {
