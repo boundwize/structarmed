@@ -135,20 +135,40 @@ final class ClassNode
 
     public function implementsInterface(string $interface): bool
     {
-        return in_array($interface, $this->implements, true)
-            || in_array($interface, $this->parentInterfaces, true);
+        return $this->matchesAnyClassLike($interface, $this->implements)
+            || $this->matchesAnyClassLike($interface, $this->parentInterfaces);
     }
 
     public function extendsClass(string $class): bool
     {
-        return $this->extends === $class
-            || in_array($class, $this->parentClasses, true);
+        if ($this->extends !== null && strcasecmp($this->extends, $class) === 0) {
+            return true;
+        }
+
+        return $this->matchesAnyClassLike($class, $this->parentClasses);
     }
 
     public function extendsInterface(string $interface): bool
     {
-        return in_array($interface, $this->interfaceExtends, true)
-            || in_array($interface, $this->parentInterfaces, true);
+        return $this->matchesAnyClassLike($interface, $this->interfaceExtends)
+            || $this->matchesAnyClassLike($interface, $this->parentInterfaces);
+    }
+
+    /**
+     * Class-like names are case-insensitive in PHP, unlike function and
+     * constant dependencies, so matching must not be case-sensitive.
+     *
+     * @param string[] $classLikes
+     */
+    private function matchesAnyClassLike(string $needle, array $classLikes): bool
+    {
+        foreach ($classLikes as $classLike) {
+            if (strcasecmp($classLike, $needle) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function callsFunction(string $function): bool
