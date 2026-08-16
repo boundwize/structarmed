@@ -161,6 +161,68 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($usesExit->usesLanguageConstruct('include'));
     }
 
+    public function testImplementsInterfaceIsCaseInsensitive(): void
+    {
+        $classNode = new ClassNode(
+            className:        Foo::class,
+            file:             '/foo.php',
+            line:             1,
+            layer:            'Domain',
+            extends:          null,
+            isAbstract:       false,
+            isFinal:          true,
+            isInterface:      false,
+            isReadonly:       false,
+            implements:       ['App\\Contracts\\foointerface'],
+            parentInterfaces: ['App\\Contracts\\rootinterface'],
+        );
+
+        $this->assertTrue($classNode->implementsInterface('App\\Contracts\\FooInterface'));
+        $this->assertTrue($classNode->implementsInterface('App\\Contracts\\RootInterface'));
+        $this->assertFalse($classNode->implementsInterface('App\\Contracts\\OtherInterface'));
+    }
+
+    public function testExtendsClassIsCaseInsensitive(): void
+    {
+        $classNode = new ClassNode(
+            className:     Foo::class,
+            file:          '/foo.php',
+            line:          1,
+            layer:         'Domain',
+            extends:       'App\\Support\\baseclass',
+            isAbstract:    false,
+            isFinal:       true,
+            isInterface:   false,
+            isReadonly:    false,
+            parentClasses: ['App\\Support\\rootclass'],
+        );
+
+        $this->assertTrue($classNode->extendsClass('App\\Support\\BaseClass'));
+        $this->assertTrue($classNode->extendsClass('App\\Support\\RootClass'));
+        $this->assertFalse($classNode->extendsClass('App\\Support\\OtherClass'));
+    }
+
+    public function testExtendsInterfaceIsCaseInsensitive(): void
+    {
+        $classNode = new ClassNode(
+            className:        'App\\Contracts\\FooInterface',
+            file:             '/FooInterface.php',
+            line:             1,
+            layer:            'Contracts',
+            extends:          null,
+            isAbstract:       false,
+            isFinal:          false,
+            isInterface:      true,
+            isReadonly:       false,
+            interfaceExtends: ['App\\Contracts\\baseinterface'],
+            parentInterfaces: ['App\\Contracts\\rootinterface'],
+        );
+
+        $this->assertTrue($classNode->extendsInterface('App\\Contracts\\BaseInterface'));
+        $this->assertTrue($classNode->extendsInterface('App\\Contracts\\RootInterface'));
+        $this->assertFalse($classNode->extendsInterface('App\\Contracts\\OtherInterface'));
+    }
+
     public function testSetRecursiveParents(): void
     {
         $classNode = new ClassNode(
