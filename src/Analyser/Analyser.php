@@ -28,7 +28,6 @@ use Boundwize\StructArmed\Util\Path;
 
 use function array_fill_keys;
 use function array_filter;
-use function array_intersect;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
@@ -190,8 +189,22 @@ final readonly class Analyser
 
         // Evaluate declarative ruleset alongside class rules, but buffer its
         // violations so report ordering remains class rules before ruleset.
-        $ruleset                    = $this->expandRuleset($architecture->getRuleset());
-        $classViolationSkips        = $architecture->getClassViolationSkips();
+        $ruleset = $this->expandRuleset($architecture->getRuleset());
+
+        // Precompute hash maps once so the per-dependency hot loop below uses
+        // O(1) isset() lookups instead of in_array()/array_intersect() scans.
+        $rulesetAllowedLayerMaps = [];
+
+        foreach ($ruleset as $rulesetLayer => $allowedLayers) {
+            $rulesetAllowedLayerMaps[$rulesetLayer] = array_fill_keys($allowedLayers, true);
+        }
+
+        $classViolationSkipMaps = [];
+
+        foreach ($architecture->getClassViolationSkips() as $skipClassName => $skippedDependencies) {
+            $classViolationSkipMaps[$skipClassName] = array_fill_keys($skippedDependencies, true);
+        }
+
         $rulesetSkipPaths           = $this->mergedSkipPaths($globalSkipPaths, $architecture->getRulesetSkipPaths());
         $rulesetSkipPathMatcher     = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
         $rulesetViolationCollection = new RuleViolationCollection();
@@ -272,14 +285,14 @@ final readonly class Analyser
                 continue;
             }
 
-            $allowedLayers = $ruleset[$classNode->layer] ?? null;
+            $allowedLayerMap = $rulesetAllowedLayerMaps[$classNode->layer] ?? null;
 
-            if ($allowedLayers === null) {
+            if ($allowedLayerMap === null) {
                 // Layer not listed in ruleset — no restriction.
                 continue;
             }
 
-            $skippedDepsForClass = $classViolationSkips[$classNode->className] ?? [];
+            $skippedDepsForClass = $classViolationSkipMaps[$classNode->className] ?? [];
             $dependencies        = $this->dependenciesForClass(
                 $classNode->className,
                 $dependencyMap,
@@ -288,7 +301,7 @@ final readonly class Analyser
             );
 
             foreach ($dependencies as $dependency) {
-                if (in_array($dependency, $skippedDepsForClass, true)) {
+                if (isset($skippedDepsForClass[$dependency])) {
                     continue;
                 }
 
@@ -322,8 +335,10 @@ final readonly class Analyser
 
                 // A dependency is permitted when any of its layers is explicitly allowed,
                 // regardless of whether the dependency was scanned or regex-resolved.
-                if (array_intersect($allowedLayers, $depLayers) !== []) {
-                    continue;
+                foreach ($depLayers as $depLayer) {
+                    if (isset($allowedLayerMap[$depLayer])) {
+                        continue 2;
+                    }
                 }
 
                 $violatingLayer = $primaryLayer ?? $depLayers[0];
