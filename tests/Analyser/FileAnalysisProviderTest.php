@@ -410,6 +410,13 @@ final class FileAnalysisProviderTest extends TestCase
         yield 'define() method call' => ["\$container->define('X', 1);", false, true];
         yield 'defined() on a variable' => ["\$guard || define('X', 1);", false, true];
         yield 'assignment' => ['$version = 1;', false, true];
+        yield 'define() with include argument' => ["define('X', include 'config.php');", true, true];
+        yield 'define() with assignment argument' => ["define('X', \$config = 1);", true, true];
+        yield 'guarded define() with include argument' => [
+            "defined('X') || define('X', include 'config.php');",
+            true,
+            true,
+        ];
     }
 
     #[DataProvider('defineStatementProvider')]

@@ -303,6 +303,20 @@ final class FileAnalysisProvider
 
             if ($this->isSymbolDeclaration($node)) {
                 $declaresSymbols = true;
+
+                // A define() argument can itself be effectful, e.g. define('X', include 'config.php').
+                if ($node instanceof Expression) {
+                    $argumentSideEffectLine = $this->intrinsicSideEffectLineInExpression($node->expr);
+
+                    if ($argumentSideEffectLine !== null) {
+                        if (! $hasSideEffects) {
+                            $sideEffectLine = $argumentSideEffectLine;
+                        }
+
+                        $hasSideEffects = true;
+                    }
+                }
+
                 continue;
             }
 
