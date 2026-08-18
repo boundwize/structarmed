@@ -422,6 +422,78 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\UnusedInterface', $violations[0]->className);
     }
 
+    public function testYagniRulesDoNotFlagAbstractionsReferencedByProceduralCode(): void
+    {
+        $functions = '<?php namespace App;' . "\n"
+            . 'function handle(Contract $contract): void {}' . "\n"
+            . 'function make(): AbstractHandler { return new class extends AbstractHandler {}; }' . "\n"
+            . 'function helperName(): string { return Helper::class; }';
+
+        $basePath = $this->makeTempProject([
+            'src/Contract.php'        => '<?php namespace App; interface Contract {}',
+            'src/AbstractHandler.php' => '<?php namespace App; abstract class AbstractHandler {}',
+            'src/Helper.php'          => '<?php namespace App; trait Helper {}',
+            'src/functions.php'       => $functions,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // Type hints and ::class references in procedural code have no
+        // ClassNode of their own but still keep the abstractions alive.
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testYagniRulesDoNotFlagAbstractionsReferencedByTopLevelAnonymousClassBody(): void
+    {
+        // Migration-style file: no named class at all; the reference lives in
+        // the anonymous class body, not in its extends/implements/use clauses.
+        $registration = '<?php use App\Contract;' . "\n"
+            . 'return new class {' . "\n"
+            . '    public function check(object $value): bool { return $value instanceof Contract; }' . "\n"
+            . '};';
+
+        $basePath = $this->makeTempProject([
+            'src/Contract.php'     => '<?php namespace App; interface Contract {}',
+            'src/registration.php' => $registration,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED));
+    }
+
+    public function testYagniRulesRecognizeProceduralReferencesOnCachedRun(): void
+    {
+        $functions = '<?php namespace App;' . "\n"
+            . 'function handle(Contract $contract): void {}';
+
+        $basePath            = $this->makeTempProject([
+            'src/Contract.php'  => '<?php namespace App; interface Contract {}',
+            'src/functions.php' => $functions,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $coldViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+        $warmViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // Procedural references must survive the class-node cache round-trip.
+        $this->assertFalse($coldViolationCollection->hasViolations());
+        $this->assertFalse($warmViolationCollection->hasViolations());
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsUsedByAnonymousClass(): void
     {
         $factory = '<?php namespace App;' . "\n"
@@ -508,7 +580,9 @@ final class AnalyserTest extends TestCase
             'src/UsedInterface.php' => '<?php namespace App; interface UsedInterface {}',
             'src/UsedBase.php'      => '<?php namespace App; abstract class UsedBase {}',
             'src/UsedTrait.php'     => '<?php namespace App; trait UsedTrait {}',
+            'src/Contract.php'      => '<?php namespace App; interface Contract {}',
             'src/Consumer.php'      => $consumer,
+            'src/functions.php'     => '<?php namespace App; function handle(Contract $contract): void {}',
         ]);
 
         $architecture = Architecture::define()

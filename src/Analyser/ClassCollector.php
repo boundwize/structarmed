@@ -86,6 +86,12 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var list<AnonymousClassNode> */
     private array $anonymousClassNodes = [];
 
+    /** @var array<string, list<string>> */
+    private array $fileReferences = [];
+
+    /** @var list<string> */
+    private array $currentFileReferences = [];
+
     private string $currentFile = '';
 
     /** @var list<string> */
@@ -120,6 +126,7 @@ final class ClassCollector extends NodeVisitorAbstract
     public function setCurrentFile(string $file): void
     {
         $this->currentFile             = $file;
+        $this->currentFileReferences   = [];
         $this->currentNamespaceUses    = [];
         $this->fileClassLikes          = [];
         $this->fileFunctions           = [];
@@ -140,6 +147,18 @@ final class ClassCollector extends NodeVisitorAbstract
     public function getAnonymousClassNodes(): array
     {
         return $this->anonymousClassNodes;
+    }
+
+    /**
+     * Class-like references made outside any named class-like scope, per file —
+     * procedural functions, top-level statements, and top-level anonymous
+     * class bodies.
+     *
+     * @return array<string, list<string>>
+     */
+    public function getFileReferences(): array
+    {
+        return $this->fileReferences;
     }
 
     public function enterNode(Node $node): null
@@ -237,6 +256,11 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->collectClassLike($fileClassLike);
         }
 
+        if ($this->currentFileReferences !== []) {
+            $this->fileReferences[$this->currentFile] = array_values(array_unique($this->currentFileReferences));
+            $this->currentFileReferences              = [];
+        }
+
         $this->fileClassLikes          = [];
         $this->classLikeAnalysis       = [];
         $this->classLikeMethods        = [];
@@ -295,6 +319,17 @@ final class ClassCollector extends NodeVisitorAbstract
     private function collectNodeAnalysis(Node $node): void
     {
         if ($this->activeClassLikeAnalyses === []) {
+            // Outside any named class-like scope — procedural functions,
+            // top-level statements, top-level anonymous class bodies — a
+            // class-like reference still keeps the referenced class-like alive.
+            if ($node instanceof FullyQualified) {
+                $name = $node->toString();
+
+                if (! isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
+                    $this->currentFileReferences[] = $name;
+                }
+            }
+
             return;
         }
 

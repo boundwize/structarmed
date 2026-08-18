@@ -186,7 +186,11 @@ final class AnalysisResultCache
     }
 
     /**
-     * @return array{classNodes: list<ClassNode>, anonymousClassNodes: list<AnonymousClassNode>}|null
+     * @return array{
+     *     classNodes: list<ClassNode>,
+     *     anonymousClassNodes: list<AnonymousClassNode>,
+     *     fileReferences: list<string>
+     * }|null
      */
     public function loadClassNodes(string $file, string $namespace): ?array
     {
@@ -198,14 +202,16 @@ final class AnalysisResultCache
 
         $classNodes          = $this->classNodesFromPayload($payload);
         $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
+        $fileReferences      = $this->fileReferencesFromPayload($payload);
 
-        if ($classNodes === null || $anonymousClassNodes === null) {
+        if ($classNodes === null || $anonymousClassNodes === null || $fileReferences === null) {
             return null;
         }
 
         return [
             'classNodes'          => $classNodes,
             'anonymousClassNodes' => $anonymousClassNodes,
+            'fileReferences'      => $fileReferences,
         ];
     }
 
@@ -213,6 +219,7 @@ final class AnalysisResultCache
      * @return array{
      *     classNodes: list<ClassNode>,
      *     anonymousClassNodes: list<AnonymousClassNode>,
+     *     fileReferences: list<string>,
      *     fileAnalysis: FileAnalysis
      * }|null
      */
@@ -226,17 +233,24 @@ final class AnalysisResultCache
 
         $classNodes          = $this->classNodesFromPayload($payload);
         $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
+        $fileReferences      = $this->fileReferencesFromPayload($payload);
         $fileAnalysis        = is_array($payload['fileAnalysis'] ?? null)
             ? $this->fileAnalysisFromArray($payload['fileAnalysis'])
             : null;
 
-        if ($classNodes === null || $anonymousClassNodes === null || ! $fileAnalysis instanceof FileAnalysis) {
+        if (
+            $classNodes === null
+            || $anonymousClassNodes === null
+            || $fileReferences === null
+            || ! $fileAnalysis instanceof FileAnalysis
+        ) {
             return null;
         }
 
         return [
             'classNodes'          => $classNodes,
             'anonymousClassNodes' => $anonymousClassNodes,
+            'fileReferences'      => $fileReferences,
             'fileAnalysis'        => $fileAnalysis,
         ];
     }
@@ -285,6 +299,8 @@ final class AnalysisResultCache
     /**
      * @param list<ClassNode>          $classNodes
      * @param list<AnonymousClassNode> $anonymousClassNodes
+     * @param list<string>             $fileReferences Class-like references made outside any
+     *                                                 named class-like scope in this file
      */
     public function storeClassNodes(
         string $file,
@@ -292,6 +308,7 @@ final class AnalysisResultCache
         array $classNodes,
         ?FileAnalysis $fileAnalysis = null,
         array $anonymousClassNodes = [],
+        array $fileReferences = [],
     ): void {
         $this->ensureCacheInitialised();
 
@@ -299,6 +316,7 @@ final class AnalysisResultCache
             'metadata'            => $this->fileMetadata($file, $namespace),
             'nodes'               => array_map($this->classNodeToArray(...), $classNodes),
             'anonymousClassNodes' => array_map($this->anonymousClassNodeToArray(...), $anonymousClassNodes),
+            'fileReferences'      => $fileReferences,
         ];
 
         if ($fileAnalysis instanceof FileAnalysis) {
@@ -380,6 +398,17 @@ final class AnalysisResultCache
             constantName: $constant,
             propertyName: $property,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<string>|null
+     */
+    private function fileReferencesFromPayload(array $payload): ?array
+    {
+        $fileReferences = $payload['fileReferences'] ?? [];
+
+        return $this->isStringArray($fileReferences) ? array_values($fileReferences) : null;
     }
 
     /**
