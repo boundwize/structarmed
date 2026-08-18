@@ -52,4 +52,4 @@ return Architecture::define()
             __DIR__ . '/tests/Analyser/Parallel/MockFunctions.php',
         ],
     ])
-    ->withPresets(Preset::PSR1(), Preset::PSR12(), Preset::PSR4());
+    ->withPresets(Preset::PSR1(), Preset::PSR12(), Preset::PSR4(), Preset::YAGNI());
