@@ -576,6 +576,69 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandFixesCascadingYagniViolationsInOneRun(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        // ChildInterface keeps BaseInterface "used" until the fixer removes it,
+        // which makes BaseInterface newly unused — a single --fix run must keep
+        // fixing until no violations remain.
+        file_put_contents($basePath . '/src/BaseInterface.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace App;
+
+interface BaseInterface
+{
+}
+PHP);
+        file_put_contents($basePath . '/src/ChildInterface.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace App;
+
+interface ChildInterface extends BaseInterface
+{
+}
+PHP);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+    ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('2 violations have been fixed.', $this->withoutAnsi($output));
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertFileDoesNotExist($basePath . '/src/ChildInterface.php');
+            $this->assertFileDoesNotExist($basePath . '/src/BaseInterface.php');
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandTracksComposerJsonProgressAsSingleFile(): void
     {
         $basePath = $this->createProjectDirectoryWithMissingComposerPsr4Path();

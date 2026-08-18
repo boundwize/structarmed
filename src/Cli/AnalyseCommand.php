@@ -59,6 +59,13 @@ final readonly class AnalyseCommand
         '--fix'              => 'fix',
     ];
 
+    /**
+     * Upper bound on fix/re-analyse passes. Fixers converge naturally (each
+     * pass removes or rewrites code), so this only guards against a fixer that
+     * keeps reporting success without resolving its violation.
+     */
+    private const MAX_FIX_PASSES = 10;
+
     public function __construct(private ?ProgressHandlerInterface $progressHandler = null)
     {
     }
@@ -172,9 +179,18 @@ final readonly class AnalyseCommand
         }
 
         if (isset($options['fix'])) {
-            $fixedCount = $this->fixViolations($architecture, $ruleViolationCollection);
+            // Removal fixers can cascade: deleting an unused child abstraction
+            // may leave its parent unused, so fix and re-analyse until a pass
+            // fixes nothing. The pass cap only guards against a fixer that
+            // reports success without resolving its violation.
+            for ($fixPass = 0; $fixPass < self::MAX_FIX_PASSES; $fixPass++) {
+                $passFixedCount = $this->fixViolations($architecture, $ruleViolationCollection);
 
-            if ($fixedCount > 0) {
+                if ($passFixedCount === 0) {
+                    break;
+                }
+
+                $fixedCount += $passFixedCount;
                 $analysisResultCache->clear();
 
                 $files                             = $analyser->filesForAnalysis($architecture, $scanPaths);
