@@ -92,6 +92,18 @@ final class MustHaveReturnTypeRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $mustHaveReturnTypeRule->evaluate($classNode));
     }
 
+    public function testIgnoresConstructorAndDestructorRegardlessOfCase(): void
+    {
+        $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
+        $classNode              = $this->makeNode([
+            $this->method('__CONSTRUCT', hasReturnType: false),
+            $this->method('__Destruct', hasReturnType: false),
+        ]);
+
+        // PHP method names are case-insensitive, so these are still ctor/dtor
+        $this->assertNotInstanceOf(RuleViolation::class, $mustHaveReturnTypeRule->evaluate($classNode));
+    }
+
     public function testIgnoresPrivateMethods(): void
     {
         $mustHaveReturnTypeRule = new MustHaveReturnTypeRule(layer: 'Domain');
