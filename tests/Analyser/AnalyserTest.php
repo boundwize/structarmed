@@ -484,13 +484,13 @@ final class AnalyserTest extends TestCase
         $architecture = Architecture::define()
             ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
 
-        $coldViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
+        $ruleViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
             ->analyse($architecture, [], null, AnalyserOptions::sequential());
         $warmViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
             ->analyse($architecture, [], null, AnalyserOptions::sequential());
 
         // Procedural references must survive the class-node cache round-trip.
-        $this->assertFalse($coldViolationCollection->hasViolations());
+        $this->assertFalse($ruleViolationCollection->hasViolations());
         $this->assertFalse($warmViolationCollection->hasViolations());
     }
 

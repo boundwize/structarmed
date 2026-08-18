@@ -261,7 +261,19 @@ final readonly class ParallelClassNodeExtractor
                             );
                         }
 
-                        $fileReferences[$file] = $references;
+                        $validReferences = [];
+
+                        foreach ($references as $reference) {
+                            if (! is_string($reference)) {
+                                throw new RuntimeException(
+                                    'Parallel analysis worker returned invalid file references.'
+                                );
+                            }
+
+                            $validReferences[] = $reference;
+                        }
+
+                        $fileReferences[$file] = $validReferences;
                     }
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();

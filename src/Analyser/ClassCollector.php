@@ -150,9 +150,9 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * Class-like references made outside any named class-like scope, per file —
-     * procedural functions, top-level statements, and top-level anonymous
-     * class bodies.
+     * References to class-likes made outside any named class-like scope, per
+     * file — procedural functions, top-level statements, and top-level
+     * anonymous class bodies.
      *
      * @return array<string, list<string>>
      */

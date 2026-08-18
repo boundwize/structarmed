@@ -7,7 +7,9 @@ namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use Iterator;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -479,13 +481,23 @@ PHP);
         }
     }
 
-    public function testExtractThrowsWhenFileReferencesEntryIsInvalid(): void
+    /**
+     * @return Iterator<string, array{mixed}>
+     */
+    public static function invalidFileReferencesEntryProvider(): Iterator
+    {
+        yield 'entry not an array' => [['Foo.php' => 'invalid']];
+        yield 'entry with non-string reference' => [['Foo.php' => [1]]];
+    }
+
+    #[DataProvider('invalidFileReferencesEntryProvider')]
+    public function testExtractThrowsWhenFileReferencesEntryIsInvalid(mixed $invalidFileReferences): void
     {
         $GLOBALS['mock_file_get_contents_payload'] = [
             'nodes'               => [],
             'fileAnalyses'        => [],
             'anonymousClassNodes' => [],
-            'fileReferences'      => ['Foo.php' => 'invalid'],
+            'fileReferences'      => $invalidFileReferences,
             'error'               => null,
         ];
 
