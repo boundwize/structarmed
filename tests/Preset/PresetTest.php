@@ -13,6 +13,10 @@ use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerNameTrait;
+use Boundwize\StructArmed\Preset\Presets\YagniPreset;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeImplementedInterfaceRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeOverriddenAbstractClassRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -24,8 +28,44 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Psr15Preset::class)]
 #[CoversClass(Psr4Preset::class)]
 #[CoversClass(ResolvesSourceLayerNameTrait::class)]
+#[CoversClass(YagniPreset::class)]
 final class PresetTest extends TestCase
 {
+    public function testYagniPresetRegistersSourceLayerAndRules(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::YAGNI(
+            sourcePaths: ['src/'],
+        )->apply($architecture);
+
+        $this->assertSame(['Source' => ['src/']], $architecture->getLayers());
+
+        $rules = $architecture->getRules();
+        $this->assertInstanceOf(
+            MustBeImplementedInterfaceRule::class,
+            $rules[YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED] ?? null
+        );
+        $this->assertInstanceOf(
+            MustBeOverriddenAbstractClassRule::class,
+            $rules[YagniPreset::ABSTRACT_CLASS_MUST_BE_OVERRIDDEN] ?? null
+        );
+        $this->assertInstanceOf(
+            MustBeUsedTraitRule::class,
+            $rules[YagniPreset::TRAIT_MUST_BE_USED] ?? null
+        );
+    }
+
+    public function testYagniPresetUsesComposerSourcePathsByDefault(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::YAGNI()->apply($architecture);
+
+        // A null source path list defers to Composer-discovered PSR-4 paths.
+        $this->assertSame(['Source' => []], $architecture->getLayers());
+    }
+
     public function testPsr1PresetRegistersSourceLayerAndRules(): void
     {
         $architecture = Architecture::define();

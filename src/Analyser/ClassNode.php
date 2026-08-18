@@ -60,6 +60,8 @@ final class ClassNode
         public array $parentClasses = [],
         public array $parentInterfaces = [],
         public bool $isExtended = false,
+        public bool $isImplemented = false,
+        public bool $isUsed = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
@@ -81,6 +83,27 @@ final class ClassNode
     public function setExtended(bool $isExtended): void
     {
         $this->isExtended = $isExtended;
+    }
+
+    /**
+     * Whether another scanned class implements this interface (directly or
+     * through inheritance) or another scanned interface extends it. Computed by
+     * the analyser for rules implementing ImplementedInterfaceAwareRuleInterface;
+     * false otherwise.
+     */
+    public function setImplemented(bool $isImplemented): void
+    {
+        $this->isImplemented = $isImplemented;
+    }
+
+    /**
+     * Whether another scanned class-like uses this trait. Computed by the
+     * analyser for rules implementing UsedTraitAwareRuleInterface; false
+     * otherwise.
+     */
+    public function setUsed(bool $isUsed): void
+    {
+        $this->isUsed = $isUsed;
     }
 
     public function shortName(): string

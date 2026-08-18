@@ -209,12 +209,15 @@ final class ClassCollector extends NodeVisitorAbstract
 
         if (! $node->name instanceof Identifier) {
             // Anonymous classes never become ClassNodes, but the class they
-            // extend is still extended within the scanned paths.
+            // extend, the interfaces they implement, and the traits they use
+            // are still used within the scanned paths.
             if ($node instanceof Class_) {
                 $this->anonymousClassNodes[] = new AnonymousClassNode(
-                    file:    $this->currentFile,
-                    line:    $node->getStartLine(),
-                    extends: $node->extends instanceof Name ? $node->extends->toString() : null,
+                    file:       $this->currentFile,
+                    line:       $node->getStartLine(),
+                    extends:    $node->extends instanceof Name ? $node->extends->toString() : null,
+                    implements: $this->collectImplements($node),
+                    traits:     $this->collectTraits($node),
                 );
             }
 

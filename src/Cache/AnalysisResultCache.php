@@ -388,9 +388,11 @@ final class AnalysisResultCache
     private function anonymousClassNodeToArray(AnonymousClassNode $anonymousClassNode): array
     {
         return [
-            'file'    => $anonymousClassNode->file,
-            'line'    => $anonymousClassNode->line,
-            'extends' => $anonymousClassNode->extends,
+            'file'       => $anonymousClassNode->file,
+            'line'       => $anonymousClassNode->line,
+            'extends'    => $anonymousClassNode->extends,
+            'implements' => $anonymousClassNode->implements,
+            'traits'     => $anonymousClassNode->traits,
         ];
     }
 
@@ -413,18 +415,26 @@ final class AnalysisResultCache
                 return null;
             }
 
-            $file    = $rawNode['file'] ?? null;
-            $line    = $rawNode['line'] ?? null;
-            $extends = $rawNode['extends'] ?? null;
+            $file       = $rawNode['file'] ?? null;
+            $line       = $rawNode['line'] ?? null;
+            $extends    = $rawNode['extends'] ?? null;
+            $implements = $rawNode['implements'] ?? [];
+            $traits     = $rawNode['traits'] ?? [];
 
             if (! is_string($file) || ! is_int($line) || ($extends !== null && ! is_string($extends))) {
                 return null;
             }
 
+            if (! $this->isStringArray($implements) || ! $this->isStringArray($traits)) {
+                return null;
+            }
+
             $anonymousClassNodes[] = new AnonymousClassNode(
-                file:    $file,
-                line:    $line,
-                extends: $extends,
+                file:       $file,
+                line:       $line,
+                extends:    $extends,
+                implements: $implements,
+                traits:     $traits,
             );
         }
 

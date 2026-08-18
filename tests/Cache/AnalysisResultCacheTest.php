@@ -603,9 +603,11 @@ final class AnalysisResultCacheTest extends TestCase
         $classNodes          = [$this->makeClassNode($sourceFile)];
         $anonymousClassNodes = [
             new AnonymousClassNode(
-                file:    $sourceFile,
-                line:    7,
-                extends: 'App\BaseHandler',
+                file:       $sourceFile,
+                line:       7,
+                extends:    'App\BaseHandler',
+                implements: ['App\Contract'],
+                traits:     ['App\Helper'],
             ),
         ];
 
@@ -675,6 +677,12 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'not an array' => ['invalid'];
         yield 'entry not an array' => [['invalid']];
         yield 'entry with invalid field types' => [[['file' => 1, 'line' => 'x', 'extends' => null]]];
+        yield 'entry with invalid implements' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'implements' => ['App\Contract', 1]]],
+        ];
+        yield 'entry with invalid traits' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'traits' => 'invalid']],
+        ];
     }
 
     #[DataProvider('corruptedAnonymousClassNodesProvider')]

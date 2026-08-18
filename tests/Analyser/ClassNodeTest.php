@@ -269,6 +269,53 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->isExtended);
     }
 
+    public function testSetImplementedTogglesIsImplementedFlag(): void
+    {
+        $classNode = new ClassNode(
+            className:   'App\\Domain\\OrderRepositoryInterface',
+            file:        '/src/OrderRepositoryInterface.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     false,
+            isInterface: true,
+            isReadonly:  false,
+        );
+
+        $this->assertFalse($classNode->isImplemented);
+
+        $classNode->setImplemented(true);
+        $this->assertTrue($classNode->isImplemented);
+
+        $classNode->setImplemented(false);
+        $this->assertFalse($classNode->isImplemented);
+    }
+
+    public function testSetUsedTogglesIsUsedFlag(): void
+    {
+        $classNode = new ClassNode(
+            className:   'App\\Domain\\TimestampableTrait',
+            file:        '/src/TimestampableTrait.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     false,
+            isInterface: false,
+            isReadonly:  false,
+            isTrait:     true,
+        );
+
+        $this->assertFalse($classNode->isUsed);
+
+        $classNode->setUsed(true);
+        $this->assertTrue($classNode->isUsed);
+
+        $classNode->setUsed(false);
+        $this->assertFalse($classNode->isUsed);
+    }
+
     public function testDependsOnMatchesExistingClassesExactly(): void
     {
         $classNode = new ClassNode(

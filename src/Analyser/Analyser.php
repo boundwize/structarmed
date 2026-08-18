@@ -17,6 +17,7 @@ use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\ImplementedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
@@ -24,6 +25,7 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
 use Boundwize\StructArmed\Util\Path;
 
 use function array_fill_keys;
@@ -78,11 +80,13 @@ final readonly class Analyser
         $ruleSkipPaths   = $architecture->getRuleSkipPaths();
         $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
 
-        $projectRuleViolations     = [];
-        $fileAnalysisRules         = [];
-        $classRules                = [];
-        $layerAwareRules           = [];
-        $hasExtendedClassAwareRule = false;
+        $projectRuleViolations            = [];
+        $fileAnalysisRules                = [];
+        $classRules                       = [];
+        $layerAwareRules                  = [];
+        $hasExtendedClassAwareRule        = false;
+        $hasImplementedInterfaceAwareRule = false;
+        $hasUsedTraitAwareRule            = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -99,6 +103,14 @@ final readonly class Analyser
 
             if ($rule instanceof ExtendedClassAwareRuleInterface) {
                 $hasExtendedClassAwareRule = true;
+            }
+
+            if ($rule instanceof ImplementedInterfaceAwareRuleInterface) {
+                $hasImplementedInterfaceAwareRule = true;
+            }
+
+            if ($rule instanceof UsedTraitAwareRuleInterface) {
+                $hasUsedTraitAwareRule = true;
             }
 
             if (! $rule instanceof ProjectRuleInterface) {
@@ -150,6 +162,14 @@ final readonly class Analyser
 
         if ($hasExtendedClassAwareRule) {
             $this->markExtendedClasses($classNodes, $extractionResult);
+        }
+
+        if ($hasImplementedInterfaceAwareRule) {
+            $this->markImplementedInterfaces($classNodes, $extractionResult);
+        }
+
+        if ($hasUsedTraitAwareRule) {
+            $this->markUsedTraits($classNodes, $extractionResult);
         }
 
         if ($withFileAnalysis) {
@@ -684,6 +704,73 @@ final readonly class Analyser
             // never do, so they are left with the default (not extended).
             if (isset($extended[strtolower($classNode->className)])) {
                 $classNode->setExtended(true);
+            }
+        }
+    }
+
+    /**
+     * Flag every interface that a scanned class implements (directly or through
+     * inheritance) or another scanned interface extends, using the recursive
+     * parent chain resolved by {@see withRecursiveParents()}.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markImplementedInterfaces(array $classNodes, ExtractionResult $extractionResult): void
+    {
+        $implemented = [];
+
+        foreach ($classNodes as $classNode) {
+            foreach ($classNode->parentInterfaces as $parentInterface) {
+                $implemented[strtolower($parentInterface)] = true;
+            }
+        }
+
+        // Anonymous classes (`new class implements Foo {}`) have no ClassNode
+        // of their own, so the interfaces they implement are tracked separately.
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            foreach ($anonymousClassNode->implements as $interface) {
+                $implemented[strtolower($interface)] = true;
+            }
+        }
+
+        foreach ($classNodes as $classNode) {
+            // Only interfaces appear in parentInterfaces; classes, traits, and
+            // enums never do, so they are left with the default (not implemented).
+            if (isset($implemented[strtolower($classNode->className)])) {
+                $classNode->setImplemented(true);
+            }
+        }
+    }
+
+    /**
+     * Flag every trait that another scanned class-like (class, trait, or enum)
+     * uses. Trait usage is a direct declaration, so no recursive chain is
+     * needed: a trait used only by another unused trait stays flagged as used
+     * until that trait is removed, at which point the next run reports it.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markUsedTraits(array $classNodes, ExtractionResult $extractionResult): void
+    {
+        $used = [];
+
+        foreach ($classNodes as $classNode) {
+            foreach ($classNode->traits as $trait) {
+                $used[strtolower($trait)] = true;
+            }
+        }
+
+        // Anonymous classes (`new class { use Foo; }`) have no ClassNode of
+        // their own, so the traits they use are tracked separately.
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            foreach ($anonymousClassNode->traits as $trait) {
+                $used[strtolower($trait)] = true;
+            }
+        }
+
+        foreach ($classNodes as $classNode) {
+            if (isset($used[strtolower($classNode->className)])) {
+                $classNode->setUsed(true);
             }
         }
     }

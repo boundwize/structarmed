@@ -81,7 +81,10 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 | `MaxDependencyCountRule` | `new MaxDependencyCountRule(layer: 'Controller', maxCount: 5)` | Constructor dependency count stays below the configured limit. |
 | `MayNotImplementInterfaceRule` | `new MayNotImplementInterfaceRule(layer: 'Domain', interface: JsonSerializable::class)` | Classes in a layer do not implement a forbidden interface. |
 | `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. Classes extended by another scanned class are skipped (making them `final` would break the child). Supports `--fix`. |
+| `MustBeImplementedInterfaceRule` | `new MustBeImplementedInterfaceRule(layer: 'Source')` | Interfaces are implemented by a scanned class (directly or through inheritance) or extended by another scanned interface. Supports `--fix` by removing the unused interface (and deleting its file when only boilerplate remains). |
 | `MustBeInterfaceRule` | `new MustBeInterfaceRule(layer: 'Contract', classNamePattern: '/Interface$/')` | Matching declarations in a layer are interfaces. |
+| `MustBeOverriddenAbstractClassRule` | `new MustBeOverriddenAbstractClassRule(layer: 'Source')` | Abstract classes are extended by a scanned class. Supports `--fix` by removing the unused abstract class (and deleting its file when only boilerplate remains). |
+| `MustBeUsedTraitRule` | `new MustBeUsedTraitRule(layer: 'Source')` | Traits are used by a scanned class, trait, or enum. Supports `--fix` by removing the unused trait (and deleting its file when only boilerplate remains). |
 | `MustDeclareConstantVisibilityRule` | `new MustDeclareConstantVisibilityRule(layer: 'Source')` | Class constants declare `public`, `protected`, or `private`. Supports `--fix`. |
 | `MustDeclareMethodVisibilityRule` | `new MustDeclareMethodVisibilityRule(layer: 'Source')` | Methods declare `public`, `protected`, or `private`. Supports `--fix`. |
 | `MustDeclarePropertyVisibilityRule` | `new MustDeclarePropertyVisibilityRule(layer: 'Source')` | Properties declare `public`, `protected`, or `private`. Supports `--fix`. |
@@ -91,7 +94,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`Psr4DirectoryExistsRule`, `Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `MustBeFinalRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically remove PSR-4 mappings for missing directories, normalize invalid PHP opening tags, remove UTF-8 byte order marks, add the `final` class modifier, and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+`Psr4DirectoryExistsRule`, `Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `MustBeFinalRule`, `MustBeImplementedInterfaceRule`, `MustBeOverriddenAbstractClassRule`, `MustBeUsedTraitRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically remove PSR-4 mappings for missing directories, normalize invalid PHP opening tags, remove UTF-8 byte order marks, add the `final` class modifier, remove unused interfaces, abstract classes, and traits (deleting their file when only `declare`/`namespace`/`use` boilerplate remains), and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
 ## Layer Rules
 

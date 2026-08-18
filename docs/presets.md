@@ -25,6 +25,7 @@ StructArmed ships with presets for common PHP standards and architecture styles.
 | `Preset::PSR4()` | Verifies configured source paths exist in composer.json `autoload` or `autoload-dev` PSR-4 mappings |
 | `Preset::DDD()` | Layer isolation, entity/VO/repository/event/service conventions |
 | `Preset::MVC()` | Layer isolation, thin controllers, model/view/service rules |
+| `Preset::YAGNI()` | Speculative-abstraction cleanup: interfaces must be implemented by a class or extended by another interface, abstract classes must be extended, traits must be used within the scanned paths. All three rules support `--fix` by removing the unused declaration |
 
 ## Initialize Presets
 
@@ -35,6 +36,7 @@ vendor/bin/structarmed init --preset=psr12
 vendor/bin/structarmed init --preset=psr15
 vendor/bin/structarmed init --preset=mvc
 vendor/bin/structarmed init --preset=ddd
+vendor/bin/structarmed init --preset=yagni
 vendor/bin/structarmed init --preset=all
 ```
 
@@ -49,6 +51,7 @@ return Architecture::define()
         Preset::PSR15(),
         Preset::MVC(),
         Preset::DDD(),
+        Preset::YAGNI(),
     );
 ```
 

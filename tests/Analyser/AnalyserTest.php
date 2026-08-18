@@ -19,6 +19,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
+use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
@@ -310,6 +311,167 @@ final class AnalyserTest extends TestCase
         // reported as if not extended — a false positive on purpose.
         $this->assertCount(1, $violations);
         $this->assertSame('App\BaseHandler', $violations[0]->className);
+    }
+
+    public function testYagniPresetReportsOnlyUnusedAbstractions(): void
+    {
+        $consumer = '<?php namespace App;' . "\n"
+            . 'final class Consumer extends UsedBase implements UsedInterface { use UsedTrait; }';
+
+        $basePath = $this->makeTempProject([
+            'src/UsedInterface.php'   => '<?php namespace App; interface UsedInterface {}',
+            'src/UnusedInterface.php' => '<?php namespace App; interface UnusedInterface {}',
+            'src/BaseInterface.php'   => '<?php namespace App; interface BaseInterface {}',
+            'src/ChildInterface.php'  => '<?php namespace App; interface ChildInterface extends BaseInterface {}',
+            'src/UsedBase.php'        => '<?php namespace App; abstract class UsedBase {}',
+            'src/UnusedBase.php'      => '<?php namespace App; abstract class UnusedBase {}',
+            'src/UsedTrait.php'       => '<?php namespace App; trait UsedTrait {}',
+            'src/UnusedTrait.php'     => '<?php namespace App; trait UnusedTrait {}',
+            'src/Consumer.php'        => $consumer,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $interfaceViolations = $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED);
+        $abstractViolations  = $ruleViolationCollection->forRule(YagniPreset::ABSTRACT_CLASS_MUST_BE_OVERRIDDEN);
+        $traitViolations     = $ruleViolationCollection->forRule(YagniPreset::TRAIT_MUST_BE_USED);
+
+        // BaseInterface is extended by ChildInterface, so only UnusedInterface
+        // and the never-implemented ChildInterface itself are reported.
+        $interfaceClassNames = array_map(
+            static fn (RuleViolation $ruleViolation): string => $ruleViolation->className,
+            $interfaceViolations
+        );
+        sort($interfaceClassNames);
+
+        $this->assertSame(['App\ChildInterface', 'App\UnusedInterface'], $interfaceClassNames);
+
+        $this->assertCount(1, $abstractViolations);
+        $this->assertSame('App\UnusedBase', $abstractViolations[0]->className);
+
+        $this->assertCount(1, $traitViolations);
+        $this->assertSame('App\UnusedTrait', $traitViolations[0]->className);
+    }
+
+    public function testMustBeImplementedInterfaceRuleRecognizesTransitiveImplementation(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/BaseInterface.php'  => '<?php namespace App; interface BaseInterface {}',
+            'src/ChildInterface.php' => '<?php namespace App; interface ChildInterface extends BaseInterface {}',
+            'src/Consumer.php'       => '<?php namespace App; final class Consumer implements ChildInterface {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // Consumer implements ChildInterface, which transitively implements
+        // BaseInterface — neither interface is speculative.
+        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED));
+    }
+
+    public function testYagniRulesDoNotFlagAbstractionsUsedByAnonymousClass(): void
+    {
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class Factory {' . "\n"
+            . '    public function make(): Contract { return new class implements Contract { use Helper; }; }' . "\n"
+            . '}';
+
+        $basePath = $this->makeTempProject([
+            'src/Contract.php' => '<?php namespace App; interface Contract {}',
+            'src/Helper.php'   => '<?php namespace App; trait Helper {}',
+            'src/Factory.php'  => $factory,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED));
+        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::TRAIT_MUST_BE_USED));
+    }
+
+    public function testYagniRulesDoNotFlagAnonymousClassUsageOnCachedRun(): void
+    {
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class Factory {' . "\n"
+            . '    public function make(): Contract { return new class implements Contract { use Helper; }; }' . "\n"
+            . '}';
+
+        $basePath            = $this->makeTempProject([
+            'src/Contract.php' => '<?php namespace App; interface Contract {}',
+            'src/Helper.php'   => '<?php namespace App; trait Helper {}',
+            'src/Factory.php'  => $factory,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+        $warmViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // The anonymous-class implements/use lists must survive the class-node
+        // cache round-trip.
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+        $this->assertFalse($warmViolationCollection->hasViolations());
+    }
+
+    public function testYagniRulesFollowOriginalNamesWhenUsageIsAliased(): void
+    {
+        $consumer = '<?php namespace App\Sub;' . "\n"
+            . 'use App\BaseHandler as BaseAlias;' . "\n"
+            . 'use App\Contract as ContractAlias;' . "\n"
+            . 'use App\Helper as HelperAlias;' . "\n"
+            . 'final class Consumer extends BaseAlias implements ContractAlias { use HelperAlias; }';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseHandler.php'  => '<?php namespace App; abstract class BaseHandler {}',
+            'src/Contract.php'     => '<?php namespace App; interface Contract {}',
+            'src/Helper.php'       => '<?php namespace App; trait Helper {}',
+            'src/Sub/Consumer.php' => $consumer,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // Aliased imports resolve to the original names, so the abstractions
+        // count as used.
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testYagniRulesRecognizeUsageWithParallelRunner(): void
+    {
+        $consumer = '<?php namespace App;' . "\n"
+            . 'final class Consumer extends UsedBase implements UsedInterface { use UsedTrait; }';
+
+        $basePath = $this->makeTempProject([
+            'src/UsedInterface.php' => '<?php namespace App; interface UsedInterface {}',
+            'src/UsedBase.php'      => '<?php namespace App; abstract class UsedBase {}',
+            'src/UsedTrait.php'     => '<?php namespace App; trait UsedTrait {}',
+            'src/Consumer.php'      => $consumer,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::parallel());
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testMustBeFinalRuleReportsSameExtendedClassesOnCachedRun(): void
