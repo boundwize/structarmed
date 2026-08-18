@@ -204,7 +204,7 @@ final class ClassNode
     public function constructorParamCount(): int
     {
         foreach ($this->methods as $method) {
-            if ($method->name === '__construct') {
+            if ($method->isConstructor()) {
                 return $method->paramCount;
             }
         }

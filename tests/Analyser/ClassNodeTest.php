@@ -400,4 +400,24 @@ final class ClassNodeTest extends TestCase
         $this->assertSame(2, $withConstructor->constructorParamCount());
         $this->assertSame(0, $withoutConstructor->constructorParamCount());
     }
+
+    public function testConstructorParamCountMatchesConstructorCaseInsensitively(): void
+    {
+        $classNode = new ClassNode(
+            className: 'App\\Domain\\Order',
+            file: '/src/Order.php',
+            line: 1,
+            layer: 'Domain',
+            extends: null,
+            isAbstract: false,
+            isFinal: true,
+            isInterface: false,
+            isReadonly: false,
+            methods: [
+                new MethodNode('__CONSTRUCT', 'public', false, false, 3, 1, 3),
+            ],
+        );
+
+        $this->assertSame(3, $classNode->constructorParamCount());
+    }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use function strcasecmp;
+
 final readonly class MethodNode
 {
     public function __construct(
@@ -27,11 +29,11 @@ final readonly class MethodNode
 
     public function isConstructor(): bool
     {
-        return $this->name === '__construct';
+        return strcasecmp($this->name, '__construct') === 0;
     }
 
     public function isDestructor(): bool
     {
-        return $this->name === '__destruct';
+        return strcasecmp($this->name, '__destruct') === 0;
     }
 }

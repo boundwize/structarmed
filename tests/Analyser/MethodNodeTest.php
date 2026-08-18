@@ -28,4 +28,19 @@ final class MethodNodeTest extends TestCase
         $this->assertFalse($protectedMethod->isConstructor());
         $this->assertFalse($protectedMethod->isDestructor());
     }
+
+    public function testConstructorAndDestructorDetectionIsCaseInsensitive(): void
+    {
+        $upperConstructor = new MethodNode('__CONSTRUCT', 'public', false, false, 0, 1, 3, isMagic: true);
+        $mixedConstructor = new MethodNode('__Construct', 'public', false, false, 0, 1, 3, isMagic: true);
+        $upperDestructor  = new MethodNode('__DESTRUCT', 'public', false, false, 0, 1, 3, isMagic: true);
+        $mixedDestructor  = new MethodNode('__Destruct', 'public', false, false, 0, 1, 3, isMagic: true);
+
+        $this->assertTrue($upperConstructor->isConstructor());
+        $this->assertTrue($mixedConstructor->isConstructor());
+        $this->assertFalse($upperConstructor->isDestructor());
+        $this->assertTrue($upperDestructor->isDestructor());
+        $this->assertTrue($mixedDestructor->isDestructor());
+        $this->assertFalse($upperDestructor->isConstructor());
+    }
 }
