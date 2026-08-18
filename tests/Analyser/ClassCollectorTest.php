@@ -62,6 +62,33 @@ final class ClassCollectorTest extends TestCase
         return $classCollector;
     }
 
+    public function testCollectsFileReferencesFromProceduralCode(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'function handle(Contract $contract): void {}' . "\n"
+            . 'function check(object $value): bool { return $value instanceof Contract; }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Contract']],
+            $classCollector->getFileReferences()
+        );
+    }
+
+    public function testDoesNotCollectFileReferencesFromClassBodies(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Checker { public function check(object $value): bool'
+            . ' { return $value instanceof Contract; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // References inside a named class-like land on its ClassNode
+        // dependencies, not in the file-level references.
+        $this->assertSame([], $classCollector->getFileReferences());
+    }
+
     public function testCollectsFinalClass(): void
     {
         $classNode = $this->collect('<?php final class Foo {}');

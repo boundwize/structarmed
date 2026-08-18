@@ -494,6 +494,32 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($warmViolationCollection->hasViolations());
     }
 
+    public function testYagniRulesRecognizeProceduralReferencesOnCachedRunWithFileAnalysis(): void
+    {
+        $functions = '<?php namespace App;' . "\n"
+            . 'function handle(Contract $contract): void {}';
+
+        $basePath            = $this->makeTempProject([
+            'src/Contract.php'  => '<?php namespace App; interface Contract {}',
+            'src/functions.php' => $functions,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        // A file-analysis rule makes the warm run load class nodes through the
+        // file-analysis cache path, which must also restore file references.
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']))
+            ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+        $warmViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+        $this->assertFalse($warmViolationCollection->hasViolations());
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsUsedByAnonymousClass(): void
     {
         $factory = '<?php namespace App;' . "\n"
