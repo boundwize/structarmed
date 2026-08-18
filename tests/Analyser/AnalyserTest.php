@@ -376,6 +376,52 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED));
     }
 
+    public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
+    {
+        $checker = '<?php namespace App;' . "\n"
+            . 'final class Checker {' . "\n"
+            . '    public function check(object $obj): bool { return $obj instanceof Contract; }' . "\n"
+            . '    public function handle(AbstractHandler $handler): void {}' . "\n"
+            . '    public function helperName(): string { return Helper::class; }' . "\n"
+            . '}';
+
+        $basePath = $this->makeTempProject([
+            'src/Contract.php'        => '<?php namespace App; interface Contract {}',
+            'src/AbstractHandler.php' => '<?php namespace App; abstract class AbstractHandler {}',
+            'src/Helper.php'          => '<?php namespace App; trait Helper {}',
+            'src/Checker.php'         => $checker,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // instanceof checks, type hints, and ::class constants are references;
+        // removing the abstraction would break the referencing code.
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
+    public function testYagniRulesIgnoreSelfReferences(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/UnusedInterface.php' => '<?php namespace App;'
+                . ' interface UnusedInterface { public const NAME = UnusedInterface::class; }',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED);
+
+        // A class-like referencing itself cannot keep itself alive.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\UnusedInterface', $violations[0]->className);
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsUsedByAnonymousClass(): void
     {
         $factory = '<?php namespace App;' . "\n"

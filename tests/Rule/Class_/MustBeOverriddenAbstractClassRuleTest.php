@@ -31,6 +31,7 @@ final class MustBeOverriddenAbstractClassRuleTest extends TestCase
         bool $isTrait = false,
         bool $isEnum = false,
         bool $isExtended = false,
+        bool $isUsed = false,
     ): ClassNode {
         return new ClassNode(
             className:   $className,
@@ -45,6 +46,7 @@ final class MustBeOverriddenAbstractClassRuleTest extends TestCase
             isTrait:     $isTrait,
             isEnum:      $isEnum,
             isExtended:  $isExtended,
+            isUsed:      $isUsed,
         );
     }
 
@@ -52,6 +54,17 @@ final class MustBeOverriddenAbstractClassRuleTest extends TestCase
     {
         $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
         $classNode                         = $this->makeNode(isExtended: true);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $mustBeOverriddenAbstractClassRule->evaluate($classNode)
+        );
+    }
+
+    public function testPassesWhenAbstractClassIsReferencedAsDependency(): void
+    {
+        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
+        $classNode                         = $this->makeNode(isUsed: true);
 
         $this->assertNotInstanceOf(
             RuleViolation::class,

@@ -61,8 +61,10 @@ final readonly class AnalyseCommand
 
     /**
      * Upper bound on fix/re-analyse passes. Fixers converge naturally (each
-     * pass removes or rewrites code), so this only guards against a fixer that
-     * keeps reporting success without resolving its violation.
+     * pass removes or rewrites code), so this mainly guards against a fixer
+     * that keeps reporting success without resolving its violation. A cascade
+     * deeper than this cap (e.g. an unused-abstraction chain of more than
+     * ten levels) needs another --fix invocation to finish.
      */
     private const MAX_FIX_PASSES = 10;
 

@@ -67,9 +67,18 @@ final readonly class PhpParserFixerProcessor
     private function hasOnlyDeclarations(array $statements): bool
     {
         foreach ($statements as $statement) {
+            // The block form `declare(...) { ... }` carries statements of its
+            // own, so only an empty-bodied declare counts as boilerplate.
+            if ($statement instanceof Declare_) {
+                if ($statement->stmts !== null && ! $this->hasOnlyDeclarations($statement->stmts)) {
+                    return false;
+                }
+
+                continue;
+            }
+
             if (
-                $statement instanceof Declare_
-                || $statement instanceof Use_
+                $statement instanceof Use_
                 || $statement instanceof GroupUse
                 || $statement instanceof Nop
             ) {

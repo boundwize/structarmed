@@ -97,9 +97,10 @@ final class ClassNode
     }
 
     /**
-     * Whether another scanned class-like uses this trait. Computed by the
-     * analyser for rules implementing UsedTraitAwareRuleInterface; false
-     * otherwise.
+     * Whether another scanned class-like uses this class-like — as a trait, or
+     * by referencing it as a dependency (type hint, instanceof, ::class,
+     * static call, ...). Computed by the analyser when a usage-aware rule is
+     * active; false otherwise.
      */
     public function setUsed(bool $isUsed): void
     {

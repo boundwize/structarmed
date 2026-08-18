@@ -44,6 +44,12 @@ final readonly class MustBeImplementedInterfaceRule extends AbstractPhpParserFix
             return null;
         }
 
+        // A dependency reference (instanceof, type hint, ::class, ...) means
+        // removing the interface would break the referencing code.
+        if ($classNode->isUsed) {
+            return null;
+        }
+
         return new RuleViolation(
             message:   sprintf(
                 'Interface [%s] must be implemented by a class or extended by another interface',

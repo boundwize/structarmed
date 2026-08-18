@@ -44,6 +44,12 @@ final readonly class MustBeOverriddenAbstractClassRule extends AbstractPhpParser
             return null;
         }
 
+        // A dependency reference (instanceof, type hint, ::class, static
+        // call, ...) means removing the class would break the referencing code.
+        if ($classNode->isUsed) {
+            return null;
+        }
+
         return new RuleViolation(
             message:   sprintf(
                 'Abstract class [%s] must be extended by a class',

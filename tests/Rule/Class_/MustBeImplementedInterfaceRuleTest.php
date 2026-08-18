@@ -35,6 +35,7 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
         bool $isTrait = false,
         bool $isEnum = false,
         bool $isImplemented = false,
+        bool $isUsed = false,
     ): ClassNode {
         return new ClassNode(
             className:    $className,
@@ -49,6 +50,7 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
             isTrait:      $isTrait,
             isEnum:       $isEnum,
             isImplemented: $isImplemented,
+            isUsed:       $isUsed,
         );
     }
 
@@ -56,6 +58,17 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
     {
         $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
         $classNode                      = $this->makeNode(isImplemented: true);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $mustBeImplementedInterfaceRule->evaluate($classNode)
+        );
+    }
+
+    public function testPassesWhenInterfaceIsReferencedAsDependency(): void
+    {
+        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
+        $classNode                      = $this->makeNode(isUsed: true);
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
@@ -166,7 +179,8 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
 
         file_put_contents(
             $file,
-            "<?php\n\ndeclare(strict_types=1);\n\nnamespace App;\n\ninterface UnusedInterface\n{\n}\n"
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace App;\n\nuse ArrayAccess;\n\n"
+                . "interface UnusedInterface extends ArrayAccess\n{\n}\n"
         );
 
         $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
@@ -180,6 +194,36 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
             layer:     'Domain',
         )));
         $this->assertFileDoesNotExist($file);
+    }
+
+    public function testFixKeepsFileWhenDeclareBlockContainsExecutableCode(): void
+    {
+        $temporaryDirectory = $this->makeTemporaryDirectory('structarmed-yagni-interface');
+        $file               = $temporaryDirectory . '/ticks.php';
+
+        // The block form `declare(ticks=1) { ... }` carries executable
+        // statements — removing the interface must not delete the file.
+        file_put_contents(
+            $file,
+            "<?php\n\ndeclare(ticks=1) {\n    echo 'KEEP ME';\n}\n\ninterface UnusedInterface\n{\n}\n"
+        );
+
+        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
+
+        $this->assertTrue($mustBeImplementedInterfaceRule->fix(new RuleViolation(
+            message:   'Interface [UnusedInterface] must be implemented by a class'
+                . ' or extended by another interface',
+            file:      $file,
+            line:      7,
+            className: 'UnusedInterface',
+            layer:     'Domain',
+        )));
+        $this->assertFileExists($file);
+
+        $fixedCode = (string) file_get_contents($file);
+
+        $this->assertStringNotContainsString('interface UnusedInterface', $fixedCode);
+        $this->assertStringContainsString("echo 'KEEP ME';", $fixedCode);
     }
 
     public function testFixKeepsFileWhenOtherCodeRemains(): void

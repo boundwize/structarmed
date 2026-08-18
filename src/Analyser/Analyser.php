@@ -168,8 +168,8 @@ final readonly class Analyser
             $this->markImplementedInterfaces($classNodes, $extractionResult);
         }
 
-        if ($hasUsedTraitAwareRule) {
-            $this->markUsedTraits($classNodes, $extractionResult);
+        if ($hasExtendedClassAwareRule || $hasImplementedInterfaceAwareRule || $hasUsedTraitAwareRule) {
+            $this->markUsedClassLikes($classNodes, $extractionResult);
         }
 
         if ($withFileAnalysis) {
@@ -743,20 +743,33 @@ final readonly class Analyser
     }
 
     /**
-     * Flag every trait that another scanned class-like (class, trait, or enum)
-     * uses. Trait usage is a direct declaration, so no recursive chain is
-     * needed: a trait used only by another unused trait stays flagged as used
-     * until that trait is removed, at which point the next run reports it.
+     * Flag every class-like that another scanned class-like (class, trait, or
+     * enum) uses — as a trait, or by referencing it as a dependency: a type
+     * hint, an instanceof check, a ::class constant, a static call, and so on.
+     * Self-references are ignored: a class-like cannot keep itself alive.
+     * Usage is a direct declaration, so no recursive chain is needed: a
+     * class-like used only by another unused one stays flagged as used until
+     * its user is removed, at which point the next run reports it.
      *
      * @param list<ClassNode> $classNodes
      */
-    private function markUsedTraits(array $classNodes, ExtractionResult $extractionResult): void
+    private function markUsedClassLikes(array $classNodes, ExtractionResult $extractionResult): void
     {
         $used = [];
 
         foreach ($classNodes as $classNode) {
             foreach ($classNode->traits as $trait) {
                 $used[strtolower($trait)] = true;
+            }
+
+            $selfKey = strtolower($classNode->className);
+
+            foreach ($classNode->dependencies as $dependency) {
+                $dependencyKey = strtolower($dependency);
+
+                if ($dependencyKey !== $selfKey) {
+                    $used[$dependencyKey] = true;
+                }
             }
         }
 
