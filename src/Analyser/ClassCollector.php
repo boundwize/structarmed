@@ -480,14 +480,22 @@ final class ClassCollector extends NodeVisitorAbstract
             return;
         }
 
-        // Reflection construction APIs instantiate a class the collector
-        // cannot pin down statically, exactly like an unresolvable
-        // `new $class` — the unresolved marker keeps referenced classes
+        // Reflection construction APIs and unserialize() instantiate a class
+        // the collector cannot pin down statically, exactly like an
+        // unresolvable `new $class` — the unresolved marker keeps classes
         // concrete.
         if (
             ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
             && $node->name instanceof Identifier
             && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
+        ) {
+            $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
+        }
+
+        if (
+            $node instanceof FuncCall
+            && $node->name instanceof Name
+            && $node->name->toLowerString() === 'unserialize'
         ) {
             $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
         }

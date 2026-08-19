@@ -819,23 +819,24 @@ final readonly class Analyser
             }
         }
 
-        // A dynamic `new` whose target could not be resolved statically (e.g.
-        // `new $class` on a function parameter) may instantiate any class the
-        // scanned code references — `$factory->make(X::class)` style call
-        // sites make X referenced, so treating referenced classes as possibly
-        // instantiated keeps them concrete without exempting classes nothing
-        // references at all.
+        // A dynamic instantiation whose target could not be resolved
+        // statically — `new $class` on a function parameter, a
+        // ReflectionClass construction, unserialize() — may target any class:
+        // the name can come from the environment, configuration, or a
+        // payload, entirely outside the scanned code. No class can then be
+        // proven safe to abstract, so every class-like conservatively counts
+        // as instantiated. Resolvable construction keeps precise detection;
+        // unresolvable construction silences the concreteness fix.
         $hasUnresolvedInstantiation = isset($instantiated[ClassCollector::UNRESOLVED_INSTANTIATION]);
 
         foreach ($classNodes as $classNode) {
             $classNameKey = strtolower($classNode->className);
-            $isReferenced = isset($used[$classNameKey]) || isset($instantiated[$classNameKey]);
 
-            if ($isReferenced) {
+            if (isset($used[$classNameKey]) || isset($instantiated[$classNameKey])) {
                 $classNode->setReferenced(true);
             }
 
-            if (isset($instantiated[$classNameKey]) || ($hasUnresolvedInstantiation && $isReferenced)) {
+            if ($hasUnresolvedInstantiation || isset($instantiated[$classNameKey])) {
                 $classNode->setInstantiated(true);
             }
         }

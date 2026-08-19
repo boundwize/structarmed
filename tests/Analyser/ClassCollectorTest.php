@@ -239,6 +239,20 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testMarksUnresolvedInstantiationForUnserialize(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Loader { public function load(string $payload): mixed {'
+            . ' return unserialize($payload); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
     public function testDoesNotMarkUnresolvedInstantiationForOrdinaryMethodCalls(): void
     {
         $code = '<?php namespace App;' . "\n"
