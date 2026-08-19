@@ -59,6 +59,7 @@ use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 
+use function array_keys;
 use function array_pop;
 use function array_unique;
 use function array_values;
@@ -117,10 +118,11 @@ final class ClassCollector extends NodeVisitorAbstract
     private array $currentFileInstantiations = [];
 
     /**
-     * Variables currently known to hold a constant class-name string, so
-     * `new $variable` instantiations can be resolved.
+     * Constant class-name strings each variable may hold (a union across all
+     * of its resolvable assignments), so `new $variable` instantiations can be
+     * resolved to every possible target.
      *
-     * @var array<string, string>
+     * @var array<string, array<string, true>>
      */
     private array $variableClassNames = [];
 
@@ -581,11 +583,19 @@ final class ClassCollector extends NodeVisitorAbstract
             return;
         }
 
-        // `new $class` where the variable holds a constant class-name value,
-        // or `new (X::class)` / `new ('App\X')` class expressions.
-        $className = $class instanceof Variable && is_string($class->name)
-            ? ($this->variableClassNames[$class->name] ?? null)
-            : $this->resolveClassNameExpr($class);
+        // `new $class` instantiates any of the constant class-name values the
+        // variable may hold — conditional reassignments make every recorded
+        // possibility reachable at runtime.
+        if ($class instanceof Variable && is_string($class->name)) {
+            foreach (array_keys($this->variableClassNames[$class->name] ?? []) as $possibleClassName) {
+                $this->currentFileInstantiations[] = $possibleClassName;
+            }
+
+            return;
+        }
+
+        // `new (X::class)` / `new ('App\X')` class expressions.
+        $className = $this->resolveClassNameExpr($class);
 
         if ($className !== null) {
             $this->currentFileInstantiations[] = $className;
@@ -623,8 +633,11 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /**
      * Track `$variable = <constant class-name expression>` assignments so a
-     * later `new $variable` can be resolved. Over-approximation is safe: a
-     * recorded instantiation only keeps a class concrete or alive.
+     * later `new $variable` can be resolved. Every resolvable value is kept as
+     * a possibility — a conditional reassignment does not replace the earlier
+     * one, since either branch may run. Over-approximation is the safe
+     * direction: a recorded instantiation only keeps a class concrete or
+     * alive, while a missed one could let the fixer break runtime code.
      */
     private function trackVariableClassName(Assign $assign): void
     {
@@ -635,13 +648,10 @@ final class ClassCollector extends NodeVisitorAbstract
         $className = $this->resolveClassNameExpr($assign->expr);
 
         if ($className === null) {
-            // Reassigned to something unresolvable — drop the stale name.
-            unset($this->variableClassNames[$assign->var->name]);
-
             return;
         }
 
-        $this->variableClassNames[$assign->var->name] = $className;
+        $this->variableClassNames[$assign->var->name][$className] = true;
     }
 
     /**

@@ -177,7 +177,22 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
-    public function testDropsVariableClassNameOnUnresolvableReassignment(): void
+    public function testCollectsAllPossibleClassNamesOnConditionalReassignment(): void
+    {
+        // Either branch may run at runtime, so both classes are instantiable.
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Factory { public function create(bool $child): object {'
+            . ' $class = Base::class; if ($child) { $class = Child::class; } return new $class(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Base', 'App\Child']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testKeepsEarlierClassNameOnUnresolvableReassignment(): void
     {
         $code = '<?php namespace App;' . "\n"
             . 'final class Maker { public function make(object $obj): object {'
@@ -185,9 +200,13 @@ final class ClassCollectorTest extends TestCase
 
         $classCollector = $this->makeCollector($code);
 
-        // The reassignment cannot be evaluated statically, so the earlier
-        // constant value must not leak into the instantiation.
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        // The reassignment cannot be evaluated statically, but the earlier
+        // constant value may still reach the instantiation — keeping it is
+        // the safe over-approximation.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Base']],
+            $classCollector->getFileInstantiations()
+        );
     }
 
     public function testIgnoresUnresolvableClassNameExpressions(): void

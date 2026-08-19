@@ -589,6 +589,34 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnConditionalDynamicInstantiation(): void
+    {
+        // `create(false)` instantiates Base at runtime even though the
+        // traversal sees Child assigned last — every possible value of the
+        // variable must keep its class concrete.
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class Factory { public function create(bool $child): Base {' . "\n"
+            . '    $class = Base::class;' . "\n"
+            . '    if ($child) { $class = Child::class; }' . "\n"
+            . '    return new $class();' . "\n"
+            . '} }';
+
+        $basePath = $this->makeTempProject([
+            'src/Base.php'    => '<?php namespace App; class Base {}',
+            'src/Child.php'   => '<?php namespace App; final class Child extends Base {}',
+            'src/Factory.php' => $factory,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnSelfAndParentInstantiation(): void
     {
         // `new self()` resolves to the class itself even when called through a
