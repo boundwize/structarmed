@@ -223,6 +223,33 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testMarksUnresolvedInstantiationForReflectionConstruction(): void
+    {
+        // ReflectionClass::newInstance() constructs an object of a class the
+        // collector cannot determine.
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Booter { public function boot(\ReflectionClass $r, ?\ReflectionClass $n): object {'
+            . ' return $r->newInstance() ?? $n?->newInstanceWithoutConstructor(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testDoesNotMarkUnresolvedInstantiationForOrdinaryMethodCalls(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Caller { public function run(object $service): mixed {'
+            . ' return $service->handle(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
     public function testMarksUnresolvedInstantiationForRuntimeClassExpression(): void
     {
         $code = '<?php namespace App;' . "\n"

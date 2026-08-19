@@ -643,6 +643,31 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnReflectionInstantiation(): void
+    {
+        // ReflectionClass::newInstance() constructs Base at runtime; the
+        // reflection construction call marks an unresolved instantiation, so
+        // the referenced Base stays concrete.
+        $bootstrap = '<?php' . "\n"
+            . '$reflection = new ReflectionClass(App\Base::class);' . "\n"
+            . '$instance = $reflection->newInstance();';
+
+        $basePath = $this->makeTempProject([
+            'src/Base.php'      => '<?php namespace App; class Base {}',
+            'src/Child.php'     => '<?php namespace App; final class Child extends Base {}',
+            'src/bootstrap.php' => $bootstrap,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRuleStillFlagsUnreferencedParent(): void
     {
         // The unresolved dynamic instantiation exempts only referenced

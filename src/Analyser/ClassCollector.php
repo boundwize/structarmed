@@ -24,7 +24,9 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\Include_;
 use PhpParser\Node\Expr\Isset_;
 use PhpParser\Node\Expr\List_;
+use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
+use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
@@ -107,6 +109,21 @@ final class ClassCollector extends NodeVisitorAbstract
      * target passed in as `X::class` is not fixed into an abstract class.
      */
     public const UNRESOLVED_INSTANTIATION = '*';
+
+    /**
+     * Method names of the ReflectionClass object-construction APIs. Calling
+     * any of them instantiates a class the collector cannot determine, so the
+     * call records {@see self::UNRESOLVED_INSTANTIATION}. Matching by method
+     * name alone over-approximates (any receiver type matches) — the safe
+     * direction for a fixer that would otherwise make a class abstract.
+     */
+    private const REFLECTION_CONSTRUCTION_METHODS = [
+        'newinstance'                   => true,
+        'newinstanceargs'               => true,
+        'newinstancewithoutconstructor' => true,
+        'newlazyghost'                  => true,
+        'newlazyproxy'                  => true,
+    ];
 
     /** @var list<ClassNode> */
     private array $nodes = [];
@@ -461,6 +478,18 @@ final class ClassCollector extends NodeVisitorAbstract
             }
 
             return;
+        }
+
+        // Reflection construction APIs instantiate a class the collector
+        // cannot pin down statically, exactly like an unresolvable
+        // `new $class` — the unresolved marker keeps referenced classes
+        // concrete.
+        if (
+            ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
+            && $node->name instanceof Identifier
+            && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
+        ) {
+            $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
         }
 
         if ($this->activeClassLikeAnalyses === []) {
