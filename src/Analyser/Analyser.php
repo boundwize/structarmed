@@ -762,12 +762,30 @@ final readonly class Analyser
                 $used[strtolower($trait)] = true;
             }
 
-            $selfKey = strtolower($classNode->className);
+            // A node's own inheritance-clause names (and the imports that
+            // exist for them) are structural relations, not value references:
+            // extending a class must not count as "referencing" it, or an
+            // extended-but-unreferenced class could never be told apart from
+            // a genuinely referenced one. Structural usage is covered by the
+            // dedicated extended/implemented/trait marking, and a child that
+            // instantiates its parent is covered by the instantiation
+            // collection in the file-level references.
+            $excludedKeys = [strtolower($classNode->className) => true];
+
+            if ($classNode->extends !== null) {
+                $excludedKeys[strtolower($classNode->extends)] = true;
+            }
+
+            foreach ([$classNode->implements, $classNode->interfaceExtends, $classNode->traits] as $clauseNames) {
+                foreach ($clauseNames as $clauseName) {
+                    $excludedKeys[strtolower($clauseName)] = true;
+                }
+            }
 
             foreach ($classNode->dependencies as $dependency) {
                 $dependencyKey = strtolower($dependency);
 
-                if ($dependencyKey !== $selfKey) {
+                if (! isset($excludedKeys[$dependencyKey])) {
                     $used[$dependencyKey] = true;
                 }
             }

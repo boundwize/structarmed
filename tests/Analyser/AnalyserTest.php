@@ -469,6 +469,108 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\UnusedTrait', $traitViolations[0]->className);
     }
 
+    public function testExtendedClassMustBeAbstractOrReferencedRuleFlagsOnlyUnreferencedParent(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/BaseRepository.php' => '<?php namespace App; class BaseRepository {}',
+            'src/UserRepository.php' => '<?php namespace App;'
+                . ' final class UserRepository extends BaseRepository {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED);
+
+        // BaseRepository is only ever used as a parent class; extending it
+        // does not count as a reference, so it should be abstract.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\BaseRepository', $violations[0]->className);
+    }
+
+    public function testExtendedClassMustBeAbstractOrReferencedRulePassesWhenParentIsInstantiated(): void
+    {
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class Factory { public function make(): BaseRepository { return new BaseRepository(); } }';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseRepository.php' => '<?php namespace App; class BaseRepository {}',
+            'src/UserRepository.php' => '<?php namespace App;'
+                . ' final class UserRepository extends BaseRepository {}',
+            'src/Factory.php'        => $factory,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED);
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testExtendedClassMustBeAbstractOrReferencedRulePassesWhenChildInstantiatesParent(): void
+    {
+        // The extends clause itself must not count as a reference, but the
+        // child's `new BaseRepository()` must: making the parent abstract
+        // would fatal at that instantiation.
+        $child = '<?php namespace App;' . "\n"
+            . 'final class CachingRepository extends BaseRepository {' . "\n"
+            . '    public function inner(): BaseRepository { return new BaseRepository(); }' . "\n"
+            . '}';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseRepository.php'    => '<?php namespace App; class BaseRepository {}',
+            'src/CachingRepository.php' => $child,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED);
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testExtendedClassMustBeAbstractOrReferencedRulePassesOnSelfAndParentInstantiation(): void
+    {
+        // `new self()` resolves to the class itself even when called through a
+        // subclass, and `new parent()` resolves to the extended class — both
+        // would fatal if the target became abstract.
+        $connection = '<?php namespace App;' . "\n"
+            . 'class Connection { public static function open(): self { return new self(); } }';
+        $pool       = '<?php namespace App;' . "\n"
+            . 'class ConnectionPool extends Connection {' . "\n"
+            . '    public function fresh(): Connection { return new parent(); }' . "\n"
+            . '}';
+        $tuned      = '<?php namespace App;' . "\n"
+            . 'final class TunedPool extends ConnectionPool {}';
+
+        $basePath = $this->makeTempProject([
+            'src/Connection.php'     => $connection,
+            'src/ConnectionPool.php' => $pool,
+            'src/TunedPool.php'      => $tuned,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED);
+
+        // Connection is protected by both `new self()` and `new parent()`;
+        // ConnectionPool is extended but never referenced, so only it is
+        // reported.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\ConnectionPool', $violations[0]->className);
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedByClassNameString(): void
     {
         $checker = '<?php namespace App;' . "\n"

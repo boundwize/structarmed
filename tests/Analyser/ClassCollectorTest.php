@@ -114,6 +114,58 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame([], $classCollector->getFileReferences());
     }
 
+    public function testCollectsInstantiationsAsFileReferences(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Factory { public function make(): object { return new Service(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Service']],
+            $classCollector->getFileReferences()
+        );
+    }
+
+    public function testResolvesSelfStaticAndParentInstantiations(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'class Repository extends BaseRepository {' . "\n"
+            . '    public function one(): self { return new self(); }' . "\n"
+            . '    public function two(): static { return new static(); }' . "\n"
+            . '    public function three(): BaseRepository { return new parent(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Repository', 'App\BaseRepository']],
+            $classCollector->getFileReferences()
+        );
+    }
+
+    public function testDoesNotCollectDynamicOrAnonymousInstantiations(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Maker { public function make(string $class): object {'
+            . ' $a = new $class(); $b = new class {}; return $a ?? $b; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // `new $class` has no resolvable name (class-name strings cover it),
+        // and anonymous classes are tracked as AnonymousClassNodes.
+        $this->assertSame([], $classCollector->getFileReferences());
+    }
+
+    public function testIgnoresRelativeInstantiationOutsideClassScope(): void
+    {
+        // `new self` outside a class parses but cannot be resolved to a name;
+        // PHP itself rejects it at runtime.
+        $classCollector = $this->makeCollector('<?php namespace App; new self();');
+
+        $this->assertSame([], $classCollector->getFileReferences());
+    }
+
     public function testCollectsFinalClass(): void
     {
         $classNode = $this->collect('<?php final class Foo {}');

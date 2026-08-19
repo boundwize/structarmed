@@ -18,6 +18,7 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\Include_;
 use PhpParser\Node\Expr\Isset_;
 use PhpParser\Node\Expr\List_;
+use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
@@ -56,6 +57,7 @@ use function array_pop;
 use function array_unique;
 use function array_values;
 use function count;
+use function end;
 use function in_array;
 use function is_string;
 use function preg_match;
@@ -101,6 +103,15 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /** @var list<string> */
     private array $currentFileReferences = [];
+
+    /**
+     * Stack of named class-likes currently being entered, so `new self`,
+     * `new static`, and `new parent` instantiations can be resolved to the
+     * class names they target.
+     *
+     * @var list<array{name: string, extends: string|null}>
+     */
+    private array $activeClassLikeScopes = [];
 
     private string $currentFile = '';
 
@@ -255,6 +266,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $this->fileClassLikes[] = $node;
         array_pop($this->activeClassLikeAnalyses);
+        array_pop($this->activeClassLikeScopes);
 
         return null;
     }
@@ -275,6 +287,7 @@ final class ClassCollector extends NodeVisitorAbstract
         $this->classLikeAnalysis       = [];
         $this->classLikeMethods        = [];
         $this->activeClassLikeAnalyses = [];
+        $this->activeClassLikeScopes   = [];
         $this->activeMethodIds         = [];
         $this->methodClassLikeAnalyses = [];
 
@@ -291,6 +304,12 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
         $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
+        $this->activeClassLikeScopes[]         = [
+            'name'    => $this->resolveClassName($classLike),
+            'extends' => $classLike instanceof Class_ && $classLike->extends instanceof Name
+                ? $classLike->extends->toString()
+                : null,
+        ];
 
         foreach ($classLike->getMethods() as $classMethod) {
             $methodId = spl_object_id($classMethod);
@@ -339,6 +358,17 @@ final class ClassCollector extends NodeVisitorAbstract
             ) {
                 $this->currentFileReferences[] = $node->value;
             }
+
+            return;
+        }
+
+        // Instantiations always count as references, wherever they appear:
+        // `new` on an abstracted or removed class is fatal, so the referenced
+        // class must stay alive and concrete. Inheritance-clause names are
+        // excluded from the dependency-based reference scan, which makes this
+        // the signal that protects a parent class its own child instantiates.
+        if ($node instanceof New_) {
+            $this->collectInstantiation($node);
 
             return;
         }
@@ -458,6 +488,40 @@ final class ClassCollector extends NodeVisitorAbstract
             foreach ($this->activeMethodIds as $activeMethodId) {
                 $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
             }
+        }
+    }
+
+    private function collectInstantiation(New_ $new): void
+    {
+        $class = $new->class;
+
+        if ($class instanceof FullyQualified) {
+            $this->currentFileReferences[] = $class->toString();
+
+            return;
+        }
+
+        // Dynamic (`new $class`) and anonymous (`new class {}`) instantiations
+        // carry no resolvable name here; dynamic ones are conservatively
+        // covered by the class-name string collection.
+        if (! $class instanceof Name) {
+            return;
+        }
+
+        // After name resolution only self, static, and parent survive as
+        // plain names; resolve them against the enclosing class-like scope.
+        $scope = end($this->activeClassLikeScopes);
+
+        if ($scope === false) {
+            return;
+        }
+
+        $relativeName = $class->toLowerString();
+
+        if ($relativeName === 'self' || $relativeName === 'static') {
+            $this->currentFileReferences[] = $scope['name'];
+        } elseif ($relativeName === 'parent' && $scope['extends'] !== null) {
+            $this->currentFileReferences[] = $scope['extends'];
         }
     }
 
