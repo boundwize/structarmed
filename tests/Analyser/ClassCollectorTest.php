@@ -201,10 +201,38 @@ final class ClassCollectorTest extends TestCase
         $classCollector = $this->makeCollector($code);
 
         // The reassignment cannot be evaluated statically, but the earlier
-        // constant value may still reach the instantiation — keeping it is
-        // the safe over-approximation.
+        // constant value may still reach the instantiation — keeping it plus
+        // the unresolved marker is the safe over-approximation.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\Base']],
+            ['/fake/path/Foo.php' => ['App\Base', ClassCollector::UNRESOLVED_INSTANTIATION]],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testMarksUnresolvedInstantiationForUnknownDynamicClass(): void
+    {
+        // The class name flows in from a call site the collector cannot see.
+        $code = '<?php namespace App;' . "\n"
+            . 'function make(string $class): object { return new $class(); }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testMarksUnresolvedInstantiationForRuntimeClassExpression(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Holder { public function __construct(private string $class) {}'
+            . ' public function make(): object { return new ($this->class)(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
             $classCollector->getFileInstantiations()
         );
     }
@@ -219,20 +247,23 @@ final class ClassCollectorTest extends TestCase
         $classCollector = $this->makeCollector($code);
 
         // Runtime-dependent concatenation, non-class-shaped strings, and
-        // property assignments resolve to nothing.
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        // property assignments resolve to no concrete candidate — only the
+        // unresolved marker remains.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            $classCollector->getFileInstantiations()
+        );
     }
 
-    public function testDoesNotCollectDynamicOrAnonymousInstantiations(): void
+    public function testDoesNotCollectAnonymousInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"
-            . 'final class Maker { public function make(string $class): object {'
-            . ' $a = new $class(); $b = new class {}; return $a ?? $b; } }';
+            . 'final class Maker { public function make(): object { return new class {}; } }';
 
         $classCollector = $this->makeCollector($code);
 
-        // `new $class` has no resolvable name (class-name strings cover it),
-        // and anonymous classes are tracked as AnonymousClassNodes.
+        // Anonymous classes are tracked as AnonymousClassNodes, and their
+        // known declaration does not make any named class instantiable.
         $this->assertSame([], $classCollector->getFileInstantiations());
     }
 

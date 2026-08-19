@@ -99,6 +99,15 @@ final class ClassCollector extends NodeVisitorAbstract
     private const CLASS_LIKE_STRING_PATTERN =
         '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+)*+$/';
 
+    /**
+     * Sentinel recorded in the file instantiations when a dynamic `new` has no
+     * statically known class-name candidates (e.g. `new $class` on a function
+     * parameter). Can never collide with a real class name. The analyser then
+     * treats referenced class-likes as possibly instantiated, so a factory
+     * target passed in as `X::class` is not fixed into an abstract class.
+     */
+    public const UNRESOLVED_INSTANTIATION = '*';
+
     /** @var list<ClassNode> */
     private array $nodes = [];
 
@@ -125,6 +134,14 @@ final class ClassCollector extends NodeVisitorAbstract
      * @var array<string, array<string, true>>
      */
     private array $variableClassNames = [];
+
+    /**
+     * Variables that received at least one statically unresolvable assignment,
+     * so `new $variable` cannot claim to know every possible target.
+     *
+     * @var array<string, true>
+     */
+    private array $variableUnknownAssignments = [];
 
     private readonly ConstExprEvaluator $constExprEvaluator;
 
@@ -186,18 +203,19 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function setCurrentFile(string $file): void
     {
-        $this->currentFile               = $file;
-        $this->currentFileReferences     = [];
-        $this->currentFileInstantiations = [];
-        $this->variableClassNames        = [];
-        $this->currentNamespaceUses      = [];
-        $this->fileClassLikes            = [];
-        $this->fileFunctions             = [];
-        $this->classLikeAnalysis         = [];
-        $this->classLikeMethods          = [];
-        $this->activeClassLikeAnalyses   = [];
-        $this->activeMethodIds           = [];
-        $this->methodClassLikeAnalyses   = [];
+        $this->currentFile                = $file;
+        $this->currentFileReferences      = [];
+        $this->currentFileInstantiations  = [];
+        $this->variableClassNames         = [];
+        $this->variableUnknownAssignments = [];
+        $this->currentNamespaceUses       = [];
+        $this->fileClassLikes             = [];
+        $this->fileFunctions              = [];
+        $this->classLikeAnalysis          = [];
+        $this->classLikeMethods           = [];
+        $this->activeClassLikeAnalyses    = [];
+        $this->activeMethodIds            = [];
+        $this->methodClassLikeAnalyses    = [];
     }
 
     /** @return list<ClassNode> */
@@ -587,8 +605,16 @@ final class ClassCollector extends NodeVisitorAbstract
         // variable may hold — conditional reassignments make every recorded
         // possibility reachable at runtime.
         if ($class instanceof Variable && is_string($class->name)) {
-            foreach (array_keys($this->variableClassNames[$class->name] ?? []) as $possibleClassName) {
+            $possibleClassNames = array_keys($this->variableClassNames[$class->name] ?? []);
+
+            foreach ($possibleClassNames as $possibleClassName) {
                 $this->currentFileInstantiations[] = $possibleClassName;
+            }
+
+            // A variable with no candidates (e.g. a function parameter) or
+            // with an unresolvable assignment may target any class.
+            if ($possibleClassNames === [] || isset($this->variableUnknownAssignments[$class->name])) {
+                $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
             }
 
             return;
@@ -599,7 +625,11 @@ final class ClassCollector extends NodeVisitorAbstract
 
         if ($className !== null) {
             $this->currentFileInstantiations[] = $className;
+
+            return;
         }
+
+        $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
     }
 
     /**
@@ -648,6 +678,8 @@ final class ClassCollector extends NodeVisitorAbstract
         $className = $this->resolveClassNameExpr($assign->expr);
 
         if ($className === null) {
+            $this->variableUnknownAssignments[$assign->var->name] = true;
+
             return;
         }
 

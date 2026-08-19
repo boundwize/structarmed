@@ -617,6 +617,57 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesWhenFactoryInstantiatesUnknownClass(): void
+    {
+        // `make(Base::class)` instantiates Base at runtime, but the collector
+        // cannot connect the argument to `new $class`. The unresolved dynamic
+        // instantiation makes every referenced class count as possibly
+        // instantiated.
+        $functions = '<?php namespace App;' . "\n"
+            . 'function make(string $class): object { return new $class(); }' . "\n"
+            . 'make(Base::class);';
+
+        $basePath = $this->makeTempProject([
+            'src/Base.php'      => '<?php namespace App; class Base {}',
+            'src/Child.php'     => '<?php namespace App; final class Child extends Base {}',
+            'src/functions.php' => $functions,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleStillFlagsUnreferencedParent(): void
+    {
+        // The unresolved dynamic instantiation exempts only referenced
+        // classes — an extended class nothing references cannot be its
+        // target, so it is still reported.
+        $functions = '<?php namespace App;' . "\n"
+            . 'function make(string $class): object { return new $class(); }';
+
+        $basePath = $this->makeTempProject([
+            'src/UnreferencedBase.php' => '<?php namespace App; class UnreferencedBase {}',
+            'src/Sub.php'              => '<?php namespace App; final class Sub extends UnreferencedBase {}',
+            'src/functions.php'        => $functions,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\UnreferencedBase', $violations[0]->className);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnSelfAndParentInstantiation(): void
     {
         // `new self()` resolves to the class itself even when called through a

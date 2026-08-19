@@ -762,12 +762,29 @@ final readonly class Analyser
                 $used[strtolower($trait)] = true;
             }
 
-            $selfKey = strtolower($classNode->className);
+            // A node's own inheritance-clause names (and the imports that
+            // exist for them) are structural relations, not value references.
+            // Excluding them keeps "referenced" meaningful for the unresolved
+            // dynamic instantiation check below: a class extended by a child
+            // is not thereby a possible `new $class` target. The usage-aware
+            // deletion rules are unaffected — each combines this flag with its
+            // structural extended/implemented/trait marking.
+            $excludedKeys = [strtolower($classNode->className) => true];
+
+            if ($classNode->extends !== null) {
+                $excludedKeys[strtolower($classNode->extends)] = true;
+            }
+
+            foreach ([$classNode->implements, $classNode->interfaceExtends, $classNode->traits] as $clauseNames) {
+                foreach ($clauseNames as $clauseName) {
+                    $excludedKeys[strtolower($clauseName)] = true;
+                }
+            }
 
             foreach ($classNode->dependencies as $dependency) {
                 $dependencyKey = strtolower($dependency);
 
-                if ($dependencyKey !== $selfKey) {
+                if (! isset($excludedKeys[$dependencyKey])) {
                     $used[$dependencyKey] = true;
                 }
             }
@@ -802,14 +819,23 @@ final readonly class Analyser
             }
         }
 
+        // A dynamic `new` whose target could not be resolved statically (e.g.
+        // `new $class` on a function parameter) may instantiate any class the
+        // scanned code references — `$factory->make(X::class)` style call
+        // sites make X referenced, so treating referenced classes as possibly
+        // instantiated keeps them concrete without exempting classes nothing
+        // references at all.
+        $hasUnresolvedInstantiation = isset($instantiated[ClassCollector::UNRESOLVED_INSTANTIATION]);
+
         foreach ($classNodes as $classNode) {
             $classNameKey = strtolower($classNode->className);
+            $isReferenced = isset($used[$classNameKey]) || isset($instantiated[$classNameKey]);
 
-            if (isset($used[$classNameKey]) || isset($instantiated[$classNameKey])) {
+            if ($isReferenced) {
                 $classNode->setReferenced(true);
             }
 
-            if (isset($instantiated[$classNameKey])) {
+            if (isset($instantiated[$classNameKey]) || ($hasUnresolvedInstantiation && $isReferenced)) {
                 $classNode->setInstantiated(true);
             }
         }
