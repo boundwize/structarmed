@@ -89,6 +89,31 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame([], $classCollector->getFileReferences());
     }
 
+    public function testCollectsClassNameShapedStringValuesAsFileReferences(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Checker { public function check(object $obj): bool {'
+            . ' $contract = \'App\\Contract\'; return $obj instanceof $contract; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Contract']],
+            $classCollector->getFileReferences()
+        );
+    }
+
+    public function testDoesNotCollectNonClassNameShapedStringValues(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Greeter { public function greet(): string {'
+            . ' $mode = true ? \'foo-bar\' : \'hello world\'; return $mode . \'123abc\' . \'\'; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame([], $classCollector->getFileReferences());
+    }
+
     public function testCollectsFinalClass(): void
     {
         $classNode = $this->collect('<?php final class Foo {}');

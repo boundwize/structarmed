@@ -336,8 +336,8 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::sequential());
 
-        $interfaceViolations = $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED);
-        $abstractViolations  = $ruleViolationCollection->forRule(YagniPreset::ABSTRACT_CLASS_MUST_BE_OVERRIDDEN);
+        $interfaceViolations = $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_USED);
+        $abstractViolations  = $ruleViolationCollection->forRule(YagniPreset::ABSTRACT_CLASS_MUST_BE_USED);
         $traitViolations     = $ruleViolationCollection->forRule(YagniPreset::TRAIT_MUST_BE_USED);
 
         // BaseInterface is extended by ChildInterface, so only UnusedInterface
@@ -357,7 +357,7 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\UnusedTrait', $traitViolations[0]->className);
     }
 
-    public function testMustBeImplementedInterfaceRuleRecognizesTransitiveImplementation(): void
+    public function testMustBeUsedInterfaceRuleRecognizesTransitiveImplementation(): void
     {
         $basePath = $this->makeTempProject([
             'src/BaseInterface.php'  => '<?php namespace App; interface BaseInterface {}',
@@ -373,7 +373,43 @@ final class AnalyserTest extends TestCase
 
         // Consumer implements ChildInterface, which transitively implements
         // BaseInterface — neither interface is speculative.
-        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED));
+        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_USED));
+    }
+
+    public function testMustBeUsedTraitRuleRecognizesTraitUsedByAnotherTrait(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/InnerTrait.php' => '<?php namespace App; trait InnerTrait {}',
+            'src/OuterTrait.php' => '<?php namespace App; trait OuterTrait { use InnerTrait; }',
+            'src/Consumer.php'   => '<?php namespace App; final class Consumer { use OuterTrait; }',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::TRAIT_MUST_BE_USED);
+
+        // InnerTrait is used by OuterTrait, which is used by Consumer.
+        $this->assertCount(0, $violations);
+    }
+
+    public function testMustBeUsedTraitRuleRecognizesTraitUsedByEnum(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Helper.php' => '<?php namespace App; trait Helper {}',
+            'src/Status.php' => '<?php namespace App; enum Status { use Helper; }',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::TRAIT_MUST_BE_USED);
+
+        $this->assertCount(0, $violations);
     }
 
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
@@ -408,18 +444,58 @@ final class AnalyserTest extends TestCase
         $basePath = $this->makeTempProject([
             'src/UnusedInterface.php' => '<?php namespace App;'
                 . ' interface UnusedInterface { public const NAME = UnusedInterface::class; }',
+            'src/UnusedBase.php'      => '<?php namespace App; abstract class UnusedBase'
+                . ' { public function name(): string { return UnusedBase::class; } }',
+            'src/UnusedTrait.php'     => '<?php namespace App; trait UnusedTrait'
+                . ' { public function name(): string { return UnusedTrait::class; } }',
         ]);
 
         $architecture = Architecture::define()
             ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
 
-        $violations = (new Analyser($basePath))
-            ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED);
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $interfaceViolations = $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_USED);
+        $abstractViolations  = $ruleViolationCollection->forRule(YagniPreset::ABSTRACT_CLASS_MUST_BE_USED);
+        $traitViolations     = $ruleViolationCollection->forRule(YagniPreset::TRAIT_MUST_BE_USED);
 
         // A class-like referencing itself cannot keep itself alive.
-        $this->assertCount(1, $violations);
-        $this->assertSame('App\UnusedInterface', $violations[0]->className);
+        $this->assertCount(1, $interfaceViolations);
+        $this->assertSame('App\UnusedInterface', $interfaceViolations[0]->className);
+        $this->assertCount(1, $abstractViolations);
+        $this->assertSame('App\UnusedBase', $abstractViolations[0]->className);
+        $this->assertCount(1, $traitViolations);
+        $this->assertSame('App\UnusedTrait', $traitViolations[0]->className);
+    }
+
+    public function testYagniRulesDoNotFlagAbstractionsReferencedByClassNameString(): void
+    {
+        $checker = '<?php namespace App;' . "\n"
+            . 'final class Checker {' . "\n"
+            . '    public function check(object $obj): bool {'
+            . ' $contract = \'App\\Contract\'; return $obj instanceof $contract; }' . "\n"
+            . '    public function handlerClass(): string { return \'App\\AbstractHandler\'; }' . "\n"
+            . '}';
+
+        $basePath = $this->makeTempProject([
+            'src/Contract.php'        => '<?php namespace App; interface Contract {}',
+            'src/AbstractHandler.php' => '<?php namespace App; abstract class AbstractHandler {}',
+            'src/Helper.php'          => '<?php namespace App; trait Helper {}',
+            'src/Checker.php'         => $checker,
+            'src/bootstrap.php'       => '<?php $helper = \'App\\Helper\'; return $helper;',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // A class-name string value can reach `new $class` or `instanceof
+        // $class` at runtime, so it counts as a reference — in class bodies
+        // and procedural code alike.
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testYagniRulesDoNotFlagAbstractionsReferencedByProceduralCode(): void
@@ -467,7 +543,7 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::sequential());
 
-        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED));
+        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_USED));
     }
 
     public function testYagniRulesRecognizeProceduralReferencesOnCachedRun(): void
@@ -539,7 +615,7 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::sequential());
 
-        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED));
+        $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::INTERFACE_MUST_BE_USED));
         $this->assertCount(0, $ruleViolationCollection->forRule(YagniPreset::TRAIT_MUST_BE_USED));
     }
 

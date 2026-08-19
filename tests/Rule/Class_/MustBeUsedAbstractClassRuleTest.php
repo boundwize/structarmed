@@ -8,7 +8,7 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassLike\RemoveClassLikeVisitor;
-use Boundwize\StructArmed\Rule\Rules\Class_\MustBeOverriddenAbstractClassRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -17,9 +17,9 @@ use ReflectionMethod;
 
 use function file_put_contents;
 
-#[CoversClass(MustBeOverriddenAbstractClassRule::class)]
+#[CoversClass(MustBeUsedAbstractClassRule::class)]
 #[CoversClass(RemoveClassLikeVisitor::class)]
-final class MustBeOverriddenAbstractClassRuleTest extends TestCase
+final class MustBeUsedAbstractClassRuleTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
 
@@ -31,7 +31,7 @@ final class MustBeOverriddenAbstractClassRuleTest extends TestCase
         bool $isTrait = false,
         bool $isEnum = false,
         bool $isExtended = false,
-        bool $isUsed = false,
+        bool $isReferenced = false,
     ): ClassNode {
         return new ClassNode(
             className:   $className,
@@ -46,38 +46,38 @@ final class MustBeOverriddenAbstractClassRuleTest extends TestCase
             isTrait:     $isTrait,
             isEnum:      $isEnum,
             isExtended:  $isExtended,
-            isUsed:      $isUsed,
+            isReferenced:      $isReferenced,
         );
     }
 
     public function testPassesWhenAbstractClassIsExtended(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $classNode                         = $this->makeNode(isExtended: true);
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $classNode                   = $this->makeNode(isExtended: true);
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $mustBeOverriddenAbstractClassRule->evaluate($classNode)
+            $mustBeUsedAbstractClassRule->evaluate($classNode)
         );
     }
 
     public function testPassesWhenAbstractClassIsReferencedAsDependency(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $classNode                         = $this->makeNode(isUsed: true);
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $classNode                   = $this->makeNode(isReferenced: true);
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $mustBeOverriddenAbstractClassRule->evaluate($classNode)
+            $mustBeUsedAbstractClassRule->evaluate($classNode)
         );
     }
 
     public function testViolatesWhenAbstractClassIsNotExtended(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $classNode                         = $this->makeNode(isExtended: false);
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $classNode                   = $this->makeNode(isExtended: false);
 
-        $violation = $mustBeOverriddenAbstractClassRule->evaluate($classNode);
+        $violation = $mustBeUsedAbstractClassRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('must be extended', $violation->message);
@@ -87,24 +87,24 @@ final class MustBeOverriddenAbstractClassRuleTest extends TestCase
     {
         $this->assertInstanceOf(
             ExtendedClassAwareRuleInterface::class,
-            new MustBeOverriddenAbstractClassRule(layer: 'Domain')
+            new MustBeUsedAbstractClassRule(layer: 'Domain')
         );
     }
 
     public function testIsFixable(): void
     {
-        $this->assertInstanceOf(FixableInterface::class, new MustBeOverriddenAbstractClassRule(layer: 'Domain'));
+        $this->assertInstanceOf(FixableInterface::class, new MustBeUsedAbstractClassRule(layer: 'Domain'));
     }
 
     public function testCreatesRemoveClassLikeFixerVisitor(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $reflectionMethod                  = new ReflectionMethod(
-            $mustBeOverriddenAbstractClassRule,
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $reflectionMethod            = new ReflectionMethod(
+            $mustBeUsedAbstractClassRule,
             'createFixerVisitor'
         );
-        $removeClassLikeVisitor            = $reflectionMethod->invoke(
-            $mustBeOverriddenAbstractClassRule,
+        $removeClassLikeVisitor      = $reflectionMethod->invoke(
+            $mustBeUsedAbstractClassRule,
             new RuleViolation(
                 message:   'Abstract class [App\\AbstractHandler] must be extended by a class',
                 file:      '/src/AbstractHandler.php',
@@ -119,64 +119,64 @@ final class MustBeOverriddenAbstractClassRuleTest extends TestCase
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $classNode                         = $this->makeNode(layer: 'Infrastructure');
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $classNode                   = $this->makeNode(layer: 'Infrastructure');
 
-        $this->assertFalse($mustBeOverriddenAbstractClassRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedAbstractClassRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToConcreteClasses(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $classNode                         = $this->makeNode(isAbstract: false);
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $classNode                   = $this->makeNode(isAbstract: false);
 
-        $this->assertFalse($mustBeOverriddenAbstractClassRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedAbstractClassRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToInterfaces(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $classNode                         = $this->makeNode(isInterface: true);
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $classNode                   = $this->makeNode(isInterface: true);
 
-        $this->assertFalse($mustBeOverriddenAbstractClassRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedAbstractClassRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToTraits(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $classNode                         = $this->makeNode(isTrait: true);
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $classNode                   = $this->makeNode(isTrait: true);
 
-        $this->assertFalse($mustBeOverriddenAbstractClassRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedAbstractClassRule->appliesTo($classNode));
     }
 
     public function testAppliesToLayerWhenNoPatternConfigured(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
-        $classNode                         = $this->makeNode();
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
+        $classNode                   = $this->makeNode();
 
-        $this->assertTrue($mustBeOverriddenAbstractClassRule->appliesTo($classNode));
+        $this->assertTrue($mustBeUsedAbstractClassRule->appliesTo($classNode));
     }
 
     public function testAppliesToMatchingPattern(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(
             layer:            'Domain',
             classNamePattern: '/^App\\\\Domain\\\\Abstract/'
         );
-        $classNode                         = $this->makeNode();
+        $classNode                   = $this->makeNode();
 
-        $this->assertTrue($mustBeOverriddenAbstractClassRule->appliesTo($classNode));
+        $this->assertTrue($mustBeUsedAbstractClassRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToNonMatchingPattern(): void
     {
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(
             layer:            'Domain',
             classNamePattern: '/Base$/'
         );
-        $classNode                         = $this->makeNode();
+        $classNode                   = $this->makeNode();
 
-        $this->assertFalse($mustBeOverriddenAbstractClassRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedAbstractClassRule->appliesTo($classNode));
     }
 
     public function testFixDeletesFileWhenOnlyBoilerplateRemains(): void
@@ -189,9 +189,9 @@ final class MustBeOverriddenAbstractClassRuleTest extends TestCase
             "<?php\n\ndeclare(strict_types=1);\n\nnamespace App;\n\nabstract class AbstractHandler\n{\n}\n"
         );
 
-        $mustBeOverriddenAbstractClassRule = new MustBeOverriddenAbstractClassRule(layer: 'Domain');
+        $mustBeUsedAbstractClassRule = new MustBeUsedAbstractClassRule(layer: 'Domain');
 
-        $this->assertTrue($mustBeOverriddenAbstractClassRule->fix(new RuleViolation(
+        $this->assertTrue($mustBeUsedAbstractClassRule->fix(new RuleViolation(
             message:   'Abstract class [App\\AbstractHandler] must be extended by a class',
             file:      $file,
             line:      7,

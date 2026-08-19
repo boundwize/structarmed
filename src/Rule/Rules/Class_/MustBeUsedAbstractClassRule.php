@@ -12,7 +12,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class MustBeOverriddenAbstractClassRule extends AbstractPhpParserFixableRule implements
+final readonly class MustBeUsedAbstractClassRule extends AbstractPhpParserFixableRule implements
     ExtendedClassAwareRuleInterface
 {
     public function __construct(
@@ -46,13 +46,13 @@ final readonly class MustBeOverriddenAbstractClassRule extends AbstractPhpParser
 
         // A dependency reference (instanceof, type hint, ::class, static
         // call, ...) means removing the class would break the referencing code.
-        if ($classNode->isUsed) {
+        if ($classNode->isReferenced) {
             return null;
         }
 
         return new RuleViolation(
             message:   sprintf(
-                'Abstract class [%s] must be extended by a class',
+                'Abstract class [%s] must be extended by a class or referenced as a dependency',
                 $classNode->className
             ),
             file:      $classNode->file,

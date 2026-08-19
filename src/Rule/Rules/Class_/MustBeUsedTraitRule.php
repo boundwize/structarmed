@@ -40,13 +40,13 @@ final readonly class MustBeUsedTraitRule extends AbstractPhpParserFixableRule im
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ($classNode->isUsed) {
+        if ($classNode->isReferenced) {
             return null;
         }
 
         return new RuleViolation(
             message:   sprintf(
-                'Trait [%s] must be used by a class, trait, or enum',
+                'Trait [%s] must be used by a class, trait, or enum, or referenced as a dependency',
                 $classNode->className
             ),
             file:      $classNode->file,

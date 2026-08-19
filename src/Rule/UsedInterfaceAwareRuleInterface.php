@@ -15,6 +15,6 @@ namespace Boundwize\StructArmed\Rule;
  * implemented solely by a consumer outside the scan is reported as if not
  * implemented.
  */
-interface ImplementedInterfaceAwareRuleInterface extends RuleInterface
+interface UsedInterfaceAwareRuleInterface extends RuleInterface
 {
 }

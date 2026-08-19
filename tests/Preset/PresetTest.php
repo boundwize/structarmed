@@ -14,8 +14,8 @@ use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerNameTrait;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
-use Boundwize\StructArmed\Rule\Rules\Class_\MustBeImplementedInterfaceRule;
-use Boundwize\StructArmed\Rule\Rules\Class_\MustBeOverriddenAbstractClassRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -43,12 +43,12 @@ final class PresetTest extends TestCase
 
         $rules = $architecture->getRules();
         $this->assertInstanceOf(
-            MustBeImplementedInterfaceRule::class,
-            $rules[YagniPreset::INTERFACE_MUST_BE_IMPLEMENTED] ?? null
+            MustBeUsedInterfaceRule::class,
+            $rules[YagniPreset::INTERFACE_MUST_BE_USED] ?? null
         );
         $this->assertInstanceOf(
-            MustBeOverriddenAbstractClassRule::class,
-            $rules[YagniPreset::ABSTRACT_CLASS_MUST_BE_OVERRIDDEN] ?? null
+            MustBeUsedAbstractClassRule::class,
+            $rules[YagniPreset::ABSTRACT_CLASS_MUST_BE_USED] ?? null
         );
         $this->assertInstanceOf(
             MustBeUsedTraitRule::class,

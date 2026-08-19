@@ -7,13 +7,13 @@ namespace Boundwize\StructArmed\Rule\Rules\Class_;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassLike\RemoveClassLikeVisitor;
-use Boundwize\StructArmed\Rule\ImplementedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 
 use function sprintf;
 
-final readonly class MustBeImplementedInterfaceRule extends AbstractPhpParserFixableRule implements
-    ImplementedInterfaceAwareRuleInterface
+final readonly class MustBeUsedInterfaceRule extends AbstractPhpParserFixableRule implements
+    UsedInterfaceAwareRuleInterface
 {
     public function __construct(
         private string $layer,
@@ -46,13 +46,14 @@ final readonly class MustBeImplementedInterfaceRule extends AbstractPhpParserFix
 
         // A dependency reference (instanceof, type hint, ::class, ...) means
         // removing the interface would break the referencing code.
-        if ($classNode->isUsed) {
+        if ($classNode->isReferenced) {
             return null;
         }
 
         return new RuleViolation(
             message:   sprintf(
-                'Interface [%s] must be implemented by a class or extended by another interface',
+                'Interface [%s] must be implemented by a class, extended by another interface,'
+                    . ' or referenced as a dependency',
                 $classNode->className
             ),
             file:      $classNode->file,

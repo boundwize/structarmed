@@ -307,13 +307,13 @@ final class ClassNodeTest extends TestCase
             isTrait:     true,
         );
 
-        $this->assertFalse($classNode->isUsed);
+        $this->assertFalse($classNode->isReferenced);
 
-        $classNode->setUsed(true);
-        $this->assertTrue($classNode->isUsed);
+        $classNode->setReferenced(true);
+        $this->assertTrue($classNode->isReferenced);
 
-        $classNode->setUsed(false);
-        $this->assertFalse($classNode->isUsed);
+        $classNode->setReferenced(false);
+        $this->assertFalse($classNode->isReferenced);
     }
 
     public function testDependsOnMatchesExistingClassesExactly(): void

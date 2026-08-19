@@ -29,7 +29,7 @@ final class MustBeUsedTraitRuleTest extends TestCase
         bool $isInterface = false,
         bool $isTrait = true,
         bool $isEnum = false,
-        bool $isUsed = false,
+        bool $isReferenced = false,
     ): ClassNode {
         return new ClassNode(
             className:   $className,
@@ -43,14 +43,14 @@ final class MustBeUsedTraitRuleTest extends TestCase
             isReadonly:  false,
             isTrait:     $isTrait,
             isEnum:      $isEnum,
-            isUsed:      $isUsed,
+            isReferenced:      $isReferenced,
         );
     }
 
     public function testPassesWhenTraitIsUsed(): void
     {
         $mustBeUsedTraitRule = new MustBeUsedTraitRule(layer: 'Domain');
-        $classNode           = $this->makeNode(isUsed: true);
+        $classNode           = $this->makeNode(isReferenced: true);
 
         $this->assertNotInstanceOf(RuleViolation::class, $mustBeUsedTraitRule->evaluate($classNode));
     }
@@ -58,7 +58,7 @@ final class MustBeUsedTraitRuleTest extends TestCase
     public function testViolatesWhenTraitIsNotUsed(): void
     {
         $mustBeUsedTraitRule = new MustBeUsedTraitRule(layer: 'Domain');
-        $classNode           = $this->makeNode(isUsed: false);
+        $classNode           = $this->makeNode(isReferenced: false);
 
         $violation = $mustBeUsedTraitRule->evaluate($classNode);
 

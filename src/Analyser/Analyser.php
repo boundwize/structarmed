@@ -17,7 +17,6 @@ use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
-use Boundwize\StructArmed\Rule\ImplementedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
@@ -25,6 +24,7 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
 use Boundwize\StructArmed\Util\Path;
 
@@ -80,13 +80,13 @@ final readonly class Analyser
         $ruleSkipPaths   = $architecture->getRuleSkipPaths();
         $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
 
-        $projectRuleViolations            = [];
-        $fileAnalysisRules                = [];
-        $classRules                       = [];
-        $layerAwareRules                  = [];
-        $hasExtendedClassAwareRule        = false;
-        $hasImplementedInterfaceAwareRule = false;
-        $hasUsedTraitAwareRule            = false;
+        $projectRuleViolations     = [];
+        $fileAnalysisRules         = [];
+        $classRules                = [];
+        $layerAwareRules           = [];
+        $hasExtendedClassAwareRule = false;
+        $hasUsedInterfaceAwareRule = false;
+        $hasUsedTraitAwareRule     = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -105,8 +105,8 @@ final readonly class Analyser
                 $hasExtendedClassAwareRule = true;
             }
 
-            if ($rule instanceof ImplementedInterfaceAwareRuleInterface) {
-                $hasImplementedInterfaceAwareRule = true;
+            if ($rule instanceof UsedInterfaceAwareRuleInterface) {
+                $hasUsedInterfaceAwareRule = true;
             }
 
             if ($rule instanceof UsedTraitAwareRuleInterface) {
@@ -164,12 +164,12 @@ final readonly class Analyser
             $this->markExtendedClasses($classNodes, $extractionResult);
         }
 
-        if ($hasImplementedInterfaceAwareRule) {
+        if ($hasUsedInterfaceAwareRule) {
             $this->markImplementedInterfaces($classNodes, $extractionResult);
         }
 
-        if ($hasExtendedClassAwareRule || $hasImplementedInterfaceAwareRule || $hasUsedTraitAwareRule) {
-            $this->markUsedClassLikes($classNodes, $extractionResult);
+        if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
+            $this->markReferencedClassLikes($classNodes, $extractionResult);
         }
 
         if ($withFileAnalysis) {
@@ -753,7 +753,7 @@ final readonly class Analyser
      *
      * @param list<ClassNode> $classNodes
      */
-    private function markUsedClassLikes(array $classNodes, ExtractionResult $extractionResult): void
+    private function markReferencedClassLikes(array $classNodes, ExtractionResult $extractionResult): void
     {
         $used = [];
 
@@ -792,7 +792,7 @@ final readonly class Analyser
 
         foreach ($classNodes as $classNode) {
             if (isset($used[strtolower($classNode->className)])) {
-                $classNode->setUsed(true);
+                $classNode->setReferenced(true);
             }
         }
     }

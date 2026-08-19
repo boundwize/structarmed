@@ -9,9 +9,9 @@ use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassLike\RemoveClassLikeVisitor;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\PhpParserFixerProcessor;
-use Boundwize\StructArmed\Rule\ImplementedInterfaceAwareRuleInterface;
-use Boundwize\StructArmed\Rule\Rules\Class_\MustBeImplementedInterfaceRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -20,11 +20,11 @@ use ReflectionMethod;
 use function file_get_contents;
 use function file_put_contents;
 
-#[CoversClass(MustBeImplementedInterfaceRule::class)]
+#[CoversClass(MustBeUsedInterfaceRule::class)]
 #[CoversClass(RemoveClassLikeVisitor::class)]
 #[CoversClass(AbstractPhpParserFixableRule::class)]
 #[CoversClass(PhpParserFixerProcessor::class)]
-final class MustBeImplementedInterfaceRuleTest extends TestCase
+final class MustBeUsedInterfaceRuleTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
 
@@ -35,7 +35,7 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
         bool $isTrait = false,
         bool $isEnum = false,
         bool $isImplemented = false,
-        bool $isUsed = false,
+        bool $isReferenced = false,
     ): ClassNode {
         return new ClassNode(
             className:    $className,
@@ -50,62 +50,62 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
             isTrait:      $isTrait,
             isEnum:       $isEnum,
             isImplemented: $isImplemented,
-            isUsed:       $isUsed,
+            isReferenced:       $isReferenced,
         );
     }
 
     public function testPassesWhenInterfaceIsImplemented(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
-        $classNode                      = $this->makeNode(isImplemented: true);
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $classNode               = $this->makeNode(isImplemented: true);
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $mustBeImplementedInterfaceRule->evaluate($classNode)
+            $mustBeUsedInterfaceRule->evaluate($classNode)
         );
     }
 
     public function testPassesWhenInterfaceIsReferencedAsDependency(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
-        $classNode                      = $this->makeNode(isUsed: true);
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $classNode               = $this->makeNode(isReferenced: true);
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $mustBeImplementedInterfaceRule->evaluate($classNode)
+            $mustBeUsedInterfaceRule->evaluate($classNode)
         );
     }
 
     public function testViolatesWhenInterfaceIsNotImplemented(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
-        $classNode                      = $this->makeNode(isImplemented: false);
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $classNode               = $this->makeNode(isImplemented: false);
 
-        $violation = $mustBeImplementedInterfaceRule->evaluate($classNode);
+        $violation = $mustBeUsedInterfaceRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('must be implemented', $violation->message);
     }
 
-    public function testIsImplementedInterfaceAware(): void
+    public function testIsUsedInterfaceAware(): void
     {
         $this->assertInstanceOf(
-            ImplementedInterfaceAwareRuleInterface::class,
-            new MustBeImplementedInterfaceRule(layer: 'Domain')
+            UsedInterfaceAwareRuleInterface::class,
+            new MustBeUsedInterfaceRule(layer: 'Domain')
         );
     }
 
     public function testIsFixable(): void
     {
-        $this->assertInstanceOf(FixableInterface::class, new MustBeImplementedInterfaceRule(layer: 'Domain'));
+        $this->assertInstanceOf(FixableInterface::class, new MustBeUsedInterfaceRule(layer: 'Domain'));
     }
 
     public function testCreatesRemoveClassLikeFixerVisitor(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
-        $reflectionMethod               = new ReflectionMethod($mustBeImplementedInterfaceRule, 'createFixerVisitor');
-        $removeClassLikeVisitor         = $reflectionMethod->invoke(
-            $mustBeImplementedInterfaceRule,
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $reflectionMethod        = new ReflectionMethod($mustBeUsedInterfaceRule, 'createFixerVisitor');
+        $removeClassLikeVisitor  = $reflectionMethod->invoke(
+            $mustBeUsedInterfaceRule,
             new RuleViolation(
                 message:   'Interface [App\\Unused] must be implemented by a class or extended by another interface',
                 file:      '/src/Unused.php',
@@ -120,56 +120,56 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
 
     public function testDoesNotApplyToWrongLayer(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
-        $classNode                      = $this->makeNode(layer: 'Infrastructure');
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $classNode               = $this->makeNode(layer: 'Infrastructure');
 
-        $this->assertFalse($mustBeImplementedInterfaceRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedInterfaceRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToClasses(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
-        $classNode                      = $this->makeNode(isInterface: false);
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $classNode               = $this->makeNode(isInterface: false);
 
-        $this->assertFalse($mustBeImplementedInterfaceRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedInterfaceRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToTraits(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
-        $classNode                      = $this->makeNode(isInterface: false, isTrait: true);
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $classNode               = $this->makeNode(isInterface: false, isTrait: true);
 
-        $this->assertFalse($mustBeImplementedInterfaceRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedInterfaceRule->appliesTo($classNode));
     }
 
     public function testAppliesToLayerWhenNoPatternConfigured(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
-        $classNode                      = $this->makeNode();
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $classNode               = $this->makeNode();
 
-        $this->assertTrue($mustBeImplementedInterfaceRule->appliesTo($classNode));
+        $this->assertTrue($mustBeUsedInterfaceRule->appliesTo($classNode));
     }
 
     public function testAppliesToMatchingPattern(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(
             layer:            'Domain',
             classNamePattern: '/Interface$/'
         );
-        $classNode                      = $this->makeNode(className: 'App\\Domain\\OrderRepositoryInterface');
+        $classNode               = $this->makeNode(className: 'App\\Domain\\OrderRepositoryInterface');
 
-        $this->assertTrue($mustBeImplementedInterfaceRule->appliesTo($classNode));
+        $this->assertTrue($mustBeUsedInterfaceRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToNonMatchingPattern(): void
     {
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(
             layer:            'Domain',
             classNamePattern: '/Repository$/'
         );
-        $classNode                      = $this->makeNode(className: 'App\\Domain\\OrderRepositoryInterface');
+        $classNode               = $this->makeNode(className: 'App\\Domain\\OrderRepositoryInterface');
 
-        $this->assertFalse($mustBeImplementedInterfaceRule->appliesTo($classNode));
+        $this->assertFalse($mustBeUsedInterfaceRule->appliesTo($classNode));
     }
 
     public function testFixDeletesFileWhenOnlyBoilerplateRemains(): void
@@ -183,9 +183,9 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
                 . "interface UnusedInterface extends ArrayAccess\n{\n}\n"
         );
 
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
 
-        $this->assertTrue($mustBeImplementedInterfaceRule->fix(new RuleViolation(
+        $this->assertTrue($mustBeUsedInterfaceRule->fix(new RuleViolation(
             message:   'Interface [App\\UnusedInterface] must be implemented by a class'
                 . ' or extended by another interface',
             file:      $file,
@@ -208,9 +208,9 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
             "<?php\n\ndeclare(ticks=1) {\n    echo 'KEEP ME';\n}\n\ninterface UnusedInterface\n{\n}\n"
         );
 
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
 
-        $this->assertTrue($mustBeImplementedInterfaceRule->fix(new RuleViolation(
+        $this->assertTrue($mustBeUsedInterfaceRule->fix(new RuleViolation(
             message:   'Interface [UnusedInterface] must be implemented by a class'
                 . ' or extended by another interface',
             file:      $file,
@@ -237,9 +237,9 @@ final class MustBeImplementedInterfaceRuleTest extends TestCase
                 . "interface UnusedInterface\n{\n}\n\nfinal class Order\n{\n}\n"
         );
 
-        $mustBeImplementedInterfaceRule = new MustBeImplementedInterfaceRule(layer: 'Domain');
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
 
-        $this->assertTrue($mustBeImplementedInterfaceRule->fix(new RuleViolation(
+        $this->assertTrue($mustBeUsedInterfaceRule->fix(new RuleViolation(
             message:   'Interface [App\\UnusedInterface] must be implemented by a class'
                 . ' or extended by another interface',
             file:      $file,

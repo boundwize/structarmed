@@ -26,6 +26,7 @@ use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Param;
+use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Case_;
 use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Class_;
@@ -57,6 +58,7 @@ use function array_values;
 use function count;
 use function in_array;
 use function is_string;
+use function preg_match;
 use function spl_object_id;
 use function strtolower;
 
@@ -79,6 +81,14 @@ final class ClassCollector extends NodeVisitorAbstract
         'false' => true,
         'null'  => true,
     ];
+
+    /**
+     * A string value shaped like a (possibly namespaced) class name, e.g.
+     * 'App\Contract' or 'stdClass'. Such values can reach `new $class` or
+     * `instanceof $class` at runtime, so they count as references.
+     */
+    private const CLASS_LIKE_STRING_PATTERN =
+        '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+)*+$/';
 
     /** @var list<ClassNode> */
     private array $nodes = [];
@@ -318,6 +328,21 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function collectNodeAnalysis(Node $node): void
     {
+        // A class-name-shaped string literal may feed `new $class`,
+        // `$obj instanceof $class`, class_exists(), container ids, and so on.
+        // Whether it appears inside a class-like or in procedural code, treat
+        // it as a file-level reference so the named class-like stays alive.
+        if ($node instanceof String_) {
+            if (
+                ! isset(self::KEYWORD_CONSTANTS[strtolower($node->value)])
+                && preg_match(self::CLASS_LIKE_STRING_PATTERN, $node->value) === 1
+            ) {
+                $this->currentFileReferences[] = $node->value;
+            }
+
+            return;
+        }
+
         if ($this->activeClassLikeAnalyses === []) {
             // Outside any named class-like scope — procedural functions,
             // top-level statements, top-level anonymous class bodies — a

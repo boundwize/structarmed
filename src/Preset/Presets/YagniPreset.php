@@ -6,8 +6,8 @@ namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
-use Boundwize\StructArmed\Rule\Rules\Class_\MustBeImplementedInterfaceRule;
-use Boundwize\StructArmed\Rule\Rules\Class_\MustBeOverriddenAbstractClassRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
 
 /**
@@ -24,9 +24,9 @@ final readonly class YagniPreset implements PresetInterface
 {
     use ResolvesSourceLayerNameTrait;
 
-    public const INTERFACE_MUST_BE_IMPLEMENTED = 'yagni.interface.must_be_implemented';
+    public const INTERFACE_MUST_BE_USED = 'yagni.interface.must_be_used';
 
-    public const ABSTRACT_CLASS_MUST_BE_OVERRIDDEN = 'yagni.abstract_class.must_be_overridden';
+    public const ABSTRACT_CLASS_MUST_BE_USED = 'yagni.abstract_class.must_be_used';
 
     public const TRAIT_MUST_BE_USED = 'yagni.trait.must_be_used';
 
@@ -44,12 +44,12 @@ final readonly class YagniPreset implements PresetInterface
         $architecture->layer($layerName, $this->sourcePaths ?? []);
 
         $architecture->rule(
-            self::INTERFACE_MUST_BE_IMPLEMENTED,
-            new MustBeImplementedInterfaceRule($layerName)
+            self::INTERFACE_MUST_BE_USED,
+            new MustBeUsedInterfaceRule($layerName)
         );
         $architecture->rule(
-            self::ABSTRACT_CLASS_MUST_BE_OVERRIDDEN,
-            new MustBeOverriddenAbstractClassRule($layerName)
+            self::ABSTRACT_CLASS_MUST_BE_USED,
+            new MustBeUsedAbstractClassRule($layerName)
         );
         $architecture->rule(
             self::TRAIT_MUST_BE_USED,
