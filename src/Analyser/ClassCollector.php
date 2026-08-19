@@ -500,6 +500,12 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
         }
 
+        // eval() can construct anything; it is additionally recorded as a
+        // language construct for in-class usage rules further down.
+        if ($node instanceof Eval_) {
+            $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
+        }
+
         if ($this->activeClassLikeAnalyses === []) {
             // Outside any named class-like scope — procedural functions,
             // top-level statements, top-level anonymous class bodies — a

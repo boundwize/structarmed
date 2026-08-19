@@ -253,6 +253,22 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testMarksUnresolvedInstantiationForEval(): void
+    {
+        $inClass    = '<?php namespace App;' . "\n"
+            . 'final class Runner { public function run(string $code): mixed { return eval($code); } }';
+        $procedural = '<?php eval((string) $_ENV[\'PHP_CODE\']);';
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            $this->makeCollector($inClass)->getFileInstantiations()
+        );
+        $this->assertSame(
+            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            $this->makeCollector($procedural)->getFileInstantiations()
+        );
+    }
+
     public function testDoesNotMarkUnresolvedInstantiationForOrdinaryMethodCalls(): void
     {
         $code = '<?php namespace App;' . "\n"

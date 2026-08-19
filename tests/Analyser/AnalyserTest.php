@@ -693,6 +693,28 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleSkipsAllWhenEvalIsUsed(): void
+    {
+        // eval() can construct any class the evaluated code names.
+        $bootstrap = '<?php' . "\n"
+            . 'eval((string) $_ENV[\'PHP_CODE\']);';
+
+        $basePath = $this->makeTempProject([
+            'src/Base.php'      => '<?php namespace App; class Base {}',
+            'src/Child.php'     => '<?php namespace App; final class Child extends Base {}',
+            'src/bootstrap.php' => $bootstrap,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRuleSkipsAllWhenUnserializeIsCalled(): void
     {
         // unserialize() constructs instances of whatever the payload names;
