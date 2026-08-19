@@ -12,7 +12,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class ExtendedClassMustBeAbstractOrReferencedRule extends AbstractPhpParserFixableRule implements
+final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends AbstractPhpParserFixableRule implements
     ExtendedClassAwareRuleInterface
 {
     public function __construct(
@@ -44,16 +44,17 @@ final readonly class ExtendedClassMustBeAbstractOrReferencedRule extends Abstrac
             return null;
         }
 
-        // A dependency reference (instantiation, type hint, ::class, a
-        // class-name string, ...) means the class is consumed as a value, so
-        // making it abstract could break the referencing code.
-        if ($classNode->isReferenced) {
+        // Only instantiation (`new X`, or `new self`/`static`/`parent`
+        // resolving to X) requires the class to stay concrete — type hints,
+        // instanceof checks, and ::class constants keep working once the
+        // class becomes abstract.
+        if ($classNode->isInstantiated) {
             return null;
         }
 
         return new RuleViolation(
             message:   sprintf(
-                'Extended class [%s] must be declared abstract or referenced as a dependency',
+                'Extended class [%s] must be declared abstract or instantiated',
                 $classNode->className
             ),
             file:      $classNode->file,

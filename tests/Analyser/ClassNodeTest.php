@@ -292,7 +292,7 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->isImplemented);
     }
 
-    public function testSetUsedTogglesIsUsedFlag(): void
+    public function testSetReferencedTogglesIsReferencedFlag(): void
     {
         $classNode = new ClassNode(
             className:   'App\\Domain\\TimestampableTrait',
@@ -314,6 +314,29 @@ final class ClassNodeTest extends TestCase
 
         $classNode->setReferenced(false);
         $this->assertFalse($classNode->isReferenced);
+    }
+
+    public function testSetInstantiatedTogglesIsInstantiatedFlag(): void
+    {
+        $classNode = new ClassNode(
+            className:   'App\\Domain\\BaseRepository',
+            file:        '/src/BaseRepository.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     false,
+            isInterface: false,
+            isReadonly:  false,
+        );
+
+        $this->assertFalse($classNode->isInstantiated);
+
+        $classNode->setInstantiated(true);
+        $this->assertTrue($classNode->isInstantiated);
+
+        $classNode->setInstantiated(false);
+        $this->assertFalse($classNode->isInstantiated);
     }
 
     public function testDependsOnMatchesExistingClassesExactly(): void

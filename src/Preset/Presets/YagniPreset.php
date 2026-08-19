@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
-use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrReferencedRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
@@ -15,8 +15,8 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
  * YAGNI ("You Aren't Gonna Need It") preset: reports speculative abstractions
  * nothing in the scanned paths needs — interfaces no class implements and no
  * interface extends, abstract classes no class extends, traits no class-like
- * uses, and extended classes that are never referenced directly and so should
- * be abstract.
+ * uses, and extended classes that are never instantiated and so should be
+ * abstract.
  *
  * Trade-off: only usage within the scanned paths is known. Abstractions that
  * exist for consumers outside the scan (e.g. a published library's extension
@@ -32,7 +32,8 @@ final readonly class YagniPreset implements PresetInterface
 
     public const TRAIT_MUST_BE_USED = 'yagni.trait.must_be_used';
 
-    public const EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED = 'yagni.extended_class.must_be_abstract_or_referenced';
+    public const EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED =
+        'yagni.extended_class.must_be_abstract_or_instantiated';
 
     /**
      * @param list<string>|null $sourcePaths
@@ -60,8 +61,8 @@ final readonly class YagniPreset implements PresetInterface
             new MustBeUsedTraitRule($layerName)
         );
         $architecture->rule(
-            self::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED,
-            new ExtendedClassMustBeAbstractOrReferencedRule($layerName)
+            self::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED,
+            new ExtendedClassMustBeAbstractOrInstantiatedRule($layerName)
         );
     }
 }

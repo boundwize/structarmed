@@ -762,30 +762,12 @@ final readonly class Analyser
                 $used[strtolower($trait)] = true;
             }
 
-            // A node's own inheritance-clause names (and the imports that
-            // exist for them) are structural relations, not value references:
-            // extending a class must not count as "referencing" it, or an
-            // extended-but-unreferenced class could never be told apart from
-            // a genuinely referenced one. Structural usage is covered by the
-            // dedicated extended/implemented/trait marking, and a child that
-            // instantiates its parent is covered by the instantiation
-            // collection in the file-level references.
-            $excludedKeys = [strtolower($classNode->className) => true];
-
-            if ($classNode->extends !== null) {
-                $excludedKeys[strtolower($classNode->extends)] = true;
-            }
-
-            foreach ([$classNode->implements, $classNode->interfaceExtends, $classNode->traits] as $clauseNames) {
-                foreach ($clauseNames as $clauseName) {
-                    $excludedKeys[strtolower($clauseName)] = true;
-                }
-            }
+            $selfKey = strtolower($classNode->className);
 
             foreach ($classNode->dependencies as $dependency) {
                 $dependencyKey = strtolower($dependency);
 
-                if (! isset($excludedKeys[$dependencyKey])) {
+                if ($dependencyKey !== $selfKey) {
                     $used[$dependencyKey] = true;
                 }
             }
@@ -808,9 +790,27 @@ final readonly class Analyser
             }
         }
 
+        // Instantiations (`new X`, with self/static/parent already resolved)
+        // are the one usage that requires a class to stay concrete, so they
+        // are tracked apart from plain references. No self-exclusion here: a
+        // class instantiating itself cannot become abstract either.
+        $instantiated = [];
+
+        foreach ($extractionResult->fileInstantiations as $instantiations) {
+            foreach ($instantiations as $instantiation) {
+                $instantiated[strtolower($instantiation)] = true;
+            }
+        }
+
         foreach ($classNodes as $classNode) {
-            if (isset($used[strtolower($classNode->className)])) {
+            $classNameKey = strtolower($classNode->className);
+
+            if (isset($used[$classNameKey]) || isset($instantiated[$classNameKey])) {
                 $classNode->setReferenced(true);
+            }
+
+            if (isset($instantiated[$classNameKey])) {
+                $classNode->setInstantiated(true);
             }
         }
     }
@@ -980,6 +980,7 @@ final readonly class Analyser
         $fileAnalyses        = [];
         $anonymousClassNodes = [];
         $fileReferences      = [];
+        $fileInstantiations  = [];
         $filesToParse        = [];
 
         foreach ($files as $file) {
@@ -1004,6 +1005,10 @@ final readonly class Analyser
 
                 if ($cachedResult['fileReferences'] !== []) {
                     $fileReferences[$file] = $cachedResult['fileReferences'];
+                }
+
+                if ($cachedResult['fileInstantiations'] !== []) {
+                    $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
                 }
 
                 $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
@@ -1032,6 +1037,10 @@ final readonly class Analyser
             if ($cachedResult['fileReferences'] !== []) {
                 $fileReferences[$file] = $cachedResult['fileReferences'];
             }
+
+            if ($cachedResult['fileInstantiations'] !== []) {
+                $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
+            }
         }
 
         $progressHandler?->start(count($filesToParse));
@@ -1039,7 +1048,13 @@ final readonly class Analyser
         if ($filesToParse === []) {
             $progressHandler?->finish();
 
-            return new ExtractionResult($classNodes, $fileAnalyses, $anonymousClassNodes, $fileReferences);
+            return new ExtractionResult(
+                $classNodes,
+                $fileAnalyses,
+                $anonymousClassNodes,
+                $fileReferences,
+                $fileInstantiations,
+            );
         }
 
         $options = $analyserOptions ?? AnalyserOptions::parallel();
@@ -1086,6 +1101,10 @@ final readonly class Analyser
             $fileReferences[$file] = $parsedFileReferences;
         }
 
+        foreach ($parsedResult->fileInstantiations as $file => $parsedFileInstantiations) {
+            $fileInstantiations[$file] = $parsedFileInstantiations;
+        }
+
         foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
             $this->analysisResultCache?->storeClassNodes(
                 $fileToParse,
@@ -1094,12 +1113,19 @@ final readonly class Analyser
                 $fileAnalyses[$fileToParse] ?? null,
                 $anonymousClassNodesByFile[$fileToParse] ?? [],
                 $fileReferences[$fileToParse] ?? [],
+                $fileInstantiations[$fileToParse] ?? [],
             );
         }
 
         $progressHandler?->finish();
 
-        return new ExtractionResult($classNodes, $fileAnalyses, $anonymousClassNodes, $fileReferences);
+        return new ExtractionResult(
+            $classNodes,
+            $fileAnalyses,
+            $anonymousClassNodes,
+            $fileReferences,
+            $fileInstantiations,
+        );
     }
 
     /**

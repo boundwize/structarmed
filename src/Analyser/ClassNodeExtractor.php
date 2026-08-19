@@ -58,6 +58,7 @@ final readonly class ClassNodeExtractor
             $fileAnalyses,
             $classCollector->getAnonymousClassNodes(),
             $classCollector->getFileReferences(),
+            $classCollector->getFileInstantiations(),
         );
     }
 }

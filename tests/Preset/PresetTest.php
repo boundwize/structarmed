@@ -14,7 +14,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerNameTrait;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
-use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrReferencedRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
@@ -56,8 +56,8 @@ final class PresetTest extends TestCase
             $rules[YagniPreset::TRAIT_MUST_BE_USED] ?? null
         );
         $this->assertInstanceOf(
-            ExtendedClassMustBeAbstractOrReferencedRule::class,
-            $rules[YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED] ?? null
+            ExtendedClassMustBeAbstractOrInstantiatedRule::class,
+            $rules[YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED] ?? null
         );
     }
 

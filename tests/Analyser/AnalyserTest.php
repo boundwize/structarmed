@@ -469,7 +469,7 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\UnusedTrait', $traitViolations[0]->className);
     }
 
-    public function testExtendedClassMustBeAbstractOrReferencedRuleFlagsOnlyUnreferencedParent(): void
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleFlagsUninstantiatedParent(): void
     {
         $basePath = $this->makeTempProject([
             'src/BaseRepository.php' => '<?php namespace App; class BaseRepository {}',
@@ -482,7 +482,7 @@ final class AnalyserTest extends TestCase
 
         $violations = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED);
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
 
         // BaseRepository is only ever used as a parent class; extending it
         // does not count as a reference, so it should be abstract.
@@ -490,7 +490,33 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\BaseRepository', $violations[0]->className);
     }
 
-    public function testExtendedClassMustBeAbstractOrReferencedRulePassesWhenParentIsInstantiated(): void
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleFlagsTypeHintedButUninstantiatedParent(): void
+    {
+        $consumer = '<?php namespace App;' . "\n"
+            . 'final class Consumer { public function handle(BaseRepository $repository): string'
+            . ' { return $repository instanceof BaseRepository ? BaseRepository::class : \'\'; } }';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseRepository.php' => '<?php namespace App; class BaseRepository {}',
+            'src/UserRepository.php' => '<?php namespace App;'
+                . ' final class UserRepository extends BaseRepository {}',
+            'src/Consumer.php'       => $consumer,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        // Type hints, instanceof, and ::class keep working on an abstract
+        // class — only instantiation requires it to stay concrete.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\BaseRepository', $violations[0]->className);
+    }
+
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesWhenParentIsInstantiated(): void
     {
         $factory = '<?php namespace App;' . "\n"
             . 'final class Factory { public function make(): BaseRepository { return new BaseRepository(); } }';
@@ -507,12 +533,12 @@ final class AnalyserTest extends TestCase
 
         $violations = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED);
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
 
         $this->assertCount(0, $violations);
     }
 
-    public function testExtendedClassMustBeAbstractOrReferencedRulePassesWhenChildInstantiatesParent(): void
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesWhenChildInstantiatesParent(): void
     {
         // The extends clause itself must not count as a reference, but the
         // child's `new BaseRepository()` must: making the parent abstract
@@ -532,12 +558,38 @@ final class AnalyserTest extends TestCase
 
         $violations = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED);
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
 
         $this->assertCount(0, $violations);
     }
 
-    public function testExtendedClassMustBeAbstractOrReferencedRulePassesOnSelfAndParentInstantiation(): void
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnDynamicInstantiation(): void
+    {
+        // The constant-expression evaluator resolves `$class = X::class;
+        // new $class()` — dynamic instantiation still keeps the parent
+        // concrete.
+        $factory = '<?php namespace App;' . "\n"
+            . 'final class Factory { public function make(): object {'
+            . ' $class = BaseRepository::class; return new $class(); } }';
+
+        $basePath = $this->makeTempProject([
+            'src/BaseRepository.php' => '<?php namespace App; class BaseRepository {}',
+            'src/UserRepository.php' => '<?php namespace App;'
+                . ' final class UserRepository extends BaseRepository {}',
+            'src/Factory.php'        => $factory,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnSelfAndParentInstantiation(): void
     {
         // `new self()` resolves to the class itself even when called through a
         // subclass, and `new parent()` resolves to the extended class — both
@@ -562,7 +614,7 @@ final class AnalyserTest extends TestCase
 
         $violations = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_REFERENCED);
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
 
         // Connection is protected by both `new self()` and `new parent()`;
         // ConnectionPool is extended but never referenced, so only it is
@@ -651,10 +703,13 @@ final class AnalyserTest extends TestCase
     public function testYagniRulesRecognizeProceduralReferencesOnCachedRun(): void
     {
         $functions = '<?php namespace App;' . "\n"
-            . 'function handle(Contract $contract): void {}';
+            . 'function handle(Contract $contract): void {}' . "\n"
+            . 'function makeBase(): PlainBase { return new PlainBase(); }';
 
         $basePath            = $this->makeTempProject([
             'src/Contract.php'  => '<?php namespace App; interface Contract {}',
+            'src/PlainBase.php' => '<?php namespace App; class PlainBase {}',
+            'src/PlainSub.php'  => '<?php namespace App; final class PlainSub extends PlainBase {}',
             'src/functions.php' => $functions,
         ]);
         $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
@@ -675,10 +730,13 @@ final class AnalyserTest extends TestCase
     public function testYagniRulesRecognizeProceduralReferencesOnCachedRunWithFileAnalysis(): void
     {
         $functions = '<?php namespace App;' . "\n"
-            . 'function handle(Contract $contract): void {}';
+            . 'function handle(Contract $contract): void {}' . "\n"
+            . 'function makeBase(): PlainBase { return new PlainBase(); }';
 
         $basePath            = $this->makeTempProject([
             'src/Contract.php'  => '<?php namespace App; interface Contract {}',
+            'src/PlainBase.php' => '<?php namespace App; class PlainBase {}',
+            'src/PlainSub.php'  => '<?php namespace App; final class PlainSub extends PlainBase {}',
             'src/functions.php' => $functions,
         ]);
         $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
@@ -785,8 +843,12 @@ final class AnalyserTest extends TestCase
             'src/UsedBase.php'      => '<?php namespace App; abstract class UsedBase {}',
             'src/UsedTrait.php'     => '<?php namespace App; trait UsedTrait {}',
             'src/Contract.php'      => '<?php namespace App; interface Contract {}',
+            'src/PlainBase.php'     => '<?php namespace App; class PlainBase {}',
+            'src/PlainSub.php'      => '<?php namespace App; final class PlainSub extends PlainBase {}',
             'src/Consumer.php'      => $consumer,
-            'src/functions.php'     => '<?php namespace App; function handle(Contract $contract): void {}',
+            'src/functions.php'     => '<?php namespace App;'
+                . ' function handle(Contract $contract): void {}'
+                . ' function makeBase(): PlainBase { return new PlainBase(); }',
         ]);
 
         $architecture = Architecture::define()

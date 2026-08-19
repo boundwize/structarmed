@@ -138,6 +138,7 @@ final readonly class ParallelClassNodeExtractor
         $fileAnalyses        = [];
         $anonymousClassNodes = [];
         $fileReferences      = [];
+        $fileInstantiations  = [];
         $failure             = null;
 
         while ($pending !== []) {
@@ -275,6 +276,36 @@ final readonly class ParallelClassNodeExtractor
 
                         $fileReferences[$file] = $validReferences;
                     }
+
+                    $workerFileInstantiations = $result['fileInstantiations'] ?? [];
+
+                    if (! is_array($workerFileInstantiations)) {
+                        throw new RuntimeException(
+                            'Parallel analysis worker returned invalid file instantiations.'
+                        );
+                    }
+
+                    foreach ($workerFileInstantiations as $file => $instantiations) {
+                        if (! is_string($file) || ! is_array($instantiations)) {
+                            throw new RuntimeException(
+                                'Parallel analysis worker returned invalid file instantiations.'
+                            );
+                        }
+
+                        $validInstantiations = [];
+
+                        foreach ($instantiations as $instantiation) {
+                            if (! is_string($instantiation)) {
+                                throw new RuntimeException(
+                                    'Parallel analysis worker returned invalid file instantiations.'
+                                );
+                            }
+
+                            $validInstantiations[] = $instantiation;
+                        }
+
+                        $fileInstantiations[$file] = $validInstantiations;
+                    }
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
                 } finally {
@@ -298,7 +329,7 @@ final readonly class ParallelClassNodeExtractor
             throw new RuntimeException($failure);
         }
 
-        return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes, $fileReferences);
+        return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes, $fileReferences, $fileInstantiations);
     }
 
     /**

@@ -114,7 +114,7 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame([], $classCollector->getFileReferences());
     }
 
-    public function testCollectsInstantiationsAsFileReferences(): void
+    public function testCollectsInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"
             . 'final class Factory { public function make(): object { return new Service(); } }';
@@ -123,8 +123,9 @@ final class ClassCollectorTest extends TestCase
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Service']],
-            $classCollector->getFileReferences()
+            $classCollector->getFileInstantiations()
         );
+        $this->assertSame([], $classCollector->getFileReferences());
     }
 
     public function testResolvesSelfStaticAndParentInstantiations(): void
@@ -140,8 +141,67 @@ final class ClassCollectorTest extends TestCase
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Repository', 'App\BaseRepository']],
-            $classCollector->getFileReferences()
+            $classCollector->getFileInstantiations()
         );
+    }
+
+    public function testResolvesVariableClassNameInstantiations(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Maker {' . "\n"
+            . '    public function fromClassConstant(): object { $class = Base::class; return new $class(); }' . "\n"
+            . '    public function fromString(): object { $class = \'App\\StringBase\'; return new $class(); }' . "\n"
+            . '    public function fromClassExpr(): object { return new (Concatenated::class)(); }' . "\n"
+            . '    public function fromConcat(): object {'
+            . ' $class = \'App\\\\\' . \'Joined\'; return new $class(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Base', 'App\StringBase', 'App\Concatenated', 'App\Joined']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testResolvesSelfClassConstantInstantiation(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'class Registry { public function fresh(): object { $class = self::class; return new $class(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Registry']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testDropsVariableClassNameOnUnresolvableReassignment(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Maker { public function make(object $obj): object {'
+            . ' $class = \'App\\Base\'; $class = $obj::class; return new $class(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // The reassignment cannot be evaluated statically, so the earlier
+        // constant value must not leak into the instantiation.
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
+    public function testIgnoresUnresolvableClassNameExpressions(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Maker { public function make(string $suffix): object {'
+            . ' $class = \'App\\\\\' . $suffix; $label = \'not a class name!\';'
+            . ' $this->kept = \'App\\Prop\'; return new $class(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // Runtime-dependent concatenation, non-class-shaped strings, and
+        // property assignments resolve to nothing.
+        $this->assertSame([], $classCollector->getFileInstantiations());
     }
 
     public function testDoesNotCollectDynamicOrAnonymousInstantiations(): void
@@ -154,7 +214,7 @@ final class ClassCollectorTest extends TestCase
 
         // `new $class` has no resolvable name (class-name strings cover it),
         // and anonymous classes are tracked as AnonymousClassNodes.
-        $this->assertSame([], $classCollector->getFileReferences());
+        $this->assertSame([], $classCollector->getFileInstantiations());
     }
 
     public function testIgnoresRelativeInstantiationOutsideClassScope(): void
@@ -163,7 +223,7 @@ final class ClassCollectorTest extends TestCase
         // PHP itself rejects it at runtime.
         $classCollector = $this->makeCollector('<?php namespace App; new self();');
 
-        $this->assertSame([], $classCollector->getFileReferences());
+        $this->assertSame([], $classCollector->getFileInstantiations());
     }
 
     public function testCollectsFinalClass(): void

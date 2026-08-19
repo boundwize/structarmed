@@ -62,6 +62,7 @@ final class ClassNode
         public bool $isExtended = false,
         public bool $isImplemented = false,
         public bool $isReferenced = false,
+        public bool $isInstantiated = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
@@ -105,6 +106,17 @@ final class ClassNode
     public function setReferenced(bool $isReferenced): void
     {
         $this->isReferenced = $isReferenced;
+    }
+
+    /**
+     * Whether another scanned scope instantiates this class — `new X`, or a
+     * `new self`/`new static`/`new parent` resolving to it. Instantiation is
+     * the one usage that requires a class to stay concrete. Computed by the
+     * analyser when a usage-aware rule is active; false otherwise.
+     */
+    public function setInstantiated(bool $isInstantiated): void
+    {
+        $this->isInstantiated = $isInstantiated;
     }
 
     public function shortName(): string

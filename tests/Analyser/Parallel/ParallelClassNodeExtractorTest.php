@@ -490,6 +490,45 @@ PHP);
         yield 'entry with non-string reference' => [['Foo.php' => [1]]];
     }
 
+    /**
+     * @return Iterator<string, array{mixed}>
+     */
+    public static function invalidFileInstantiationsProvider(): Iterator
+    {
+        yield 'not an array' => ['invalid'];
+        yield 'entry not an array' => [['Foo.php' => 'invalid']];
+        yield 'entry with non-string instantiation' => [['Foo.php' => [1]]];
+    }
+
+    #[DataProvider('invalidFileInstantiationsProvider')]
+    public function testExtractThrowsWhenFileInstantiationsPayloadIsInvalid(mixed $invalidFileInstantiations): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'               => [],
+            'fileAnalyses'        => [],
+            'anonymousClassNodes' => [],
+            'fileReferences'      => [],
+            'fileInstantiations'  => $invalidFileInstantiations,
+            'error'               => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid file instantiations.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
     #[DataProvider('invalidFileReferencesEntryProvider')]
     public function testExtractThrowsWhenFileReferencesEntryIsInvalid(mixed $invalidFileReferences): void
     {

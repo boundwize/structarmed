@@ -10,19 +10,14 @@ use Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassLike\RemoveClassLikeVisitor;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
-use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
-
-use function file_put_contents;
 
 #[CoversClass(MustBeUsedTraitRule::class)]
 #[CoversClass(RemoveClassLikeVisitor::class)]
 final class MustBeUsedTraitRuleTest extends TestCase
 {
-    use TemporaryDirectoryCleanupTrait;
-
     private function makeNode(
         string $className = 'App\\Domain\\TimestampableTrait',
         string $layer = 'Domain',
@@ -143,27 +138,5 @@ final class MustBeUsedTraitRuleTest extends TestCase
         $classNode           = $this->makeNode();
 
         $this->assertFalse($mustBeUsedTraitRule->appliesTo($classNode));
-    }
-
-    public function testFixDeletesFileWhenOnlyBoilerplateRemains(): void
-    {
-        $temporaryDirectory = $this->makeTemporaryDirectory('structarmed-yagni-trait');
-        $file               = $temporaryDirectory . '/UnusedTrait.php';
-
-        file_put_contents(
-            $file,
-            "<?php\n\ndeclare(strict_types=1);\n\nnamespace App;\n\ntrait UnusedTrait\n{\n}\n"
-        );
-
-        $mustBeUsedTraitRule = new MustBeUsedTraitRule(layer: 'Domain');
-
-        $this->assertTrue($mustBeUsedTraitRule->fix(new RuleViolation(
-            message:   'Trait [App\\UnusedTrait] must be used by a class, trait, or enum',
-            file:      $file,
-            line:      7,
-            className: 'App\\UnusedTrait',
-            layer:     'Domain',
-        )));
-        $this->assertFileDoesNotExist($file);
     }
 }

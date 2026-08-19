@@ -189,7 +189,8 @@ final class AnalysisResultCache
      * @return array{
      *     classNodes: list<ClassNode>,
      *     anonymousClassNodes: list<AnonymousClassNode>,
-     *     fileReferences: list<string>
+     *     fileReferences: list<string>,
+     *     fileInstantiations: list<string>
      * }|null
      */
     public function loadClassNodes(string $file, string $namespace): ?array
@@ -203,8 +204,14 @@ final class AnalysisResultCache
         $classNodes          = $this->classNodesFromPayload($payload);
         $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
         $fileReferences      = $this->fileReferencesFromPayload($payload);
+        $fileInstantiations  = $this->fileInstantiationsFromPayload($payload);
 
-        if ($classNodes === null || $anonymousClassNodes === null || $fileReferences === null) {
+        if (
+            $classNodes === null
+            || $anonymousClassNodes === null
+            || $fileReferences === null
+            || $fileInstantiations === null
+        ) {
             return null;
         }
 
@@ -212,6 +219,7 @@ final class AnalysisResultCache
             'classNodes'          => $classNodes,
             'anonymousClassNodes' => $anonymousClassNodes,
             'fileReferences'      => $fileReferences,
+            'fileInstantiations'  => $fileInstantiations,
         ];
     }
 
@@ -220,6 +228,7 @@ final class AnalysisResultCache
      *     classNodes: list<ClassNode>,
      *     anonymousClassNodes: list<AnonymousClassNode>,
      *     fileReferences: list<string>,
+     *     fileInstantiations: list<string>,
      *     fileAnalysis: FileAnalysis
      * }|null
      */
@@ -234,6 +243,7 @@ final class AnalysisResultCache
         $classNodes          = $this->classNodesFromPayload($payload);
         $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
         $fileReferences      = $this->fileReferencesFromPayload($payload);
+        $fileInstantiations  = $this->fileInstantiationsFromPayload($payload);
         $fileAnalysis        = is_array($payload['fileAnalysis'] ?? null)
             ? $this->fileAnalysisFromArray($payload['fileAnalysis'])
             : null;
@@ -242,6 +252,7 @@ final class AnalysisResultCache
             $classNodes === null
             || $anonymousClassNodes === null
             || $fileReferences === null
+            || $fileInstantiations === null
             || ! $fileAnalysis instanceof FileAnalysis
         ) {
             return null;
@@ -251,6 +262,7 @@ final class AnalysisResultCache
             'classNodes'          => $classNodes,
             'anonymousClassNodes' => $anonymousClassNodes,
             'fileReferences'      => $fileReferences,
+            'fileInstantiations'  => $fileInstantiations,
             'fileAnalysis'        => $fileAnalysis,
         ];
     }
@@ -301,6 +313,7 @@ final class AnalysisResultCache
      * @param list<AnonymousClassNode> $anonymousClassNodes
      * @param list<string>             $fileReferences Class-like references made outside any
      *                                                 named class-like scope in this file
+     * @param list<string>             $fileInstantiations Class-like instantiations in this file
      */
     public function storeClassNodes(
         string $file,
@@ -309,6 +322,7 @@ final class AnalysisResultCache
         ?FileAnalysis $fileAnalysis = null,
         array $anonymousClassNodes = [],
         array $fileReferences = [],
+        array $fileInstantiations = [],
     ): void {
         $this->ensureCacheInitialised();
 
@@ -317,6 +331,7 @@ final class AnalysisResultCache
             'nodes'               => array_map($this->classNodeToArray(...), $classNodes),
             'anonymousClassNodes' => array_map($this->anonymousClassNodeToArray(...), $anonymousClassNodes),
             'fileReferences'      => $fileReferences,
+            'fileInstantiations'  => $fileInstantiations,
         ];
 
         if ($fileAnalysis instanceof FileAnalysis) {
@@ -409,6 +424,17 @@ final class AnalysisResultCache
         $fileReferences = $payload['fileReferences'] ?? [];
 
         return $this->isStringArray($fileReferences) ? array_values($fileReferences) : null;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<string>|null
+     */
+    private function fileInstantiationsFromPayload(array $payload): ?array
+    {
+        $fileInstantiations = $payload['fileInstantiations'] ?? [];
+
+        return $this->isStringArray($fileInstantiations) ? array_values($fileInstantiations) : null;
     }
 
     /**
