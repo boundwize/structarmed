@@ -172,6 +172,10 @@ final readonly class Analyser
             $this->markReferencedClassLikes($classNodes, $extractionResult);
         }
 
+        if ($hasExtendedClassAwareRule) {
+            $this->markInstantiatedClasses($classNodes, $extractionResult);
+        }
+
         if ($withFileAnalysis) {
             $fileAnalysisProvider = new FileAnalysisProvider(
                 analyses: $extractionResult->fileAnalyses,
@@ -807,10 +811,43 @@ final readonly class Analyser
             }
         }
 
-        // Instantiations (`new X`, with self/static/parent already resolved)
-        // are the one usage that requires a class to stay concrete, so they
-        // are tracked apart from plain references. No self-exclusion here: a
-        // class instantiating itself cannot become abstract either.
+        // An instantiation is also a reference; the sentinel is not a class
+        // name and marks nothing here.
+        foreach ($extractionResult->fileInstantiations as $instantiations) {
+            foreach ($instantiations as $instantiation) {
+                if ($instantiation !== ClassCollector::UNRESOLVED_INSTANTIATION) {
+                    $used[strtolower($instantiation)] = true;
+                }
+            }
+        }
+
+        foreach ($classNodes as $classNode) {
+            if (isset($used[strtolower($classNode->className)])) {
+                $classNode->setReferenced(true);
+            }
+        }
+    }
+
+    /**
+     * Flag every concrete class that another scanned scope instantiates —
+     * `new X` (with self/static/parent already resolved), a dynamic
+     * `new $class` resolved from constant class-name values, and so on.
+     * No self-exclusion here: a class instantiating itself cannot become
+     * abstract either.
+     *
+     * A dynamic instantiation whose target could not be resolved statically —
+     * `new $class` on a function parameter, a ReflectionClass construction,
+     * unserialize(), eval() — may target any class: the name can come from
+     * the environment, configuration, or a payload, entirely outside the
+     * scanned code. No class can then be proven safe to abstract, so every
+     * class-like conservatively counts as instantiated. Resolvable
+     * construction keeps precise detection; unresolvable construction
+     * silences the concreteness fix.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markInstantiatedClasses(array $classNodes, ExtractionResult $extractionResult): void
+    {
         $instantiated = [];
 
         foreach ($extractionResult->fileInstantiations as $instantiations) {
@@ -819,24 +856,10 @@ final readonly class Analyser
             }
         }
 
-        // A dynamic instantiation whose target could not be resolved
-        // statically — `new $class` on a function parameter, a
-        // ReflectionClass construction, unserialize() — may target any class:
-        // the name can come from the environment, configuration, or a
-        // payload, entirely outside the scanned code. No class can then be
-        // proven safe to abstract, so every class-like conservatively counts
-        // as instantiated. Resolvable construction keeps precise detection;
-        // unresolvable construction silences the concreteness fix.
         $hasUnresolvedInstantiation = isset($instantiated[ClassCollector::UNRESOLVED_INSTANTIATION]);
 
         foreach ($classNodes as $classNode) {
-            $classNameKey = strtolower($classNode->className);
-
-            if (isset($used[$classNameKey]) || isset($instantiated[$classNameKey])) {
-                $classNode->setReferenced(true);
-            }
-
-            if ($hasUnresolvedInstantiation || isset($instantiated[$classNameKey])) {
+            if ($hasUnresolvedInstantiation || isset($instantiated[strtolower($classNode->className)])) {
                 $classNode->setInstantiated(true);
             }
         }
