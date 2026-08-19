@@ -339,6 +339,43 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->isInstantiated);
     }
 
+    public function testSetInstantiatedIsIgnoredForNonInstantiableClassLikes(): void
+    {
+        $makeNode = static fn (
+            bool $isAbstract = false,
+            bool $isInterface = false,
+            bool $isTrait = false,
+            bool $isEnum = false,
+        ): ClassNode => new ClassNode(
+            className:   'App\\Domain\\SomeClassLike',
+            file:        '/src/SomeClassLike.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  $isAbstract,
+            isFinal:     false,
+            isInterface: $isInterface,
+            isReadonly:  false,
+            isTrait:     $isTrait,
+            isEnum:      $isEnum,
+        );
+
+        $nonInstantiables = [
+            'abstract class' => $makeNode(isAbstract: true),
+            'interface'      => $makeNode(isInterface: true),
+            'trait'          => $makeNode(isTrait: true),
+            'enum'           => $makeNode(isEnum: true),
+        ];
+
+        foreach ($nonInstantiables as $kind => $classNode) {
+            $classNode->setInstantiated(true);
+
+            // `new` on these class-likes is fatal, so they can never be an
+            // instantiation target.
+            $this->assertFalse($classNode->isInstantiated, $kind);
+        }
+    }
+
     public function testDependsOnMatchesExistingClassesExactly(): void
     {
         $classNode = new ClassNode(
