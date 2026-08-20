@@ -77,6 +77,34 @@ StructArmed runs in parallel by default. Disable parallel processing when debugg
 vendor/bin/structarmed analyse --disable-parallel
 ```
 
+### Xdebug In Parallel Workers
+
+To reduce worker startup and analysis overhead, StructArmed sets `XDEBUG_MODE=off` for parallel workers when the variable is not already defined. This has no effect when the Xdebug extension is not installed.
+
+Set `XDEBUG_MODE` explicitly to enable Xdebug in the workers. StructArmed preserves the configured value:
+
+```bash
+# Linux and macOS
+XDEBUG_MODE=debug vendor/bin/structarmed analyse
+
+# Enable multiple Xdebug modes
+XDEBUG_MODE=develop,debug vendor/bin/structarmed analyse
+```
+
+In PowerShell:
+
+```powershell
+$env:XDEBUG_MODE = "debug"
+vendor/bin/structarmed analyse
+```
+
+In Windows Command Prompt:
+
+```batch
+set XDEBUG_MODE=debug
+vendor\bin\structarmed analyse
+```
+
 ## Version Commands
 
 ```bash

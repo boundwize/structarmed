@@ -24,6 +24,7 @@ use function feof;
 use function file_put_contents;
 use function filesize;
 use function fread;
+use function getenv;
 use function is_array;
 use function is_dir;
 use function is_resource;
@@ -77,6 +78,7 @@ final readonly class ParallelClassNodeExtractor
         $pending        = [];
         $emitProgress   = $progressHandler instanceof ProgressHandlerInterface;
         $cacheDirectory = $this->cacheDirectory ?? sys_get_temp_dir();
+        $environment    = $this->workerEnvironment();
 
         if (! is_dir($cacheDirectory)) {
             mkdir($cacheDirectory, 0777, true);
@@ -109,6 +111,8 @@ final readonly class ParallelClassNodeExtractor
                     2 => ['file', $stderrFile, 'w'],
                 ],
                 $pipes,
+                null,
+                $environment,
             );
 
             if ($process === false) {
@@ -330,6 +334,14 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes, $fileReferences, $fileInstantiations);
+    }
+
+    /** @return array<string, string> */
+    private function workerEnvironment(): array
+    {
+        $environment = getenv();
+
+        return $environment + ['XDEBUG_MODE' => 'off'];
     }
 
     /**
