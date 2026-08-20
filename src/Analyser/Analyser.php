@@ -161,7 +161,7 @@ final readonly class Analyser
         $classNodes       = $this->withRecursiveParents($classNodes);
 
         if ($hasExtendedClassAwareRule) {
-            $this->markExtendedClasses($classNodes, $extractionResult);
+            $this->markExtendedAndInstantiatedClasses($classNodes, $extractionResult);
         }
 
         if ($hasUsedInterfaceAwareRule) {
@@ -170,10 +170,6 @@ final readonly class Analyser
 
         if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
             $this->markReferencedClassLikes($classNodes, $extractionResult);
-        }
-
-        if ($hasExtendedClassAwareRule) {
-            $this->markInstantiatedClasses($classNodes, $extractionResult);
         }
 
         if ($withFileAnalysis) {
@@ -679,15 +675,23 @@ final readonly class Analyser
     }
 
     /**
-     * Flag every class that another scanned class extends, using the recursive
-     * parent chain resolved by {@see withRecursiveParents()}. A class name found
-     * among any node's parent classes is extended within the scanned paths.
+     * Flag every class that another scanned class extends or another scanned
+     * scope instantiates. Extended classes use the recursive parent chain
+     * resolved by {@see withRecursiveParents()}; instantiated classes come from
+     * the resolved `new` expressions collected per file, including constant
+     * class expressions and resolvable ReflectionClass construction. There is
+     * no self-exclusion for instantiation: a class that instantiates itself must
+     * remain concrete. Runtime-fed dynamic construction resolves to nothing and
+     * remains outside the documented scanned-code boundary.
      *
      * @param list<ClassNode> $classNodes
      */
-    private function markExtendedClasses(array $classNodes, ExtractionResult $extractionResult): void
-    {
-        $extended = [];
+    private function markExtendedAndInstantiatedClasses(
+        array $classNodes,
+        ExtractionResult $extractionResult
+    ): void {
+        $extended     = [];
+        $instantiated = [];
 
         foreach ($classNodes as $classNode) {
             foreach ($classNode->parentClasses as $parentClass) {
@@ -703,11 +707,23 @@ final readonly class Analyser
             }
         }
 
+        foreach ($extractionResult->fileInstantiations as $instantiations) {
+            foreach ($instantiations as $instantiation) {
+                $instantiated[strtolower($instantiation)] = true;
+            }
+        }
+
         foreach ($classNodes as $classNode) {
+            $classNameKey = strtolower($classNode->className);
+
             // Only classes appear in parentClasses; traits, interfaces, and enums
             // never do, so they are left with the default (not extended).
-            if (isset($extended[strtolower($classNode->className)])) {
+            if (isset($extended[$classNameKey])) {
                 $classNode->setExtended(true);
+            }
+
+            if (isset($instantiated[$classNameKey])) {
+                $classNode->setInstantiated(true);
             }
         }
     }
@@ -821,37 +837,6 @@ final readonly class Analyser
         foreach ($classNodes as $classNode) {
             if (isset($used[strtolower($classNode->className)])) {
                 $classNode->setReferenced(true);
-            }
-        }
-    }
-
-    /**
-     * Flag every concrete class that another scanned scope instantiates —
-     * `new X` (with self/static/parent already resolved), a constant class
-     * expression such as `new (X::class)`, or a chained ReflectionClass
-     * construction with a resolvable target. No self-exclusion here: a class
-     * instantiating itself cannot become abstract either.
-     *
-     * Runtime-fed dynamic construction (`new $class` from a parameter,
-     * unserialize(), containers) resolves to nothing — it is part of the
-     * documented scanned-code boundary, handled with skipRule() or skip paths
-     * where such factories exist.
-     *
-     * @param list<ClassNode> $classNodes
-     */
-    private function markInstantiatedClasses(array $classNodes, ExtractionResult $extractionResult): void
-    {
-        $instantiated = [];
-
-        foreach ($extractionResult->fileInstantiations as $instantiations) {
-            foreach ($instantiations as $instantiation) {
-                $instantiated[strtolower($instantiation)] = true;
-            }
-        }
-
-        foreach ($classNodes as $classNode) {
-            if (isset($instantiated[strtolower($classNode->className)])) {
-                $classNode->setInstantiated(true);
             }
         }
     }
