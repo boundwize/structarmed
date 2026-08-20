@@ -63,6 +63,8 @@ final readonly class ClassNodeWorker
                 'nodes'               => $result->classNodes,
                 'fileAnalyses'        => $result->fileAnalyses,
                 'anonymousClassNodes' => $result->anonymousClassNodes,
+                'fileReferences'      => $result->fileReferences,
+                'fileInstantiations'  => $result->fileInstantiations,
                 'error'               => null,
             ]));
 
@@ -72,6 +74,8 @@ final readonly class ClassNodeWorker
                 'nodes'               => [],
                 'fileAnalyses'        => [],
                 'anonymousClassNodes' => [],
+                'fileReferences'      => [],
+                'fileInstantiations'  => [],
                 'error'               => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
             ]));
 

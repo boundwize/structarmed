@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
+use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 
 /**
  * Factory for built-in presets.
@@ -21,6 +22,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
  *   ->withPreset(Preset::PSR4())
  *   ->withPreset(Preset::PSR12())
  *   ->withPreset(Preset::PSR15())
+ *   ->withPreset(Preset::YAGNI())
  *   ->withPresets(Preset::DDD(), Preset::MVC())
  */
 final class Preset
@@ -82,6 +84,17 @@ final class Preset
             enforceFinalEntities:    $enforceFinalEntities,
             enforceFinalValueObjects: $enforceFinalValueObjects,
             enforceFinalEvents:      $enforceFinalEvents,
+        );
+    }
+
+    /**
+     * @param list<string>|null $sourcePaths
+     */
+    public static function YAGNI(
+        ?array $sourcePaths = null,
+    ): YagniPreset {
+        return new YagniPreset(
+            sourcePaths: $sourcePaths,
         );
     }
 

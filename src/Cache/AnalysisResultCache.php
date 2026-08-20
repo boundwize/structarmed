@@ -186,7 +186,12 @@ final class AnalysisResultCache
     }
 
     /**
-     * @return array{classNodes: list<ClassNode>, anonymousClassNodes: list<AnonymousClassNode>}|null
+     * @return array{
+     *     classNodes: list<ClassNode>,
+     *     anonymousClassNodes: list<AnonymousClassNode>,
+     *     fileReferences: list<string>,
+     *     fileInstantiations: list<string>
+     * }|null
      */
     public function loadClassNodes(string $file, string $namespace): ?array
     {
@@ -198,14 +203,23 @@ final class AnalysisResultCache
 
         $classNodes          = $this->classNodesFromPayload($payload);
         $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
+        $fileReferences      = $this->fileReferencesFromPayload($payload);
+        $fileInstantiations  = $this->fileInstantiationsFromPayload($payload);
 
-        if ($classNodes === null || $anonymousClassNodes === null) {
+        if (
+            $classNodes === null
+            || $anonymousClassNodes === null
+            || $fileReferences === null
+            || $fileInstantiations === null
+        ) {
             return null;
         }
 
         return [
             'classNodes'          => $classNodes,
             'anonymousClassNodes' => $anonymousClassNodes,
+            'fileReferences'      => $fileReferences,
+            'fileInstantiations'  => $fileInstantiations,
         ];
     }
 
@@ -213,6 +227,8 @@ final class AnalysisResultCache
      * @return array{
      *     classNodes: list<ClassNode>,
      *     anonymousClassNodes: list<AnonymousClassNode>,
+     *     fileReferences: list<string>,
+     *     fileInstantiations: list<string>,
      *     fileAnalysis: FileAnalysis
      * }|null
      */
@@ -226,17 +242,27 @@ final class AnalysisResultCache
 
         $classNodes          = $this->classNodesFromPayload($payload);
         $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
+        $fileReferences      = $this->fileReferencesFromPayload($payload);
+        $fileInstantiations  = $this->fileInstantiationsFromPayload($payload);
         $fileAnalysis        = is_array($payload['fileAnalysis'] ?? null)
             ? $this->fileAnalysisFromArray($payload['fileAnalysis'])
             : null;
 
-        if ($classNodes === null || $anonymousClassNodes === null || ! $fileAnalysis instanceof FileAnalysis) {
+        if (
+            $classNodes === null
+            || $anonymousClassNodes === null
+            || $fileReferences === null
+            || $fileInstantiations === null
+            || ! $fileAnalysis instanceof FileAnalysis
+        ) {
             return null;
         }
 
         return [
             'classNodes'          => $classNodes,
             'anonymousClassNodes' => $anonymousClassNodes,
+            'fileReferences'      => $fileReferences,
+            'fileInstantiations'  => $fileInstantiations,
             'fileAnalysis'        => $fileAnalysis,
         ];
     }
@@ -285,6 +311,9 @@ final class AnalysisResultCache
     /**
      * @param list<ClassNode>          $classNodes
      * @param list<AnonymousClassNode> $anonymousClassNodes
+     * @param list<string>             $fileReferences Class-like references made outside any
+     *                                                 named class-like scope in this file
+     * @param list<string>             $fileInstantiations Class-like instantiations in this file
      */
     public function storeClassNodes(
         string $file,
@@ -292,6 +321,8 @@ final class AnalysisResultCache
         array $classNodes,
         ?FileAnalysis $fileAnalysis = null,
         array $anonymousClassNodes = [],
+        array $fileReferences = [],
+        array $fileInstantiations = [],
     ): void {
         $this->ensureCacheInitialised();
 
@@ -299,6 +330,8 @@ final class AnalysisResultCache
             'metadata'            => $this->fileMetadata($file, $namespace),
             'nodes'               => array_map($this->classNodeToArray(...), $classNodes),
             'anonymousClassNodes' => array_map($this->anonymousClassNodeToArray(...), $anonymousClassNodes),
+            'fileReferences'      => $fileReferences,
+            'fileInstantiations'  => $fileInstantiations,
         ];
 
         if ($fileAnalysis instanceof FileAnalysis) {
@@ -383,14 +416,38 @@ final class AnalysisResultCache
     }
 
     /**
+     * @param array<string, mixed> $payload
+     * @return list<string>|null
+     */
+    private function fileReferencesFromPayload(array $payload): ?array
+    {
+        $fileReferences = $payload['fileReferences'] ?? [];
+
+        return $this->isStringArray($fileReferences) ? array_values($fileReferences) : null;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<string>|null
+     */
+    private function fileInstantiationsFromPayload(array $payload): ?array
+    {
+        $fileInstantiations = $payload['fileInstantiations'] ?? [];
+
+        return $this->isStringArray($fileInstantiations) ? array_values($fileInstantiations) : null;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function anonymousClassNodeToArray(AnonymousClassNode $anonymousClassNode): array
     {
         return [
-            'file'    => $anonymousClassNode->file,
-            'line'    => $anonymousClassNode->line,
-            'extends' => $anonymousClassNode->extends,
+            'file'       => $anonymousClassNode->file,
+            'line'       => $anonymousClassNode->line,
+            'extends'    => $anonymousClassNode->extends,
+            'implements' => $anonymousClassNode->implements,
+            'traits'     => $anonymousClassNode->traits,
         ];
     }
 
@@ -413,18 +470,26 @@ final class AnalysisResultCache
                 return null;
             }
 
-            $file    = $rawNode['file'] ?? null;
-            $line    = $rawNode['line'] ?? null;
-            $extends = $rawNode['extends'] ?? null;
+            $file       = $rawNode['file'] ?? null;
+            $line       = $rawNode['line'] ?? null;
+            $extends    = $rawNode['extends'] ?? null;
+            $implements = $rawNode['implements'] ?? [];
+            $traits     = $rawNode['traits'] ?? [];
 
             if (! is_string($file) || ! is_int($line) || ($extends !== null && ! is_string($extends))) {
                 return null;
             }
 
+            if (! $this->isStringArray($implements) || ! $this->isStringArray($traits)) {
+                return null;
+            }
+
             $anonymousClassNodes[] = new AnonymousClassNode(
-                file:    $file,
-                line:    $line,
-                extends: $extends,
+                file:       $file,
+                line:       $line,
+                extends:    $extends,
+                implements: $implements,
+                traits:     $traits,
             );
         }
 

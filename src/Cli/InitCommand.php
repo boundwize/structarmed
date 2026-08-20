@@ -87,13 +87,15 @@ PHP);
             'psr12' => '    ->withPreset(Preset::PSR12());',
             'psr15' => '    ->withPreset(Preset::PSR15());',
             'psr4' => '    ->withPreset(Preset::PSR4());',
+            'yagni' => '    ->withPreset(Preset::YAGNI());',
             'all' => "    ->withPresets(\n"
                 . "        Preset::PSR1(),\n"
                 . "        Preset::PSR12(),\n"
                 . "        Preset::PSR15(),\n"
                 . "        Preset::PSR4(),\n"
                 . "        Preset::DDD(),\n"
-                . "        Preset::MVC()\n"
+                . "        Preset::MVC(),\n"
+                . "        Preset::YAGNI()\n"
                 . "    );",
             default => null,
         };

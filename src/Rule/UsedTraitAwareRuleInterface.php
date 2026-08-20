@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Boundwize\StructArmed\Rule;
+
+/**
+ * Marker for rules whose evaluation depends on whether a trait is used within
+ * the scanned paths — used by another scanned class-like (class, trait, or
+ * enum) or referenced as a dependency. When at least one active rule
+ * implements this marker, the analyser flags each ClassNode's $isReferenced
+ * before rules are evaluated, so implementers can read $classNode->isReferenced.
+ *
+ * Trade-off: only usage within the scanned paths is known. A trait used solely
+ * by a consumer outside the scan is reported as if not used.
+ */
+interface UsedTraitAwareRuleInterface extends RuleInterface
+{
+}

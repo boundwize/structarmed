@@ -69,6 +69,11 @@ final class InitCommandTest extends TestCase
             '    ->withPreset(Preset::PSR4());',
         ];
 
+        yield 'yagni' => [
+            ['--preset=yagni'],
+            '    ->withPreset(Preset::YAGNI());',
+        ];
+
         yield 'all' => [
             ['--preset=all'],
             "    ->withPresets(\n"
@@ -77,7 +82,8 @@ final class InitCommandTest extends TestCase
             . "        Preset::PSR15(),\n"
             . "        Preset::PSR4(),\n"
             . "        Preset::DDD(),\n"
-            . "        Preset::MVC()\n"
+            . "        Preset::MVC(),\n"
+            . "        Preset::YAGNI()\n"
             . "    );",
         ];
     }

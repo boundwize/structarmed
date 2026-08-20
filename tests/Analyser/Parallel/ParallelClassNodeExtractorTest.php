@@ -7,7 +7,9 @@ namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use Iterator;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -443,6 +445,109 @@ PHP);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid anonymous class nodes.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    public function testExtractThrowsWhenFileReferencesPayloadIsNotAnArray(): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'               => [],
+            'fileAnalyses'        => [],
+            'anonymousClassNodes' => [],
+            'fileReferences'      => 'invalid',
+            'error'               => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid file references.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    /**
+     * @return Iterator<string, array{mixed}>
+     */
+    public static function invalidFileReferencesEntryProvider(): Iterator
+    {
+        yield 'entry not an array' => [['Foo.php' => 'invalid']];
+        yield 'entry with non-string reference' => [['Foo.php' => [1]]];
+    }
+
+    /**
+     * @return Iterator<string, array{mixed}>
+     */
+    public static function invalidFileInstantiationsProvider(): Iterator
+    {
+        yield 'not an array' => ['invalid'];
+        yield 'entry not an array' => [['Foo.php' => 'invalid']];
+        yield 'entry with non-string instantiation' => [['Foo.php' => [1]]];
+    }
+
+    #[DataProvider('invalidFileInstantiationsProvider')]
+    public function testExtractThrowsWhenFileInstantiationsPayloadIsInvalid(mixed $invalidFileInstantiations): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'               => [],
+            'fileAnalyses'        => [],
+            'anonymousClassNodes' => [],
+            'fileReferences'      => [],
+            'fileInstantiations'  => $invalidFileInstantiations,
+            'error'               => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid file instantiations.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    #[DataProvider('invalidFileReferencesEntryProvider')]
+    public function testExtractThrowsWhenFileReferencesEntryIsInvalid(mixed $invalidFileReferences): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'               => [],
+            'fileAnalyses'        => [],
+            'anonymousClassNodes' => [],
+            'fileReferences'      => $invalidFileReferences,
+            'error'               => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid file references.');
 
         try {
             $parallelClassNodeExtractor->extract([$file]);

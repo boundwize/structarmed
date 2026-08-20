@@ -6,11 +6,17 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
+use PhpParser\ConstExprEvaluationException;
+use PhpParser\ConstExprEvaluator;
 use PhpParser\Node;
+use PhpParser\Node\Arg;
+use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
+use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
+use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\Empty_;
 use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\Exit_;
@@ -18,6 +24,9 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\Include_;
 use PhpParser\Node\Expr\Isset_;
 use PhpParser\Node\Expr\List_;
+use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\New_;
+use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
@@ -26,6 +35,7 @@ use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Param;
+use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Case_;
 use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Class_;
@@ -55,9 +65,12 @@ use function array_pop;
 use function array_unique;
 use function array_values;
 use function count;
+use function end;
 use function in_array;
 use function is_string;
+use function preg_match;
 use function spl_object_id;
+use function strcasecmp;
 use function strtolower;
 
 final class ClassCollector extends NodeVisitorAbstract
@@ -80,11 +93,55 @@ final class ClassCollector extends NodeVisitorAbstract
         'null'  => true,
     ];
 
+    /**
+     * A string value shaped like a (possibly namespaced) class name, e.g.
+     * 'App\Contract' or 'stdClass'. Such values can reach `new $class` or
+     * `instanceof $class` at runtime, so they count as references.
+     */
+    private const CLASS_LIKE_STRING_PATTERN =
+        '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+)*+$/';
+
+    /**
+     * Method names of the ReflectionClass object-construction APIs. Calling
+     * one chained on a `new ReflectionClass(<resolvable class name>)` receiver
+     * instantiates the reflected class.
+     */
+    private const REFLECTION_CONSTRUCTION_METHODS = [
+        'newinstance'                   => true,
+        'newinstanceargs'               => true,
+        'newinstancewithoutconstructor' => true,
+        'newlazyghost'                  => true,
+        'newlazyproxy'                  => true,
+    ];
+
     /** @var list<ClassNode> */
     private array $nodes = [];
 
     /** @var list<AnonymousClassNode> */
     private array $anonymousClassNodes = [];
+
+    /** @var array<string, list<string>> */
+    private array $fileReferences = [];
+
+    /** @var list<string> */
+    private array $currentFileReferences = [];
+
+    /** @var array<string, list<string>> */
+    private array $fileInstantiations = [];
+
+    /** @var list<string> */
+    private array $currentFileInstantiations = [];
+
+    private readonly ConstExprEvaluator $constExprEvaluator;
+
+    /**
+     * Stack of named class-likes currently being entered, so `new self`,
+     * `new static`, and `new parent` instantiations can be resolved to the
+     * class names they target.
+     *
+     * @var list<array{name: string, extends: string|null}>
+     */
+    private array $activeClassLikeScopes = [];
 
     private string $currentFile = '';
 
@@ -115,19 +172,37 @@ final class ClassCollector extends NodeVisitorAbstract
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
+        $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): string {
+            if (
+                $expr instanceof ClassConstFetch
+                && $expr->name instanceof Identifier
+                && $expr->name->toLowerString() === 'class'
+                && $expr->class instanceof Name
+            ) {
+                $className = $this->resolveClassLikeName($expr->class);
+
+                if ($className !== null) {
+                    return $className;
+                }
+            }
+
+            throw new ConstExprEvaluationException('Expression is not a resolvable class name.');
+        });
     }
 
     public function setCurrentFile(string $file): void
     {
-        $this->currentFile             = $file;
-        $this->currentNamespaceUses    = [];
-        $this->fileClassLikes          = [];
-        $this->fileFunctions           = [];
-        $this->classLikeAnalysis       = [];
-        $this->classLikeMethods        = [];
-        $this->activeClassLikeAnalyses = [];
-        $this->activeMethodIds         = [];
-        $this->methodClassLikeAnalyses = [];
+        $this->currentFile               = $file;
+        $this->currentFileReferences     = [];
+        $this->currentFileInstantiations = [];
+        $this->currentNamespaceUses      = [];
+        $this->fileClassLikes            = [];
+        $this->fileFunctions             = [];
+        $this->classLikeAnalysis         = [];
+        $this->classLikeMethods          = [];
+        $this->activeClassLikeAnalyses   = [];
+        $this->activeMethodIds           = [];
+        $this->methodClassLikeAnalyses   = [];
     }
 
     /** @return list<ClassNode> */
@@ -140,6 +215,30 @@ final class ClassCollector extends NodeVisitorAbstract
     public function getAnonymousClassNodes(): array
     {
         return $this->anonymousClassNodes;
+    }
+
+    /**
+     * References to class-likes made outside any named class-like scope, per
+     * file — procedural functions, top-level statements, and top-level
+     * anonymous class bodies.
+     *
+     * @return array<string, list<string>>
+     */
+    public function getFileReferences(): array
+    {
+        return $this->fileReferences;
+    }
+
+    /**
+     * Class-like instantiations (`new X`, with self/static/parent resolved to
+     * the class names they target), per file. `new` on an abstract class is
+     * fatal, so these are what an extended class needs to stay concrete.
+     *
+     * @return array<string, list<string>>
+     */
+    public function getFileInstantiations(): array
+    {
+        return $this->fileInstantiations;
     }
 
     public function enterNode(Node $node): null
@@ -203,18 +302,51 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
+        // Both instantiation handlers run on leave, once the NameResolver
+        // has resolved the nested name nodes (e.g. Base::class inside the
+        // class expression).
+        //
+        // Instantiations are tracked separately from plain references:
+        // `new` on an abstract class is fatal, so instantiation is the one
+        // usage that requires an extended class to stay concrete — type
+        // hints, instanceof checks, and ::class constants all keep working
+        // once a class becomes abstract.
+        if ($node instanceof New_) {
+            $this->collectInstantiation($node);
+
+            return null;
+        }
+
+        // A ReflectionClass construction call instantiates the reflected
+        // class when the reflection target is statically resolvable. The
+        // `new` receiver is checked first: it is the rare shape, so the
+        // common method call skips the name lowering entirely.
+        if (
+            ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
+            && $node->var instanceof New_
+            && $node->name instanceof Identifier
+            && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
+        ) {
+            $this->collectReflectionInstantiation($node->var);
+
+            return null;
+        }
+
         if (! $node instanceof ClassLike) {
             return null;
         }
 
         if (! $node->name instanceof Identifier) {
             // Anonymous classes never become ClassNodes, but the class they
-            // extend is still extended within the scanned paths.
+            // extend, the interfaces they implement, and the traits they use
+            // are still used within the scanned paths.
             if ($node instanceof Class_) {
                 $this->anonymousClassNodes[] = new AnonymousClassNode(
-                    file:    $this->currentFile,
-                    line:    $node->getStartLine(),
-                    extends: $node->extends instanceof Name ? $node->extends->toString() : null,
+                    file:       $this->currentFile,
+                    line:       $node->getStartLine(),
+                    extends:    $node->extends instanceof Name ? $node->extends->toString() : null,
+                    implements: $this->collectImplements($node),
+                    traits:     $this->collectTraits($node),
                 );
             }
 
@@ -223,6 +355,7 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $this->fileClassLikes[] = $node;
         array_pop($this->activeClassLikeAnalyses);
+        array_pop($this->activeClassLikeScopes);
 
         return null;
     }
@@ -234,10 +367,23 @@ final class ClassCollector extends NodeVisitorAbstract
             $this->collectClassLike($fileClassLike);
         }
 
+        if ($this->currentFileReferences !== []) {
+            $this->fileReferences[$this->currentFile] = array_values(array_unique($this->currentFileReferences));
+            $this->currentFileReferences              = [];
+        }
+
+        if ($this->currentFileInstantiations !== []) {
+            $this->fileInstantiations[$this->currentFile] = array_values(
+                array_unique($this->currentFileInstantiations)
+            );
+            $this->currentFileInstantiations              = [];
+        }
+
         $this->fileClassLikes          = [];
         $this->classLikeAnalysis       = [];
         $this->classLikeMethods        = [];
         $this->activeClassLikeAnalyses = [];
+        $this->activeClassLikeScopes   = [];
         $this->activeMethodIds         = [];
         $this->methodClassLikeAnalyses = [];
 
@@ -254,6 +400,12 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
         $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
+        $this->activeClassLikeScopes[]         = [
+            'name'    => $this->resolveClassName($classLike),
+            'extends' => $classLike instanceof Class_ && $classLike->extends instanceof Name
+                ? $classLike->extends->toString()
+                : null,
+        ];
 
         foreach ($classLike->getMethods() as $classMethod) {
             $methodId = spl_object_id($classMethod);
@@ -291,7 +443,33 @@ final class ClassCollector extends NodeVisitorAbstract
 
     private function collectNodeAnalysis(Node $node): void
     {
+        // A class-name-shaped string literal may feed `new $class`,
+        // `$obj instanceof $class`, class_exists(), container ids, and so on.
+        // Whether it appears inside a class-like or in procedural code, treat
+        // it as a file-level reference so the named class-like stays alive.
+        if ($node instanceof String_) {
+            if (
+                ! isset(self::KEYWORD_CONSTANTS[strtolower($node->value)])
+                && preg_match(self::CLASS_LIKE_STRING_PATTERN, $node->value) === 1
+            ) {
+                $this->currentFileReferences[] = $node->value;
+            }
+
+            return;
+        }
+
         if ($this->activeClassLikeAnalyses === []) {
+            // Outside any named class-like scope — procedural functions,
+            // top-level statements, top-level anonymous class bodies — a
+            // class-like reference still keeps the referenced class-like alive.
+            if ($node instanceof FullyQualified) {
+                $name = $node->toString();
+
+                if (! isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
+                    $this->currentFileReferences[] = $name;
+                }
+            }
+
             return;
         }
 
@@ -396,6 +574,128 @@ final class ClassCollector extends NodeVisitorAbstract
                 $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
             }
         }
+    }
+
+    private function collectInstantiation(New_ $new): void
+    {
+        $class = $new->class;
+
+        if ($class instanceof Name) {
+            $className = $this->resolveClassLikeName($class);
+
+            if ($className !== null) {
+                $this->currentFileInstantiations[] = $className;
+            }
+
+            return;
+        }
+
+        // Anonymous classes (`new class {}`) are tracked as
+        // AnonymousClassNodes; constant class expressions may still resolve
+        // below. Runtime-fed dynamic instantiations (`new \$class` from a
+        // parameter, unserialize(), containers) are part of the documented
+        // scanned-code boundary and resolve to nothing.
+        if (! $class instanceof Expr) {
+            return;
+        }
+
+        // `new (X::class)` / `new ('App\X')` constant class expressions.
+        $className = $this->resolveClassNameExpr($class);
+
+        if ($className !== null) {
+            $this->currentFileInstantiations[] = $className;
+        }
+    }
+
+    /**
+     * Resolve a class-like name node to a fully qualified name: either it is
+     * already fully qualified, or it is a self/static/parent keyword resolved
+     * against the enclosing class-like scope. Returns null when there is no
+     * scope to resolve against.
+     */
+    private function resolveClassLikeName(Name $name): ?string
+    {
+        if ($name instanceof FullyQualified) {
+            return $name->toString();
+        }
+
+        // After name resolution only self, static, and parent survive as
+        // plain names.
+        $scope = end($this->activeClassLikeScopes);
+
+        if ($scope === false) {
+            return null;
+        }
+
+        $relativeName = $name->toLowerString();
+
+        if ($relativeName === 'self' || $relativeName === 'static') {
+            return $scope['name'];
+        }
+
+        return $relativeName === 'parent' ? $scope['extends'] : null;
+    }
+
+    /**
+     * Resolve `new ReflectionClass(<constant class-name expression>)` to the
+     * reflected class name, or null for anything else.
+     */
+    private function resolveReflectionTarget(New_ $new): ?string
+    {
+        if (! $new->class instanceof Name) {
+            return null;
+        }
+
+        if (strcasecmp($new->class->toString(), 'ReflectionClass') !== 0) {
+            return null;
+        }
+
+        $firstArg = $new->args[0] ?? null;
+
+        if (! $firstArg instanceof Arg) {
+            return null;
+        }
+
+        return $this->resolveClassNameExpr($firstArg->value);
+    }
+
+    /**
+     * Record the reflected class as instantiated when a construction method is
+     * called chained on a `new` receiver that is a resolvable ReflectionClass.
+     * Anything else — variable-held reflections, runtime-named targets —
+     * records nothing: that is part of the documented scanned-code boundary.
+     */
+    private function collectReflectionInstantiation(New_ $new): void
+    {
+        $reflectionTarget = $this->resolveReflectionTarget($new);
+
+        if ($reflectionTarget !== null) {
+            $this->currentFileInstantiations[] = $reflectionTarget;
+        }
+    }
+
+    /**
+     * Evaluate a constant expression to a class-name string: 'App\X' literals,
+     * X::class (including self/static/parent::class), and concatenations of
+     * those. Anything depending on runtime values resolves to null.
+     */
+    private function resolveClassNameExpr(Expr $expr): ?string
+    {
+        if (! $expr instanceof String_ && ! $expr instanceof ClassConstFetch && ! $expr instanceof Concat) {
+            return null;
+        }
+
+        try {
+            $value = $this->constExprEvaluator->evaluateSilently($expr);
+        } catch (ConstExprEvaluationException) {
+            return null;
+        }
+
+        if (! is_string($value) || preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) !== 1) {
+            return null;
+        }
+
+        return $value;
     }
 
     private function addDependency(string $dependency): void

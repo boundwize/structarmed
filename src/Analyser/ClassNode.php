@@ -60,6 +60,9 @@ final class ClassNode
         public array $parentClasses = [],
         public array $parentInterfaces = [],
         public bool $isExtended = false,
+        public bool $isImplemented = false,
+        public bool $isReferenced = false,
+        public bool $isInstantiated = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
@@ -81,6 +84,48 @@ final class ClassNode
     public function setExtended(bool $isExtended): void
     {
         $this->isExtended = $isExtended;
+    }
+
+    /**
+     * Whether another scanned class implements this interface (directly or
+     * through inheritance) or another scanned interface extends it. Computed by
+     * the analyser for rules implementing UsedInterfaceAwareRuleInterface;
+     * false otherwise.
+     */
+    public function setImplemented(bool $isImplemented): void
+    {
+        $this->isImplemented = $isImplemented;
+    }
+
+    /**
+     * Whether another scanned class-like references this class-like — as a
+     * trait it uses, or as a dependency (type hint, instanceof, ::class,
+     * static call, ...). Computed by the analyser when a usage-aware rule is
+     * active; false otherwise.
+     */
+    public function setReferenced(bool $isReferenced): void
+    {
+        $this->isReferenced = $isReferenced;
+    }
+
+    /**
+     * Whether another scanned scope instantiates this class — `new X`, or a
+     * `new self`/`new static`/`new parent` resolving to it. Instantiation is
+     * the one usage that requires a class to stay concrete. Computed by the
+     * analyser when a usage-aware rule is active; false otherwise.
+     *
+     * Only a concrete named class can be an instantiation target — `new` on
+     * an abstract class, interface, trait, or enum is fatal — so marking any
+     * other class-like as instantiated is ignored. (Anonymous classes never
+     * become ClassNodes in the first place.)
+     */
+    public function setInstantiated(bool $isInstantiated): void
+    {
+        if ($isInstantiated && (! $this->isClass() || $this->isAbstract)) {
+            return;
+        }
+
+        $this->isInstantiated = $isInstantiated;
     }
 
     public function shortName(): string

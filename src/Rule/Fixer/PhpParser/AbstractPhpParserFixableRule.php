@@ -17,10 +17,21 @@ abstract readonly class AbstractPhpParserFixableRule implements FixableInterface
         return $this->fixerProcessor()->process(
             $ruleViolation->file,
             $nodeVisitor,
+            $this->shouldRemoveFileWhenEmpty(),
         );
     }
 
     abstract protected function createFixerVisitor(RuleViolation $ruleViolation): NodeVisitor;
+
+    /**
+     * Whether the fixed file should be deleted when the fix leaves no code
+     * behind — only declare/namespace/use boilerplate. Rules whose fix removes
+     * whole declarations opt in by returning true.
+     */
+    protected function shouldRemoveFileWhenEmpty(): bool
+    {
+        return false;
+    }
 
     private function fixerProcessor(): PhpParserFixerProcessor
     {

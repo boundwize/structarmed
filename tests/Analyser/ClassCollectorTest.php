@@ -62,6 +62,243 @@ final class ClassCollectorTest extends TestCase
         return $classCollector;
     }
 
+    public function testCollectsFileReferencesFromProceduralCode(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'function handle(Contract $contract): void {}' . "\n"
+            . 'function check(object $value): bool { return $value instanceof Contract; }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Contract']],
+            $classCollector->getFileReferences()
+        );
+    }
+
+    public function testDoesNotCollectFileReferencesFromClassBodies(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Checker { public function check(object $value): bool'
+            . ' { return $value instanceof Contract; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // References inside a named class-like land on its ClassNode
+        // dependencies, not in the file-level references.
+        $this->assertSame([], $classCollector->getFileReferences());
+    }
+
+    public function testCollectsClassNameShapedStringValuesAsFileReferences(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Checker { public function check(object $obj): bool {'
+            . ' $contract = \'App\\Contract\'; return $obj instanceof $contract; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Contract']],
+            $classCollector->getFileReferences()
+        );
+    }
+
+    public function testDoesNotCollectNonClassNameShapedStringValues(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Greeter { public function greet(): string {'
+            . ' $mode = true ? \'foo-bar\' : \'hello world\'; return $mode . \'123abc\' . \'\'; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame([], $classCollector->getFileReferences());
+    }
+
+    public function testCollectsInstantiations(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Factory { public function make(): object { return new Service(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Service']],
+            $classCollector->getFileInstantiations()
+        );
+        $this->assertSame([], $classCollector->getFileReferences());
+    }
+
+    public function testResolvesSelfStaticAndParentInstantiations(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'class Repository extends BaseRepository {' . "\n"
+            . '    public function one(): self { return new self(); }' . "\n"
+            . '    public function two(): static { return new static(); }' . "\n"
+            . '    public function three(): BaseRepository { return new parent(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Repository', 'App\BaseRepository']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testResolvesConstantClassExpressionInstantiations(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Maker {' . "\n"
+            . '    public function fromClassConstant(): object { return new (Base::class)(); }' . "\n"
+            . '    public function fromString(): object { return new (\'App\\StringBase\')(); }' . "\n"
+            . '    public function fromConcat(): object { return new (\'App\\\\\' . \'Joined\')(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Base', 'App\StringBase', 'App\Joined']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testResolvesSelfClassConstantInstantiation(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'class Registry { public function fresh(): object { return new (self::class)(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Registry']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testIgnoresRuntimeFedDynamicInstantiations(): void
+    {
+        // The class name flows in from a call site or property the collector
+        // cannot see — part of the documented scanned-code boundary.
+        $code = '<?php namespace App;' . "\n"
+            . 'function make(string $class): object { return new $class(); }' . "\n"
+            . 'final class Holder { public function __construct(private string $class) {}'
+            . ' public function make(): object { return new ($this->class)(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
+    public function testResolvesChainedReflectionConstruction(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Booter { public function boot(): object {'
+            . ' return (new \ReflectionClass(Base::class))->newInstance(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // ReflectionClass itself is instantiated, and so is the class it
+        // reflects.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['ReflectionClass', 'App\Base']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testResolvesNullsafeChainedReflectionConstruction(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Booter { public function boot(): ?object {'
+            . ' return (new \\ReflectionClass(\'App\\Child\'))?->newInstanceWithoutConstructor(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['ReflectionClass', 'App\Child']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testIgnoresReflectionConstructionWithUnresolvableTarget(): void
+    {
+        // Runtime-named targets and variable-held reflections stay within the
+        // documented scanned-code boundary — nothing is recorded for them.
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Booter { public function boot(\\ReflectionClass $r, string $name): object {'
+            . ' $other = new \\ReflectionClass($name); return $r->newInstance() ?? $other->newInstance(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['ReflectionClass']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testIgnoresNonReflectionChainedConstructionCalls(): void
+    {
+        // A newInstance() chained on something that is not a resolvable
+        // ReflectionClass records nothing for the chain — only the receiver's
+        // own `new` counts where resolvable.
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Booter { public function boot(object $x): mixed {'
+            . ' $a = (new Container())->newInstance(); $b = (new ($x::class))->newInstance();'
+            . ' $c = (new \\ReflectionClass())->newInstance(); return $a ?? $b ?? $c; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Container', 'ReflectionClass']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testIgnoresOrdinaryMethodCalls(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Caller { public function run(object $service): mixed {'
+            . ' return $service->handle(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
+    public function testIgnoresUnresolvableClassNameExpressions(): void
+    {
+        // Runtime-dependent class expressions and non-class-shaped strings
+        // resolve to nothing — no instantiation is recorded.
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Maker { public function make(string $suffix, object $obj): object {'
+            . ' $a = new (\'App\\\\\' . $suffix)(); $b = new ($obj::class)();'
+            . ' $c = new (\'not a class name!\')(); return $a ?? $b ?? $c; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
+    public function testDoesNotCollectAnonymousInstantiations(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Maker { public function make(): object { return new class {}; } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // Anonymous classes are tracked as AnonymousClassNodes, and their
+        // known declaration does not make any named class instantiable.
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
+    public function testIgnoresRelativeInstantiationOutsideClassScope(): void
+    {
+        // `new self` outside a class parses but cannot be resolved to a name;
+        // PHP itself rejects it at runtime.
+        $classCollector = $this->makeCollector('<?php namespace App; new self();');
+
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
     public function testCollectsFinalClass(): void
     {
         $classNode = $this->collect('<?php final class Foo {}');

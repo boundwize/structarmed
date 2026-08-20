@@ -603,9 +603,11 @@ final class AnalysisResultCacheTest extends TestCase
         $classNodes          = [$this->makeClassNode($sourceFile)];
         $anonymousClassNodes = [
             new AnonymousClassNode(
-                file:    $sourceFile,
-                line:    7,
-                extends: 'App\BaseHandler',
+                file:       $sourceFile,
+                line:       7,
+                extends:    'App\BaseHandler',
+                implements: ['App\Contract'],
+                traits:     ['App\Helper'],
             ),
         ];
 
@@ -618,6 +620,8 @@ final class AnalysisResultCacheTest extends TestCase
                 $classNodes,
                 null,
                 $anonymousClassNodes,
+                ['App\ReferencedInFunction'],
+                ['App\InstantiatedInFunction'],
             );
 
             $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
@@ -625,6 +629,8 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded['classNodes']);
             $this->assertEquals($anonymousClassNodes, $loaded['anonymousClassNodes']);
+            $this->assertSame(['App\ReferencedInFunction'], $loaded['fileReferences']);
+            $this->assertSame(['App\InstantiatedInFunction'], $loaded['fileInstantiations']);
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -658,6 +664,8 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded['classNodes']);
             $this->assertSame([], $loaded['anonymousClassNodes']);
+            $this->assertSame([], $loaded['fileReferences']);
+            $this->assertSame([], $loaded['fileInstantiations']);
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -675,6 +683,66 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'not an array' => ['invalid'];
         yield 'entry not an array' => [['invalid']];
         yield 'entry with invalid field types' => [[['file' => 1, 'line' => 'x', 'extends' => null]]];
+        yield 'entry with invalid implements' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'implements' => ['App\Contract', 1]]],
+        ];
+        yield 'entry with invalid traits' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'traits' => 'invalid']],
+        ];
+    }
+
+    public function testLoadClassNodesRejectsCorruptedFileReferencesPayload(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true);
+            $this->assertIsArray($payload);
+            $payload['fileReferences'] = ['App\Contract', 1];
+            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
+
+            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testLoadClassNodesRejectsCorruptedFileInstantiationsPayload(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true);
+            $this->assertIsArray($payload);
+            $payload['fileInstantiations'] = ['App\Base', 1];
+            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
+
+            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
     }
 
     #[DataProvider('corruptedAnonymousClassNodesProvider')]

@@ -7,20 +7,24 @@ namespace Boundwize\StructArmed\Analyser;
 /**
  * An anonymous class declaration (`new class ... {}`). Anonymous classes never
  * become ClassNodes — they cannot be referenced by name and no rule targets
- * them directly — but the class they extend is still extended within the
- * scanned paths, which extended-class-aware rules must take into account.
+ * them directly — but the class they extend, the interfaces they implement,
+ * and the traits they use are still used within the scanned paths, which
+ * usage-aware rules must take into account.
  *
  * The usage example is on MustBeFinalRule, which must skip if target class is extended by an anonymous class.
- *
- * Note: Other properties like anonymous class's traits, implements, etc may come
- * later if needed for future needed rules.
  */
 final readonly class AnonymousClassNode
 {
+    /**
+     * @param string[] $implements Interface names this anonymous class implements
+     * @param string[] $traits     Trait names this anonymous class uses
+     */
     public function __construct(
         public string $file,
         public int $line,
         public ?string $extends,
+        public array $implements = [],
+        public array $traits = [],
     ) {
     }
 }

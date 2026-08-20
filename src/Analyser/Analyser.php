@@ -24,6 +24,8 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
+use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
 use Boundwize\StructArmed\Util\Path;
 
 use function array_fill_keys;
@@ -83,6 +85,8 @@ final readonly class Analyser
         $classRules                = [];
         $layerAwareRules           = [];
         $hasExtendedClassAwareRule = false;
+        $hasUsedInterfaceAwareRule = false;
+        $hasUsedTraitAwareRule     = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -99,6 +103,14 @@ final readonly class Analyser
 
             if ($rule instanceof ExtendedClassAwareRuleInterface) {
                 $hasExtendedClassAwareRule = true;
+            }
+
+            if ($rule instanceof UsedInterfaceAwareRuleInterface) {
+                $hasUsedInterfaceAwareRule = true;
+            }
+
+            if ($rule instanceof UsedTraitAwareRuleInterface) {
+                $hasUsedTraitAwareRule = true;
             }
 
             if (! $rule instanceof ProjectRuleInterface) {
@@ -150,6 +162,18 @@ final readonly class Analyser
 
         if ($hasExtendedClassAwareRule) {
             $this->markExtendedClasses($classNodes, $extractionResult);
+        }
+
+        if ($hasUsedInterfaceAwareRule) {
+            $this->markImplementedInterfaces($classNodes, $extractionResult);
+        }
+
+        if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
+            $this->markReferencedClassLikes($classNodes, $extractionResult);
+        }
+
+        if ($hasExtendedClassAwareRule) {
+            $this->markInstantiatedClasses($classNodes, $extractionResult);
         }
 
         if ($withFileAnalysis) {
@@ -689,6 +713,150 @@ final readonly class Analyser
     }
 
     /**
+     * Flag every interface that a scanned class implements (directly or through
+     * inheritance) or another scanned interface extends, using the recursive
+     * parent chain resolved by {@see withRecursiveParents()}.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markImplementedInterfaces(array $classNodes, ExtractionResult $extractionResult): void
+    {
+        $implemented = [];
+
+        foreach ($classNodes as $classNode) {
+            foreach ($classNode->parentInterfaces as $parentInterface) {
+                $implemented[strtolower($parentInterface)] = true;
+            }
+        }
+
+        // Anonymous classes (`new class implements Foo {}`) have no ClassNode
+        // of their own, so the interfaces they implement are tracked separately.
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            foreach ($anonymousClassNode->implements as $interface) {
+                $implemented[strtolower($interface)] = true;
+            }
+        }
+
+        foreach ($classNodes as $classNode) {
+            // Only interfaces appear in parentInterfaces; classes, traits, and
+            // enums never do, so they are left with the default (not implemented).
+            if (isset($implemented[strtolower($classNode->className)])) {
+                $classNode->setImplemented(true);
+            }
+        }
+    }
+
+    /**
+     * Flag every class-like that another scanned class-like (class, trait, or
+     * enum) uses — as a trait, or by referencing it as a dependency: a type
+     * hint, an instanceof check, a ::class constant, a static call, and so on.
+     * Self-references are ignored: a class-like cannot keep itself alive.
+     * Usage is a direct declaration, so no recursive chain is needed: a
+     * class-like used only by another unused one stays flagged as used until
+     * its user is removed, at which point the next run reports it.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markReferencedClassLikes(array $classNodes, ExtractionResult $extractionResult): void
+    {
+        $used = [];
+
+        foreach ($classNodes as $classNode) {
+            foreach ($classNode->traits as $trait) {
+                $used[strtolower($trait)] = true;
+            }
+
+            // A node's own inheritance-clause names (and the imports that
+            // exist for them) are structural relations, not value references.
+            // Excluding them keeps "referenced" meaningful for the unresolved
+            // dynamic instantiation check below: a class extended by a child
+            // is not thereby a possible `new $class` target. The usage-aware
+            // deletion rules are unaffected — each combines this flag with its
+            // structural extended/implemented/trait marking.
+            $excludedKeys = [strtolower($classNode->className) => true];
+
+            if ($classNode->extends !== null) {
+                $excludedKeys[strtolower($classNode->extends)] = true;
+            }
+
+            foreach ([$classNode->implements, $classNode->interfaceExtends, $classNode->traits] as $clauseNames) {
+                foreach ($clauseNames as $clauseName) {
+                    $excludedKeys[strtolower($clauseName)] = true;
+                }
+            }
+
+            foreach ($classNode->dependencies as $dependency) {
+                $dependencyKey = strtolower($dependency);
+
+                if (! isset($excludedKeys[$dependencyKey])) {
+                    $used[$dependencyKey] = true;
+                }
+            }
+        }
+
+        // Anonymous classes (`new class { use Foo; }`) have no ClassNode of
+        // their own, so the traits they use are tracked separately.
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            foreach ($anonymousClassNode->traits as $trait) {
+                $used[strtolower($trait)] = true;
+            }
+        }
+
+        // References made outside any named class-like scope — procedural
+        // functions, top-level statements, top-level anonymous class bodies —
+        // have no ClassNode either, so they are tracked per file.
+        foreach ($extractionResult->fileReferences as $references) {
+            foreach ($references as $reference) {
+                $used[strtolower($reference)] = true;
+            }
+        }
+
+        // An instantiation is also a reference.
+        foreach ($extractionResult->fileInstantiations as $instantiations) {
+            foreach ($instantiations as $instantiation) {
+                $used[strtolower($instantiation)] = true;
+            }
+        }
+
+        foreach ($classNodes as $classNode) {
+            if (isset($used[strtolower($classNode->className)])) {
+                $classNode->setReferenced(true);
+            }
+        }
+    }
+
+    /**
+     * Flag every concrete class that another scanned scope instantiates —
+     * `new X` (with self/static/parent already resolved), a constant class
+     * expression such as `new (X::class)`, or a chained ReflectionClass
+     * construction with a resolvable target. No self-exclusion here: a class
+     * instantiating itself cannot become abstract either.
+     *
+     * Runtime-fed dynamic construction (`new $class` from a parameter,
+     * unserialize(), containers) resolves to nothing — it is part of the
+     * documented scanned-code boundary, handled with skipRule() or skip paths
+     * where such factories exist.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markInstantiatedClasses(array $classNodes, ExtractionResult $extractionResult): void
+    {
+        $instantiated = [];
+
+        foreach ($extractionResult->fileInstantiations as $instantiations) {
+            foreach ($instantiations as $instantiation) {
+                $instantiated[strtolower($instantiation)] = true;
+            }
+        }
+
+        foreach ($classNodes as $classNode) {
+            if (isset($instantiated[strtolower($classNode->className)])) {
+                $classNode->setInstantiated(true);
+            }
+        }
+    }
+
+    /**
      * @param list<ClassNode> $classNodes
      * @return list<ClassNode>
      */
@@ -852,6 +1020,8 @@ final readonly class Analyser
         $classNodes          = [];
         $fileAnalyses        = [];
         $anonymousClassNodes = [];
+        $fileReferences      = [];
+        $fileInstantiations  = [];
         $filesToParse        = [];
 
         foreach ($files as $file) {
@@ -872,6 +1042,14 @@ final readonly class Analyser
 
                 foreach ($cachedResult['anonymousClassNodes'] as $cachedAnonymousClassNode) {
                     $anonymousClassNodes[] = $cachedAnonymousClassNode;
+                }
+
+                if ($cachedResult['fileReferences'] !== []) {
+                    $fileReferences[$file] = $cachedResult['fileReferences'];
+                }
+
+                if ($cachedResult['fileInstantiations'] !== []) {
+                    $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
                 }
 
                 $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
@@ -896,6 +1074,14 @@ final readonly class Analyser
             foreach ($cachedResult['anonymousClassNodes'] as $cachedAnonymousClassNode) {
                 $anonymousClassNodes[] = $cachedAnonymousClassNode;
             }
+
+            if ($cachedResult['fileReferences'] !== []) {
+                $fileReferences[$file] = $cachedResult['fileReferences'];
+            }
+
+            if ($cachedResult['fileInstantiations'] !== []) {
+                $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
+            }
         }
 
         $progressHandler?->start(count($filesToParse));
@@ -903,7 +1089,13 @@ final readonly class Analyser
         if ($filesToParse === []) {
             $progressHandler?->finish();
 
-            return new ExtractionResult($classNodes, $fileAnalyses, $anonymousClassNodes);
+            return new ExtractionResult(
+                $classNodes,
+                $fileAnalyses,
+                $anonymousClassNodes,
+                $fileReferences,
+                $fileInstantiations,
+            );
         }
 
         $options = $analyserOptions ?? AnalyserOptions::parallel();
@@ -946,6 +1138,14 @@ final readonly class Analyser
             $fileAnalyses[$file] = $fileAnalysis;
         }
 
+        foreach ($parsedResult->fileReferences as $file => $parsedFileReferences) {
+            $fileReferences[$file] = $parsedFileReferences;
+        }
+
+        foreach ($parsedResult->fileInstantiations as $file => $parsedFileInstantiations) {
+            $fileInstantiations[$file] = $parsedFileInstantiations;
+        }
+
         foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
             $this->analysisResultCache?->storeClassNodes(
                 $fileToParse,
@@ -953,12 +1153,20 @@ final readonly class Analyser
                 $fileClassNodes,
                 $fileAnalyses[$fileToParse] ?? null,
                 $anonymousClassNodesByFile[$fileToParse] ?? [],
+                $fileReferences[$fileToParse] ?? [],
+                $fileInstantiations[$fileToParse] ?? [],
             );
         }
 
         $progressHandler?->finish();
 
-        return new ExtractionResult($classNodes, $fileAnalyses, $anonymousClassNodes);
+        return new ExtractionResult(
+            $classNodes,
+            $fileAnalyses,
+            $anonymousClassNodes,
+            $fileReferences,
+            $fileInstantiations,
+        );
     }
 
     /**

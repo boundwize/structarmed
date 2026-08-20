@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 
 return Architecture::define()
     ->layer('Analyser', 'src/Analyser/')
@@ -52,4 +53,8 @@ return Architecture::define()
             __DIR__ . '/tests/Analyser/Parallel/MockFunctions.php',
         ],
     ])
-    ->withPresets(Preset::PSR1(), Preset::PSR12(), Preset::PSR4());
+    ->withPresets(Preset::PSR1(), Preset::PSR12(), Preset::PSR4(), Preset::YAGNI())
+    ->rule(
+        'source.must_be_final',
+        new MustBeFinalRule(layer: 'Source')
+    );

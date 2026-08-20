@@ -269,6 +269,113 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->isExtended);
     }
 
+    public function testSetImplementedTogglesIsImplementedFlag(): void
+    {
+        $classNode = new ClassNode(
+            className:   'App\\Domain\\OrderRepositoryInterface',
+            file:        '/src/OrderRepositoryInterface.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     false,
+            isInterface: true,
+            isReadonly:  false,
+        );
+
+        $this->assertFalse($classNode->isImplemented);
+
+        $classNode->setImplemented(true);
+        $this->assertTrue($classNode->isImplemented);
+
+        $classNode->setImplemented(false);
+        $this->assertFalse($classNode->isImplemented);
+    }
+
+    public function testSetReferencedTogglesIsReferencedFlag(): void
+    {
+        $classNode = new ClassNode(
+            className:   'App\\Domain\\TimestampableTrait',
+            file:        '/src/TimestampableTrait.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     false,
+            isInterface: false,
+            isReadonly:  false,
+            isTrait:     true,
+        );
+
+        $this->assertFalse($classNode->isReferenced);
+
+        $classNode->setReferenced(true);
+        $this->assertTrue($classNode->isReferenced);
+
+        $classNode->setReferenced(false);
+        $this->assertFalse($classNode->isReferenced);
+    }
+
+    public function testSetInstantiatedTogglesIsInstantiatedFlag(): void
+    {
+        $classNode = new ClassNode(
+            className:   'App\\Domain\\BaseRepository',
+            file:        '/src/BaseRepository.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     false,
+            isInterface: false,
+            isReadonly:  false,
+        );
+
+        $this->assertFalse($classNode->isInstantiated);
+
+        $classNode->setInstantiated(true);
+        $this->assertTrue($classNode->isInstantiated);
+
+        $classNode->setInstantiated(false);
+        $this->assertFalse($classNode->isInstantiated);
+    }
+
+    public function testSetInstantiatedIsIgnoredForNonInstantiableClassLikes(): void
+    {
+        $makeNode = static fn (
+            bool $isAbstract = false,
+            bool $isInterface = false,
+            bool $isTrait = false,
+            bool $isEnum = false,
+        ): ClassNode => new ClassNode(
+            className:   'App\\Domain\\SomeClassLike',
+            file:        '/src/SomeClassLike.php',
+            line:        5,
+            layer:       'Domain',
+            extends:     null,
+            isAbstract:  $isAbstract,
+            isFinal:     false,
+            isInterface: $isInterface,
+            isReadonly:  false,
+            isTrait:     $isTrait,
+            isEnum:      $isEnum,
+        );
+
+        $nonInstantiables = [
+            'abstract class' => $makeNode(isAbstract: true),
+            'interface'      => $makeNode(isInterface: true),
+            'trait'          => $makeNode(isTrait: true),
+            'enum'           => $makeNode(isEnum: true),
+        ];
+
+        foreach ($nonInstantiables as $kind => $classNode) {
+            $classNode->setInstantiated(true);
+
+            // `new` on these class-likes is fatal, so they can never be an
+            // instantiation target.
+            $this->assertFalse($classNode->isInstantiated, $kind);
+        }
+    }
+
     public function testDependsOnMatchesExistingClassesExactly(): void
     {
         $classNode = new ClassNode(
