@@ -160,11 +160,7 @@ final readonly class Analyser
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes);
 
-        $hasClassLikeAwareRule = $hasExtendedClassAwareRule
-            || $hasUsedInterfaceAwareRule
-            || $hasUsedTraitAwareRule;
-
-        if ($hasClassLikeAwareRule) {
+        if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
             $this->markClassLikeUsage(
                 $classNodes,
                 $extractionResult,
