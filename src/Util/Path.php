@@ -8,6 +8,7 @@ use function ltrim;
 use function preg_replace;
 use function realpath;
 use function rtrim;
+use function str_contains;
 use function str_ends_with;
 use function str_replace;
 use function str_starts_with;
@@ -36,7 +37,10 @@ final class Path
 
         $isUnc = str_starts_with($path, '\\\\') || str_starts_with($path, '//');
         $path  = str_replace('\\', '/', $path);
-        $path  = (string) preg_replace('#/+#', '/', $path);
+
+        if (str_contains($path, '//')) {
+            $path = (string) preg_replace('#/+#', '/', $path);
+        }
 
         if ($isUnc) {
             $path = '//' . ltrim($path, '/');

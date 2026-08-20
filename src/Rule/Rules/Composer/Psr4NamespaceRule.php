@@ -154,9 +154,7 @@ final class Psr4NamespaceRule implements RuleInterface
      */
     private function mappingsFor(string $basePath): array
     {
-        if (! isset($this->mappingsByBasePath[$basePath])) {
-            $this->mappingsByBasePath[$basePath] = $this->psr4PathResolver->namespacePaths($basePath);
-        }
+        $this->mappingsByBasePath[$basePath] ??= $this->psr4PathResolver->namespacePaths($basePath);
 
         return $this->mappingsByBasePath[$basePath];
     }
