@@ -36,6 +36,7 @@ use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Param;
 use PhpParser\Node\Scalar\String_;
+use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Case_;
 use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Class_;
@@ -66,7 +67,6 @@ use function array_unique;
 use function array_values;
 use function count;
 use function end;
-use function in_array;
 use function is_string;
 use function preg_match;
 use function spl_object_id;
@@ -114,6 +114,42 @@ final class ClassCollector extends NodeVisitorAbstract
         'newlazyproxy'                  => true,
     ];
 
+    /**
+     * Node classes counted as cyclomatic-complexity branches. The parser only
+     * ever instantiates these exact classes, so a single ::class hash lookup
+     * replaces an instanceof chain on the per-node hot path.
+     */
+    private const COMPLEXITY_BRANCH_NODES = [
+        If_::class        => true,
+        ElseIf_::class    => true,
+        For_::class       => true,
+        Foreach_::class   => true,
+        While_::class     => true,
+        Do_::class        => true,
+        Case_::class      => true,
+        Catch_::class     => true,
+        Ternary::class    => true,
+        BooleanAnd::class => true,
+        BooleanOr::class  => true,
+        LogicalAnd::class => true,
+        LogicalOr::class  => true,
+        MatchArm::class   => true,
+    ];
+
+    /**
+     * Node classes that map to a fixed language-construct name. Exit_ and
+     * Include_ are handled separately: their names depend on node data.
+     */
+    private const LANGUAGE_CONSTRUCT_NODES = [
+        Echo_::class  => 'echo',
+        Print_::class => 'print',
+        Isset_::class => 'isset',
+        Empty_::class => 'empty',
+        Unset_::class => 'unset',
+        Eval_::class  => 'eval',
+        List_::class  => 'list',
+    ];
+
     /** @var list<ClassNode> */
     private array $nodes = [];
 
@@ -151,7 +187,7 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var ClassLike[] */
     private array $fileClassLikes = [];
 
-    /** @var string[] */
+    /** @var array<string, true> */
     private array $fileFunctions = [];
 
     /** @var array<int, ClassLikeAnalysis> */
@@ -243,50 +279,55 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function enterNode(Node $node): null
     {
-        if ($node instanceof Namespace_) {
-            $this->currentNamespaceUses = [];
+        // The scope-tracking node types are all statements, so the far more
+        // frequent expression/name/identifier nodes skip their checks with a
+        // single instanceof.
+        if ($node instanceof Stmt) {
+            if ($node instanceof Namespace_) {
+                $this->currentNamespaceUses = [];
 
-            return null;
-        }
-
-        if ($node instanceof Use_) {
-            foreach ($node->uses as $use) {
-                $this->currentNamespaceUses[] = $use->name->toString();
+                return null;
             }
 
-            return null;
-        }
+            if ($node instanceof Use_) {
+                foreach ($node->uses as $use) {
+                    $this->currentNamespaceUses[] = $use->name->toString();
+                }
 
-        if ($node instanceof GroupUse) {
-            $prefix = $node->prefix->toString();
-
-            foreach ($node->uses as $use) {
-                $this->currentNamespaceUses[] = $prefix . '\\' . $use->name->toString();
+                return null;
             }
 
-            return null;
-        }
+            if ($node instanceof GroupUse) {
+                $prefix = $node->prefix->toString();
 
-        if ($node instanceof Function_) {
-            if (isset($node->namespacedName)) {
-                $this->fileFunctions[] = $node->namespacedName->toString();
+                foreach ($node->uses as $use) {
+                    $this->currentNamespaceUses[] = $prefix . '\\' . $use->name->toString();
+                }
+
+                return null;
             }
 
-            return null;
-        }
+            if ($node instanceof Function_) {
+                if (isset($node->namespacedName)) {
+                    $this->fileFunctions[$node->namespacedName->toString()] = true;
+                }
 
-        if ($node instanceof ClassLike) {
-            if ($node->name instanceof Identifier) {
-                $this->startClassLikeAnalysis($node);
+                return null;
             }
 
-            return null;
-        }
+            if ($node instanceof ClassLike) {
+                if ($node->name instanceof Identifier) {
+                    $this->startClassLikeAnalysis($node);
+                }
 
-        if ($node instanceof ClassMethod) {
-            $this->startMethodAnalysis($node);
+                return null;
+            }
 
-            return null;
+            if ($node instanceof ClassMethod) {
+                $this->startMethodAnalysis($node);
+
+                return null;
+            }
         }
 
         $this->collectNodeAnalysis($node);
@@ -296,38 +337,40 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function leaveNode(Node $node): null
     {
-        if ($node instanceof ClassMethod) {
-            $this->finishMethodAnalysis($node);
-
-            return null;
-        }
-
         // Both instantiation handlers run on leave, once the NameResolver
         // has resolved the nested name nodes (e.g. Base::class inside the
-        // class expression).
-        //
-        // Instantiations are tracked separately from plain references:
-        // `new` on an abstract class is fatal, so instantiation is the one
-        // usage that requires an extended class to stay concrete — type
-        // hints, instanceof checks, and ::class constants all keep working
-        // once a class becomes abstract.
-        if ($node instanceof New_) {
-            $this->collectInstantiation($node);
+        // class expression). They only match expressions, and ClassMethod /
+        // ClassLike are statements, so one instanceof splits the two groups.
+        if ($node instanceof Expr) {
+            // Instantiations are tracked separately from plain references:
+            // `new` on an abstract class is fatal, so instantiation is the one
+            // usage that requires an extended class to stay concrete — type
+            // hints, instanceof checks, and ::class constants all keep working
+            // once a class becomes abstract.
+            if ($node instanceof New_) {
+                $this->collectInstantiation($node);
+
+                return null;
+            }
+
+            // A ReflectionClass construction call instantiates the reflected
+            // class when the reflection target is statically resolvable. The
+            // `new` receiver is checked first: it is the rare shape, so the
+            // common method call skips the name lowering entirely.
+            if (
+                ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
+                && $node->var instanceof New_
+                && $node->name instanceof Identifier
+                && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
+            ) {
+                $this->collectReflectionInstantiation($node->var);
+            }
 
             return null;
         }
 
-        // A ReflectionClass construction call instantiates the reflected
-        // class when the reflection target is statically resolvable. The
-        // `new` receiver is checked first: it is the rare shape, so the
-        // common method call skips the name lowering entirely.
-        if (
-            ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
-            && $node->var instanceof New_
-            && $node->name instanceof Identifier
-            && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
-        ) {
-            $this->collectReflectionInstantiation($node->var);
+        if ($node instanceof ClassMethod) {
+            $this->finishMethodAnalysis($node);
 
             return null;
         }
@@ -458,25 +501,46 @@ final class ClassCollector extends NodeVisitorAbstract
             return;
         }
 
-        if ($this->activeClassLikeAnalyses === []) {
-            // Outside any named class-like scope — procedural functions,
-            // top-level statements, top-level anonymous class bodies — a
-            // class-like reference still keeps the referenced class-like alive.
-            if ($node instanceof FullyQualified) {
-                $name = $node->toString();
+        if ($node instanceof FullyQualified) {
+            $name = $node->toString();
 
-                if (! isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
-                    $this->currentFileReferences[] = $name;
-                }
+            if (isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
+                return;
+            }
+
+            if ($this->activeClassLikeAnalyses === []) {
+                // Outside any named class-like scope — procedural functions,
+                // top-level statements, top-level anonymous class bodies — a
+                // class-like reference still keeps the referenced class-like
+                // alive.
+                $this->currentFileReferences[] = $name;
+
+                return;
+            }
+
+            $this->addDependency($name);
+
+            return;
+        }
+
+        if ($this->activeClassLikeAnalyses === []) {
+            return;
+        }
+
+        // Branch nodes (conditions, loops, boolean operators) are among the
+        // most frequent remaining node types, so they dispatch on one hash
+        // lookup before the rarer per-type checks below.
+        if (isset(self::COMPLEXITY_BRANCH_NODES[$node::class])) {
+            foreach ($this->activeMethodIds as $activeMethodId) {
+                $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
             }
 
             return;
         }
 
-        if ($node instanceof FullyQualified) {
-            $name = $node->toString();
-            if (! isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
-                $this->addDependency($name);
+        if ($node instanceof Variable) {
+            if (is_string($node->name) && isset(self::SUPERGLOBALS[$node->name])) {
+                $this->addSuperglobal('$' . $node->name);
             }
 
             return;
@@ -508,18 +572,6 @@ final class ClassCollector extends NodeVisitorAbstract
             return;
         }
 
-        if ($node instanceof Echo_) {
-            $this->addLanguageConstruct('echo');
-
-            return;
-        }
-
-        if ($node instanceof Print_) {
-            $this->addLanguageConstruct('print');
-
-            return;
-        }
-
         if ($node instanceof Include_) {
             $this->addLanguageConstruct(match ($node->type) {
                 Include_::TYPE_REQUIRE      => 'require',
@@ -531,48 +583,10 @@ final class ClassCollector extends NodeVisitorAbstract
             return;
         }
 
-        if ($node instanceof Isset_) {
-            $this->addLanguageConstruct('isset');
+        $languageConstruct = self::LANGUAGE_CONSTRUCT_NODES[$node::class] ?? null;
 
-            return;
-        }
-
-        if ($node instanceof Empty_) {
-            $this->addLanguageConstruct('empty');
-
-            return;
-        }
-
-        if ($node instanceof Unset_) {
-            $this->addLanguageConstruct('unset');
-
-            return;
-        }
-
-        if ($node instanceof Eval_) {
-            $this->addLanguageConstruct('eval');
-
-            return;
-        }
-
-        if ($node instanceof List_) {
-            $this->addLanguageConstruct('list');
-
-            return;
-        }
-
-        if ($node instanceof Variable) {
-            if (is_string($node->name) && isset(self::SUPERGLOBALS[$node->name])) {
-                $this->addSuperglobal('$' . $node->name);
-            }
-
-            return;
-        }
-
-        if ($this->activeMethodIds !== [] && $this->isComplexityBranch($node)) {
-            foreach ($this->activeMethodIds as $activeMethodId) {
-                $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
-            }
+        if ($languageConstruct !== null) {
+            $this->addLanguageConstruct($languageConstruct);
         }
     }
 
@@ -737,9 +751,8 @@ final class ClassCollector extends NodeVisitorAbstract
         $methods          = $this->collectMethods($classLikeMethods, $analysis['complexityByMethodId']);
         $implements       = $this->collectImplements($classLike);
         $interfaceExtends = $this->collectInterfaceExtends($classLike);
-        $traits           = $this->collectTraits($classLike);
-        $constants        = $this->collectConstants($classLike);
-        $properties       = $this->collectProperties($classLike, $classLikeMethods);
+
+        [$traits, $constants, $properties] = $this->collectMembers($classLike, $classLikeMethods);
 
         $this->nodes[] = new ClassNode(
             className:          $className,
@@ -770,56 +783,60 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * @return ConstantNode[]
-     */
-    private function collectConstants(ClassLike $classLike): array
-    {
-        $constants = [];
-
-        foreach ($classLike->stmts as $stmt) {
-            if (! $stmt instanceof ClassConst) {
-                continue;
-            }
-
-            $visibility            = $this->resolveVisibilityName($stmt);
-            $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
-
-            foreach ($stmt->consts as $const) {
-                $constants[] = new ConstantNode(
-                    name:                 (string) $const->name,
-                    visibility:           $visibility,
-                    hasExplicitVisibility: $hasExplicitVisibility,
-                    line:                 $const->getStartLine(),
-                );
-            }
-        }
-
-        return $constants;
-    }
-
-    /**
+     * Collect traits, constants, and properties in a single pass over the
+     * class-like statements instead of one loop per member kind.
+     *
      * @param array<int, ClassMethod> $classLikeMethods
-     * @return PropertyNode[]
+     * @return array{0: string[], 1: ConstantNode[], 2: PropertyNode[]}
      */
-    private function collectProperties(ClassLike $classLike, array $classLikeMethods): array
+    private function collectMembers(ClassLike $classLike, array $classLikeMethods): array
     {
-        $properties = [];
+        $isInterface = $classLike instanceof Interface_;
+        $traits      = [];
+        $constants   = [];
+        $properties  = [];
 
         foreach ($classLike->stmts as $stmt) {
-            if (! $stmt instanceof Property) {
+            if ($stmt instanceof TraitUse) {
+                if ($isInterface) {
+                    continue;
+                }
+
+                foreach ($stmt->traits as $trait) {
+                    $traits[] = $trait->toString();
+                }
+
                 continue;
             }
 
-            $visibility            = $this->resolveVisibilityName($stmt);
-            $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
+            if ($stmt instanceof ClassConst) {
+                $visibility            = $this->resolveVisibilityName($stmt);
+                $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
 
-            foreach ($stmt->props as $prop) {
-                $properties[] = new PropertyNode(
-                    name:                 (string) $prop->name,
-                    visibility:           $visibility,
-                    hasExplicitVisibility: $hasExplicitVisibility,
-                    line:                 $prop->getStartLine(),
-                );
+                foreach ($stmt->consts as $const) {
+                    $constants[] = new ConstantNode(
+                        name:                 (string) $const->name,
+                        visibility:           $visibility,
+                        hasExplicitVisibility: $hasExplicitVisibility,
+                        line:                 $const->getStartLine(),
+                    );
+                }
+
+                continue;
+            }
+
+            if ($stmt instanceof Property) {
+                $visibility            = $this->resolveVisibilityName($stmt);
+                $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
+
+                foreach ($stmt->props as $prop) {
+                    $properties[] = new PropertyNode(
+                        name:                 (string) $prop->name,
+                        visibility:           $visibility,
+                        hasExplicitVisibility: $hasExplicitVisibility,
+                        line:                 $prop->getStartLine(),
+                    );
+                }
             }
         }
 
@@ -845,7 +862,7 @@ final class ClassCollector extends NodeVisitorAbstract
             break;
         }
 
-        return $properties;
+        return [$traits, $constants, $properties];
     }
 
     private function resolveClassName(ClassLike $classLike): string
@@ -892,32 +909,15 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $namespacedName = $name->getAttribute('namespacedName');
 
-        if (
-            $namespacedName instanceof Name
-            && in_array($namespacedName->toString(), $this->fileFunctions, true)
-        ) {
-            return $namespacedName->toString();
+        if ($namespacedName instanceof Name) {
+            $namespacedNameString = $namespacedName->toString();
+
+            if (isset($this->fileFunctions[$namespacedNameString])) {
+                return $namespacedNameString;
+            }
         }
 
         return $functionName;
-    }
-
-    private function isComplexityBranch(Node $node): bool
-    {
-        return $node instanceof If_
-            || $node instanceof ElseIf_
-            || $node instanceof For_
-            || $node instanceof Foreach_
-            || $node instanceof While_
-            || $node instanceof Do_
-            || $node instanceof Case_
-            || $node instanceof Catch_
-            || $node instanceof Ternary
-            || $node instanceof BooleanAnd
-            || $node instanceof BooleanOr
-            || $node instanceof LogicalAnd
-            || $node instanceof LogicalOr
-            || $node instanceof MatchArm;
     }
 
     /**
