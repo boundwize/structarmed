@@ -492,8 +492,8 @@ final class ClassCollector extends NodeVisitorAbstract
         // it as a file-level reference so the named class-like stays alive.
         if ($node instanceof String_) {
             if (
-                ! isset(self::KEYWORD_CONSTANTS[strtolower($node->value)])
-                && preg_match(self::CLASS_LIKE_STRING_PATTERN, $node->value) === 1
+                preg_match(self::CLASS_LIKE_STRING_PATTERN, $node->value) === 1
+                && ! isset(self::KEYWORD_CONSTANTS[strtolower($node->value)])
             ) {
                 $this->currentFileReferences[] = $node->value;
             }
