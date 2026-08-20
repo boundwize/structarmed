@@ -586,7 +586,13 @@ final readonly class Analyser
         array $inheritanceDependencyMap,
         array &$resolvedInheritedDependencies
     ): array {
-        $dependencies = $dependencyMap[$className] ?? [];
+        // Associative set keeps first-occurrence order and dedupes on insert,
+        // avoiding a list-then-array_unique() pass over the accumulated closure.
+        $dependencies = [];
+
+        foreach ($dependencyMap[$className] ?? [] as $dependency) {
+            $dependencies[$dependency] = true;
+        }
 
         foreach ($inheritanceDependencyMap[$className] ?? [] as $dependency) {
             $cycleDetected = false;
@@ -600,11 +606,11 @@ final readonly class Analyser
             );
 
             foreach ($resolved as $resolvedDependency) {
-                $dependencies[] = $resolvedDependency;
+                $dependencies[$resolvedDependency] = true;
             }
         }
 
-        return array_values(array_unique($dependencies));
+        return array_keys($dependencies);
     }
 
     /**
@@ -622,22 +628,21 @@ final readonly class Analyser
         array $seen,
         bool &$cycleDetected
     ): array {
-        $resolvedDependencies = [$dependency];
-
         if (isset($seen[$dependency])) {
             $cycleDetected = true;
 
-            return $resolvedDependencies;
+            return [$dependency];
         }
 
         if (isset($resolvedInheritedDependencies[$dependency])) {
             return $resolvedInheritedDependencies[$dependency];
         }
 
-        $hasCycle = false;
+        $resolvedDependencies = [$dependency => true];
+        $hasCycle             = false;
 
         foreach ($dependencyMap[$dependency] ?? [] as $mappedDependency) {
-            $resolvedDependencies[] = $mappedDependency;
+            $resolvedDependencies[$mappedDependency] = true;
         }
 
         $seen += [$dependency => true];
@@ -654,13 +659,13 @@ final readonly class Analyser
             );
 
             foreach ($resolved as $resolvedDependency) {
-                $resolvedDependencies[] = $resolvedDependency;
+                $resolvedDependencies[$resolvedDependency] = true;
             }
 
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        $resolvedDependencies = array_values(array_unique($resolvedDependencies));
+        $resolvedDependencies = array_keys($resolvedDependencies);
 
         if (! $hasCycle) {
             $resolvedInheritedDependencies[$dependency] = $resolvedDependencies;
