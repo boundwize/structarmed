@@ -116,6 +116,67 @@ return Architecture::define()
     );
 ```
 
+## Reading Usage Flags In A Custom Rule
+
+Every `ClassNode` carries four usage flags describing how the class-like is used elsewhere in the scanned paths:
+
+| Flag | Meaning |
+| --- | --- |
+| `$classNode->isExtended` | Another scanned class (or anonymous class) extends this class, directly or through inheritance |
+| `$classNode->isImplemented` | A scanned class implements this interface (directly or through inheritance), or another scanned interface extends it |
+| `$classNode->isReferenced` | Another scanned scope references it as a dependency: a type hint, an `instanceof` check, a `::class` constant, a static call, a trait use, a class-name string, and so on |
+| `$classNode->isInstantiated` | Another scanned scope instantiates it: `new X`, `new self`/`static`/`parent`, a constant class expression such as `new (X::class)`, or a resolvable `ReflectionClass` construction |
+
+Collecting this usage information costs extra analysis time, so the analyser only computes it when an active rule declares that it needs it. A custom rule declares that by implementing one of three marker interfaces instead of the plain `Boundwize\StructArmed\Rule\RuleInterface` (each marker extends it, so no other change is needed):
+
+| Marker interface | Flags populated |
+| --- | --- |
+| `Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface` | `$isExtended`, `$isReferenced`, `$isInstantiated` |
+| `Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface` | `$isImplemented`, `$isReferenced` |
+| `Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface` | `$isReferenced` |
+
+Without a matching marker on at least one active rule, the corresponding flags keep their default `false` — reading them from a rule that only implements `RuleInterface` reports every class-like as unused.
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
+
+use function sprintf;
+
+final readonly class ContractMustBeImplementedRule implements UsedInterfaceAwareRuleInterface
+{
+    public function appliesTo(ClassNode $classNode): bool
+    {
+        return $classNode->isInterface
+            && $classNode->isInLayer('Contracts');
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        if ($classNode->isImplemented || $classNode->isReferenced) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:   sprintf('Contract [%s] must be implemented or referenced', $classNode->className),
+            file:      $classNode->file,
+            line:      $classNode->line,
+            className: $classNode->className,
+            layer:     $classNode->layer,
+        );
+    }
+}
+```
+
+The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedInterfaceRule` implements `UsedInterfaceAwareRuleInterface`, `MustBeUsedTraitRule` implements `UsedTraitAwareRuleInterface`, and `MustBeUsedAbstractClassRule` and `ExtendedClassMustBeAbstractOrInstantiatedRule` implement `ExtendedClassAwareRuleInterface`.
+
+Trade-off: only usage within the scanned paths is known. A class-like used solely by a consumer outside the scan — a vendor package, an unscanned directory, runtime-fed dynamic construction — is reported as if unused. Widen the scan, or use `skipRule()` and skip paths where such consumers exist.
+
 ## Making A Custom Rule Fixable
 
 Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
