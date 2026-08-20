@@ -9,8 +9,8 @@ use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
 use PhpParser\Node;
+use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
-use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
 use PhpParser\Node\Expr\BinaryOp\Concat;
@@ -61,7 +61,6 @@ use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 
-use function array_keys;
 use function array_pop;
 use function array_unique;
 use function array_values;
@@ -71,6 +70,7 @@ use function in_array;
 use function is_string;
 use function preg_match;
 use function spl_object_id;
+use function strcasecmp;
 use function strtolower;
 
 final class ClassCollector extends NodeVisitorAbstract
@@ -102,20 +102,9 @@ final class ClassCollector extends NodeVisitorAbstract
         '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+)*+$/';
 
     /**
-     * Sentinel recorded in the file instantiations when a dynamic `new` has no
-     * statically known class-name candidates (e.g. `new $class` on a function
-     * parameter). Can never collide with a real class name. The analyser then
-     * treats referenced class-likes as possibly instantiated, so a factory
-     * target passed in as `X::class` is not fixed into an abstract class.
-     */
-    public const UNRESOLVED_INSTANTIATION = '*';
-
-    /**
      * Method names of the ReflectionClass object-construction APIs. Calling
-     * any of them instantiates a class the collector cannot determine, so the
-     * call records {@see self::UNRESOLVED_INSTANTIATION}. Matching by method
-     * name alone over-approximates (any receiver type matches) — the safe
-     * direction for a fixer that would otherwise make a class abstract.
+     * one chained on a `new ReflectionClass(<resolvable class name>)` receiver
+     * instantiates the reflected class.
      */
     private const REFLECTION_CONSTRUCTION_METHODS = [
         'newinstance'                   => true,
@@ -142,23 +131,6 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /** @var list<string> */
     private array $currentFileInstantiations = [];
-
-    /**
-     * Constant class-name strings each variable may hold (a union across all
-     * of its resolvable assignments), so `new $variable` instantiations can be
-     * resolved to every possible target.
-     *
-     * @var array<string, array<string, true>>
-     */
-    private array $variableClassNames = [];
-
-    /**
-     * Variables that received at least one statically unresolvable assignment,
-     * so `new $variable` cannot claim to know every possible target.
-     *
-     * @var array<string, true>
-     */
-    private array $variableUnknownAssignments = [];
 
     private readonly ConstExprEvaluator $constExprEvaluator;
 
@@ -220,19 +192,17 @@ final class ClassCollector extends NodeVisitorAbstract
 
     public function setCurrentFile(string $file): void
     {
-        $this->currentFile                = $file;
-        $this->currentFileReferences      = [];
-        $this->currentFileInstantiations  = [];
-        $this->variableClassNames         = [];
-        $this->variableUnknownAssignments = [];
-        $this->currentNamespaceUses       = [];
-        $this->fileClassLikes             = [];
-        $this->fileFunctions              = [];
-        $this->classLikeAnalysis          = [];
-        $this->classLikeMethods           = [];
-        $this->activeClassLikeAnalyses    = [];
-        $this->activeMethodIds            = [];
-        $this->methodClassLikeAnalyses    = [];
+        $this->currentFile               = $file;
+        $this->currentFileReferences     = [];
+        $this->currentFileInstantiations = [];
+        $this->currentNamespaceUses      = [];
+        $this->fileClassLikes            = [];
+        $this->fileFunctions             = [];
+        $this->classLikeAnalysis         = [];
+        $this->classLikeMethods          = [];
+        $this->activeClassLikeAnalyses   = [];
+        $this->activeMethodIds           = [];
+        $this->methodClassLikeAnalyses   = [];
     }
 
     /** @return list<ClassNode> */
@@ -332,17 +302,10 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
-        // Both run on leave, once the NameResolver has resolved the nested
-        // name nodes (e.g. Base::class inside the assigned expression).
+        // Both instantiation handlers run on leave, once the NameResolver
+        // has resolved the nested name nodes (e.g. Base::class inside the
+        // class expression).
         //
-        // A variable assigned a constant class-name value may feed a later
-        // `new $variable`.
-        if ($node instanceof Assign) {
-            $this->trackVariableClassName($node);
-
-            return null;
-        }
-
         // Instantiations are tracked separately from plain references:
         // `new` on an abstract class is fatal, so instantiation is the one
         // usage that requires an extended class to stay concrete — type
@@ -350,6 +313,18 @@ final class ClassCollector extends NodeVisitorAbstract
         // once a class becomes abstract.
         if ($node instanceof New_) {
             $this->collectInstantiation($node);
+
+            return null;
+        }
+
+        // A ReflectionClass construction call instantiates the reflected
+        // class when the reflection target is statically resolvable.
+        if (
+            ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
+            && $node->name instanceof Identifier
+            && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
+        ) {
+            $this->collectReflectionInstantiation($node);
 
             return null;
         }
@@ -478,32 +453,6 @@ final class ClassCollector extends NodeVisitorAbstract
             }
 
             return;
-        }
-
-        // Reflection construction APIs and unserialize() instantiate a class
-        // the collector cannot pin down statically, exactly like an
-        // unresolvable `new $class` — the unresolved marker keeps classes
-        // concrete.
-        if (
-            ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
-            && $node->name instanceof Identifier
-            && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
-        ) {
-            $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
-        }
-
-        if (
-            $node instanceof FuncCall
-            && $node->name instanceof Name
-            && $node->name->toLowerString() === 'unserialize'
-        ) {
-            $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
-        }
-
-        // eval() can construct anything; it is additionally recorded as a
-        // language construct for in-class usage rules further down.
-        if ($node instanceof Eval_) {
-            $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
         }
 
         if ($this->activeClassLikeAnalyses === []) {
@@ -639,40 +588,20 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         // Anonymous classes (`new class {}`) are tracked as
-        // AnonymousClassNodes; dynamic instantiations may still resolve below.
+        // AnonymousClassNodes; constant class expressions may still resolve
+        // below. Runtime-fed dynamic instantiations (`new \$class` from a
+        // parameter, unserialize(), containers) are part of the documented
+        // scanned-code boundary and resolve to nothing.
         if (! $class instanceof Expr) {
             return;
         }
 
-        // `new $class` instantiates any of the constant class-name values the
-        // variable may hold — conditional reassignments make every recorded
-        // possibility reachable at runtime.
-        if ($class instanceof Variable && is_string($class->name)) {
-            $possibleClassNames = array_keys($this->variableClassNames[$class->name] ?? []);
-
-            foreach ($possibleClassNames as $possibleClassName) {
-                $this->currentFileInstantiations[] = $possibleClassName;
-            }
-
-            // A variable with no candidates (e.g. a function parameter) or
-            // with an unresolvable assignment may target any class.
-            if ($possibleClassNames === [] || isset($this->variableUnknownAssignments[$class->name])) {
-                $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
-            }
-
-            return;
-        }
-
-        // `new (X::class)` / `new ('App\X')` class expressions.
+        // `new (X::class)` / `new ('App\X')` constant class expressions.
         $className = $this->resolveClassNameExpr($class);
 
         if ($className !== null) {
             $this->currentFileInstantiations[] = $className;
-
-            return;
         }
-
-        $this->currentFileInstantiations[] = self::UNRESOLVED_INSTANTIATION;
     }
 
     /**
@@ -705,28 +634,45 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * Track `$variable = <constant class-name expression>` assignments so a
-     * later `new $variable` can be resolved. Every resolvable value is kept as
-     * a possibility — a conditional reassignment does not replace the earlier
-     * one, since either branch may run. Over-approximation is the safe
-     * direction: a recorded instantiation only keeps a class concrete or
-     * alive, while a missed one could let the fixer break runtime code.
+     * Resolve `new ReflectionClass(<constant class-name expression>)` to the
+     * reflected class name, or null for anything else.
      */
-    private function trackVariableClassName(Assign $assign): void
+    private function resolveReflectionTarget(New_ $new): ?string
     {
-        if (! $assign->var instanceof Variable || ! is_string($assign->var->name)) {
+        if (! $new->class instanceof Name) {
+            return null;
+        }
+
+        if (strcasecmp($new->class->toString(), 'ReflectionClass') !== 0) {
+            return null;
+        }
+
+        $firstArg = $new->args[0] ?? null;
+
+        if (! $firstArg instanceof Arg) {
+            return null;
+        }
+
+        return $this->resolveClassNameExpr($firstArg->value);
+    }
+
+    /**
+     * Record the reflected class as instantiated when a construction method is
+     * called chained on a resolvable ReflectionClass. Anything else —
+     * variable-held reflections, runtime-named targets — records nothing:
+     * that is part of the documented scanned-code boundary.
+     */
+    private function collectReflectionInstantiation(MethodCall|NullsafeMethodCall $methodCall): void
+    {
+        if (! $methodCall->var instanceof New_) {
             return;
         }
 
-        $className = $this->resolveClassNameExpr($assign->expr);
+        $reflectionTarget = $this->resolveReflectionTarget($methodCall->var);
 
-        if ($className === null) {
-            $this->variableUnknownAssignments[$assign->var->name] = true;
-
-            return;
+        if ($reflectionTarget !== null) {
+            $this->currentFileInstantiations[] = $reflectionTarget;
         }
-
-        $this->variableClassNames[$assign->var->name][$className] = true;
     }
 
     /**

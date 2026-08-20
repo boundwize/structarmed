@@ -145,21 +145,19 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
-    public function testResolvesVariableClassNameInstantiations(): void
+    public function testResolvesConstantClassExpressionInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"
             . 'final class Maker {' . "\n"
-            . '    public function fromClassConstant(): object { $class = Base::class; return new $class(); }' . "\n"
-            . '    public function fromString(): object { $class = \'App\\StringBase\'; return new $class(); }' . "\n"
-            . '    public function fromClassExpr(): object { return new (Concatenated::class)(); }' . "\n"
-            . '    public function fromConcat(): object {'
-            . ' $class = \'App\\\\\' . \'Joined\'; return new $class(); }' . "\n"
+            . '    public function fromClassConstant(): object { return new (Base::class)(); }' . "\n"
+            . '    public function fromString(): object { return new (\'App\\StringBase\')(); }' . "\n"
+            . '    public function fromConcat(): object { return new (\'App\\\\\' . \'Joined\')(); }' . "\n"
             . '}';
 
         $classCollector = $this->makeCollector($code);
 
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\Base', 'App\StringBase', 'App\Concatenated', 'App\Joined']],
+            ['/fake/path/Foo.php' => ['App\Base', 'App\StringBase', 'App\Joined']],
             $classCollector->getFileInstantiations()
         );
     }
@@ -167,7 +165,7 @@ final class ClassCollectorTest extends TestCase
     public function testResolvesSelfClassConstantInstantiation(): void
     {
         $code = '<?php namespace App;' . "\n"
-            . 'class Registry { public function fresh(): object { $class = self::class; return new $class(); } }';
+            . 'class Registry { public function fresh(): object { return new (self::class)(); } }';
 
         $classCollector = $this->makeCollector($code);
 
@@ -177,99 +175,85 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
-    public function testCollectsAllPossibleClassNamesOnConditionalReassignment(): void
+    public function testIgnoresRuntimeFedDynamicInstantiations(): void
     {
-        // Either branch may run at runtime, so both classes are instantiable.
+        // The class name flows in from a call site or property the collector
+        // cannot see — part of the documented scanned-code boundary.
         $code = '<?php namespace App;' . "\n"
-            . 'final class Factory { public function create(bool $child): object {'
-            . ' $class = Base::class; if ($child) { $class = Child::class; } return new $class(); } }';
+            . 'function make(string $class): object { return new $class(); }' . "\n"
+            . 'final class Holder { public function __construct(private string $class) {}'
+            . ' public function make(): object { return new ($this->class)(); } }';
 
         $classCollector = $this->makeCollector($code);
 
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
+    public function testResolvesChainedReflectionConstruction(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Booter { public function boot(): object {'
+            . ' return (new \ReflectionClass(Base::class))->newInstance(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // ReflectionClass itself is instantiated, and so is the class it
+        // reflects.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\Base', 'App\Child']],
+            ['/fake/path/Foo.php' => ['ReflectionClass', 'App\Base']],
             $classCollector->getFileInstantiations()
         );
     }
 
-    public function testKeepsEarlierClassNameOnUnresolvableReassignment(): void
+    public function testResolvesNullsafeChainedReflectionConstruction(): void
     {
         $code = '<?php namespace App;' . "\n"
-            . 'final class Maker { public function make(object $obj): object {'
-            . ' $class = \'App\\Base\'; $class = $obj::class; return new $class(); } }';
-
-        $classCollector = $this->makeCollector($code);
-
-        // The reassignment cannot be evaluated statically, but the earlier
-        // constant value may still reach the instantiation — keeping it plus
-        // the unresolved marker is the safe over-approximation.
-        $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\Base', ClassCollector::UNRESOLVED_INSTANTIATION]],
-            $classCollector->getFileInstantiations()
-        );
-    }
-
-    public function testMarksUnresolvedInstantiationForUnknownDynamicClass(): void
-    {
-        // The class name flows in from a call site the collector cannot see.
-        $code = '<?php namespace App;' . "\n"
-            . 'function make(string $class): object { return new $class(); }';
+            . 'final class Booter { public function boot(): ?object {'
+            . ' return (new \\ReflectionClass(\'App\\Child\'))?->newInstanceWithoutConstructor(); } }';
 
         $classCollector = $this->makeCollector($code);
 
         $this->assertSame(
-            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            ['/fake/path/Foo.php' => ['ReflectionClass', 'App\Child']],
             $classCollector->getFileInstantiations()
         );
     }
 
-    public function testMarksUnresolvedInstantiationForReflectionConstruction(): void
+    public function testIgnoresReflectionConstructionWithUnresolvableTarget(): void
     {
-        // ReflectionClass::newInstance() constructs an object of a class the
-        // collector cannot determine.
+        // Runtime-named targets and variable-held reflections stay within the
+        // documented scanned-code boundary — nothing is recorded for them.
         $code = '<?php namespace App;' . "\n"
-            . 'final class Booter { public function boot(\ReflectionClass $r, ?\ReflectionClass $n): object {'
-            . ' return $r->newInstance() ?? $n?->newInstanceWithoutConstructor(); } }';
+            . 'final class Booter { public function boot(\\ReflectionClass $r, string $name): object {'
+            . ' $other = new \\ReflectionClass($name); return $r->newInstance() ?? $other->newInstance(); } }';
 
         $classCollector = $this->makeCollector($code);
 
         $this->assertSame(
-            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            ['/fake/path/Foo.php' => ['ReflectionClass']],
             $classCollector->getFileInstantiations()
         );
     }
 
-    public function testMarksUnresolvedInstantiationForUnserialize(): void
+    public function testIgnoresNonReflectionChainedConstructionCalls(): void
     {
+        // A newInstance() chained on something that is not a resolvable
+        // ReflectionClass records nothing for the chain — only the receiver's
+        // own `new` counts where resolvable.
         $code = '<?php namespace App;' . "\n"
-            . 'final class Loader { public function load(string $payload): mixed {'
-            . ' return unserialize($payload); } }';
+            . 'final class Booter { public function boot(object $x): mixed {'
+            . ' $a = (new Container())->newInstance(); $b = (new ($x::class))->newInstance();'
+            . ' $c = (new \\ReflectionClass())->newInstance(); return $a ?? $b ?? $c; } }';
 
         $classCollector = $this->makeCollector($code);
 
         $this->assertSame(
-            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
+            ['/fake/path/Foo.php' => ['App\Container', 'ReflectionClass']],
             $classCollector->getFileInstantiations()
         );
     }
 
-    public function testMarksUnresolvedInstantiationForEval(): void
-    {
-        $inClass    = '<?php namespace App;' . "\n"
-            . 'final class Runner { public function run(string $code): mixed { return eval($code); } }';
-        $procedural = '<?php eval((string) $_ENV[\'PHP_CODE\']);';
-
-        $this->assertSame(
-            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
-            $this->makeCollector($inClass)->getFileInstantiations()
-        );
-        $this->assertSame(
-            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
-            $this->makeCollector($procedural)->getFileInstantiations()
-        );
-    }
-
-    public function testDoesNotMarkUnresolvedInstantiationForOrdinaryMethodCalls(): void
+    public function testIgnoresOrdinaryMethodCalls(): void
     {
         $code = '<?php namespace App;' . "\n"
             . 'final class Caller { public function run(object $service): mixed {'
@@ -280,36 +264,18 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame([], $classCollector->getFileInstantiations());
     }
 
-    public function testMarksUnresolvedInstantiationForRuntimeClassExpression(): void
-    {
-        $code = '<?php namespace App;' . "\n"
-            . 'final class Holder { public function __construct(private string $class) {}'
-            . ' public function make(): object { return new ($this->class)(); } }';
-
-        $classCollector = $this->makeCollector($code);
-
-        $this->assertSame(
-            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
-            $classCollector->getFileInstantiations()
-        );
-    }
-
     public function testIgnoresUnresolvableClassNameExpressions(): void
     {
+        // Runtime-dependent class expressions and non-class-shaped strings
+        // resolve to nothing — no instantiation is recorded.
         $code = '<?php namespace App;' . "\n"
-            . 'final class Maker { public function make(string $suffix): object {'
-            . ' $class = \'App\\\\\' . $suffix; $label = \'not a class name!\';'
-            . ' $this->kept = \'App\\Prop\'; return new $class(); } }';
+            . 'final class Maker { public function make(string $suffix, object $obj): object {'
+            . ' $a = new (\'App\\\\\' . $suffix)(); $b = new ($obj::class)();'
+            . ' $c = new (\'not a class name!\')(); return $a ?? $b ?? $c; } }';
 
         $classCollector = $this->makeCollector($code);
 
-        // Runtime-dependent concatenation, non-class-shaped strings, and
-        // property assignments resolve to no concrete candidate — only the
-        // unresolved marker remains.
-        $this->assertSame(
-            ['/fake/path/Foo.php' => [ClassCollector::UNRESOLVED_INSTANTIATION]],
-            $classCollector->getFileInstantiations()
-        );
+        $this->assertSame([], $classCollector->getFileInstantiations());
     }
 
     public function testDoesNotCollectAnonymousInstantiations(): void

@@ -811,13 +811,10 @@ final readonly class Analyser
             }
         }
 
-        // An instantiation is also a reference; the sentinel is not a class
-        // name and marks nothing here.
+        // An instantiation is also a reference.
         foreach ($extractionResult->fileInstantiations as $instantiations) {
             foreach ($instantiations as $instantiation) {
-                if ($instantiation !== ClassCollector::UNRESOLVED_INSTANTIATION) {
-                    $used[strtolower($instantiation)] = true;
-                }
+                $used[strtolower($instantiation)] = true;
             }
         }
 
@@ -830,19 +827,15 @@ final readonly class Analyser
 
     /**
      * Flag every concrete class that another scanned scope instantiates —
-     * `new X` (with self/static/parent already resolved), a dynamic
-     * `new $class` resolved from constant class-name values, and so on.
-     * No self-exclusion here: a class instantiating itself cannot become
-     * abstract either.
+     * `new X` (with self/static/parent already resolved), a constant class
+     * expression such as `new (X::class)`, or a chained ReflectionClass
+     * construction with a resolvable target. No self-exclusion here: a class
+     * instantiating itself cannot become abstract either.
      *
-     * A dynamic instantiation whose target could not be resolved statically —
-     * `new $class` on a function parameter, a ReflectionClass construction,
-     * unserialize(), eval() — may target any class: the name can come from
-     * the environment, configuration, or a payload, entirely outside the
-     * scanned code. No class can then be proven safe to abstract, so every
-     * class-like conservatively counts as instantiated. Resolvable
-     * construction keeps precise detection; unresolvable construction
-     * silences the concreteness fix.
+     * Runtime-fed dynamic construction (`new $class` from a parameter,
+     * unserialize(), containers) resolves to nothing — it is part of the
+     * documented scanned-code boundary, handled with skipRule() or skip paths
+     * where such factories exist.
      *
      * @param list<ClassNode> $classNodes
      */
@@ -856,10 +849,8 @@ final readonly class Analyser
             }
         }
 
-        $hasUnresolvedInstantiation = isset($instantiated[ClassCollector::UNRESOLVED_INSTANTIATION]);
-
         foreach ($classNodes as $classNode) {
-            if ($hasUnresolvedInstantiation || isset($instantiated[strtolower($classNode->className)])) {
+            if (isset($instantiated[strtolower($classNode->className)])) {
                 $classNode->setInstantiated(true);
             }
         }

@@ -563,14 +563,12 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
-    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnDynamicInstantiation(): void
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnClassExpressionInstantiation(): void
     {
-        // The constant-expression evaluator resolves `$class = X::class;
-        // new $class()` — dynamic instantiation still keeps the parent
-        // concrete.
+        // The constant class expression resolves at the `new` site itself.
         $factory = '<?php namespace App;' . "\n"
             . 'final class Factory { public function make(): object {'
-            . ' $class = BaseRepository::class; return new $class(); } }';
+            . ' return new (BaseRepository::class)(); } }';
 
         $basePath = $this->makeTempProject([
             'src/BaseRepository.php' => '<?php namespace App; class BaseRepository {}',
@@ -589,40 +587,12 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
-    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnConditionalDynamicInstantiation(): void
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleFlagsFactoryFedParent(): void
     {
-        // `create(false)` instantiates Base at runtime even though the
-        // traversal sees Child assigned last — every possible value of the
-        // variable must keep its class concrete.
-        $factory = '<?php namespace App;' . "\n"
-            . 'final class Factory { public function create(bool $child): Base {' . "\n"
-            . '    $class = Base::class;' . "\n"
-            . '    if ($child) { $class = Child::class; }' . "\n"
-            . '    return new $class();' . "\n"
-            . '} }';
-
-        $basePath = $this->makeTempProject([
-            'src/Base.php'    => '<?php namespace App; class Base {}',
-            'src/Child.php'   => '<?php namespace App; final class Child extends Base {}',
-            'src/Factory.php' => $factory,
-        ]);
-
-        $architecture = Architecture::define()
-            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
-
-        $violations = (new Analyser($basePath))
-            ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
-
-        $this->assertCount(0, $violations);
-    }
-
-    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesWhenFactoryInstantiatesUnknownClass(): void
-    {
-        // `make(Base::class)` instantiates Base at runtime, but the collector
-        // cannot connect the argument to `new $class`. The unresolved dynamic
-        // instantiation makes every referenced class count as possibly
-        // instantiated.
+        // `make(Base::class)` cannot be connected to the factory's
+        // `new $class` statically — runtime-fed construction is part of the
+        // documented scanned-code boundary, handled with skipRule() or skip
+        // paths, so Base is still reported here.
         $functions = '<?php namespace App;' . "\n"
             . 'function make(string $class): object { return new $class(); }' . "\n"
             . 'make(Base::class);';
@@ -640,16 +610,39 @@ final class AnalyserTest extends TestCase
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
             ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
 
-        $this->assertCount(0, $violations);
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\Base', $violations[0]->className);
     }
 
     public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnReflectionInstantiation(): void
     {
-        // ReflectionClass::newInstance() constructs Base at runtime; the
-        // reflection construction call marks an unresolved instantiation, so
-        // the referenced Base stays concrete.
+        // The chained ReflectionClass constructor argument resolves to
+        // App\Base, so the newInstance() call counts as instantiating Base.
         $bootstrap = '<?php' . "\n"
-            . '$reflection = new ReflectionClass(App\Base::class);' . "\n"
+            . '$instance = (new ReflectionClass(App\Base::class))->newInstance();';
+
+        $basePath = $this->makeTempProject([
+            'src/Base.php'      => '<?php namespace App; class Base {}',
+            'src/Child.php'     => '<?php namespace App; final class Child extends Base {}',
+            'src/bootstrap.php' => $bootstrap,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleStillFlagsWithUnresolvableReflection(): void
+    {
+        // Reflection over a runtime-named class is outside the scanned-code
+        // boundary and must not silence the rule for every class.
+        $bootstrap = '<?php' . "\n"
+            . '$reflection = new ReflectionClass((string) $_ENV[\'CLASS\']);' . "\n"
             . '$instance = $reflection->newInstance();';
 
         $basePath = $this->makeTempProject([
@@ -665,77 +658,8 @@ final class AnalyserTest extends TestCase
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
             ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
 
-        $this->assertCount(0, $violations);
-    }
-
-    public function testExtendedClassMustBeAbstractOrInstantiatedRuleSkipsAllWhenUnresolvedInstantiationExists(): void
-    {
-        // `make($_ENV['CLASS'])` can name any class — even one nothing in the
-        // scanned code references — so an unresolved dynamic instantiation
-        // must silence the rule entirely: no class can be proven safe to
-        // abstract.
-        $functions = '<?php namespace App;' . "\n"
-            . 'function make(string $class): object { return new $class(); }';
-
-        $basePath = $this->makeTempProject([
-            'src/UnreferencedBase.php' => '<?php namespace App; class UnreferencedBase {}',
-            'src/Sub.php'              => '<?php namespace App; final class Sub extends UnreferencedBase {}',
-            'src/functions.php'        => $functions,
-        ]);
-
-        $architecture = Architecture::define()
-            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
-
-        $violations = (new Analyser($basePath))
-            ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
-
-        $this->assertCount(0, $violations);
-    }
-
-    public function testExtendedClassMustBeAbstractOrInstantiatedRuleSkipsAllWhenEvalIsUsed(): void
-    {
-        // eval() can construct any class the evaluated code names.
-        $bootstrap = '<?php' . "\n"
-            . 'eval((string) $_ENV[\'PHP_CODE\']);';
-
-        $basePath = $this->makeTempProject([
-            'src/Base.php'      => '<?php namespace App; class Base {}',
-            'src/Child.php'     => '<?php namespace App; final class Child extends Base {}',
-            'src/bootstrap.php' => $bootstrap,
-        ]);
-
-        $architecture = Architecture::define()
-            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
-
-        $violations = (new Analyser($basePath))
-            ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
-
-        $this->assertCount(0, $violations);
-    }
-
-    public function testExtendedClassMustBeAbstractOrInstantiatedRuleSkipsAllWhenUnserializeIsCalled(): void
-    {
-        // unserialize() constructs instances of whatever the payload names;
-        // abstracting a serialized concrete class breaks deserialization.
-        $bootstrap = '<?php' . "\n"
-            . '$restored = unserialize((string) file_get_contents(__DIR__ . \'/payload.bin\'));';
-
-        $basePath = $this->makeTempProject([
-            'src/Base.php'      => '<?php namespace App; class Base {}',
-            'src/Child.php'     => '<?php namespace App; final class Child extends Base {}',
-            'src/bootstrap.php' => $bootstrap,
-        ]);
-
-        $architecture = Architecture::define()
-            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
-
-        $violations = (new Analyser($basePath))
-            ->analyse($architecture, [], null, AnalyserOptions::sequential())
-            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
-
-        $this->assertCount(0, $violations);
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\Base', $violations[0]->className);
     }
 
     public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnSelfAndParentInstantiation(): void
