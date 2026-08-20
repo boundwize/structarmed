@@ -157,6 +157,24 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testAnalyserHandlesParentOutsideClassNodeCollection(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/SomeClass.php' => '<?php class SomeClass extends \\Some\\Vendor\\ClassName {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('SomeClass', $violations[0]->className);
+    }
+
     public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClass(): void
     {
         $factory = '<?php namespace App;' . "\n"
@@ -3011,13 +3029,40 @@ final class AnalyserTest extends TestCase
                 'App\Database\Support\trace',
             ],
         ];
+
+        yield 'class, function, and constant with case-colliding names' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\Symbol;
+                use function App\Database\symbol;
+                use const App\Database\SYMBOL;
+
+                final class Request
+                {
+                    public function resolve(Symbol $symbol): int
+                    {
+                        symbol();
+
+                        return SYMBOL;
+                    }
+                }
+                PHP,
+            [
+                'App\Database\Symbol',
+                'App\Database\symbol',
+                'App\Database\SYMBOL',
+            ],
+        ];
     }
 
     /**
      * @param list<string> $dependencies
      */
     #[DataProvider('importedSymbolDependencyProvider')]
-    public function testAnalyserRulesetTreatsImportedConstantsAndFunctionsAsDependencies(
+    public function testAnalyserRulesetTreatsImportedSymbolsAsDistinctDependencies(
         string $sourceCode,
         array $dependencies
     ): void {

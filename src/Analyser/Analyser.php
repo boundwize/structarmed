@@ -28,6 +28,7 @@ use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
 use Boundwize\StructArmed\Util\Path;
 
+use function array_change_key_case;
 use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
@@ -44,6 +45,8 @@ use function sprintf;
 use function str_starts_with;
 use function strtolower;
 use function substr;
+
+use const CASE_LOWER;
 
 final readonly class Analyser
 {
@@ -158,11 +161,13 @@ final readonly class Analyser
             $withFileAnalysis,
         );
         $classNodes       = $extractionResult->classNodes;
-        $classNodes       = $this->withRecursiveParents($classNodes);
+        $classNodeMap     = [];
+        $classNodes       = $this->withRecursiveParents($classNodes, $classNodeMap);
 
         if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
             $this->markClassLikeUsage(
                 $classNodes,
+                $classNodeMap,
                 $extractionResult,
                 $hasExtendedClassAwareRule,
                 $hasUsedInterfaceAwareRule,
@@ -677,10 +682,12 @@ final readonly class Analyser
      * parent chain resolved by {@see withRecursiveParents()}; instantiated
      * classes come from resolved `new` expressions collected per file.
      *
-     * @param list<ClassNode> $classNodes
+     * @param list<ClassNode>          $classNodes
+     * @param array<string, ClassNode> $classNodeMap
      */
     private function markClassLikeUsage(
         array $classNodes,
+        array $classNodeMap,
         ExtractionResult $extractionResult,
         bool $markExtended,
         bool $markImplemented,
@@ -693,18 +700,18 @@ final readonly class Analyser
         foreach ($classNodes as $classNode) {
             if ($markExtended) {
                 foreach ($classNode->parentClasses as $parentClass) {
-                    $extended[strtolower($parentClass)] = true;
+                    $extended[$parentClass] = true;
                 }
             }
 
             if ($markImplemented) {
                 foreach ($classNode->parentInterfaces as $parentInterface) {
-                    $implemented[strtolower($parentInterface)] = true;
+                    $implemented[$parentInterface] = true;
                 }
             }
 
             foreach ($classNode->traits as $trait) {
-                $used[strtolower($trait)] = true;
+                $used[$trait] = true;
             }
 
             // A node's own inheritance-clause names (and the imports that
@@ -714,18 +721,27 @@ final readonly class Analyser
             // is not thereby a possible `new $class` target. The usage-aware
             // deletion rules are unaffected — each combines this flag with its
             // structural extended/implemented/trait marking.
-            $excludedKeys = [strtolower($classNode->className) => true];
+            if ($classNode->dependencies === []) {
+                continue;
+            }
+
+            $excludedNames = [$classNode->className];
 
             if ($classNode->extends !== null) {
-                $excludedKeys[strtolower($classNode->extends)] = true;
+                $excludedNames[] = $classNode->extends;
             }
 
             foreach ([$classNode->implements, $classNode->interfaceExtends, $classNode->traits] as $clauseNames) {
                 foreach ($clauseNames as $clauseName) {
-                    $excludedKeys[strtolower($clauseName)] = true;
+                    $excludedNames[] = $clauseName;
                 }
             }
 
+            $excludedKeys = array_change_key_case(array_fill_keys($excludedNames, true), CASE_LOWER);
+
+            // Dependencies also include function and constant symbols. Keep the
+            // source list intact and only derive a transient class-name lookup
+            // key instead of normalising the dependencies into one keyed map.
             foreach ($classNode->dependencies as $dependency) {
                 $dependencyKey = strtolower($dependency);
 
@@ -739,17 +755,17 @@ final readonly class Analyser
         // and trait-use relationships are tracked separately.
         foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
             if ($markExtended && $anonymousClassNode->extends !== null) {
-                $extended[strtolower($anonymousClassNode->extends)] = true;
+                $extended[$anonymousClassNode->extends] = true;
             }
 
             if ($markImplemented) {
                 foreach ($anonymousClassNode->implements as $interface) {
-                    $implemented[strtolower($interface)] = true;
+                    $implemented[$interface] = true;
                 }
             }
 
             foreach ($anonymousClassNode->traits as $trait) {
-                $used[strtolower($trait)] = true;
+                $used[$trait] = true;
             }
         }
 
@@ -758,19 +774,22 @@ final readonly class Analyser
         // have no ClassNode either, so they are tracked per file.
         foreach ($extractionResult->fileReferences as $references) {
             foreach ($references as $reference) {
-                $used[strtolower($reference)] = true;
+                $used[$reference] = true;
             }
         }
 
         foreach ($extractionResult->fileInstantiations as $classNames) {
             foreach ($classNames as $className) {
-                $instantiated[strtolower($className)] = true;
+                $instantiated[$className] = true;
             }
         }
 
-        foreach ($classNodes as $classNode) {
-            $classNameKey = strtolower($classNode->className);
+        $extended     = $markExtended ? array_change_key_case($extended, CASE_LOWER) : [];
+        $implemented  = $markImplemented ? array_change_key_case($implemented, CASE_LOWER) : [];
+        $used         = array_change_key_case($used, CASE_LOWER);
+        $instantiated = array_change_key_case($instantiated, CASE_LOWER);
 
+        foreach ($classNodeMap as $classNameKey => $classNode) {
             if ($markExtended && isset($extended[$classNameKey])) {
                 $classNode->setExtended(true);
             }
@@ -792,27 +811,34 @@ final readonly class Analyser
 
     /**
      * @param list<ClassNode> $classNodes
+     * @param array<string, ClassNode> $classNodeMap
      * @return list<ClassNode>
      */
-    private function withRecursiveParents(array $classNodes): array
+    private function withRecursiveParents(array $classNodes, array &$classNodeMap): array
     {
         $parentClassMap     = [];
         $parentInterfaceMap = [];
         $parentsCache       = [];
 
         foreach ($classNodes as $classNode) {
-            $classNameKey                      = strtolower($classNode->className);
-            $parentClassMap[$classNameKey]     = $classNode->extends !== null
-                ? [$classNode->extends]
-                : [];
-            $parentInterfaceMap[$classNameKey] = $classNode->interfaceExtends !== []
+            $parentInterfaces = $classNode->interfaceExtends !== []
                 ? array_values(array_unique([...$classNode->implements, ...$classNode->interfaceExtends]))
                 : array_values($classNode->implements);
+
+            $classNodeMap[$classNode->className]       = $classNode;
+            $parentClassMap[$classNode->className]     = $classNode->extends !== null
+                ? $this->caseInsensitiveNameMap([$classNode->extends])
+                : [];
+            $parentInterfaceMap[$classNode->className] = $parentInterfaces !== []
+                ? $this->caseInsensitiveNameMap($parentInterfaces)
+                : [];
         }
 
-        foreach ($classNodes as $classNode) {
-            $classNameKey = strtolower($classNode->className);
+        $parentClassMap     = array_change_key_case($parentClassMap, CASE_LOWER);
+        $parentInterfaceMap = array_change_key_case($parentInterfaceMap, CASE_LOWER);
+        $classNodeMap       = array_change_key_case($classNodeMap, CASE_LOWER);
 
+        foreach ($classNodeMap as $classNameKey => $classNode) {
             if (
                 $parentClassMap[$classNameKey] === []
                 && $parentInterfaceMap[$classNameKey] === []
@@ -830,10 +856,25 @@ final readonly class Analyser
                 $cycleDetected
             );
 
-            $classNode->setRecursiveParents($result['classes'], $result['interfaces']);
+            $classNode->setRecursiveParents(array_values($result['classes']), array_values($result['interfaces']));
         }
 
         return $classNodes;
+    }
+
+    /**
+     * @param list<string> $names
+     * @return array<string, string>
+     */
+    private function caseInsensitiveNameMap(array $names): array
+    {
+        $nameMap = [];
+
+        foreach ($names as $name) {
+            $nameMap[$name] = $name;
+        }
+
+        return array_change_key_case($nameMap, CASE_LOWER);
     }
 
     /**
@@ -841,11 +882,11 @@ final readonly class Analyser
      * interfaces in one pass, avoiding the double traversal of the parent-class chain that
      * the previous two-method approach required.
      *
-     * @param array<string, list<string>>                                        $parentClassMap
-     * @param array<string, list<string>>                                        $parentInterfaceMap
-     * @param array<string, array{classes: list<string>, interfaces: list<string>}> $cache
-     * @param array<string, true>                                                $seen
-     * @return array{classes: list<string>, interfaces: list<string>}
+     * @param array<string, array<string, string>> $parentClassMap
+     * @param array<string, array<string, string>> $parentInterfaceMap
+     * @param array<string, array{classes: array<string, string>, interfaces: array<string, string>}> $cache
+     * @param array<string, true> $seen
+     * @return array{classes: array<string, string>, interfaces: array<string, string>}
      */
     private function recursiveParents(
         string $classNameKey,
@@ -863,17 +904,15 @@ final readonly class Analyser
         $interfacesSet = [];
         $hasCycle      = false;
 
-        foreach ($parentClassMap[$classNameKey] ?? [] as $parentClass) {
-            $parentClassKey = strtolower($parentClass);
-
+        foreach ($parentClassMap[$classNameKey] ?? [] as $parentClassKey => $parentClass) {
             if (isset($seen[$parentClassKey])) {
                 $hasCycle = true;
                 continue;
             }
 
-            $childHasCycle            = false;
-            $classesSet[$parentClass] = true;
-            $result                   = $this->recursiveParents(
+            $childHasCycle               = false;
+            $classesSet[$parentClassKey] = $parentClass;
+            $result                      = $this->recursiveParents(
                 $parentClassKey,
                 $parentClassMap,
                 $parentInterfaceMap,
@@ -882,28 +921,26 @@ final readonly class Analyser
                 $childHasCycle
             );
 
-            foreach ($result['classes'] as $ancestor) {
-                $classesSet[$ancestor] = true;
+            foreach ($result['classes'] as $ancestorKey => $ancestor) {
+                $classesSet[$ancestorKey] = $ancestor;
             }
 
-            foreach ($result['interfaces'] as $iface) {
-                $interfacesSet[$iface] = true;
+            foreach ($result['interfaces'] as $interfaceKey => $interface) {
+                $interfacesSet[$interfaceKey] = $interface;
             }
 
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        foreach ($parentInterfaceMap[$classNameKey] ?? [] as $parentInterface) {
-            $parentInterfaceKey = strtolower($parentInterface);
-
+        foreach ($parentInterfaceMap[$classNameKey] ?? [] as $parentInterfaceKey => $parentInterface) {
             if (isset($seen[$parentInterfaceKey])) {
                 $hasCycle = true;
                 continue;
             }
 
-            $childHasCycle                   = false;
-            $interfacesSet[$parentInterface] = true;
-            $result                          = $this->recursiveParents(
+            $childHasCycle                      = false;
+            $interfacesSet[$parentInterfaceKey] = $parentInterface;
+            $result                             = $this->recursiveParents(
                 $parentInterfaceKey,
                 $parentClassMap,
                 $parentInterfaceMap,
@@ -912,16 +949,16 @@ final readonly class Analyser
                 $childHasCycle
             );
 
-            foreach ($result['interfaces'] as $ancestor) {
-                $interfacesSet[$ancestor] = true;
+            foreach ($result['interfaces'] as $ancestorKey => $ancestor) {
+                $interfacesSet[$ancestorKey] = $ancestor;
             }
 
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
         $result = [
-            'classes'    => array_keys($classesSet),
-            'interfaces' => array_keys($interfacesSet),
+            'classes'    => $classesSet,
+            'interfaces' => $interfacesSet,
         ];
 
         if (! $hasCycle) {
