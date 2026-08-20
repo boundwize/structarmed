@@ -160,23 +160,13 @@ final readonly class Analyser
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes);
 
-        $hasClassLikeAwareRule = $hasExtendedClassAwareRule
-            || $hasUsedInterfaceAwareRule
-            || $hasUsedTraitAwareRule;
-        $instantiatedClassMap  = $hasClassLikeAwareRule
-            ? $this->classNameMap($extractionResult->fileInstantiations)
-            : [];
-
-        if ($hasExtendedClassAwareRule) {
-            $this->markExtendedAndInstantiatedClasses($classNodes, $extractionResult, $instantiatedClassMap);
-        }
-
-        if ($hasUsedInterfaceAwareRule) {
-            $this->markImplementedInterfaces($classNodes, $extractionResult);
-        }
-
-        if ($hasClassLikeAwareRule) {
-            $this->markReferencedClassLikes($classNodes, $extractionResult, $instantiatedClassMap);
+        if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
+            $this->markClassLikeUsage(
+                $classNodes,
+                $extractionResult,
+                $hasExtendedClassAwareRule,
+                $hasUsedInterfaceAwareRule,
+            );
         }
 
         if ($withFileAnalysis) {
@@ -682,108 +672,37 @@ final readonly class Analyser
     }
 
     /**
-     * Flag every class that another scanned class extends or another scanned
-     * scope instantiates. Extended classes use the recursive parent chain
-     * resolved by {@see withRecursiveParents()}; instantiated classes come from
-     * the resolved `new` expressions collected per file, including constant
-     * class expressions and resolvable ReflectionClass construction. There is
-     * no self-exclusion for instantiation: a class that instantiates itself must
-     * remain concrete. Runtime-fed dynamic construction resolves to nothing and
-     * remains outside the documented scanned-code boundary.
-     *
-     * @param list<ClassNode>     $classNodes
-     * @param array<string, true> $instantiatedClassMap
-     */
-    private function markExtendedAndInstantiatedClasses(
-        array $classNodes,
-        ExtractionResult $extractionResult,
-        array $instantiatedClassMap
-    ): void {
-        $extended = [];
-
-        foreach ($classNodes as $classNode) {
-            foreach ($classNode->parentClasses as $parentClass) {
-                $extended[strtolower($parentClass)] = true;
-            }
-        }
-
-        // Anonymous classes (`new class extends Foo {}`) have no ClassNode of
-        // their own, so the classes they extend are tracked separately.
-        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
-            if ($anonymousClassNode->extends !== null) {
-                $extended[strtolower($anonymousClassNode->extends)] = true;
-            }
-        }
-
-        foreach ($classNodes as $classNode) {
-            $classNameKey = strtolower($classNode->className);
-
-            // Only classes appear in parentClasses; traits, interfaces, and enums
-            // never do, so they are left with the default (not extended).
-            if (isset($extended[$classNameKey])) {
-                $classNode->setExtended(true);
-            }
-
-            if (isset($instantiatedClassMap[$classNameKey])) {
-                $classNode->setInstantiated(true);
-            }
-        }
-    }
-
-    /**
-     * Flag every interface that a scanned class implements (directly or through
-     * inheritance) or another scanned interface extends, using the recursive
-     * parent chain resolved by {@see withRecursiveParents()}.
+     * Collect and apply class-like usage flags with one collection pass and one
+     * application pass over the class nodes. Extended classes use the recursive
+     * parent chain resolved by {@see withRecursiveParents()}; instantiated
+     * classes come from resolved `new` expressions collected per file.
      *
      * @param list<ClassNode> $classNodes
      */
-    private function markImplementedInterfaces(array $classNodes, ExtractionResult $extractionResult): void
-    {
-        $implemented = [];
-
-        foreach ($classNodes as $classNode) {
-            foreach ($classNode->parentInterfaces as $parentInterface) {
-                $implemented[strtolower($parentInterface)] = true;
-            }
-        }
-
-        // Anonymous classes (`new class implements Foo {}`) have no ClassNode
-        // of their own, so the interfaces they implement are tracked separately.
-        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
-            foreach ($anonymousClassNode->implements as $interface) {
-                $implemented[strtolower($interface)] = true;
-            }
-        }
-
-        foreach ($classNodes as $classNode) {
-            // Only interfaces appear in parentInterfaces; classes, traits, and
-            // enums never do, so they are left with the default (not implemented).
-            if (isset($implemented[strtolower($classNode->className)])) {
-                $classNode->setImplemented(true);
-            }
-        }
-    }
-
-    /**
-     * Flag every class-like that another scanned class-like (class, trait, or
-     * enum) uses — as a trait, or by referencing it as a dependency: a type
-     * hint, an instanceof check, a ::class constant, a static call, and so on.
-     * Self-references are ignored: a class-like cannot keep itself alive.
-     * Usage is a direct declaration, so no recursive chain is needed: a
-     * class-like used only by another unused one stays flagged as used until
-     * its user is removed, at which point the next run reports it.
-     *
-     * @param list<ClassNode>     $classNodes
-     * @param array<string, true> $instantiatedClassMap
-     */
-    private function markReferencedClassLikes(
+    private function markClassLikeUsage(
         array $classNodes,
         ExtractionResult $extractionResult,
-        array $instantiatedClassMap
+        bool $markExtended,
+        bool $markImplemented,
     ): void {
-        $used = [];
+        $extended     = [];
+        $implemented  = [];
+        $used         = [];
+        $instantiated = [];
 
         foreach ($classNodes as $classNode) {
+            if ($markExtended) {
+                foreach ($classNode->parentClasses as $parentClass) {
+                    $extended[strtolower($parentClass)] = true;
+                }
+            }
+
+            if ($markImplemented) {
+                foreach ($classNode->parentInterfaces as $parentInterface) {
+                    $implemented[strtolower($parentInterface)] = true;
+                }
+            }
+
             foreach ($classNode->traits as $trait) {
                 $used[strtolower($trait)] = true;
             }
@@ -816,9 +735,19 @@ final readonly class Analyser
             }
         }
 
-        // Anonymous classes (`new class { use Foo; }`) have no ClassNode of
-        // their own, so the traits they use are tracked separately.
+        // Anonymous classes have no ClassNode of their own, so their inheritance
+        // and trait-use relationships are tracked separately.
         foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            if ($markExtended && $anonymousClassNode->extends !== null) {
+                $extended[strtolower($anonymousClassNode->extends)] = true;
+            }
+
+            if ($markImplemented) {
+                foreach ($anonymousClassNode->implements as $interface) {
+                    $implemented[strtolower($interface)] = true;
+                }
+            }
+
             foreach ($anonymousClassNode->traits as $trait) {
                 $used[strtolower($trait)] = true;
             }
@@ -833,33 +762,32 @@ final readonly class Analyser
             }
         }
 
+        foreach ($extractionResult->fileInstantiations as $classNames) {
+            foreach ($classNames as $className) {
+                $instantiated[strtolower($className)] = true;
+            }
+        }
+
         foreach ($classNodes as $classNode) {
             $classNameKey = strtolower($classNode->className);
 
-            // An instantiation is also a reference. Reuse the lookup already
-            // consumed by markExtendedAndInstantiatedClasses() instead of
-            // traversing the per-file instantiations a second time.
-            if (isset($instantiatedClassMap[$classNameKey]) || isset($used[$classNameKey])) {
+            if ($markExtended && isset($extended[$classNameKey])) {
+                $classNode->setExtended(true);
+            }
+
+            if ($markExtended && isset($instantiated[$classNameKey])) {
+                $classNode->setInstantiated(true);
+            }
+
+            if ($markImplemented && isset($implemented[$classNameKey])) {
+                $classNode->setImplemented(true);
+            }
+
+            // An instantiation is also a reference, so reuse its lookup here.
+            if (isset($instantiated[$classNameKey]) || isset($used[$classNameKey])) {
                 $classNode->setReferenced(true);
             }
         }
-    }
-
-    /**
-     * @param array<string, list<string>> $classNamesByFile
-     * @return array<string, true>
-     */
-    private function classNameMap(array $classNamesByFile): array
-    {
-        $classNameMap = [];
-
-        foreach ($classNamesByFile as $classNames) {
-            foreach ($classNames as $className) {
-                $classNameMap[strtolower($className)] = true;
-            }
-        }
-
-        return $classNameMap;
     }
 
     /**
