@@ -665,9 +665,9 @@ final class ClassCollector extends NodeVisitorAbstract
      * Anything else — variable-held reflections, runtime-named targets —
      * records nothing: that is part of the documented scanned-code boundary.
      */
-    private function collectReflectionInstantiation(New_ $receiver): void
+    private function collectReflectionInstantiation(New_ $new): void
     {
-        $reflectionTarget = $this->resolveReflectionTarget($receiver);
+        $reflectionTarget = $this->resolveReflectionTarget($new);
 
         if ($reflectionTarget !== null) {
             $this->currentFileInstantiations[] = $reflectionTarget;
