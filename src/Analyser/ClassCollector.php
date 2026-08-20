@@ -327,7 +327,7 @@ final class ClassCollector extends NodeVisitorAbstract
             && $node->name instanceof Identifier
             && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
         ) {
-            $this->collectReflectionInstantiation($node);
+            $this->collectReflectionInstantiation($node->var);
 
             return null;
         }
@@ -661,17 +661,13 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /**
      * Record the reflected class as instantiated when a construction method is
-     * called chained on a resolvable ReflectionClass. Anything else —
-     * variable-held reflections, runtime-named targets — records nothing:
-     * that is part of the documented scanned-code boundary.
+     * called chained on a `new` receiver that is a resolvable ReflectionClass.
+     * Anything else — variable-held reflections, runtime-named targets —
+     * records nothing: that is part of the documented scanned-code boundary.
      */
-    private function collectReflectionInstantiation(MethodCall|NullsafeMethodCall $methodCall): void
+    private function collectReflectionInstantiation(New_ $receiver): void
     {
-        if (! $methodCall->var instanceof New_) {
-            return;
-        }
-
-        $reflectionTarget = $this->resolveReflectionTarget($methodCall->var);
+        $reflectionTarget = $this->resolveReflectionTarget($receiver);
 
         if ($reflectionTarget !== null) {
             $this->currentFileInstantiations[] = $reflectionTarget;
