@@ -418,6 +418,27 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame(['FirstTrait', 'SecondTrait'], $classNode->traits);
     }
 
+    public function testCollectsNoTraitsFromInterfaceWithTraitUse(): void
+    {
+        // PHP rejects trait use inside interfaces at compile time, but the
+        // parser accepts it, so the collector must skip such statements.
+        $nodes = $this->collectNodes('<?php interface Foo { use FirstTrait; }');
+
+        $this->assertCount(1, $nodes);
+        $this->assertTrue($nodes[0]->isInterface);
+        $this->assertSame([], $nodes[0]->traits);
+    }
+
+    public function testCollectsUsedTraitsInAnonymousClass(): void
+    {
+        $anonymousClassNodes = $this->collectAnonymousClassNodes('<?php
+        namespace App;
+        return new class { use FirstTrait, SecondTrait; };');
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $this->assertSame(['App\FirstTrait', 'App\SecondTrait'], $anonymousClassNodes[0]->traits);
+    }
+
     public function testCollectsUsedTraitsInEnum(): void
     {
         $nodes    = $this->collectNodes('
