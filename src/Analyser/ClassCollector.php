@@ -955,17 +955,16 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
+     * Traits used by an anonymous class; named class-likes collect theirs in
+     * collectMembers().
+     *
      * @return string[]
      */
-    private function collectTraits(ClassLike $classLike): array
+    private function collectTraits(Class_ $class): array
     {
-        if ($classLike instanceof Interface_) {
-            return [];
-        }
-
         $traits = [];
 
-        foreach ($classLike->stmts as $stmt) {
+        foreach ($class->stmts as $stmt) {
             if (! $stmt instanceof TraitUse) {
                 continue;
             }
