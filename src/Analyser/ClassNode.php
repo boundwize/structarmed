@@ -20,7 +20,7 @@ final class ClassNode
     public readonly array $layers;
 
     /**
-     * @param list<string>   $dependencies        Fully-qualified class names this class depends on
+     * @param list<string>   $dependencies        Fully-qualified class, function, or constant dependencies
      * @param string[]       $implements          Interface names this class implements
      * @param string[]       $traits              Trait names this class uses
      * @param MethodNode[]   $methods             Methods of this class
