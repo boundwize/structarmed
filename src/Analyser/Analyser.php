@@ -160,16 +160,23 @@ final readonly class Analyser
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes);
 
+        $hasClassLikeAwareRule = $hasExtendedClassAwareRule
+            || $hasUsedInterfaceAwareRule
+            || $hasUsedTraitAwareRule;
+        $instantiatedClassMap  = $hasClassLikeAwareRule
+            ? $this->classNameMap($extractionResult->fileInstantiations)
+            : [];
+
         if ($hasExtendedClassAwareRule) {
-            $this->markExtendedAndInstantiatedClasses($classNodes, $extractionResult);
+            $this->markExtendedAndInstantiatedClasses($classNodes, $extractionResult, $instantiatedClassMap);
         }
 
         if ($hasUsedInterfaceAwareRule) {
             $this->markImplementedInterfaces($classNodes, $extractionResult);
         }
 
-        if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
-            $this->markReferencedClassLikes($classNodes, $extractionResult);
+        if ($hasClassLikeAwareRule) {
+            $this->markReferencedClassLikes($classNodes, $extractionResult, $instantiatedClassMap);
         }
 
         if ($withFileAnalysis) {
@@ -684,14 +691,15 @@ final readonly class Analyser
      * remain concrete. Runtime-fed dynamic construction resolves to nothing and
      * remains outside the documented scanned-code boundary.
      *
-     * @param list<ClassNode> $classNodes
+     * @param list<ClassNode>     $classNodes
+     * @param array<string, true> $instantiatedClassMap
      */
     private function markExtendedAndInstantiatedClasses(
         array $classNodes,
-        ExtractionResult $extractionResult
+        ExtractionResult $extractionResult,
+        array $instantiatedClassMap
     ): void {
-        $extended     = [];
-        $instantiated = [];
+        $extended = [];
 
         foreach ($classNodes as $classNode) {
             foreach ($classNode->parentClasses as $parentClass) {
@@ -707,12 +715,6 @@ final readonly class Analyser
             }
         }
 
-        foreach ($extractionResult->fileInstantiations as $instantiations) {
-            foreach ($instantiations as $instantiation) {
-                $instantiated[strtolower($instantiation)] = true;
-            }
-        }
-
         foreach ($classNodes as $classNode) {
             $classNameKey = strtolower($classNode->className);
 
@@ -722,7 +724,7 @@ final readonly class Analyser
                 $classNode->setExtended(true);
             }
 
-            if (isset($instantiated[$classNameKey])) {
+            if (isset($instantiatedClassMap[$classNameKey])) {
                 $classNode->setInstantiated(true);
             }
         }
@@ -771,10 +773,14 @@ final readonly class Analyser
      * class-like used only by another unused one stays flagged as used until
      * its user is removed, at which point the next run reports it.
      *
-     * @param list<ClassNode> $classNodes
+     * @param list<ClassNode>     $classNodes
+     * @param array<string, true> $instantiatedClassMap
      */
-    private function markReferencedClassLikes(array $classNodes, ExtractionResult $extractionResult): void
-    {
+    private function markReferencedClassLikes(
+        array $classNodes,
+        ExtractionResult $extractionResult,
+        array $instantiatedClassMap
+    ): void {
         $used = [];
 
         foreach ($classNodes as $classNode) {
@@ -827,18 +833,33 @@ final readonly class Analyser
             }
         }
 
-        // An instantiation is also a reference.
-        foreach ($extractionResult->fileInstantiations as $instantiations) {
-            foreach ($instantiations as $instantiation) {
-                $used[strtolower($instantiation)] = true;
-            }
-        }
-
         foreach ($classNodes as $classNode) {
-            if (isset($used[strtolower($classNode->className)])) {
+            $classNameKey = strtolower($classNode->className);
+
+            // An instantiation is also a reference. Reuse the lookup already
+            // consumed by markExtendedAndInstantiatedClasses() instead of
+            // traversing the per-file instantiations a second time.
+            if (isset($instantiatedClassMap[$classNameKey]) || isset($used[$classNameKey])) {
                 $classNode->setReferenced(true);
             }
         }
+    }
+
+    /**
+     * @param array<string, list<string>> $classNamesByFile
+     * @return array<string, true>
+     */
+    private function classNameMap(array $classNamesByFile): array
+    {
+        $classNameMap = [];
+
+        foreach ($classNamesByFile as $classNames) {
+            foreach ($classNames as $className) {
+                $classNameMap[strtolower($className)] = true;
+            }
+        }
+
+        return $classNameMap;
     }
 
     /**
