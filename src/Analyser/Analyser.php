@@ -163,15 +163,11 @@ final readonly class Analyser
         $hasClassLikeAwareRule = $hasExtendedClassAwareRule
             || $hasUsedInterfaceAwareRule
             || $hasUsedTraitAwareRule;
-        $instantiatedClassMap  = $hasClassLikeAwareRule
-            ? $this->classNameMap($extractionResult->fileInstantiations)
-            : [];
 
         if ($hasClassLikeAwareRule) {
             $this->markClassLikeUsage(
                 $classNodes,
                 $extractionResult,
-                $instantiatedClassMap,
                 $hasExtendedClassAwareRule,
                 $hasUsedInterfaceAwareRule,
             );
@@ -685,19 +681,18 @@ final readonly class Analyser
      * parent chain resolved by {@see withRecursiveParents()}; instantiated
      * classes come from resolved `new` expressions collected per file.
      *
-     * @param list<ClassNode>     $classNodes
-     * @param array<string, true> $instantiatedClassMap
+     * @param list<ClassNode> $classNodes
      */
     private function markClassLikeUsage(
         array $classNodes,
         ExtractionResult $extractionResult,
-        array $instantiatedClassMap,
         bool $markExtended,
         bool $markImplemented,
     ): void {
-        $extended    = [];
-        $implemented = [];
-        $used        = [];
+        $extended     = [];
+        $implemented  = [];
+        $used         = [];
+        $instantiated = [];
 
         foreach ($classNodes as $classNode) {
             if ($markExtended) {
@@ -771,6 +766,12 @@ final readonly class Analyser
             }
         }
 
+        foreach ($extractionResult->fileInstantiations as $classNames) {
+            foreach ($classNames as $className) {
+                $instantiated[strtolower($className)] = true;
+            }
+        }
+
         foreach ($classNodes as $classNode) {
             $classNameKey = strtolower($classNode->className);
 
@@ -778,7 +779,7 @@ final readonly class Analyser
                 $classNode->setExtended(true);
             }
 
-            if ($markExtended && isset($instantiatedClassMap[$classNameKey])) {
+            if ($markExtended && isset($instantiated[$classNameKey])) {
                 $classNode->setInstantiated(true);
             }
 
@@ -787,27 +788,10 @@ final readonly class Analyser
             }
 
             // An instantiation is also a reference, so reuse its lookup here.
-            if (isset($instantiatedClassMap[$classNameKey]) || isset($used[$classNameKey])) {
+            if (isset($instantiated[$classNameKey]) || isset($used[$classNameKey])) {
                 $classNode->setReferenced(true);
             }
         }
-    }
-
-    /**
-     * @param array<string, list<string>> $classNamesByFile
-     * @return array<string, true>
-     */
-    private function classNameMap(array $classNamesByFile): array
-    {
-        $classNameMap = [];
-
-        foreach ($classNamesByFile as $classNames) {
-            foreach ($classNames as $className) {
-                $classNameMap[strtolower($className)] = true;
-            }
-        }
-
-        return $classNameMap;
     }
 
     /**
