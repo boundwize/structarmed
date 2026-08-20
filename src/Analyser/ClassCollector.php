@@ -318,9 +318,12 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         // A ReflectionClass construction call instantiates the reflected
-        // class when the reflection target is statically resolvable.
+        // class when the reflection target is statically resolvable. The
+        // `new` receiver is checked first: it is the rare shape, so the
+        // common method call skips the name lowering entirely.
         if (
             ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
+            && $node->var instanceof New_
             && $node->name instanceof Identifier
             && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
         ) {
