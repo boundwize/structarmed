@@ -277,9 +277,7 @@ final readonly class AnalyseCommand
             $value          = $optionAndValue[1] ?? null;
 
             if (isset(self::VALUE_OPTIONS[$option])) {
-                if ($value === null) {
-                    $value = $arguments[++$index] ?? '';
-                }
+                $value ??= $arguments[++$index] ?? '';
 
                 $options[self::VALUE_OPTIONS[$option]] = $value;
                 continue;
