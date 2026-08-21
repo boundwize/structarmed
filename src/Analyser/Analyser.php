@@ -780,7 +780,8 @@ final readonly class Analyser
 
         $instantiated += $this->parentsInstantiatedThroughTraits(
             $traitsInstantiatingParent,
-            [...$classNodes, ...$extractionResult->anonymousClassNodes]
+            $classNodes,
+            $extractionResult->anonymousClassNodes
         );
 
         foreach ($classNodes as $classNode) {
@@ -809,19 +810,23 @@ final readonly class Analyser
      * `new parent()` inside a trait instantiates the parent of every class
      * using that trait, directly or through another trait that uses it.
      *
-     * @param list<string>                       $traitsInstantiatingParent
-     * @param list<ClassNode|AnonymousClassNode> $nodes
+     * @param list<string>             $traitsInstantiatingParent
+     * @param list<ClassNode>          $classNodes
+     * @param list<AnonymousClassNode> $anonymousClassNodes
      * @return array<string, true> Lowercased parent class names
      */
-    private function parentsInstantiatedThroughTraits(array $traitsInstantiatingParent, array $nodes): array
-    {
+    private function parentsInstantiatedThroughTraits(
+        array $traitsInstantiatingParent,
+        array $classNodes,
+        array $anonymousClassNodes,
+    ): array {
         if ($traitsInstantiatingParent === []) {
             return [];
         }
 
         $usersByTrait = [];
 
-        foreach ($nodes as $node) {
+        foreach ([...$classNodes, ...$anonymousClassNodes] as $node) {
             foreach ($node->traits as $trait) {
                 $usersByTrait[strtolower($trait)][] = $node;
             }
