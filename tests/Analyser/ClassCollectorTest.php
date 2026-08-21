@@ -161,7 +161,7 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame(
             [
                 '/fake/path/Foo.php' => [
-                    ClassCollector::TRAIT_PARENT_INSTANTIATION_PREFIX . 'App\Factory',
+                    ClassCollector::traitParentMarker('App\Factory'),
                     'App\Factory',
                 ],
             ],
@@ -197,7 +197,7 @@ final class ClassCollectorTest extends TestCase
             [
                 '/fake/path/Foo.php' => [
                     'App\Base',
-                    ClassCollector::TRAIT_PARENT_INSTANTIATION_PREFIX . 'App\Factory',
+                    ClassCollector::traitParentMarker('App\Factory'),
                     'App\Other',
                 ],
             ],

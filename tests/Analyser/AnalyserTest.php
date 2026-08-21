@@ -546,7 +546,8 @@ final class AnalyserTest extends TestCase
             'src/ParentClass.php' => '<?php namespace App; class ParentClass {}',
             'src/Factory.php'     => '<?php namespace App; trait Factory'
                 . ' { public static function createParent(): object { return new parent(); } }',
-            'src/Outer.php'       => '<?php namespace App; trait Outer { use Factory; }',
+            'src/Outer.php'       => '<?php namespace App; trait Outer { use Factory;'
+                . ' public static function again(): object { return new parent(); } }',
             'src/ChildClass.php'  => '<?php namespace App; class ChildClass extends ParentClass { use Outer; }',
             'src/OtherBase.php'   => '<?php namespace App; class OtherBase {}',
             'src/builder.php'     => '<?php namespace App;'

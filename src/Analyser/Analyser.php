@@ -32,7 +32,6 @@ use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
-use function array_map;
 use function array_merge;
 use function array_unique;
 use function array_values;
@@ -43,7 +42,6 @@ use function is_dir;
 use function is_file;
 use function sprintf;
 use function str_starts_with;
-use function strlen;
 use function strtolower;
 use function substr;
 
@@ -764,34 +762,26 @@ final readonly class Analyser
             }
         }
 
-        $traitParentInstantiations = [];
+        $traitsInstantiatingParent = [];
 
-        foreach ($extractionResult->fileInstantiations as $classNames) {
-            foreach ($classNames as $className) {
-                if (str_starts_with($className, ClassCollector::TRAIT_PARENT_INSTANTIATION_PREFIX)) {
-                    $traitParentInstantiations[] = substr(
-                        $className,
-                        strlen(ClassCollector::TRAIT_PARENT_INSTANTIATION_PREFIX)
-                    );
+        foreach ($extractionResult->fileInstantiations as $instantiations) {
+            foreach ($instantiations as $instantiation) {
+                $traitName = ClassCollector::traitFromParentMarker($instantiation);
+
+                if ($traitName === null) {
+                    $instantiated[strtolower($instantiation)] = true;
 
                     continue;
                 }
 
-                $instantiated[strtolower($className)] = true;
+                $traitsInstantiatingParent[] = $traitName;
             }
         }
 
-        if ($traitParentInstantiations !== []) {
-            foreach (
-                $this->resolveTraitParentInstantiations(
-                    $traitParentInstantiations,
-                    $classNodes,
-                    $extractionResult->anonymousClassNodes
-                ) as $className
-            ) {
-                $instantiated[strtolower($className)] = true;
-            }
-        }
+        $instantiated += $this->parentsInstantiatedThroughTraits(
+            $traitsInstantiatingParent,
+            [...$classNodes, ...$extractionResult->anonymousClassNodes]
+        );
 
         foreach ($classNodes as $classNode) {
             $classNameKey = strtolower($classNode->className);
@@ -819,56 +809,64 @@ final readonly class Analyser
      * `new parent()` inside a trait instantiates the parent of every class
      * using that trait, directly or through another trait that uses it.
      *
-     * @param list<string>             $traitNames
-     * @param list<ClassNode>          $classNodes
-     * @param list<AnonymousClassNode> $anonymousClassNodes
-     * @return list<string>
+     * @param list<string>                       $traitsInstantiatingParent
+     * @param list<ClassNode|AnonymousClassNode> $nodes
+     * @return array<string, true> Lowercased parent class names
      */
-    private function resolveTraitParentInstantiations(
-        array $traitNames,
-        array $classNodes,
-        array $anonymousClassNodes,
-    ): array {
-        // Traits using the marker trait, resolved transitively: a class using
-        // any trait in this set inherits the `new parent()` call.
-        $instantiatingTraits = array_fill_keys(array_map(strtolower(...), $traitNames), true);
+    private function parentsInstantiatedThroughTraits(array $traitsInstantiatingParent, array $nodes): array
+    {
+        if ($traitsInstantiatingParent === []) {
+            return [];
+        }
 
-        do {
-            $grown = false;
+        $usersByTrait = [];
 
-            foreach ($classNodes as $classNode) {
-                if (! $classNode->isTrait || isset($instantiatingTraits[strtolower($classNode->className)])) {
-                    continue;
-                }
-
-                foreach ($classNode->traits as $trait) {
-                    if (isset($instantiatingTraits[strtolower($trait)])) {
-                        $instantiatingTraits[strtolower($classNode->className)] = true;
-                        $grown                                                  = true;
-
-                        break;
-                    }
-                }
-            }
-        } while ($grown);
-
-        $parents = [];
-
-        foreach ([...$classNodes, ...$anonymousClassNodes] as $node) {
-            if ($node->extends === null) {
-                continue;
-            }
-
+        foreach ($nodes as $node) {
             foreach ($node->traits as $trait) {
-                if (isset($instantiatingTraits[strtolower($trait)])) {
-                    $parents[] = $node->extends;
-
-                    break;
-                }
+                $usersByTrait[strtolower($trait)][] = $node;
             }
         }
 
-        return array_values(array_unique($parents));
+        $parents       = [];
+        $visitedTraits = [];
+
+        foreach ($traitsInstantiatingParent as $traitInstantiatingParent) {
+            $this->collectParentsOfTraitUsers($traitInstantiatingParent, $usersByTrait, $visitedTraits, $parents);
+        }
+
+        return $parents;
+    }
+
+    /**
+     * @param array<string, list<ClassNode|AnonymousClassNode>> $usersByTrait
+     * @param array<string, true>                               $visitedTraits
+     * @param array<string, true>                               $parents
+     */
+    private function collectParentsOfTraitUsers(
+        string $traitName,
+        array $usersByTrait,
+        array &$visitedTraits,
+        array &$parents,
+    ): void {
+        $traitKey = strtolower($traitName);
+
+        if (isset($visitedTraits[$traitKey])) {
+            return;
+        }
+
+        $visitedTraits[$traitKey] = true;
+
+        foreach ($usersByTrait[$traitKey] ?? [] as $user) {
+            if ($user instanceof ClassNode && $user->isTrait) {
+                $this->collectParentsOfTraitUsers($user->className, $usersByTrait, $visitedTraits, $parents);
+
+                continue;
+            }
+
+            if ($user->extends !== null) {
+                $parents[strtolower($user->extends)] = true;
+            }
+        }
     }
 
     /**
