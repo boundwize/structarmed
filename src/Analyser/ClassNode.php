@@ -130,9 +130,11 @@ final class ClassNode
 
     public function shortName(): string
     {
-        $parts = explode('\\', $this->className);
+        $position = strrpos($this->className, '\\');
 
-        return end($parts);
+        return $position === false
+            ? $this->className
+            : substr($this->className, $position + 1);
     }
 
     public function isInLayer(string $layer): bool
