@@ -145,6 +145,14 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testTraitParentMarkerRoundTrips(): void
+    {
+        $marker = ClassCollector::traitParentMarker('App\\Factory');
+
+        $this->assertSame('App\\Factory', ClassCollector::traitFromParentMarker($marker));
+        $this->assertNull(ClassCollector::traitFromParentMarker('App\\Factory'));
+    }
+
     public function testRecordsTraitParentInstantiationAsMarker(): void
     {
         $code = '<?php namespace App;' . "\n"
