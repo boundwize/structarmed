@@ -655,18 +655,14 @@ final class ClassCollector extends NodeVisitorAbstract
             return $scope['name'];
         }
 
-        if ($relativeName !== 'parent') {
-            return null;
-        }
-
         // A trait has no parent of its own: `new parent()` targets the parent
         // of whichever class uses the trait, which is only known once every
         // class has been collected. Emit a marker the analyser resolves later.
-        if ($scope['isTrait']) {
+        if ($relativeName === 'parent' && $scope['isTrait']) {
             return self::TRAIT_PARENT_INSTANTIATION_PREFIX . $scope['name'];
         }
 
-        return $scope['extends'];
+        return $relativeName === 'parent' ? $scope['extends'] : null;
     }
 
     /**

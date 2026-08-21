@@ -145,6 +145,30 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testRecordsTraitParentInstantiationAsMarker(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'trait Factory {' . "\n"
+            . '    public static function createParent(): object { return new parent(); }' . "\n"
+            . '    public static function viaClassConstant(): object { return new (parent::class)(); }' . "\n"
+            . '    public static function createSelf(): object { return new self(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        // A trait has no parent: the marker is resolved by the analyser to the
+        // parent of every class using the trait.
+        $this->assertSame(
+            [
+                '/fake/path/Foo.php' => [
+                    ClassCollector::TRAIT_PARENT_INSTANTIATION_PREFIX . 'App\Factory',
+                    'App\Factory',
+                ],
+            ],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
     public function testResolvesConstantClassExpressionInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"
