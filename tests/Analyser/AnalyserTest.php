@@ -646,6 +646,242 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\\Other', $violations[0]->className);
     }
 
+    /**
+     * @param array<string, string> $files
+     * @param list<string>          $expectedExtendedViolations
+     * @param list<string>          $expectedTraitViolations
+     */
+    #[DataProvider('selfAndStaticInstantiationProvider')]
+    public function testResolvesSelfAndStaticInstantiationsByPhpBinding(
+        array $files,
+        array $expectedExtendedViolations,
+        array $expectedTraitViolations = [],
+    ): void {
+        $basePath = $this->makeTempProject($files);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        // Sequential and parallel analysis must resolve the deferred markers
+        // identically.
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel()] as $analyserOptions) {
+            $ruleViolationCollection = (new Analyser($basePath))
+                ->analyse($architecture, [], null, $analyserOptions);
+
+            $this->assertSame(
+                $expectedExtendedViolations,
+                $this->violationClassNames(
+                    $ruleViolationCollection->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED)
+                )
+            );
+            $this->assertSame(
+                $expectedTraitViolations,
+                $this->violationClassNames($ruleViolationCollection->forRule(YagniPreset::TRAIT_MUST_BE_USED))
+            );
+        }
+    }
+
+    /**
+     * @return iterable<string, array{0: array<string, string>, 1: list<string>, 2?: list<string>}>
+     */
+    public static function selfAndStaticInstantiationProvider(): iterable
+    {
+        $selfFactory   = '<?php namespace App; trait Factory'
+            . ' { public static function create(): object { return new self(); } }';
+        $staticFactory = '<?php namespace App; trait Factory'
+            . ' { public static function create(): object { return new static(); } }';
+
+        yield 'unused trait with new self() is still reported unused' => [
+            [
+                'src/Factory.php' => $selfFactory,
+                'src/A.php'       => '<?php namespace App; class A {}',
+                'src/B.php'       => '<?php namespace App; final class B extends A {}',
+            ],
+            ['App\A'],
+            ['App\Factory'],
+        ];
+
+        yield 'unused trait with new static() is still reported unused' => [
+            [
+                'src/Factory.php' => $staticFactory,
+                'src/A.php'       => '<?php namespace App; class A {}',
+                'src/B.php'       => '<?php namespace App; final class B extends A {}',
+            ],
+            ['App\A'],
+            ['App\Factory'],
+        ];
+
+        // `self` is lexically bound to the composing class: A is instantiated,
+        // but Child — which merely inherits create() — is not.
+        yield 'trait new self() marks the consuming class but not its descendants' => [
+            [
+                'src/Factory.php' => $selfFactory,
+                'src/A.php'       => '<?php namespace App; class A { use Factory; }',
+                'src/Child.php'   => '<?php namespace App; class Child extends A {}',
+                'src/Leaf.php'    => '<?php namespace App; final class Leaf extends Child {}',
+            ],
+            ['App\Child'],
+        ];
+
+        yield 'trait new self() marks every consuming class' => [
+            [
+                'src/Factory.php' => $selfFactory,
+                'src/A.php'       => '<?php namespace App; class A { use Factory; }',
+                'src/B.php'       => '<?php namespace App; class B { use Factory; }',
+                'src/ChildA.php'  => '<?php namespace App; final class ChildA extends A {}',
+                'src/ChildB.php'  => '<?php namespace App; final class ChildB extends B {}',
+            ],
+            [],
+        ];
+
+        yield 'trait new self() resolves through transitive trait composition' => [
+            [
+                'src/Factory.php' => $selfFactory,
+                'src/Outer.php'   => '<?php namespace App; trait Outer { use Factory; }',
+                'src/A.php'       => '<?php namespace App; class A { use Outer; }',
+                'src/Child.php'   => '<?php namespace App; final class Child extends A {}',
+            ],
+            [],
+        ];
+
+        // Outer1 and Outer2 both lead to Top: the shared trait is visited once.
+        yield 'trait new self() resolves through diamond trait composition' => [
+            [
+                'src/Factory.php' => $selfFactory,
+                'src/Outer1.php'  => '<?php namespace App; trait Outer1 { use Factory; }',
+                'src/Outer2.php'  => '<?php namespace App; trait Outer2 { use Factory; }',
+                'src/Top.php'     => '<?php namespace App; trait Top { use Outer1; use Outer2; }',
+                'src/A.php'       => '<?php namespace App; class A { use Top; }',
+                'src/Child.php'   => '<?php namespace App; final class Child extends A {}',
+            ],
+            [],
+        ];
+
+        // An anonymous class using the trait has no name to instantiate.
+        yield 'trait new self() used by an anonymous class marks nothing' => [
+            [
+                'src/Factory.php' => $selfFactory,
+                'src/Host.php'    => '<?php namespace App; final class Host'
+                    . ' { public function make(): object { return new class { use Factory; }; } }',
+                'src/A.php'       => '<?php namespace App; class A {}',
+                'src/Child.php'   => '<?php namespace App; final class Child extends A {}',
+            ],
+            ['App\\A'],
+        ];
+
+        yield 'class new self() marks the declaring class only' => [
+            [
+                'src/ParentClass.php' => '<?php namespace App; class ParentClass'
+                    . ' { public static function create(): object { return new self(); } }',
+                'src/Child.php'       => '<?php namespace App; class Child extends ParentClass {}',
+                'src/Leaf.php'        => '<?php namespace App; final class Leaf extends Child {}',
+            ],
+            ['App\Child'],
+        ];
+
+        // `static` is late-bound: every class inheriting create() can be the
+        // instantiated one. An unrelated hierarchy is unaffected.
+        yield 'trait new static() marks consuming classes and their descendants' => [
+            [
+                'src/Factory.php' => $staticFactory,
+                'src/A.php'       => '<?php namespace App; class A { use Factory; }',
+                'src/B.php'       => '<?php namespace App; class B extends A {}',
+                'src/C.php'       => '<?php namespace App; final class C extends B {}',
+                'src/X.php'       => '<?php namespace App; class X { use Factory; }',
+                'src/Y.php'       => '<?php namespace App; final class Y extends X {}',
+                'src/U.php'       => '<?php namespace App; class U {}',
+                'src/V.php'       => '<?php namespace App; final class V extends U {}',
+            ],
+            ['App\U'],
+        ];
+
+        yield 'trait new static() resolves through transitive trait composition' => [
+            [
+                'src/Factory.php' => $staticFactory,
+                'src/Outer.php'   => '<?php namespace App; trait Outer { use Factory; }',
+                'src/A.php'       => '<?php namespace App; class A { use Outer; }',
+                'src/B.php'       => '<?php namespace App; class B extends A {}',
+                'src/C.php'       => '<?php namespace App; final class C extends B {}',
+            ],
+            [],
+        ];
+
+        yield 'class new static() marks the declaring class and its descendants' => [
+            [
+                'src/A.php' => '<?php namespace App; class A'
+                    . ' { public static function create(): object { return new static(); } }',
+                'src/B.php' => '<?php namespace App; class B extends A {}',
+                'src/C.php' => '<?php namespace App; final class C extends B {}',
+            ],
+            [],
+        ];
+
+        yield 'new (self::class)() follows self binding' => [
+            [
+                'src/Factory.php' => '<?php namespace App; trait Factory'
+                    . ' { public static function create(): object { return new (self::class)(); } }',
+                'src/A.php'       => '<?php namespace App; class A { use Factory; }',
+                'src/Child.php'   => '<?php namespace App; class Child extends A {}',
+                'src/Leaf.php'    => '<?php namespace App; final class Leaf extends Child {}',
+            ],
+            ['App\Child'],
+        ];
+
+        yield 'new (static::class)() follows static binding' => [
+            [
+                'src/Factory.php' => '<?php namespace App; trait Factory'
+                    . ' { public static function create(): object { return new (static::class)(); } }',
+                'src/A.php'       => '<?php namespace App; class A { use Factory; }',
+                'src/B.php'       => '<?php namespace App; class B extends A {}',
+                'src/C.php'       => '<?php namespace App; final class C extends B {}',
+            ],
+            [],
+        ];
+
+        // self/static inside an anonymous class belong to that class, which
+        // has no name to instantiate: neither the trait's consumer nor Base
+        // is marked instantiated.
+        yield 'anonymous class self/static inside a trait stay isolated' => [
+            [
+                'src/Base.php'    => '<?php namespace App; class Base {}',
+                'src/Factory.php' => '<?php namespace App; trait Factory {' . "\n"
+                    . '    public function make(): object {' . "\n"
+                    . '        return new class extends Base {' . "\n"
+                    . '            public function x(): object { return new self(); }' . "\n"
+                    . '            public function y(): object { return new static(); }' . "\n"
+                    . '        };' . "\n"
+                    . '    }' . "\n"
+                    . '}',
+                'src/A.php'       => '<?php namespace App; class A { use Factory; }',
+                'src/Child.php'   => '<?php namespace App; final class Child extends A {}',
+            ],
+            ['App\A', 'App\Base'],
+        ];
+
+        yield 'trait new parent() still marks the parent of the consuming class' => [
+            [
+                'src/ParentClass.php' => '<?php namespace App; class ParentClass {}',
+                'src/Factory.php'     => '<?php namespace App; trait Factory'
+                    . ' { public static function create(): object { return new parent(); } }',
+                'src/Child.php'       => '<?php namespace App; class Child extends ParentClass { use Factory; }',
+                'src/Leaf.php'        => '<?php namespace App; final class Leaf extends Child {}',
+            ],
+            ['App\Child'],
+        ];
+    }
+
+    /**
+     * @param array<RuleViolation> $violations
+     * @return list<string>
+     */
+    private function violationClassNames(array $violations): array
+    {
+        $classNames = array_map(static fn (RuleViolation $ruleViolation): string => $ruleViolation->className, $violations);
+        sort($classNames);
+
+        return $classNames;
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesWhenParentIsInstantiated(): void
     {
         $factory = '<?php namespace App;' . "\n"

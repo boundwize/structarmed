@@ -67,12 +67,12 @@ use function array_unique;
 use function array_values;
 use function count;
 use function end;
+use function in_array;
 use function is_string;
 use function preg_match;
 use function spl_object_id;
-use function str_starts_with;
 use function strcasecmp;
-use function strlen;
+use function strpos;
 use function strtolower;
 use function substr;
 
@@ -166,14 +166,16 @@ final class ClassCollector extends NodeVisitorAbstract
     private array $currentFileReferences = [];
 
     /**
-     * Prefix of the instantiation marker recorded for `new parent()` inside a
-     * trait, followed by the trait name. The `@` cannot occur in a class name,
-     * so the marker never collides with a real instantiation target.
+     * Separator of a deferred instantiation marker, `<keyword>@<class-like>`,
+     * recorded when `new self()`, `new static()`, or `new parent()` cannot be
+     * resolved to a class name until every class has been collected. The `@`
+     * cannot occur in a class name, so a marker never collides with a real
+     * instantiation target.
      *
-     * @see traitParentMarker()
-     * @see traitFromParentMarker()
+     * @see deferredInstantiationMarker()
+     * @see parseDeferredInstantiationMarker()
      */
-    private const TRAIT_PARENT_MARKER_PREFIX = 'parent@';
+    private const DEFERRED_MARKER_SEPARATOR = '@';
 
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
@@ -186,10 +188,11 @@ final class ClassCollector extends NodeVisitorAbstract
     /**
      * Stack of class-likes currently being entered, so `new self`,
      * `new static`, and `new parent` instantiations can be resolved to the
-     * class names they target. Anonymous classes have no name to resolve
-     * self/static to, but their `extends` still resolves `parent`.
+     * class names (or deferred markers) they target. Anonymous classes have
+     * no name to resolve self/static to, but their `extends` still resolves
+     * `parent`.
      *
-     * @var list<array{name: string|null, extends: string|null}>
+     * @var list<array{self: string|null, static: string|null, parent: string|null}>
      */
     private array $activeClassLikeScopes = [];
 
@@ -295,25 +298,39 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * Marker recorded in place of the parent class name for `new parent()`
-     * inside the given trait.
+     * Marker recorded in place of a class name for `new <keyword>()` whose
+     * target depends on classes not yet collected: `self`, `static`, and
+     * `parent` inside a trait resolve against each class using the trait,
+     * and `static` inside a class also covers its descendants.
+     *
+     * @param 'self'|'static'|'parent' $keyword
      */
-    public static function traitParentMarker(string $traitName): string
+    public static function deferredInstantiationMarker(string $keyword, string $classLikeName): string
     {
-        return self::TRAIT_PARENT_MARKER_PREFIX . $traitName;
+        return $keyword . self::DEFERRED_MARKER_SEPARATOR . $classLikeName;
     }
 
     /**
-     * The trait name carried by a `new parent()` marker, or null when the
-     * instantiation is a plain class name.
+     * The keyword and class-like name carried by a deferred instantiation
+     * marker, or null when the instantiation is a plain class name.
+     *
+     * @return array{0: 'self'|'static'|'parent', 1: string}|null
      */
-    public static function traitFromParentMarker(string $instantiation): ?string
+    public static function parseDeferredInstantiationMarker(string $instantiation): ?array
     {
-        if (! str_starts_with($instantiation, self::TRAIT_PARENT_MARKER_PREFIX)) {
+        $separatorPosition = strpos($instantiation, self::DEFERRED_MARKER_SEPARATOR);
+
+        if ($separatorPosition === false) {
             return null;
         }
 
-        return substr($instantiation, strlen(self::TRAIT_PARENT_MARKER_PREFIX));
+        $keyword = substr($instantiation, 0, $separatorPosition);
+
+        if (! in_array($keyword, ['self', 'static', 'parent'], true)) {
+            return null;
+        }
+
+        return [$keyword, substr($instantiation, $separatorPosition + 1)];
     }
 
     public function enterNode(Node $node): null
@@ -658,10 +675,10 @@ final class ClassCollector extends NodeVisitorAbstract
     }
 
     /**
-     * Resolve a class-like name node to a fully qualified name: either it is
-     * already fully qualified, or it is a self/static/parent keyword resolved
-     * against the enclosing class-like scope. Returns null when there is no
-     * scope to resolve against.
+     * Resolve a class-like name node to a fully qualified name (or deferred
+     * marker): either it is already fully qualified, or it is a
+     * self/static/parent keyword resolved against the enclosing class-like
+     * scope. Returns null when there is no scope to resolve against.
      */
     private function resolveClassLikeName(Name $name): ?string
     {
@@ -677,36 +694,42 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
-        $relativeName = $name->toLowerString();
-
-        if ($relativeName === 'self' || $relativeName === 'static') {
-            return $scope['name'];
-        }
-
-        return $relativeName === 'parent' ? $scope['extends'] : null;
+        return $scope[$name->toLowerString()] ?? null;
     }
 
     /**
-     * A trait has no parent of its own: `new parent()` targets the parent of
-     * whichever class uses the trait, which is only known once every class
-     * has been collected. Its scope therefore carries a marker the analyser
-     * resolves later, in place of a parent class name.
+     * A trait is never instantiated itself: `self`, `static`, and `parent`
+     * target whichever class uses the trait, and `static` in a class also
+     * targets its descendants. Both are only known once every class has been
+     * collected, so those scope entries carry a marker the analyser resolves
+     * later, in place of a class name.
      *
-     * @return array{name: string|null, extends: string|null}
+     * @return array{self: string|null, static: string|null, parent: string|null}
      */
     private function createClassLikeScope(ClassLike $classLike): array
     {
-        $name = $classLike->name instanceof Identifier ? $this->resolveClassName($classLike) : null;
+        $parent = $classLike instanceof Class_ && $classLike->extends instanceof Name
+            ? $classLike->extends->toString()
+            : null;
+
+        if (! $classLike->name instanceof Identifier) {
+            return ['self' => null, 'static' => null, 'parent' => $parent];
+        }
+
+        $name = $this->resolveClassName($classLike);
 
         if ($classLike instanceof Trait_) {
-            return ['name' => $name, 'extends' => self::traitParentMarker((string) $name)];
+            return [
+                'self'   => self::deferredInstantiationMarker('self', $name),
+                'static' => self::deferredInstantiationMarker('static', $name),
+                'parent' => self::deferredInstantiationMarker('parent', $name),
+            ];
         }
 
         return [
-            'name'    => $name,
-            'extends' => $classLike instanceof Class_ && $classLike->extends instanceof Name
-                ? $classLike->extends->toString()
-                : null,
+            'self'   => $name,
+            'static' => self::deferredInstantiationMarker('static', $name),
+            'parent' => $parent,
         ];
     }
 
@@ -750,8 +773,9 @@ final class ClassCollector extends NodeVisitorAbstract
 
     /**
      * Evaluate a constant expression to a class-name string: 'App\X' literals,
-     * X::class (including self/static/parent::class), and concatenations of
-     * those. Anything depending on runtime values resolves to null.
+     * X::class (including self/static/parent::class, which may yield a
+     * deferred marker), and concatenations of those. Anything depending on
+     * runtime values resolves to null.
      */
     private function resolveClassNameExpr(Expr $expr): ?string
     {
@@ -765,7 +789,10 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
-        if (! is_string($value) || preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) !== 1) {
+        if (
+            ! is_string($value)
+            || preg_match(self::CLASS_LIKE_STRING_PATTERN, self::parseDeferredInstantiationMarker($value)[1] ?? $value) !== 1
+        ) {
             return null;
         }
 

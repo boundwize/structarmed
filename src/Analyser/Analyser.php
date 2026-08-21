@@ -685,10 +685,9 @@ final readonly class Analyser
         bool $markExtended,
         bool $markImplemented,
     ): void {
-        $extended     = [];
-        $implemented  = [];
-        $used         = [];
-        $instantiated = [];
+        $extended    = [];
+        $implemented = [];
+        $used        = [];
 
         foreach ($classNodes as $classNode) {
             if ($markExtended) {
@@ -762,36 +761,46 @@ final readonly class Analyser
             }
         }
 
-        $traitsInstantiatingParent = [];
+        $instantiated    = [];
+        $deferredMarkers = [];
 
         foreach ($extractionResult->fileInstantiations as $instantiations) {
             foreach ($instantiations as $instantiation) {
-                $traitName = ClassCollector::traitFromParentMarker($instantiation);
+                $deferredMarker = ClassCollector::parseDeferredInstantiationMarker($instantiation);
 
-                if ($traitName === null) {
+                if ($deferredMarker === null) {
                     $instantiated[strtolower($instantiation)] = true;
 
                     continue;
                 }
 
-                $traitsInstantiatingParent[] = $traitName;
+                $deferredMarkers[$instantiation] = $deferredMarker;
             }
         }
 
-        $instantiated += $this->parentsInstantiatedThroughTraits(
-            $traitsInstantiatingParent,
-            $classNodes,
-            $extractionResult->anonymousClassNodes
-        );
+        // Classes whose descendants are instantiated too (`new static()`).
+        $instantiatedWithDescendants = [];
+
+        if ($deferredMarkers !== []) {
+            $this->resolveDeferredInstantiations(
+                array_values($deferredMarkers),
+                $classNodes,
+                $extractionResult->anonymousClassNodes,
+                $instantiated,
+                $instantiatedWithDescendants
+            );
+        }
 
         foreach ($classNodes as $classNode) {
-            $classNameKey = strtolower($classNode->className);
+            $classNameKey   = strtolower($classNode->className);
+            $isInstantiated = isset($instantiated[$classNameKey])
+                || $this->extendsAny($classNode, $instantiatedWithDescendants);
 
             if ($markExtended && isset($extended[$classNameKey])) {
                 $classNode->setExtended(true);
             }
 
-            if ($markExtended && isset($instantiated[$classNameKey])) {
+            if ($markExtended && $isInstantiated) {
                 $classNode->setInstantiated(true);
             }
 
@@ -800,31 +809,60 @@ final readonly class Analyser
             }
 
             // An instantiation is also a reference, so reuse its lookup here.
-            if (isset($instantiated[$classNameKey]) || isset($used[$classNameKey])) {
+            if ($isInstantiated || isset($used[$classNameKey])) {
                 $classNode->setReferenced(true);
             }
         }
     }
 
     /**
-     * `new parent()` inside a trait instantiates the parent of every class
-     * using that trait, directly or through another trait that uses it.
-     *
-     * @param list<string>             $traitsInstantiatingParent
-     * @param list<ClassNode>          $classNodes
-     * @param list<AnonymousClassNode> $anonymousClassNodes
-     * @return array<string, true> Lowercased parent class names
+     * @param array<string, true> $classNames Lowercased class names
      */
-    private function parentsInstantiatedThroughTraits(
-        array $traitsInstantiatingParent,
-        array $classNodes,
-        array $anonymousClassNodes,
-    ): array {
-        if ($traitsInstantiatingParent === []) {
-            return [];
+    private function extendsAny(ClassNode $classNode, array $classNames): bool
+    {
+        if ($classNames === []) {
+            return false;
         }
 
+        foreach ($classNode->parentClasses as $parentClass) {
+            if (isset($classNames[strtolower($parentClass)])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve `new self()`, `new static()`, and `new parent()` markers, which
+     * follow PHP's binding of each keyword: `self` is the class declaring or
+     * composing the method, `static` additionally covers its descendants, and
+     * `parent` is the parent of the declaring or composing class. Inside a
+     * trait, the composing classes are every class using the trait, directly
+     * or through another trait that uses it; the trait itself is never
+     * instantiated.
+     *
+     * @param list<array{0: 'self'|'static'|'parent', 1: string}> $deferredMarkers
+     * @param list<ClassNode>          $classNodes
+     * @param list<AnonymousClassNode> $anonymousClassNodes
+     * @param array<string, true>      $instantiated                Lowercased class names
+     * @param array<string, true>      $instantiatedWithDescendants Lowercased class names
+     */
+    private function resolveDeferredInstantiations(
+        array $deferredMarkers,
+        array $classNodes,
+        array $anonymousClassNodes,
+        array &$instantiated,
+        array &$instantiatedWithDescendants,
+    ): void {
+        $traitNames   = [];
         $usersByTrait = [];
+
+        foreach ($classNodes as $classNode) {
+            if ($classNode->isTrait) {
+                $traitNames[strtolower($classNode->className)] = true;
+            }
+        }
 
         foreach ([...$classNodes, ...$anonymousClassNodes] as $node) {
             foreach ($node->traits as $trait) {
@@ -832,26 +870,59 @@ final readonly class Analyser
             }
         }
 
-        $parents       = [];
-        $visitedTraits = [];
+        foreach ($deferredMarkers as [$keyword, $classLikeName]) {
+            $classLikeKey = strtolower($classLikeName);
 
-        foreach ($traitsInstantiatingParent as $traitInstantiatingParent) {
-            $this->collectParentsOfTraitUsers($traitInstantiatingParent, $usersByTrait, $visitedTraits, $parents);
+            // Only `static` defers in a class: `self` and `parent` resolve
+            // to plain class names at collection time.
+            if (! isset($traitNames[$classLikeKey])) {
+                $instantiated[$classLikeKey]                = true;
+                $instantiatedWithDescendants[$classLikeKey] = true;
+
+                continue;
+            }
+
+            $visitedTraits    = [];
+            $composingClasses = [];
+            $this->collectTraitUsers($classLikeName, $usersByTrait, $visitedTraits, $composingClasses);
+
+            foreach ($composingClasses as $composingClass) {
+                if ($keyword === 'parent') {
+                    if ($composingClass->extends !== null) {
+                        $instantiated[strtolower($composingClass->extends)] = true;
+                    }
+
+                    continue;
+                }
+
+                // An anonymous class has no name that could be instantiated.
+                if (! $composingClass instanceof ClassNode) {
+                    continue;
+                }
+
+                $composingClassKey                = strtolower($composingClass->className);
+                $instantiated[$composingClassKey] = true;
+
+                if ($keyword === 'static') {
+                    $instantiatedWithDescendants[$composingClassKey] = true;
+                }
+            }
         }
-
-        return $parents;
     }
 
     /**
+     * Collect the non-trait class-likes using a trait, directly or through
+     * another trait that uses it.
+     *
      * @param array<string, list<ClassNode|AnonymousClassNode>> $usersByTrait
      * @param array<string, true>                               $visitedTraits
-     * @param array<string, true>                               $parents
+     * @param list<ClassNode|AnonymousClassNode>                $users
      */
-    private function collectParentsOfTraitUsers(
+    private function collectTraitUsers(
         string $traitName,
         array $usersByTrait,
         array &$visitedTraits,
-        array &$parents,
+        array &$users,
     ): void {
         $traitKey = strtolower($traitName);
 
@@ -863,14 +934,12 @@ final readonly class Analyser
 
         foreach ($usersByTrait[$traitKey] ?? [] as $user) {
             if ($user instanceof ClassNode && $user->isTrait) {
-                $this->collectParentsOfTraitUsers($user->className, $usersByTrait, $visitedTraits, $parents);
+                $this->collectTraitUsers($user->className, $usersByTrait, $visitedTraits, $users);
 
                 continue;
             }
 
-            if ($user->extends !== null) {
-                $parents[strtolower($user->extends)] = true;
-            }
+            $users[] = $user;
         }
     }
 

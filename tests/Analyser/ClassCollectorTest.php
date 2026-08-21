@@ -139,38 +139,92 @@ final class ClassCollectorTest extends TestCase
 
         $classCollector = $this->makeCollector($code);
 
+        // `static` is late-bound, so it is recorded as a marker the analyser
+        // resolves to Repository and its descendants.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\Repository', 'App\BaseRepository']],
+            [
+                '/fake/path/Foo.php' => [
+                    'App\Repository',
+                    ClassCollector::deferredInstantiationMarker('static', 'App\Repository'),
+                    'App\BaseRepository',
+                ],
+            ],
             $classCollector->getFileInstantiations()
         );
     }
 
-    public function testTraitParentMarkerRoundTrips(): void
+    public function testDeferredInstantiationMarkerRoundTrips(): void
     {
-        $marker = ClassCollector::traitParentMarker('App\\Factory');
+        foreach (['self', 'static', 'parent'] as $keyword) {
+            $marker = ClassCollector::deferredInstantiationMarker($keyword, 'App\\Factory');
 
-        $this->assertSame('App\\Factory', ClassCollector::traitFromParentMarker($marker));
-        $this->assertNull(ClassCollector::traitFromParentMarker('App\\Factory'));
+            $this->assertSame([$keyword, 'App\\Factory'], ClassCollector::parseDeferredInstantiationMarker($marker));
+        }
+
+        $this->assertNull(ClassCollector::parseDeferredInstantiationMarker('App\\Factory'));
+        $this->assertNull(ClassCollector::parseDeferredInstantiationMarker('other@App\\Factory'));
     }
 
-    public function testRecordsTraitParentInstantiationAsMarker(): void
+    public function testDoesNotRecordStringWithMarkerSeparatorAsInstantiation(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'class Host { public function make(): object { return new (\'other@App\\Host\')(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // `@` never occurs in a class name, and only self/static/parent form
+        // a marker: anything else records nothing.
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
+    public function testRecordsTraitSelfStaticAndParentInstantiationsAsMarkers(): void
     {
         $code = '<?php namespace App;' . "\n"
             . 'trait Factory {' . "\n"
             . '    public static function createParent(): object { return new parent(); }' . "\n"
             . '    public static function viaClassConstant(): object { return new (parent::class)(); }' . "\n"
             . '    public static function createSelf(): object { return new self(); }' . "\n"
+            . '    public static function createStatic(): object { return new static(); }' . "\n"
+            . '    public static function selfViaClassConstant(): object { return new (self::class)(); }' . "\n"
+            . '    public static function staticViaClassConstant(): object { return new (static::class)(); }' . "\n"
             . '}';
 
         $classCollector = $this->makeCollector($code);
 
-        // A trait has no parent: the marker is resolved by the analyser to the
-        // parent of every class using the trait.
+        // A trait is never instantiated itself: each marker is resolved by the
+        // analyser against every class using the trait. `new (X::class)()`
+        // yields the same marker as `new X()`, deduplicated per file.
         $this->assertSame(
             [
                 '/fake/path/Foo.php' => [
-                    ClassCollector::traitParentMarker('App\Factory'),
-                    'App\Factory',
+                    ClassCollector::deferredInstantiationMarker('parent', 'App\Factory'),
+                    ClassCollector::deferredInstantiationMarker('self', 'App\Factory'),
+                    ClassCollector::deferredInstantiationMarker('static', 'App\Factory'),
+                ],
+            ],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testRecordsClassSelfAsNameAndStaticAsMarker(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'class Model extends Base {' . "\n"
+            . '    public static function createSelf(): object { return new self(); }' . "\n"
+            . '    public static function staticViaClassConstant(): object { return new (static::class)(); }' . "\n"
+            . '    public static function createParent(): object { return new parent(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        // `self` and `parent` are lexically bound; `static` is late-bound, so
+        // its marker lets the analyser include the descendants of Model.
+        $this->assertSame(
+            [
+                '/fake/path/Foo.php' => [
+                    'App\Model',
+                    ClassCollector::deferredInstantiationMarker('static', 'App\Model'),
+                    'App\Base',
                 ],
             ],
             $classCollector->getFileInstantiations()
@@ -185,6 +239,7 @@ final class ClassCollectorTest extends TestCase
             . '        return new class extends Base {' . "\n"
             . '            public static function createParent(): object { return new parent(); }' . "\n"
             . '            public static function createSelf(): object { return new self(); }' . "\n"
+            . '            public static function createStatic(): object { return new static(); }' . "\n"
             . '        };' . "\n"
             . '    }' . "\n"
             . '    public static function createOwnParent(): object { return new parent(); }' . "\n"
@@ -200,12 +255,12 @@ final class ClassCollectorTest extends TestCase
 
         // `parent` belongs to the innermost class-like: the anonymous class,
         // not the enclosing trait or class. An anonymous class without a
-        // parent (and `self` inside one) resolves to nothing.
+        // parent (and `self`/`static` inside one) resolves to nothing.
         $this->assertSame(
             [
                 '/fake/path/Foo.php' => [
                     'App\Base',
-                    ClassCollector::traitParentMarker('App\Factory'),
+                    ClassCollector::deferredInstantiationMarker('parent', 'App\Factory'),
                     'App\Other',
                 ],
             ],
