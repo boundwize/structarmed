@@ -12,7 +12,6 @@ use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
-use Boundwize\StructArmed\Util\Path;
 
 use function array_key_exists;
 use function array_keys;
@@ -33,7 +32,6 @@ use function json_encode;
 use function mkdir;
 use function rmdir;
 use function sprintf;
-use function sys_get_temp_dir;
 use function unlink;
 
 use const GLOB_NOSORT;
@@ -63,10 +61,7 @@ final class AnalysisResultCache
         private readonly string $configHash = '',
         private readonly string $composerGeneratedVersionHash = '',
     ) {
-        $basePath             = Path::normalise($basePath);
-        $this->cacheDirectory = $cacheDirectory
-            ? Path::resolve(Path::normalise($cacheDirectory), $basePath)
-            : Path::normalise(sys_get_temp_dir()) . '/structarmed/cache/' . hash('xxh128', $basePath);
+        $this->cacheDirectory = CachePathFactory::getPath($cacheDirectory, $basePath);
     }
 
     /**

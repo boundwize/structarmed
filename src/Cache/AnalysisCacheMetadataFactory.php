@@ -36,7 +36,7 @@ final readonly class AnalysisCacheMetadataFactory
         sort($files);
 
         return [
-            'version'                      => 3,
+            'version'                      => 4,
             'basePath'                     => $basePath,
             'configPath'                   => $configPath,
             'configHash'                   => $this->fileHash($configPath),
