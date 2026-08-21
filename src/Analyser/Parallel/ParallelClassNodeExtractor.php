@@ -177,8 +177,29 @@ final readonly class ParallelClassNodeExtractor
 
                 try {
                     // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                    $result = unserialize((string) file_get_contents($pending[$key]['outputFile']));
+                    $output = (string) file_get_contents($pending[$key]['outputFile']);
                     // phpcs:enable
+                    $result = $output !== '' ? unserialize($output) : null;
+
+                    // A worker that died before writing a payload (OOM, fatal error, killed process) leaves an
+                    // empty output file and a non-zero exit code; report the exit failure and stderr first instead
+                    // of masking it behind a generic "invalid payload" protocol error.
+                    if ($exitCode !== 0) {
+                        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+                        // to avoid error in test that mock it
+                        $stderr = (string) file_get_contents($pending[$key]['stderrFile']);
+                        // phpcs:enable
+
+                        $error = is_array($result) && is_string($result['error'] ?? null)
+                            ? $result['error']
+                            : sprintf('worker exited with code %d', $exitCode);
+
+                        throw new RuntimeException(sprintf(
+                            "Parallel analysis worker failed: %s%s",
+                            $error,
+                            $stderr !== '' ? "\n" . $stderr : ''
+                        ));
+                    }
 
                     if (
                         ! is_array($result)
@@ -195,7 +216,7 @@ final readonly class ParallelClassNodeExtractor
                         throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
                     }
 
-                    if ($error !== null || $exitCode !== 0) {
+                    if ($error !== null) {
                         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
                         // to avoid error in test that mock it
                         $stderr = (string) file_get_contents($pending[$key]['stderrFile']);
@@ -203,7 +224,7 @@ final readonly class ParallelClassNodeExtractor
 
                         throw new RuntimeException(sprintf(
                             "Parallel analysis worker failed: %s%s",
-                            $error ?? 'unknown error',
+                            $error,
                             $stderr !== '' ? "\n" . $stderr : ''
                         ));
                     }
