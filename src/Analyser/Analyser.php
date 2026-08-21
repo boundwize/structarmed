@@ -823,8 +823,11 @@ final readonly class Analyser
      *
      * @param array<string, true> $classNames Lowercased class names
      */
-    private function isConcreteSelfOrDescendantOfAny(ClassNode $classNode, string $classNameKey, array $classNames): bool
-    {
+    private function isConcreteSelfOrDescendantOfAny(
+        ClassNode $classNode,
+        string $classNameKey,
+        array $classNames
+    ): bool {
         if ($classNames === [] || $classNode->isAbstract || ! $classNode->isClass()) {
             return false;
         }
