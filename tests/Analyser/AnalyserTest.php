@@ -650,12 +650,14 @@ final class AnalyserTest extends TestCase
      * @param array<string, string> $files
      * @param list<string>          $expectedExtendedViolations
      * @param list<string>          $expectedTraitViolations
+     * @param list<string>          $expectedAbstractClassViolations
      */
     #[DataProvider('selfAndStaticInstantiationProvider')]
     public function testResolvesSelfAndStaticInstantiationsByPhpBinding(
         array $files,
         array $expectedExtendedViolations,
         array $expectedTraitViolations = [],
+        array $expectedAbstractClassViolations = [],
     ): void {
         $basePath = $this->makeTempProject($files);
 
@@ -678,11 +680,17 @@ final class AnalyserTest extends TestCase
                 $expectedTraitViolations,
                 $this->violationClassNames($ruleViolationCollection->forRule(YagniPreset::TRAIT_MUST_BE_USED))
             );
+            $this->assertSame(
+                $expectedAbstractClassViolations,
+                $this->violationClassNames(
+                    $ruleViolationCollection->forRule(YagniPreset::ABSTRACT_CLASS_MUST_BE_USED)
+                )
+            );
         }
     }
 
     /**
-     * @return iterable<string, array{0: array<string, string>, 1: list<string>, 2?: list<string>}>
+     * @return iterable<string, array{0: array<string, string>, 1: list<string>, 2?: list<string>, 3?: list<string>}>
      */
     public static function selfAndStaticInstantiationProvider(): iterable
     {
@@ -814,6 +822,21 @@ final class AnalyserTest extends TestCase
                 'src/C.php' => '<?php namespace App; final class C extends B {}',
             ],
             [],
+        ];
+
+        // An abstract descendant cannot be a `new static()` target, so it is
+        // neither instantiated nor referenced; C, below it, still is.
+        yield 'class new static() skips abstract descendants' => [
+            [
+                'src/A.php' => '<?php namespace App; class A'
+                    . ' { public static function create(): object { return new static(); } }',
+                'src/B.php' => '<?php namespace App; abstract class B extends A {}',
+                'src/C.php' => '<?php namespace App; final class C extends B {}',
+                'src/D.php' => '<?php namespace App; abstract class D extends A {}',
+            ],
+            [],
+            [],
+            ['App\\D'],
         ];
 
         yield 'new (self::class)() follows self binding' => [

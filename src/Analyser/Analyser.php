@@ -794,7 +794,7 @@ final readonly class Analyser
         foreach ($classNodes as $classNode) {
             $classNameKey   = strtolower($classNode->className);
             $isInstantiated = isset($instantiated[$classNameKey])
-                || $this->extendsAny($classNode, $instantiatedWithDescendants);
+                || $this->isConcreteDescendantOfAny($classNode, $instantiatedWithDescendants);
 
             if ($markExtended && isset($extended[$classNameKey])) {
                 $classNode->setExtended(true);
@@ -816,11 +816,14 @@ final readonly class Analyser
     }
 
     /**
+     * Whether `new static()` in any of the given classes can instantiate this
+     * one: an abstract descendant is not a valid late-static-binding target.
+     *
      * @param array<string, true> $classNames Lowercased class names
      */
-    private function extendsAny(ClassNode $classNode, array $classNames): bool
+    private function isConcreteDescendantOfAny(ClassNode $classNode, array $classNames): bool
     {
-        if ($classNames === []) {
+        if ($classNames === [] || $classNode->isAbstract || ! $classNode->isClass()) {
             return false;
         }
 
