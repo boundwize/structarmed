@@ -22,6 +22,8 @@ use function rmdir;
 use function sys_get_temp_dir;
 use function unlink;
 
+use const PHP_BINARY;
+
 #[CoversClass(ParallelClassNodeExtractor::class)]
 final class ParallelClassNodeExtractorTest extends TestCase
 {
@@ -290,6 +292,35 @@ PHP);
         }
     }
 
+    public function testExtractReportsStderrWhenWorkerDiesBeforeWritingPayload(): void
+    {
+        // Simulates a worker killed by OOM / fatal error before ClassNodeWorker can serialize a result:
+        // non-zero exit code, empty output file, diagnostic on stderr.
+        $GLOBALS['mock_proc_open_command'] = [
+            PHP_BINARY,
+            '-r',
+            'fwrite(STDERR, "simulated worker fatal"); exit(255);',
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+            $this->fail('Expected RuntimeException was not thrown.');
+        } catch (RuntimeException $runtimeException) {
+            $this->assertStringContainsString('Parallel analysis worker failed:', $runtimeException->getMessage());
+            $this->assertStringContainsString('worker exited with code 255', $runtimeException->getMessage());
+            $this->assertStringContainsString('simulated worker fatal', $runtimeException->getMessage());
+            $this->assertStringNotContainsString('invalid payload', $runtimeException->getMessage());
+        } finally {
+            $GLOBALS['mock_proc_open_command'] = null;
+        }
+    }
+
     public function testExtractThrowsWhenTempnamFails(): void
     {
         $GLOBALS['mock_tempnam'] = true;
@@ -322,6 +353,29 @@ PHP);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned an invalid payload.');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    public function testExtractThrowsWhenExitZeroWorkerReportsErrorInPayload(): void
+    {
+        // Worker exits 0 (real worker run) but the payload carries an error string; the error must be reported
+        // even without a non-zero exit code.
+        $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => 'simulated payload error'];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker failed: simulated payload error');
 
         try {
             $parallelClassNodeExtractor->extract([$file]);
