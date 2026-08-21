@@ -792,9 +792,15 @@ final readonly class Analyser
         }
 
         foreach ($classNodes as $classNode) {
-            $classNameKey   = strtolower($classNode->className);
-            $isInstantiated = isset($instantiated[$classNameKey])
-                || $this->isConcreteSelfOrDescendantOfAny($classNode, $classNameKey, $instantiatedWithDescendants);
+            $classNameKey = strtolower($classNode->className);
+
+            // Only a concrete class can be instantiated: `new self()` in an
+            // abstract class, or `new static()` reaching an abstract class,
+            // can never succeed and so is not a usage.
+            $isInstantiated = $classNode->isClass() && ! $classNode->isAbstract && (
+                isset($instantiated[$classNameKey])
+                || $this->isSelfOrDescendantOfAny($classNode, $classNameKey, $instantiatedWithDescendants)
+            );
 
             if ($markExtended && isset($extended[$classNameKey])) {
                 $classNode->setExtended(true);
@@ -816,19 +822,14 @@ final readonly class Analyser
     }
 
     /**
-     * Whether `new static()` in any of the given classes can instantiate this
-     * one: the class itself or a descendant, as long as it is concrete — an
-     * abstract class is never a valid late-static-binding target, even the
-     * one declaring the `new static()`.
+     * Whether `new static()` in any of the given classes can bind to this
+     * one: the class itself or any descendant.
      *
      * @param array<string, true> $classNames Lowercased class names
      */
-    private function isConcreteSelfOrDescendantOfAny(
-        ClassNode $classNode,
-        string $classNameKey,
-        array $classNames
-    ): bool {
-        if ($classNames === [] || $classNode->isAbstract || ! $classNode->isClass()) {
+    private function isSelfOrDescendantOfAny(ClassNode $classNode, string $classNameKey, array $classNames): bool
+    {
+        if ($classNames === []) {
             return false;
         }
 

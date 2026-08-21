@@ -777,6 +777,28 @@ final class AnalyserTest extends TestCase
             ['App\\A'],
         ];
 
+        // `new self()` in an abstract class can never succeed, in the class
+        // or through a trait: the class stays an unused abstraction.
+        yield 'class new self() does not mark an abstract declaring class' => [
+            [
+                'src/A.php' => '<?php namespace App; abstract class A'
+                    . ' { public static function create(): object { return new self(); } }',
+            ],
+            [],
+            [],
+            ['App\\A'],
+        ];
+
+        yield 'trait new self() does not mark an abstract consuming class' => [
+            [
+                'src/Factory.php' => $selfFactory,
+                'src/A.php'       => '<?php namespace App; abstract class A { use Factory; }',
+            ],
+            [],
+            [],
+            ['App\\A'],
+        ];
+
         yield 'class new self() marks the declaring class only' => [
             [
                 'src/ParentClass.php' => '<?php namespace App; class ParentClass'
