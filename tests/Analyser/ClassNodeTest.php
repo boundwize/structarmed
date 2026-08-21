@@ -40,6 +40,23 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->nameMatches('/^App\\\\Domain\\\\CreateOrderHandler$/', isFullName: true));
     }
 
+    public function testShortNameReturnsFullNameForGlobalNamespaceClass(): void
+    {
+        $classNode = new ClassNode(
+            className:    'GlobalHelper',
+            file:         '/src/GlobalHelper.php',
+            line:         1,
+            layer:        null,
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  false,
+            isReadonly:   false,
+        );
+
+        $this->assertSame('GlobalHelper', $classNode->shortName());
+    }
+
     public function testIsClassReturnsFalseForInterfacesAndTraits(): void
     {
         $interfaceNode = new ClassNode(
