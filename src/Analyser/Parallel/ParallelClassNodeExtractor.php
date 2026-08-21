@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
+use Boundwize\StructArmed\Cache\CachePathFactory;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
@@ -35,7 +36,6 @@ use function serialize;
 use function sprintf;
 use function stream_set_blocking;
 use function substr_count;
-use function sys_get_temp_dir;
 use function unlink;
 use function unserialize;
 use function usleep;
@@ -76,7 +76,7 @@ final readonly class ParallelClassNodeExtractor
         $script         = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $pending        = [];
         $emitProgress   = $progressHandler instanceof ProgressHandlerInterface;
-        $cacheDirectory = $this->cacheDirectory ?? sys_get_temp_dir();
+        $cacheDirectory = CachePathFactory::getPath($this->cacheDirectory, $this->basePath);
 
         if (! is_dir($cacheDirectory)) {
             mkdir($cacheDirectory, 0777, true);
