@@ -12,7 +12,6 @@ use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
-use Boundwize\StructArmed\Util\Path;
 
 use function array_key_exists;
 use function array_keys;
@@ -62,7 +61,6 @@ final class AnalysisResultCache
         private readonly string $configHash = '',
         private readonly string $composerGeneratedVersionHash = '',
     ) {
-        $basePath             = Path::normalise($basePath);
         $this->cacheDirectory = CachePathFactory::getPath($cacheDirectory, $basePath);
     }
 

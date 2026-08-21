@@ -25,6 +25,22 @@ final class CachePathFactoryTest extends TestCase
         );
     }
 
+    public function testNormalisesBasePathBeforeHashing(): void
+    {
+        $expected = CachePathFactory::getPath(null, '/path/to/project');
+
+        $this->assertSame($expected, CachePathFactory::getPath(null, '/path/to/project/'));
+        $this->assertSame($expected, CachePathFactory::getPath(null, '\\path\\to\\project\\'));
+    }
+
+    public function testNormalisesBasePathBeforeResolvingRelativeCacheDirectory(): void
+    {
+        $this->assertSame(
+            '/path/to/project/var/cache',
+            CachePathFactory::getPath('var/cache', '\\path\\to\\project\\'),
+        );
+    }
+
     public function testResolvesRelativeCacheDirectoryAgainstBasePath(): void
     {
         $this->assertSame(

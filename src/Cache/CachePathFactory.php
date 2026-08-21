@@ -16,6 +16,8 @@ final class CachePathFactory
 {
     public static function getPath(?string $cacheDirectory, string $basePath): string
     {
+        $basePath = Path::normalise($basePath);
+
         return $cacheDirectory
             ? Path::resolve(Path::normalise($cacheDirectory), $basePath)
             : Path::normalise(sys_get_temp_dir()) . '/structarmed/cache/' . hash('xxh128', $basePath);
