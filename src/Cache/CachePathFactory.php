@@ -9,6 +9,9 @@ use Boundwize\StructArmed\Util\Path;
 use function hash;
 use function sys_get_temp_dir;
 
+/**
+ * @internal
+ */
 final class CachePathFactory
 {
     public static function getPath(?string $cacheDirectory, string $basePath): string
