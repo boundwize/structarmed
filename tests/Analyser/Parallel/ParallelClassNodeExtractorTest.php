@@ -362,6 +362,29 @@ PHP);
         }
     }
 
+    public function testExtractThrowsWhenExitZeroWorkerReportsErrorInPayload(): void
+    {
+        // Worker exits 0 (real worker run) but the payload carries an error string; the error must be reported
+        // even without a non-zero exit code.
+        $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => 'simulated payload error'];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker failed: simulated payload error');
+
+        try {
+            $parallelClassNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
     public function testExtractThrowsWhenErrorPayloadIsInvalid(): void
     {
         $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => ['not_a_string']];
