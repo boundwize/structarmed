@@ -516,6 +516,80 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\BaseRepository', $violations[0]->className);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnTraitNewParent(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/ParentClass.php' => '<?php namespace App; class ParentClass {}',
+            'src/Factory.php'     => '<?php namespace App; trait Factory'
+                . ' { public static function createParent(): object { return new parent(); } }',
+            'src/ChildClass.php'  => '<?php namespace App; class ChildClass extends ParentClass { use Factory; }',
+            'src/Unrelated.php'   => '<?php namespace App; class Unrelated {}',
+            'src/Leaf.php'        => '<?php namespace App; final class Leaf extends Unrelated {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        // `new parent()` in a trait instantiates the parent of the class using
+        // the trait; a parent whose children do not use the trait is unaffected.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\Unrelated', $violations[0]->className);
+    }
+
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleResolvesTraitNewParentTransitively(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/ParentClass.php' => '<?php namespace App; class ParentClass {}',
+            'src/Factory.php'     => '<?php namespace App; trait Factory'
+                . ' { public static function createParent(): object { return new parent(); } }',
+            'src/Outer.php'       => '<?php namespace App; trait Outer { use Factory; }',
+            'src/ChildClass.php'  => '<?php namespace App; class ChildClass extends ParentClass { use Outer; }',
+            'src/OtherBase.php'   => '<?php namespace App; class OtherBase {}',
+            'src/builder.php'     => '<?php namespace App;'
+                . ' function build(): object { return new class extends OtherBase { use Factory; }; }',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::parallel())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleIgnoresTraitNewParentWhenTraitIsUnused(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/ParentClass.php' => '<?php namespace App; class ParentClass {}',
+            'src/Factory.php'     => '<?php namespace App; trait Factory'
+                . ' { public static function createParent(): object { return new parent(); } }',
+            'src/ChildClass.php'  => '<?php namespace App; final class ChildClass extends ParentClass {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // A trait nobody uses has no parent to instantiate: the extended class
+        // is still flagged, and so is the unused trait itself.
+        $extendedViolations = $ruleViolationCollection
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+        $traitViolations    = $ruleViolationCollection->forRule(YagniPreset::TRAIT_MUST_BE_USED);
+
+        $this->assertCount(1, $extendedViolations);
+        $this->assertSame('App\ParentClass', $extendedViolations[0]->className);
+        $this->assertCount(1, $traitViolations);
+        $this->assertSame('App\Factory', $traitViolations[0]->className);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesWhenParentIsInstantiated(): void
     {
         $factory = '<?php namespace App;' . "\n"

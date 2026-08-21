@@ -162,6 +162,13 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var list<string> */
     private array $currentFileReferences = [];
 
+    /**
+     * Prefix of the instantiation marker recorded for `new parent()` inside a
+     * trait, followed by the trait name. The `@` cannot occur in a class name,
+     * so the marker never collides with a real instantiation target.
+     */
+    public const TRAIT_PARENT_INSTANTIATION_PREFIX = 'parent@';
+
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
 
@@ -175,7 +182,7 @@ final class ClassCollector extends NodeVisitorAbstract
      * `new static`, and `new parent` instantiations can be resolved to the
      * class names they target.
      *
-     * @var list<array{name: string, extends: string|null}>
+     * @var list<array{name: string, extends: string|null, isTrait: bool}>
      */
     private array $activeClassLikeScopes = [];
 
@@ -448,6 +455,7 @@ final class ClassCollector extends NodeVisitorAbstract
             'extends' => $classLike instanceof Class_ && $classLike->extends instanceof Name
                 ? $classLike->extends->toString()
                 : null,
+            'isTrait' => $classLike instanceof Trait_,
         ];
 
         foreach ($classLike->getMethods() as $classMethod) {
@@ -647,7 +655,18 @@ final class ClassCollector extends NodeVisitorAbstract
             return $scope['name'];
         }
 
-        return $relativeName === 'parent' ? $scope['extends'] : null;
+        if ($relativeName !== 'parent') {
+            return null;
+        }
+
+        // A trait has no parent of its own: `new parent()` targets the parent
+        // of whichever class uses the trait, which is only known once every
+        // class has been collected. Emit a marker the analyser resolves later.
+        if ($scope['isTrait']) {
+            return self::TRAIT_PARENT_INSTANTIATION_PREFIX . $scope['name'];
+        }
+
+        return $scope['extends'];
     }
 
     /**

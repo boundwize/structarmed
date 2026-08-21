@@ -32,6 +32,7 @@ use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
+use function array_map;
 use function array_merge;
 use function array_unique;
 use function array_values;
@@ -42,6 +43,7 @@ use function is_dir;
 use function is_file;
 use function sprintf;
 use function str_starts_with;
+use function strlen;
 use function strtolower;
 use function substr;
 
@@ -762,8 +764,31 @@ final readonly class Analyser
             }
         }
 
+        $traitParentInstantiations = [];
+
         foreach ($extractionResult->fileInstantiations as $classNames) {
             foreach ($classNames as $className) {
+                if (str_starts_with($className, ClassCollector::TRAIT_PARENT_INSTANTIATION_PREFIX)) {
+                    $traitParentInstantiations[] = substr(
+                        $className,
+                        strlen(ClassCollector::TRAIT_PARENT_INSTANTIATION_PREFIX)
+                    );
+
+                    continue;
+                }
+
+                $instantiated[strtolower($className)] = true;
+            }
+        }
+
+        if ($traitParentInstantiations !== []) {
+            foreach (
+                $this->resolveTraitParentInstantiations(
+                    $traitParentInstantiations,
+                    $classNodes,
+                    $extractionResult->anonymousClassNodes
+                ) as $className
+            ) {
                 $instantiated[strtolower($className)] = true;
             }
         }
@@ -788,6 +813,62 @@ final readonly class Analyser
                 $classNode->setReferenced(true);
             }
         }
+    }
+
+    /**
+     * `new parent()` inside a trait instantiates the parent of every class
+     * using that trait, directly or through another trait that uses it.
+     *
+     * @param list<string>             $traitNames
+     * @param list<ClassNode>          $classNodes
+     * @param list<AnonymousClassNode> $anonymousClassNodes
+     * @return list<string>
+     */
+    private function resolveTraitParentInstantiations(
+        array $traitNames,
+        array $classNodes,
+        array $anonymousClassNodes,
+    ): array {
+        // Traits using the marker trait, resolved transitively: a class using
+        // any trait in this set inherits the `new parent()` call.
+        $instantiatingTraits = array_fill_keys(array_map(strtolower(...), $traitNames), true);
+
+        do {
+            $grown = false;
+
+            foreach ($classNodes as $classNode) {
+                if (! $classNode->isTrait || isset($instantiatingTraits[strtolower($classNode->className)])) {
+                    continue;
+                }
+
+                foreach ($classNode->traits as $trait) {
+                    if (isset($instantiatingTraits[strtolower($trait)])) {
+                        $instantiatingTraits[strtolower($classNode->className)] = true;
+                        $grown                                                  = true;
+
+                        break;
+                    }
+                }
+            }
+        } while ($grown);
+
+        $parents = [];
+
+        foreach ([...$classNodes, ...$anonymousClassNodes] as $node) {
+            if ($node->extends === null) {
+                continue;
+            }
+
+            foreach ($node->traits as $trait) {
+                if (isset($instantiatingTraits[strtolower($trait)])) {
+                    $parents[] = $node->extends;
+
+                    break;
+                }
+            }
+        }
+
+        return array_values(array_unique($parents));
     }
 
     /**
