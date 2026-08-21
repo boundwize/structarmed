@@ -70,8 +70,11 @@ use function end;
 use function is_string;
 use function preg_match;
 use function spl_object_id;
+use function str_starts_with;
 use function strcasecmp;
+use function strlen;
 use function strtolower;
+use function substr;
 
 final class ClassCollector extends NodeVisitorAbstract
 {
@@ -162,6 +165,16 @@ final class ClassCollector extends NodeVisitorAbstract
     /** @var list<string> */
     private array $currentFileReferences = [];
 
+    /**
+     * Prefix of the instantiation marker recorded for `new parent()` inside a
+     * trait, followed by the trait name. The `@` cannot occur in a class name,
+     * so the marker never collides with a real instantiation target.
+     *
+     * @see traitParentMarker()
+     * @see traitFromParentMarker()
+     */
+    private const TRAIT_PARENT_MARKER_PREFIX = 'parent@';
+
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
 
@@ -171,11 +184,12 @@ final class ClassCollector extends NodeVisitorAbstract
     private readonly ConstExprEvaluator $constExprEvaluator;
 
     /**
-     * Stack of named class-likes currently being entered, so `new self`,
+     * Stack of class-likes currently being entered, so `new self`,
      * `new static`, and `new parent` instantiations can be resolved to the
-     * class names they target.
+     * class names they target. Anonymous classes have no name to resolve
+     * self/static to, but their `extends` still resolves `parent`.
      *
-     * @var list<array{name: string, extends: string|null}>
+     * @var list<array{name: string|null, extends: string|null}>
      */
     private array $activeClassLikeScopes = [];
 
@@ -270,11 +284,36 @@ final class ClassCollector extends NodeVisitorAbstract
      * the class names they target), per file. `new` on an abstract class is
      * fatal, so these are what an extended class needs to stay concrete.
      *
+     * `new parent()` inside a trait is recorded as a marker instead, see
+     * {@see traitFromParentMarker()}.
+     *
      * @return array<string, list<string>>
      */
     public function getFileInstantiations(): array
     {
         return $this->fileInstantiations;
+    }
+
+    /**
+     * Marker recorded in place of the parent class name for `new parent()`
+     * inside the given trait.
+     */
+    public static function traitParentMarker(string $traitName): string
+    {
+        return self::TRAIT_PARENT_MARKER_PREFIX . $traitName;
+    }
+
+    /**
+     * The trait name carried by a `new parent()` marker, or null when the
+     * instantiation is a plain class name.
+     */
+    public static function traitFromParentMarker(string $instantiation): ?string
+    {
+        if (! str_starts_with($instantiation, self::TRAIT_PARENT_MARKER_PREFIX)) {
+            return null;
+        }
+
+        return substr($instantiation, strlen(self::TRAIT_PARENT_MARKER_PREFIX));
     }
 
     public function enterNode(Node $node): null
@@ -316,6 +355,8 @@ final class ClassCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof ClassLike) {
+                $this->activeClassLikeScopes[] = $this->createClassLikeScope($node);
+
                 if ($node->name instanceof Identifier) {
                     $this->startClassLikeAnalysis($node);
                 }
@@ -379,6 +420,8 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
+        array_pop($this->activeClassLikeScopes);
+
         if (! $node->name instanceof Identifier) {
             // Anonymous classes never become ClassNodes, but the class they
             // extend, the interfaces they implement, and the traits they use
@@ -398,7 +441,6 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $this->fileClassLikes[] = $node;
         array_pop($this->activeClassLikeAnalyses);
-        array_pop($this->activeClassLikeScopes);
 
         return null;
     }
@@ -443,12 +485,6 @@ final class ClassCollector extends NodeVisitorAbstract
 
         $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
         $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
-        $this->activeClassLikeScopes[]         = [
-            'name'    => $this->resolveClassName($classLike),
-            'extends' => $classLike instanceof Class_ && $classLike->extends instanceof Name
-                ? $classLike->extends->toString()
-                : null,
-        ];
 
         foreach ($classLike->getMethods() as $classMethod) {
             $methodId = spl_object_id($classMethod);
@@ -648,6 +684,30 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         return $relativeName === 'parent' ? $scope['extends'] : null;
+    }
+
+    /**
+     * A trait has no parent of its own: `new parent()` targets the parent of
+     * whichever class uses the trait, which is only known once every class
+     * has been collected. Its scope therefore carries a marker the analyser
+     * resolves later, in place of a parent class name.
+     *
+     * @return array{name: string|null, extends: string|null}
+     */
+    private function createClassLikeScope(ClassLike $classLike): array
+    {
+        $name = $classLike->name instanceof Identifier ? $this->resolveClassName($classLike) : null;
+
+        if ($classLike instanceof Trait_) {
+            return ['name' => $name, 'extends' => self::traitParentMarker((string) $name)];
+        }
+
+        return [
+            'name'    => $name,
+            'extends' => $classLike instanceof Class_ && $classLike->extends instanceof Name
+                ? $classLike->extends->toString()
+                : null,
+        ];
     }
 
     /**

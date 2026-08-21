@@ -145,6 +145,92 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testTraitParentMarkerRoundTrips(): void
+    {
+        $marker = ClassCollector::traitParentMarker('App\\Factory');
+
+        $this->assertSame('App\\Factory', ClassCollector::traitFromParentMarker($marker));
+        $this->assertNull(ClassCollector::traitFromParentMarker('App\\Factory'));
+    }
+
+    public function testRecordsTraitParentInstantiationAsMarker(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'trait Factory {' . "\n"
+            . '    public static function createParent(): object { return new parent(); }' . "\n"
+            . '    public static function viaClassConstant(): object { return new (parent::class)(); }' . "\n"
+            . '    public static function createSelf(): object { return new self(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        // A trait has no parent: the marker is resolved by the analyser to the
+        // parent of every class using the trait.
+        $this->assertSame(
+            [
+                '/fake/path/Foo.php' => [
+                    ClassCollector::traitParentMarker('App\Factory'),
+                    'App\Factory',
+                ],
+            ],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testResolvesParentInsideAnonymousClassAgainstTheAnonymousClass(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'trait Factory {' . "\n"
+            . '    public static function create(): object {' . "\n"
+            . '        return new class extends Base {' . "\n"
+            . '            public static function createParent(): object { return new parent(); }' . "\n"
+            . '            public static function createSelf(): object { return new self(); }' . "\n"
+            . '        };' . "\n"
+            . '    }' . "\n"
+            . '    public static function createOwnParent(): object { return new parent(); }' . "\n"
+            . '}' . "\n"
+            . 'class Host extends Other {' . "\n"
+            . '    public function make(): object {' . "\n"
+            . '        return new class { public function p(): object { return new parent(); } };' . "\n"
+            . '    }' . "\n"
+            . '    public function own(): object { return new parent(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        // `parent` belongs to the innermost class-like: the anonymous class,
+        // not the enclosing trait or class. An anonymous class without a
+        // parent (and `self` inside one) resolves to nothing.
+        $this->assertSame(
+            [
+                '/fake/path/Foo.php' => [
+                    'App\Base',
+                    ClassCollector::traitParentMarker('App\Factory'),
+                    'App\Other',
+                ],
+            ],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
+    public function testDoesNotRecordParentAccessWithoutNewAsInstantiation(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'trait Factory {' . "\n"
+            . '    public function call(): mixed { return parent::build(); }' . "\n"
+            . '    public function constant(): mixed { return parent::NAME; }' . "\n"
+            . '    public function name(): string { return parent::class; }' . "\n"
+            . '    public function property(): mixed { return parent::$shared; }' . "\n"
+            . '}' . "\n"
+            . 'class Host extends Base { use Factory; public function __construct() { parent::__construct(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // Only `new` instantiates: static calls, constants, ::class, and
+        // static properties on parent never mark it (or a trait marker).
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
     public function testResolvesConstantClassExpressionInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"

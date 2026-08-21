@@ -762,11 +762,27 @@ final readonly class Analyser
             }
         }
 
-        foreach ($extractionResult->fileInstantiations as $classNames) {
-            foreach ($classNames as $className) {
-                $instantiated[strtolower($className)] = true;
+        $traitsInstantiatingParent = [];
+
+        foreach ($extractionResult->fileInstantiations as $instantiations) {
+            foreach ($instantiations as $instantiation) {
+                $traitName = ClassCollector::traitFromParentMarker($instantiation);
+
+                if ($traitName === null) {
+                    $instantiated[strtolower($instantiation)] = true;
+
+                    continue;
+                }
+
+                $traitsInstantiatingParent[] = $traitName;
             }
         }
+
+        $instantiated += $this->parentsInstantiatedThroughTraits(
+            $traitsInstantiatingParent,
+            $classNodes,
+            $extractionResult->anonymousClassNodes
+        );
 
         foreach ($classNodes as $classNode) {
             $classNameKey = strtolower($classNode->className);
@@ -786,6 +802,74 @@ final readonly class Analyser
             // An instantiation is also a reference, so reuse its lookup here.
             if (isset($instantiated[$classNameKey]) || isset($used[$classNameKey])) {
                 $classNode->setReferenced(true);
+            }
+        }
+    }
+
+    /**
+     * `new parent()` inside a trait instantiates the parent of every class
+     * using that trait, directly or through another trait that uses it.
+     *
+     * @param list<string>             $traitsInstantiatingParent
+     * @param list<ClassNode>          $classNodes
+     * @param list<AnonymousClassNode> $anonymousClassNodes
+     * @return array<string, true> Lowercased parent class names
+     */
+    private function parentsInstantiatedThroughTraits(
+        array $traitsInstantiatingParent,
+        array $classNodes,
+        array $anonymousClassNodes,
+    ): array {
+        if ($traitsInstantiatingParent === []) {
+            return [];
+        }
+
+        $usersByTrait = [];
+
+        foreach ([...$classNodes, ...$anonymousClassNodes] as $node) {
+            foreach ($node->traits as $trait) {
+                $usersByTrait[strtolower($trait)][] = $node;
+            }
+        }
+
+        $parents       = [];
+        $visitedTraits = [];
+
+        foreach ($traitsInstantiatingParent as $traitInstantiatingParent) {
+            $this->collectParentsOfTraitUsers($traitInstantiatingParent, $usersByTrait, $visitedTraits, $parents);
+        }
+
+        return $parents;
+    }
+
+    /**
+     * @param array<string, list<ClassNode|AnonymousClassNode>> $usersByTrait
+     * @param array<string, true>                               $visitedTraits
+     * @param array<string, true>                               $parents
+     */
+    private function collectParentsOfTraitUsers(
+        string $traitName,
+        array $usersByTrait,
+        array &$visitedTraits,
+        array &$parents,
+    ): void {
+        $traitKey = strtolower($traitName);
+
+        if (isset($visitedTraits[$traitKey])) {
+            return;
+        }
+
+        $visitedTraits[$traitKey] = true;
+
+        foreach ($usersByTrait[$traitKey] ?? [] as $user) {
+            if ($user instanceof ClassNode && $user->isTrait) {
+                $this->collectParentsOfTraitUsers($user->className, $usersByTrait, $visitedTraits, $parents);
+
+                continue;
+            }
+
+            if ($user->extends !== null) {
+                $parents[strtolower($user->extends)] = true;
             }
         }
     }
