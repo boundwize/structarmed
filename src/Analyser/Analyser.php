@@ -794,7 +794,7 @@ final readonly class Analyser
         foreach ($classNodes as $classNode) {
             $classNameKey   = strtolower($classNode->className);
             $isInstantiated = isset($instantiated[$classNameKey])
-                || $this->isConcreteDescendantOfAny($classNode, $instantiatedWithDescendants);
+                || $this->isConcreteSelfOrDescendantOfAny($classNode, $classNameKey, $instantiatedWithDescendants);
 
             if ($markExtended && isset($extended[$classNameKey])) {
                 $classNode->setExtended(true);
@@ -817,14 +817,20 @@ final readonly class Analyser
 
     /**
      * Whether `new static()` in any of the given classes can instantiate this
-     * one: an abstract descendant is not a valid late-static-binding target.
+     * one: the class itself or a descendant, as long as it is concrete — an
+     * abstract class is never a valid late-static-binding target, even the
+     * one declaring the `new static()`.
      *
      * @param array<string, true> $classNames Lowercased class names
      */
-    private function isConcreteDescendantOfAny(ClassNode $classNode, array $classNames): bool
+    private function isConcreteSelfOrDescendantOfAny(ClassNode $classNode, string $classNameKey, array $classNames): bool
     {
         if ($classNames === [] || $classNode->isAbstract || ! $classNode->isClass()) {
             return false;
+        }
+
+        if (isset($classNames[$classNameKey])) {
+            return true;
         }
 
         foreach ($classNode->parentClasses as $parentClass) {
@@ -879,7 +885,6 @@ final readonly class Analyser
             // Only `static` defers in a class: `self` and `parent` resolve
             // to plain class names at collection time.
             if (! isset($traitNames[$classLikeKey])) {
-                $instantiated[$classLikeKey]                = true;
                 $instantiatedWithDescendants[$classLikeKey] = true;
 
                 continue;
@@ -903,11 +908,12 @@ final readonly class Analyser
                     continue;
                 }
 
-                $composingClassKey                = strtolower($composingClass->className);
-                $instantiated[$composingClassKey] = true;
+                $composingClassKey = strtolower($composingClass->className);
 
                 if ($keyword === 'static') {
                     $instantiatedWithDescendants[$composingClassKey] = true;
+                } else {
+                    $instantiated[$composingClassKey] = true;
                 }
             }
         }

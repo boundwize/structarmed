@@ -839,6 +839,28 @@ final class AnalyserTest extends TestCase
             ['App\\D'],
         ];
 
+        // `new static()` in an abstract class without concrete descendants
+        // can never instantiate anything, in the class or through a trait.
+        yield 'class new static() does not mark an abstract declaring class' => [
+            [
+                'src/A.php' => '<?php namespace App; abstract class A'
+                    . ' { public static function create(): object { return new static(); } }',
+            ],
+            [],
+            [],
+            ['App\\A'],
+        ];
+
+        yield 'trait new static() does not mark an abstract consuming class' => [
+            [
+                'src/Factory.php' => $staticFactory,
+                'src/A.php'       => '<?php namespace App; abstract class A { use Factory; }',
+            ],
+            [],
+            [],
+            ['App\\A'],
+        ];
+
         yield 'new (self::class)() follows self binding' => [
             [
                 'src/Factory.php' => '<?php namespace App; trait Factory'
