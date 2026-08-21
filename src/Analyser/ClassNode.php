@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
-use function end;
-use function explode;
 use function in_array;
 use function preg_match;
 use function rtrim;
 use function str_ends_with;
 use function str_starts_with;
 use function strcasecmp;
+use function strrpos;
+use function substr;
 
 final class ClassNode
 {
