@@ -178,11 +178,12 @@ final class ClassCollector extends NodeVisitorAbstract
     private readonly ConstExprEvaluator $constExprEvaluator;
 
     /**
-     * Stack of named class-likes currently being entered, so `new self`,
+     * Stack of class-likes currently being entered, so `new self`,
      * `new static`, and `new parent` instantiations can be resolved to the
-     * class names they target.
+     * class names they target. Anonymous classes have no name to resolve
+     * self/static to, but their `extends` still resolves `parent`.
      *
-     * @var list<array{name: string, extends: string|null, isTrait: bool}>
+     * @var list<array{name: string|null, extends: string|null, isTrait: bool}>
      */
     private array $activeClassLikeScopes = [];
 
@@ -325,6 +326,14 @@ final class ClassCollector extends NodeVisitorAbstract
             if ($node instanceof ClassLike) {
                 if ($node->name instanceof Identifier) {
                     $this->startClassLikeAnalysis($node);
+                } else {
+                    $this->activeClassLikeScopes[] = [
+                        'name'    => null,
+                        'extends' => $node instanceof Class_ && $node->extends instanceof Name
+                            ? $node->extends->toString()
+                            : null,
+                        'isTrait' => false,
+                    ];
                 }
 
                 return null;
@@ -399,6 +408,8 @@ final class ClassCollector extends NodeVisitorAbstract
                     traits:     $this->collectTraits($node),
                 );
             }
+
+            array_pop($this->activeClassLikeScopes);
 
             return null;
         }
@@ -658,7 +669,7 @@ final class ClassCollector extends NodeVisitorAbstract
         // A trait has no parent of its own: `new parent()` targets the parent
         // of whichever class uses the trait, which is only known once every
         // class has been collected. Emit a marker the analyser resolves later.
-        if ($relativeName === 'parent' && $scope['isTrait']) {
+        if ($relativeName === 'parent' && $scope['isTrait'] && $scope['name'] !== null) {
             return self::TRAIT_PARENT_INSTANTIATION_PREFIX . $scope['name'];
         }
 

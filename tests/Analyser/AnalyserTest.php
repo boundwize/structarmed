@@ -614,6 +614,37 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\\Base', $violations[0]->className);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleResolvesParentInsideAnonymousClassInTrait(): void
+    {
+        $factory = '<?php namespace App;' . "\n"
+            . 'trait Factory {' . "\n"
+            . '    public static function create(): object {' . "\n"
+            . '        return new class extends Base {' . "\n"
+            . '            public static function createParent(): object { return new parent(); }' . "\n"
+            . '        };' . "\n"
+            . '    }' . "\n"
+            . '}';
+
+        $basePath = $this->makeTempProject([
+            'src/Base.php'    => '<?php namespace App; class Base {}',
+            'src/Other.php'   => '<?php namespace App; class Other {}',
+            'src/Factory.php' => $factory,
+            'src/Host.php'    => '<?php namespace App; final class Host extends Other { use Factory; }',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        // `new parent()` belongs to the anonymous class, so it instantiates
+        // Base — not Other, the parent of the class using the trait.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\Other', $violations[0]->className);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesWhenParentIsInstantiated(): void
     {
         $factory = '<?php namespace App;' . "\n"

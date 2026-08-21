@@ -169,6 +169,42 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testResolvesParentInsideAnonymousClassAgainstTheAnonymousClass(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'trait Factory {' . "\n"
+            . '    public static function create(): object {' . "\n"
+            . '        return new class extends Base {' . "\n"
+            . '            public static function createParent(): object { return new parent(); }' . "\n"
+            . '            public static function createSelf(): object { return new self(); }' . "\n"
+            . '        };' . "\n"
+            . '    }' . "\n"
+            . '    public static function createOwnParent(): object { return new parent(); }' . "\n"
+            . '}' . "\n"
+            . 'class Host extends Other {' . "\n"
+            . '    public function make(): object {' . "\n"
+            . '        return new class { public function p(): object { return new parent(); } };' . "\n"
+            . '    }' . "\n"
+            . '    public function own(): object { return new parent(); }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        // `parent` belongs to the innermost class-like: the anonymous class,
+        // not the enclosing trait or class. An anonymous class without a
+        // parent (and `self` inside one) resolves to nothing.
+        $this->assertSame(
+            [
+                '/fake/path/Foo.php' => [
+                    'App\Base',
+                    ClassCollector::TRAIT_PARENT_INSTANTIATION_PREFIX . 'App\Factory',
+                    'App\Other',
+                ],
+            ],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
     public function testResolvesConstantClassExpressionInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"
