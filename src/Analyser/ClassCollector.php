@@ -791,7 +791,10 @@ final class ClassCollector extends NodeVisitorAbstract
 
         if (
             ! is_string($value)
-            || preg_match(self::CLASS_LIKE_STRING_PATTERN, self::parseDeferredInstantiationMarker($value)[1] ?? $value) !== 1
+            || preg_match(
+                self::CLASS_LIKE_STRING_PATTERN,
+                self::parseDeferredInstantiationMarker($value)[1] ?? $value
+            ) !== 1
         ) {
             return null;
         }

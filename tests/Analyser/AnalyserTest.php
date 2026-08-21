@@ -876,7 +876,11 @@ final class AnalyserTest extends TestCase
      */
     private function violationClassNames(array $violations): array
     {
-        $classNames = array_map(static fn (RuleViolation $ruleViolation): string => $ruleViolation->className, $violations);
+        $classNames = array_map(
+            static fn (RuleViolation $ruleViolation): string =>
+                $ruleViolation->className,
+            $violations
+        );
         sort($classNames);
 
         return $classNames;
