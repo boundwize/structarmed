@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Support;
 
+use Boundwize\StructArmed\Cache\CachePathFactory;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
@@ -43,6 +44,9 @@ trait TemporaryDirectoryCleanupTrait
         mkdir($basePath);
 
         $this->temporaryPaths[] = $basePath;
+        // also clean up the default cache directory derived from this base path,
+        // created e.g. by ParallelClassNodeExtractor when no cache directory is configured
+        $this->temporaryPaths[] = CachePathFactory::getPath(null, $basePath);
 
         return $basePath;
     }
