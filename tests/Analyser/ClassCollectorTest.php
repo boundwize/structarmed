@@ -213,6 +213,24 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testDoesNotRecordParentAccessWithoutNewAsInstantiation(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'trait Factory {' . "\n"
+            . '    public function call(): mixed { return parent::build(); }' . "\n"
+            . '    public function constant(): mixed { return parent::NAME; }' . "\n"
+            . '    public function name(): string { return parent::class; }' . "\n"
+            . '    public function property(): mixed { return parent::$shared; }' . "\n"
+            . '}' . "\n"
+            . 'class Host extends Base { use Factory; public function __construct() { parent::__construct(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // Only `new` instantiates: static calls, constants, ::class, and
+        // static properties on parent never mark it (or a trait marker).
+        $this->assertSame([], $classCollector->getFileInstantiations());
+    }
+
     public function testResolvesConstantClassExpressionInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"
