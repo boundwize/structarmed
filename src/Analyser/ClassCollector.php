@@ -71,6 +71,7 @@ use function in_array;
 use function is_string;
 use function preg_match;
 use function spl_object_id;
+use function str_starts_with;
 use function strcasecmp;
 use function strpos;
 use function strtolower;
@@ -544,11 +545,16 @@ final class ClassCollector extends NodeVisitorAbstract
         // Whether it appears inside a class-like or in procedural code, treat
         // it as a file-level reference so the named class-like stays alive.
         if ($node instanceof String_) {
+            // A leading `\` is a valid fully-qualified spelling
+            // (`'\App\Contract'`); strip it so the stored name matches the
+            // ClassNode::$className form used for usage lookups.
+            $value = $this->stripLeadingNamespaceSeparator($node->value);
+
             if (
-                preg_match(self::CLASS_LIKE_STRING_PATTERN, $node->value) === 1
-                && ! isset(self::KEYWORD_CONSTANTS[strtolower($node->value)])
+                preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1
+                && ! isset(self::KEYWORD_CONSTANTS[strtolower($value)])
             ) {
-                $this->currentFileReferences[] = $node->value;
+                $this->currentFileReferences[] = $value;
             }
 
             return;
@@ -784,22 +790,30 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         try {
+            /** @var string $value */
             $value = $this->constExprEvaluator->evaluateSilently($expr);
         } catch (ConstExprEvaluationException) {
             return null;
         }
 
-        if (
-            ! is_string($value)
-            || preg_match(
-                self::CLASS_LIKE_STRING_PATTERN,
-                self::parseDeferredInstantiationMarker($value)[1] ?? $value
-            ) !== 1
-        ) {
-            return null;
+        $marker = self::parseDeferredInstantiationMarker($value);
+
+        if ($marker === null) {
+            $value = $this->stripLeadingNamespaceSeparator($value);
         }
 
-        return $value;
+        return preg_match(self::CLASS_LIKE_STRING_PATTERN, $marker[1] ?? $value) === 1
+            ? $value
+            : null;
+    }
+
+    /**
+     * `'\App\X'` and `'App\X'` name the same class; the collector stores the
+     * latter form so usage keys line up with ClassNode::$className.
+     */
+    private function stripLeadingNamespaceSeparator(string $name): string
+    {
+        return str_starts_with($name, '\\') ? substr($name, 1) : $name;
     }
 
     private function addDependency(string $dependency): void
