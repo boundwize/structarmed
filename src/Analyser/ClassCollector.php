@@ -65,7 +65,6 @@ use PhpParser\NodeVisitorAbstract;
 use function array_pop;
 use function array_unique;
 use function array_values;
-use function assert;
 use function count;
 use function end;
 use function in_array;
@@ -796,10 +795,7 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
-        // The instanceof guard above admits only string literals, ::class
-        // fetches, and concatenations, all of which evaluate to strings.
-        assert(is_string($value));
-
+        /** @var string $value */
         $marker = self::parseDeferredInstantiationMarker($value);
 
         if ($marker === null) {
