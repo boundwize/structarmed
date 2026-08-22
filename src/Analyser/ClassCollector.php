@@ -790,12 +790,12 @@ final class ClassCollector extends NodeVisitorAbstract
         }
 
         try {
+            /** @var string $value */
             $value = $this->constExprEvaluator->evaluateSilently($expr);
         } catch (ConstExprEvaluationException) {
             return null;
         }
 
-        /** @var string $value */
         $marker = self::parseDeferredInstantiationMarker($value);
 
         if ($marker === null) {
