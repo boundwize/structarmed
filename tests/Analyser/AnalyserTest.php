@@ -439,6 +439,24 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testYagniRulesDoNotFlagInterfaceReferencedByLeadingBackslashString(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Contract.php'  => '<?php namespace App; interface Contract {}',
+            'src/bootstrap.php' => '<?php namespace App; interface_exists(\'\\App\\Contract\');',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        // '\App\Contract' names the interface just like 'App\Contract' does;
+        // the reference must keep it from being reported (and removed) as unused.
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     public function testYagniRulesIgnoreSelfReferences(): void
     {
         $basePath = $this->makeTempProject([

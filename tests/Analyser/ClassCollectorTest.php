@@ -103,6 +103,34 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testCollectsLeadingBackslashStringValuesAsNormalizedFileReferences(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'interface_exists(\'\\App\\Contract\');';
+
+        $classCollector = $this->makeCollector($code);
+
+        // '\App\Contract' is a valid fully-qualified spelling; the stored
+        // name drops the leading separator so it matches ClassNode::$className.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Contract']],
+            $classCollector->getFileReferences()
+        );
+    }
+
+    public function testCollectsLeadingBackslashStringInstantiationsNormalized(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Factory { public function make(): object { return new (\'\\App\\Service\')(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Service']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
     public function testDoesNotCollectNonClassNameShapedStringValues(): void
     {
         $code = '<?php namespace App;' . "\n"
