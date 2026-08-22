@@ -65,6 +65,7 @@ use PhpParser\NodeVisitorAbstract;
 use function array_pop;
 use function array_unique;
 use function array_values;
+use function assert;
 use function count;
 use function end;
 use function in_array;
@@ -795,24 +796,19 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
-        if (! is_string($value)) {
-            return null;
-        }
+        // The instanceof guard above admits only string literals, ::class
+        // fetches, and concatenations, all of which evaluate to strings.
+        assert(is_string($value));
 
-        if (self::parseDeferredInstantiationMarker($value) === null) {
+        $marker = self::parseDeferredInstantiationMarker($value);
+
+        if ($marker === null) {
             $value = $this->stripLeadingNamespaceSeparator($value);
         }
 
-        if (
-            preg_match(
-                self::CLASS_LIKE_STRING_PATTERN,
-                self::parseDeferredInstantiationMarker($value)[1] ?? $value
-            ) !== 1
-        ) {
-            return null;
-        }
-
-        return $value;
+        return preg_match(self::CLASS_LIKE_STRING_PATTERN, $marker[1] ?? $value) === 1
+            ? $value
+            : null;
     }
 
     /**

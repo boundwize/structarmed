@@ -131,6 +131,22 @@ final class ClassCollectorTest extends TestCase
         );
     }
 
+    public function testResolvesConcatenatedConstantClassExpressionAsInstantiation(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class Factory { public function make(): object { return new (\'App\\Service\' . 1)(); } }' . "\n"
+            . 'final class Other { public function make(): object { return new (1 + 1)(); } }';
+
+        $classCollector = $this->makeCollector($code);
+
+        // 'App\Service1' is a class-shaped string; `1 + 1` is not a constant
+        // class expression the collector evaluates at all.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Service1']],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
     public function testDoesNotCollectNonClassNameShapedStringValues(): void
     {
         $code = '<?php namespace App;' . "\n"
