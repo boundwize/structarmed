@@ -1606,6 +1606,28 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('psr4.source_paths.must_be_in_composer'));
     }
 
+    public function testDoesNotSynthesiseSourceFromComposerWhenSourceIsDefinedByPattern(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'           => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Generated/Proxy.php' => '<?php namespace App\Generated; class Proxy {}',
+            'src/Service.php'         => '<?php namespace App; class Service {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('Source', '/^App\\\\.*$/', '/^App\\\\Generated\\\\.*$/')
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential())
+            ->forRule('source.must_be_final');
+
+        // App\Generated\Proxy is excluded by the pattern's excludePattern; the composer-synthesised
+        // path-based Source layer must not re-add it. App\Service still matches and is flagged.
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\Service', $violations[0]->className);
+    }
+
     public function testAnalyserSkipsComposerProjectRuleWithExplicitComposerJsonRuleSkip(): void
     {
         $basePath = $this->makeTempProject([

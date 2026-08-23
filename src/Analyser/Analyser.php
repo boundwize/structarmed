@@ -464,13 +464,15 @@ final readonly class Analyser
     {
         $scanScopeLayerMap = [];
 
-        foreach ($architecture->getLayers() as $layerName => $layerPaths) {
+        $layers = $architecture->getLayers();
+
+        foreach ($layers as $layerName => $layerPaths) {
             if ($layerPaths === []) {
                 $scanScopeLayerMap[$layerName] = true;
             }
         }
 
-        if ($this->isSourceSynthesised($architecture)) {
+        if ($this->isSourceSynthesised($architecture, $layers)) {
             $scanScopeLayerMap['Source'] = true;
         }
 
@@ -480,12 +482,18 @@ final readonly class Analyser
     /**
      * Whether resolveLayers() fills the 'Source' layer from composer.json
      * PSR-4 paths because the architecture leaves it undefined or empty.
+     *
+     * @param array<string, string|list<string>> $layers the architecture's path layers
      */
-    private function isSourceSynthesised(Architecture $architecture): bool
+    private function isSourceSynthesised(Architecture $architecture, array $layers): bool
     {
-        $sourcePaths = $architecture->getLayers()['Source'] ?? null;
+        if (array_key_exists('Source', $layers)) {
+            return $layers['Source'] === [];
+        }
 
-        return $sourcePaths === null || $sourcePaths === [];
+        // A pattern-defined Source layer is an explicit definition too: synthesising a
+        // path-based one alongside it would re-add classes its excludePattern removed.
+        return ! array_key_exists('Source', $architecture->getLayerPatterns());
     }
 
     /**
@@ -1402,7 +1410,7 @@ final readonly class Analyser
         $layers           = $architecture->getLayers();
         $sourceArrayPaths = $layers['Source[]'] ?? null;
 
-        if ($this->isSourceSynthesised($architecture)) {
+        if ($this->isSourceSynthesised($architecture, $layers)) {
             $layers['Source'] = (new Psr4PathResolver())->paths($this->basePath);
         }
 
