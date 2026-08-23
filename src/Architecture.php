@@ -228,7 +228,7 @@ final class Architecture
     public function skipRules(string|array $ruleKeys): self
     {
         foreach ((array) $ruleKeys as $ruleKey) {
-            $this->registerPendingSkip($ruleKey);
+            $this->skippedRuleKeys[] = $ruleKey;
         }
 
         return $this;
