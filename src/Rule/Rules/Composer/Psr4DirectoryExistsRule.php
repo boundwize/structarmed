@@ -48,7 +48,7 @@ final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRu
         $nonExistentPaths = [];
 
         foreach ($this->psr4PathResolver->paths($basePath) as $autoloadPath) {
-            if (! is_dir(rtrim($basePath, '/') . '/' . $autoloadPath) && ! is_dir($autoloadPath) {
+            if (! is_dir(rtrim($basePath, '/') . '/' . $autoloadPath) && ! is_dir($autoloadPath)) {
                 $nonExistentPaths[] = $autoloadPath;
             }
         }
