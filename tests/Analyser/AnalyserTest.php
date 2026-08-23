@@ -29,6 +29,7 @@ use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -1919,6 +1920,62 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
 
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testAnalyserReportsSameViolationsWithAndWithoutExplicitScanPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'          => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Domain/Order.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                use App\Support\Helper;
+
+                final class Order
+                {
+                    public function __construct(private Helper $helper) {}
+                }
+                PHP,
+            'src/Support/Helper.php' => <<<'PHP'
+                <?php
+
+                namespace App\Support;
+
+                class Helper {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Infra', 'src/Infra/')
+            ->ruleset(['Domain' => ['Infra']])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $analyser = new Analyser($basePath);
+
+        $violationTuples = static function (RuleViolationCollection $ruleViolationCollection): array {
+            $tuples = [];
+            foreach ($ruleViolationCollection as $violation) {
+                $tuples[] = [$violation->ruleKey, $violation->className, $violation->message];
+            }
+
+            sort($tuples);
+
+            return $tuples;
+        };
+
+        $bareViolations     = $violationTuples($analyser->analyse($architecture));
+        $explicitViolations = $violationTuples($analyser->analyse($architecture, ['src/']));
+
+        // The synthesised Source layer classifies files identically whether the
+        // scan set comes from composer PSR-4 paths or explicit scan paths:
+        // the Source-targeted rule fires, the ruleset stays inert.
+        $this->assertSame($bareViolations, $explicitViolations);
+        $this->assertCount(1, $bareViolations);
+        $this->assertSame('source.must_be_final', $bareViolations[0][0]);
+        $this->assertSame('App\Support\Helper', $bareViolations[0][1]);
     }
 
     public function testFilesForAnalysisWidensScanToComposerPsr4PathsWhenSourceLayerIsNotDefined(): void
