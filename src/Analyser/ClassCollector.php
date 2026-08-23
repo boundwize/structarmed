@@ -29,6 +29,7 @@ use PhpParser\Node\Expr\List_;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\NullsafeMethodCall;
+use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
@@ -126,22 +127,24 @@ final class ClassCollector extends NodeVisitorAbstract
      * replaces an instanceof chain on the per-node hot path.
      */
     private const COMPLEXITY_BRANCH_NODES = [
-        If_::class            => true,
-        ElseIf_::class        => true,
-        For_::class           => true,
-        Foreach_::class       => true,
-        While_::class         => true,
-        Do_::class            => true,
-        Case_::class          => true,
-        Catch_::class         => true,
-        Ternary::class        => true,
-        BooleanAnd::class     => true,
-        BooleanOr::class      => true,
-        LogicalAnd::class     => true,
-        LogicalOr::class      => true,
-        Coalesce::class       => true,
-        AssignCoalesce::class => true,
-        MatchArm::class       => true,
+        If_::class                   => true,
+        ElseIf_::class               => true,
+        For_::class                  => true,
+        Foreach_::class              => true,
+        While_::class                => true,
+        Do_::class                   => true,
+        Case_::class                 => true,
+        Catch_::class                => true,
+        Ternary::class               => true,
+        BooleanAnd::class            => true,
+        BooleanOr::class             => true,
+        LogicalAnd::class            => true,
+        LogicalOr::class             => true,
+        Coalesce::class              => true,
+        AssignCoalesce::class        => true,
+        NullsafeMethodCall::class    => true,
+        NullsafePropertyFetch::class => true,
+        MatchArm::class              => true,
     ];
 
     /**
