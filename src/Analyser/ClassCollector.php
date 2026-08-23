@@ -11,8 +11,10 @@ use PhpParser\ConstExprEvaluator;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\AssignOp\Coalesce as AssignCoalesce;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
+use PhpParser\Node\Expr\BinaryOp\Coalesce;
 use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
@@ -124,20 +126,22 @@ final class ClassCollector extends NodeVisitorAbstract
      * replaces an instanceof chain on the per-node hot path.
      */
     private const COMPLEXITY_BRANCH_NODES = [
-        If_::class        => true,
-        ElseIf_::class    => true,
-        For_::class       => true,
-        Foreach_::class   => true,
-        While_::class     => true,
-        Do_::class        => true,
-        Case_::class      => true,
-        Catch_::class     => true,
-        Ternary::class    => true,
-        BooleanAnd::class => true,
-        BooleanOr::class  => true,
-        LogicalAnd::class => true,
-        LogicalOr::class  => true,
-        MatchArm::class   => true,
+        If_::class            => true,
+        ElseIf_::class        => true,
+        For_::class           => true,
+        Foreach_::class       => true,
+        While_::class         => true,
+        Do_::class            => true,
+        Case_::class          => true,
+        Catch_::class         => true,
+        Ternary::class        => true,
+        BooleanAnd::class     => true,
+        BooleanOr::class      => true,
+        LogicalAnd::class     => true,
+        LogicalOr::class      => true,
+        Coalesce::class       => true,
+        AssignCoalesce::class => true,
+        MatchArm::class       => true,
     ];
 
     /**
