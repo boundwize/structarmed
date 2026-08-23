@@ -1955,19 +1955,8 @@ final class AnalyserTest extends TestCase
 
         $analyser = new Analyser($basePath);
 
-        $violationTuples = static function (RuleViolationCollection $ruleViolationCollection): array {
-            $tuples = [];
-            foreach ($ruleViolationCollection as $violation) {
-                $tuples[] = [$violation->ruleKey, $violation->className, $violation->message];
-            }
-
-            sort($tuples);
-
-            return $tuples;
-        };
-
-        $bareViolations     = $violationTuples($analyser->analyse($architecture));
-        $explicitViolations = $violationTuples($analyser->analyse($architecture, ['src/']));
+        $bareViolations     = $this->violationTuples($analyser->analyse($architecture));
+        $explicitViolations = $this->violationTuples($analyser->analyse($architecture, ['src/']));
 
         // The synthesised Source layer classifies files identically whether the
         // scan set comes from composer PSR-4 paths or explicit scan paths:
@@ -1976,6 +1965,74 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $bareViolations);
         $this->assertSame('source.must_be_final', $bareViolations[0][0]);
         $this->assertSame('App\Support\Helper', $bareViolations[0][1]);
+    }
+
+    public function testAnalyserReportsSameViolationsAcrossScanModesWithSharedCache(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'          => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Domain/Order.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                use App\Support\Helper;
+
+                final class Order
+                {
+                    public function __construct(private Helper $helper) {}
+                }
+                PHP,
+            'src/Support/Helper.php' => <<<'PHP'
+                <?php
+
+                namespace App\Support;
+
+                class Helper {}
+                PHP,
+        ]);
+
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Infra', 'src/Infra/')
+            ->ruleset(['Domain' => ['Infra']])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        // A result cached under one scan mode must not leak different layer
+        // semantics into the other: cold bare, warm explicit, warm bare.
+        $bareColdViolations     = $this->violationTuples(
+            (new Analyser($basePath, $analysisResultCache, 'config'))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+        );
+        $explicitWarmViolations = $this->violationTuples(
+            (new Analyser($basePath, $analysisResultCache, 'config'))
+                ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential())
+        );
+        $bareWarmViolations     = $this->violationTuples(
+            (new Analyser($basePath, $analysisResultCache, 'config'))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+        );
+
+        $this->assertSame($bareColdViolations, $explicitWarmViolations);
+        $this->assertSame($bareColdViolations, $bareWarmViolations);
+        $this->assertCount(1, $bareColdViolations);
+        $this->assertSame('source.must_be_final', $bareColdViolations[0][0]);
+        $this->assertSame('App\Support\Helper', $bareColdViolations[0][1]);
+    }
+
+    /** @return list<array{string|null, string|null, string}> */
+    private function violationTuples(RuleViolationCollection $ruleViolationCollection): array
+    {
+        $tuples = [];
+        foreach ($ruleViolationCollection as $violation) {
+            $tuples[] = [$violation->ruleKey, $violation->className, $violation->message];
+        }
+
+        sort($tuples);
+
+        return $tuples;
     }
 
     public function testFilesForAnalysisWidensScanToComposerPsr4PathsWhenSourceLayerIsNotDefined(): void
