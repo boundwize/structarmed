@@ -1921,6 +1921,21 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testAnalyserResolvesSourceFromComposerPsr4WithExplicitScanPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"app/"}}}',
+            'app/Foo.php'   => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['app/']);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
     public function testFilesForAnalysisIncludesRootComposerJsonForComposerJsonRule(): void
     {
         $basePath = $this->makeTempProject([

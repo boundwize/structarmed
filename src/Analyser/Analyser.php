@@ -74,7 +74,7 @@ final readonly class Analyser
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
 
-        $layers          = $this->resolveLayers($architecture, $scanPaths);
+        $layers          = $this->resolveLayers($architecture);
         $rules           = $architecture->getRules();
         $globalSkipPaths = $architecture->getSkipPaths();
         $ruleSkipPaths   = $architecture->getRuleSkipPaths();
@@ -1296,7 +1296,7 @@ final readonly class Analyser
      */
     public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
     {
-        $layers        ??= $this->resolveLayers($architecture, $scanPaths);
+        $layers        ??= $this->resolveLayers($architecture);
         $files           = [];
         $skipPathMatcher = SkipPathMatcher::compile($this->basePath, $architecture->getSkipPaths());
         $scanPaths       = $this->scanPaths($layers, $scanPaths);
@@ -1379,21 +1379,20 @@ final readonly class Analyser
     }
 
     /**
-     * @param list<string> $scanPaths
      * @return array<string, string|list<string>>
      */
-    private function resolveLayers(Architecture $architecture, array $scanPaths = []): array
+    private function resolveLayers(Architecture $architecture): array
     {
         $layers           = $architecture->getLayers();
         $sourcePaths      = $layers['Source'] ?? null;
         $sourceArrayPaths = $layers['Source[]'] ?? null;
 
-        if ($sourcePaths === [] || ($sourcePaths === null && $scanPaths === [])) {
+        if ($sourcePaths === null || $sourcePaths === []) {
             $sourcePaths      = (new Psr4PathResolver())->paths($this->basePath);
             $layers['Source'] = $sourcePaths;
         }
 
-        if ($sourceArrayPaths === [] && $sourcePaths !== null && $sourcePaths !== []) {
+        if ($sourceArrayPaths === [] && $sourcePaths !== []) {
             $layers['Source[]'] = $sourcePaths;
         }
 
