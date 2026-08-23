@@ -1921,6 +1921,26 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testFilesForAnalysisWidensScanToComposerPsr4PathsWhenSourceLayerIsNotDefined(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'        => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Domain/Order.php' => '<?php namespace App\Domain; final class Order {}',
+            'src/Other/Helper.php' => '<?php namespace App\Other; final class Helper {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/');
+
+        $files = array_map($this->normalisePath(...), (new Analyser($basePath))->filesForAnalysis($architecture));
+
+        sort($files);
+
+        $this->assertCount(2, $files);
+        $this->assertStringEndsWith('/src/Domain/Order.php', $files[0]);
+        $this->assertStringEndsWith('/src/Other/Helper.php', $files[1]);
+    }
+
     public function testAnalyserResolvesSourceFromComposerPsr4WithExplicitScanPaths(): void
     {
         $basePath = $this->makeTempProject([
