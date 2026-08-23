@@ -1891,6 +1891,36 @@ final class AnalyserTest extends TestCase
         $this->assertStringEndsWith('/src/Foo.php', $files[0]);
     }
 
+    public function testFilesForAnalysisResolvesSourceFromComposerPsr4WhenSourceLayerIsNotDefined(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define();
+
+        $files = array_map($this->normalisePath(...), (new Analyser($basePath))->filesForAnalysis($architecture));
+
+        $this->assertCount(1, $files);
+        $this->assertStringEndsWith('/src/Foo.php', $files[0]);
+    }
+
+    public function testAnalyserResolvesSourceFromComposerPsr4WhenSourceLayerIsNotDefined(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"app/"}}}',
+            'app/Foo.php'   => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
     public function testFilesForAnalysisIncludesRootComposerJsonForComposerJsonRule(): void
     {
         $basePath = $this->makeTempProject([
