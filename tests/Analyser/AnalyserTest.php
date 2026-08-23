@@ -1936,6 +1936,41 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
     }
 
+    public function testSynthesisedSourceLayerIsRulesetInertLikeExplicitEmptySource(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'          => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Domain/Order.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                use App\Support\Helper;
+
+                final class Order
+                {
+                    public function __construct(private Helper $helper) {}
+                }
+                PHP,
+            'src/Support/Helper.php' => <<<'PHP'
+                <?php
+
+                namespace App\Support;
+
+                final class Helper {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Infra', 'src/Infra/')
+            ->ruleset(['Domain' => ['Infra']]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     public function testFilesForAnalysisIncludesRootComposerJsonForComposerJsonRule(): void
     {
         $basePath = $this->makeTempProject([

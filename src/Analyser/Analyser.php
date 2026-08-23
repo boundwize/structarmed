@@ -455,7 +455,8 @@ final readonly class Analyser
     /**
      * Empty layer paths are PSR-4 scan scopes resolved from composer.json, not
      * ruleset dependency layers. Classes found only through these layers are
-     * treated like external dependencies during ruleset checks.
+     * treated like external dependencies during ruleset checks. A 'Source'
+     * layer synthesised by resolveLayers() is a scan scope for the same reason.
      *
      * @return array<string, true>
      */
@@ -469,7 +470,22 @@ final readonly class Analyser
             }
         }
 
+        if ($this->isSourceSynthesised($architecture)) {
+            $scanScopeLayerMap['Source'] = true;
+        }
+
         return $scanScopeLayerMap;
+    }
+
+    /**
+     * Whether resolveLayers() fills the 'Source' layer from composer.json
+     * PSR-4 paths because the architecture leaves it undefined or empty.
+     */
+    private function isSourceSynthesised(Architecture $architecture): bool
+    {
+        $sourcePaths = $architecture->getLayers()['Source'] ?? null;
+
+        return $sourcePaths === null || $sourcePaths === [];
     }
 
     /**
@@ -1384,13 +1400,13 @@ final readonly class Analyser
     private function resolveLayers(Architecture $architecture): array
     {
         $layers           = $architecture->getLayers();
-        $sourcePaths      = $layers['Source'] ?? null;
         $sourceArrayPaths = $layers['Source[]'] ?? null;
 
-        if ($sourcePaths === null || $sourcePaths === []) {
-            $sourcePaths      = (new Psr4PathResolver())->paths($this->basePath);
-            $layers['Source'] = $sourcePaths;
+        if ($this->isSourceSynthesised($architecture)) {
+            $layers['Source'] = (new Psr4PathResolver())->paths($this->basePath);
         }
+
+        $sourcePaths = $layers['Source'] ?? [];
 
         if ($sourceArrayPaths === [] && $sourcePaths !== []) {
             $layers['Source[]'] = $sourcePaths;
