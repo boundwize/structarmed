@@ -97,6 +97,15 @@ final class ArchitectureTest extends TestCase
         $this->assertSame(['source.must_be_final'], $architecture->getSkippedRuleKeys());
     }
 
+    public function testSkipRuleDoesNotBecomeSkipPathWhenRuleIsNotRegistered(): void
+    {
+        $architecture = Architecture::define()
+            ->skipRule('nonexistent.rule');
+
+        $this->assertSame([], $architecture->getSkipPaths());
+        $this->assertSame(['nonexistent.rule'], $architecture->getSkippedRuleKeys());
+    }
+
     public function testCacheDirectoryIsRegistered(): void
     {
         $architecture = Architecture::define()
