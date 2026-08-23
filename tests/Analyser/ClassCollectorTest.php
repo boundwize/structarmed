@@ -1191,6 +1191,25 @@ PHP;
         $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
     }
 
+    public function testCountsNullCoalescingAsCyclomaticComplexity(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            final class Foo
+            {
+                public function value(?string $a, ?string $b): string
+                {
+                    $a ??= 'a';
+
+                    return $a ?? $b ?? 'b';
+                }
+            }
+            PHP);
+
+        // Base 1 + ??= + two ?? operators = 4.
+        $this->assertSame(4, $classNode->methods[0]->cyclomaticComplexity);
+    }
+
     public function testAggregatesNestedClosureBranchesIntoEnclosingMethodComplexity(): void
     {
         $code      = <<<'PHP'
