@@ -29,6 +29,7 @@ use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -1889,6 +1890,219 @@ final class AnalyserTest extends TestCase
 
         $this->assertCount(1, $files);
         $this->assertStringEndsWith('/src/Foo.php', $files[0]);
+    }
+
+    public function testFilesForAnalysisResolvesSourceFromComposerPsr4WhenSourceLayerIsNotDefined(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define();
+
+        $files = array_map($this->normalisePath(...), (new Analyser($basePath))->filesForAnalysis($architecture));
+
+        $this->assertCount(1, $files);
+        $this->assertStringEndsWith('/src/Foo.php', $files[0]);
+    }
+
+    public function testAnalyserResolvesSourceFromComposerPsr4WhenSourceLayerIsNotDefined(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"app/"}}}',
+            'app/Foo.php'   => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testAnalyserReportsSameViolationsWithAndWithoutExplicitScanPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'          => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Domain/Order.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                use App\Support\Helper;
+
+                final class Order
+                {
+                    public function __construct(private Helper $helper) {}
+                }
+                PHP,
+            'src/Support/Helper.php' => <<<'PHP'
+                <?php
+
+                namespace App\Support;
+
+                class Helper {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Infra', 'src/Infra/')
+            ->ruleset(['Domain' => ['Infra']])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $analyser = new Analyser($basePath);
+
+        $bareViolations     = $this->violationTuples($analyser->analyse($architecture));
+        $explicitViolations = $this->violationTuples($analyser->analyse($architecture, ['src/']));
+
+        // The synthesised Source layer classifies files identically whether the
+        // scan set comes from composer PSR-4 paths or explicit scan paths:
+        // the Source-targeted rule fires, the ruleset stays inert.
+        $this->assertSame($bareViolations, $explicitViolations);
+        $this->assertCount(1, $bareViolations);
+        $this->assertSame('source.must_be_final', $bareViolations[0][0]);
+        $this->assertSame('App\Support\Helper', $bareViolations[0][1]);
+    }
+
+    public function testAnalyserReportsSameViolationsAcrossScanModesWithSharedCache(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'          => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Domain/Order.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                use App\Support\Helper;
+
+                final class Order
+                {
+                    public function __construct(private Helper $helper) {}
+                }
+                PHP,
+            'src/Support/Helper.php' => <<<'PHP'
+                <?php
+
+                namespace App\Support;
+
+                class Helper {}
+                PHP,
+        ]);
+
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Infra', 'src/Infra/')
+            ->ruleset(['Domain' => ['Infra']])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        // A result cached under one scan mode must not leak different layer
+        // semantics into the other: cold bare, warm explicit, warm bare.
+        $bareColdViolations     = $this->violationTuples(
+            (new Analyser($basePath, $analysisResultCache, 'config'))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+        );
+        $explicitWarmViolations = $this->violationTuples(
+            (new Analyser($basePath, $analysisResultCache, 'config'))
+                ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential())
+        );
+        $bareWarmViolations     = $this->violationTuples(
+            (new Analyser($basePath, $analysisResultCache, 'config'))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+        );
+
+        $this->assertSame($bareColdViolations, $explicitWarmViolations);
+        $this->assertSame($bareColdViolations, $bareWarmViolations);
+        $this->assertCount(1, $bareColdViolations);
+        $this->assertSame('source.must_be_final', $bareColdViolations[0][0]);
+        $this->assertSame('App\Support\Helper', $bareColdViolations[0][1]);
+    }
+
+    /** @return list<array{string|null, string|null, string}> */
+    private function violationTuples(RuleViolationCollection $ruleViolationCollection): array
+    {
+        $tuples = [];
+        foreach ($ruleViolationCollection as $violation) {
+            $tuples[] = [$violation->ruleKey, $violation->className, $violation->message];
+        }
+
+        sort($tuples);
+
+        return $tuples;
+    }
+
+    public function testFilesForAnalysisWidensScanToComposerPsr4PathsWhenSourceLayerIsNotDefined(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'        => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Domain/Order.php' => '<?php namespace App\Domain; final class Order {}',
+            'src/Other/Helper.php' => '<?php namespace App\Other; final class Helper {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/');
+
+        $files = array_map($this->normalisePath(...), (new Analyser($basePath))->filesForAnalysis($architecture));
+
+        sort($files);
+
+        $this->assertCount(2, $files);
+        $this->assertStringEndsWith('/src/Domain/Order.php', $files[0]);
+        $this->assertStringEndsWith('/src/Other/Helper.php', $files[1]);
+    }
+
+    public function testAnalyserResolvesSourceFromComposerPsr4WithExplicitScanPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"app/"}}}',
+            'app/Foo.php'   => '<?php namespace App; class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['app/']);
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('source.must_be_final'));
+    }
+
+    public function testSynthesisedSourceLayerIsRulesetInertLikeExplicitEmptySource(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json'          => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Domain/Order.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                use App\Support\Helper;
+
+                final class Order
+                {
+                    public function __construct(private Helper $helper) {}
+                }
+                PHP,
+            'src/Support/Helper.php' => <<<'PHP'
+                <?php
+
+                namespace App\Support;
+
+                final class Helper {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Infra', 'src/Infra/')
+            ->ruleset(['Domain' => ['Infra']]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     public function testFilesForAnalysisIncludesRootComposerJsonForComposerJsonRule(): void
