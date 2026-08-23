@@ -535,6 +535,34 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\BaseRepository', $violations[0]->className);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesWhenParentIsHeldByTypedProperty(): void
+    {
+        $consumer = '<?php namespace App;' . "\n"
+            . 'final class SomeUse {' . "\n"
+            . '    private SomeHandler $someHandler;' . "\n"
+            . '    public function __construct(Container $c) { $this->someHandler = $c->get(\'some\'); }' . "\n"
+            . '}';
+
+        $basePath = $this->makeTempProject([
+            'src/SomeHandler.php' => '<?php namespace App; class SomeHandler {}',
+            'src/SubHandler.php'  => '<?php namespace App; final class SubHandler extends SomeHandler {}',
+            'src/Container.php'   => '<?php namespace App; final class Container {'
+                . ' public function get(string $id): object { return new \stdClass(); } }',
+            'src/SomeUse.php'     => $consumer,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        // A property typed with the class holds an instance built outside the
+        // scanned code (a container here), so the class must stay concrete.
+        $this->assertCount(0, $violations);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnTraitNewParent(): void
     {
         $basePath = $this->makeTempProject([

@@ -10,6 +10,7 @@ use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
+use PhpParser\Node\ComplexType;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\AssignOp\Coalesce as AssignCoalesce;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
@@ -34,9 +35,11 @@ use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\IntersectionType;
 use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt;
@@ -63,6 +66,7 @@ use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
+use PhpParser\Node\UnionType;
 use PhpParser\NodeVisitorAbstract;
 
 use function array_pop;
@@ -435,7 +439,25 @@ final class ClassCollector extends NodeVisitorAbstract
             return null;
         }
 
+        // A property typed with a class holds an instance of it, so the class
+        // is instantiated somewhere — typically by a container or factory
+        // outside the scanned code (`$this->handler = $c->get('handler')`).
+        if ($node instanceof Property) {
+            $this->collectPropertyTypeInstantiations($node->type);
+
+            return null;
+        }
+
         if ($node instanceof ClassMethod) {
+            // Promoted constructor parameters are properties too.
+            if ($node->name->toLowerString() === '__construct') {
+                foreach ($node->params as $param) {
+                    if ($param->isPromoted()) {
+                        $this->collectPropertyTypeInstantiations($param->type);
+                    }
+                }
+            }
+
             $this->finishMethodAnalysis($node);
 
             return null;
@@ -684,6 +706,37 @@ final class ClassCollector extends NodeVisitorAbstract
 
         if ($className !== null) {
             $this->currentFileInstantiations[] = $className;
+        }
+    }
+
+    /**
+     * Record every class named in a property type (including each member of a
+     * nullable, union, or intersection type) as an instantiation.
+     */
+    private function collectPropertyTypeInstantiations(Identifier|Name|ComplexType|null $type): void
+    {
+        if ($type instanceof Name) {
+            $className = $this->resolveClassLikeName($type);
+
+            if ($className !== null) {
+                $this->currentFileInstantiations[] = $className;
+            }
+
+            return;
+        }
+
+        if ($type instanceof NullableType) {
+            $this->collectPropertyTypeInstantiations($type->type);
+
+            return;
+        }
+
+        // Scalar types are Identifiers; everything else is a union or
+        // intersection whose members are collected one by one.
+        if ($type instanceof UnionType || $type instanceof IntersectionType) {
+            foreach ($type->types as $memberType) {
+                $this->collectPropertyTypeInstantiations($memberType);
+            }
         }
     }
 

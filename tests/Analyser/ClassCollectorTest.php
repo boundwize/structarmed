@@ -172,6 +172,40 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame([], $classCollector->getFileReferences());
     }
 
+    public function testRecordsPropertyTypesAsInstantiations(): void
+    {
+        $code = '<?php namespace App;' . "\n"
+            . 'final class SomeUse {' . "\n"
+            . '    private SomeHandler $someHandler;' . "\n"
+            . '    private ?Nullable $nullable = null;' . "\n"
+            . '    private UnionA|UnionB|null $union = null;' . "\n"
+            . '    private IntersectA&IntersectB $intersect;' . "\n"
+            . '    private int $scalar = 0;' . "\n"
+            . '    public function __construct(private Promoted $promoted, NotPromoted $notPromoted) {}' . "\n"
+            . '    public function run(Param $param): Return_ { return $param; }' . "\n"
+            . '}';
+
+        $classCollector = $this->makeCollector($code);
+
+        // A property typed with a class holds an instance of it, so the class
+        // is instantiated somewhere (typically a container). Plain method and
+        // constructor parameters are only references.
+        $this->assertSame(
+            [
+                '/fake/path/Foo.php' => [
+                    'App\SomeHandler',
+                    'App\Nullable',
+                    'App\UnionA',
+                    'App\UnionB',
+                    'App\IntersectA',
+                    'App\IntersectB',
+                    'App\Promoted',
+                ],
+            ],
+            $classCollector->getFileInstantiations()
+        );
+    }
+
     public function testResolvesSelfStaticAndParentInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"

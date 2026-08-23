@@ -97,6 +97,26 @@ final class ArchitectureTest extends TestCase
         $this->assertSame(['source.must_be_final'], $architecture->getSkippedRuleKeys());
     }
 
+    public function testSkipWithRegisteredRuleKeySkipsRuleInsteadOfPath(): void
+    {
+        $architecture = Architecture::define()
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'))
+            ->skip(['source.must_be_final', 'tests/Fixtures/']);
+
+        $this->assertSame(['tests/Fixtures/'], $architecture->getSkipPaths());
+        $this->assertSame(['source.must_be_final'], $architecture->getSkippedRuleKeys());
+    }
+
+    public function testSkipWithRuleKeyBecomesRuleSkipOnceRuleIsAdded(): void
+    {
+        $architecture = Architecture::define()
+            ->skip(['source.must_be_final', 'tests/Fixtures/'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $this->assertSame(['tests/Fixtures/'], $architecture->getSkipPaths());
+        $this->assertSame(['source.must_be_final'], $architecture->getSkippedRuleKeys());
+    }
+
     public function testSkipRuleDoesNotBecomeSkipPathWhenRuleIsNotRegistered(): void
     {
         $architecture = Architecture::define()
