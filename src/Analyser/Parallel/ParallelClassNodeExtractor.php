@@ -151,15 +151,12 @@ final readonly class ParallelClassNodeExtractor
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
-                    $workerFiles = $pending[$key]['files'];
-                    $nextFileIdx = $pending[$key]['filesAdvanced'];
-                    $lastFileIdx = min($nextFileIdx + substr_count($data, "\n"), count($workerFiles));
-
-                    for (; $nextFileIdx < $lastFileIdx; $nextFileIdx++) {
-                        $progressHandler?->advance($workerFiles[$nextFileIdx]);
-                    }
-
-                    $pending[$key]['filesAdvanced'] = $nextFileIdx;
+                    $pending[$key]['filesAdvanced'] = $this->advanceProgress(
+                        $pending[$key]['files'],
+                        $pending[$key]['filesAdvanced'],
+                        $pending[$key]['filesAdvanced'] + substr_count($data, "\n"),
+                        $progressHandler
+                    );
 
                     $anyActivity = true;
                 }
@@ -168,7 +165,7 @@ final readonly class ParallelClassNodeExtractor
                     continue;
                 }
 
-                // Pipe EOF means the worker exited and the OS closed its write end.
+                // Socket EOF means the worker exited and the OS closed its write end.
                 // proc_close() has not been called yet so waitpid() inside it correctly
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
@@ -176,6 +173,19 @@ final readonly class ParallelClassNodeExtractor
                 $procResource = $pending[$key]['process'];
                 assert(is_resource($procResource));
                 $exitCode = proc_close($procResource);
+
+                // A worker that exited cleanly has processed every file in its bucket, so any progress
+                // markers still in flight when the socket closed are redundant. Advance the remainder here
+                // rather than trusting the stream: on Windows, EOF can be observed before the last bytes
+                // the worker wrote have been read, which would otherwise silently drop those events.
+                if ($exitCode === 0) {
+                    $this->advanceProgress(
+                        $pending[$key]['files'],
+                        $pending[$key]['filesAdvanced'],
+                        count($pending[$key]['files']),
+                        $progressHandler
+                    );
+                }
 
                 try {
                     // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
@@ -353,6 +363,27 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes, $fileReferences, $fileInstantiations);
+    }
+
+    /**
+     * Emits progress for $workerFiles[$nextFileIdx .. $lastFileIdx), capped at the bucket size, and returns
+     * the index of the first file not yet reported so a file is never reported twice.
+     *
+     * @param list<string> $workerFiles
+     */
+    private function advanceProgress(
+        array $workerFiles,
+        int $nextFileIdx,
+        int $lastFileIdx,
+        ?ProgressHandlerInterface $progressHandler,
+    ): int {
+        $lastFileIdx = min($lastFileIdx, count($workerFiles));
+
+        for (; $nextFileIdx < $lastFileIdx; $nextFileIdx++) {
+            $progressHandler?->advance($workerFiles[$nextFileIdx]);
+        }
+
+        return $nextFileIdx;
     }
 
     /**

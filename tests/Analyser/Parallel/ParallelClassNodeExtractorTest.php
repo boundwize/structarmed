@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
-use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Tests\Support\RecordingProgressHandler;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use Iterator;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -646,29 +646,7 @@ PHP, $i));
             return $file;
         }, range(1, 120));
 
-        $progressHandler = new class implements ProgressHandlerInterface {
-            /** @var list<string> */
-            private array $advanced = [];
-
-            public function start(int $total): void
-            {
-            }
-
-            public function advance(string $file): void
-            {
-                $this->advanced[] = $file;
-            }
-
-            public function finish(): void
-            {
-            }
-
-            /** @return list<string> */
-            public function advanced(): array
-            {
-                return $this->advanced;
-            }
-        };
+        $progressHandler = new RecordingProgressHandler();
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
             basePath: $dir,
@@ -725,5 +703,38 @@ PHP, $i));
         fclose($pipes[2]);
 
         $this->assertSame(0, proc_close($process));
+    }
+
+    /**
+     * Progress must be complete even if the stdout socket delivers no markers at all: a worker that exited
+     * cleanly has processed its whole bucket, so the extractor reports the remainder itself. Windows CI
+     * observed EOF before the final bytes were read, losing the tail of each worker's progress.
+     */
+    public function testProgressIsCompletedOnCleanExitWhenNoMarkersWereReceived(): void
+    {
+        // A "worker" that writes nothing to stdout and exits 0; the result payload is supplied via the mock.
+        $GLOBALS['mock_proc_open_command']         = [PHP_BINARY, '-r', 'exit(0);'];
+        $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => null];
+
+        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $files = [];
+
+        foreach (['Foo', 'Bar', 'Baz'] as $name) {
+            $files[] = $file = sprintf('%s/%s.php', $dir, $name);
+            file_put_contents($file, sprintf('<?php class %s {}', $name));
+        }
+
+        $progressHandler            = new RecordingProgressHandler();
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 1);
+
+        try {
+            $parallelClassNodeExtractor->extract($files, $progressHandler);
+        } finally {
+            $GLOBALS['mock_proc_open_command']         = null;
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+
+        $this->assertSame($files, $progressHandler->advanced());
     }
 }
