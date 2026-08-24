@@ -153,7 +153,7 @@ final readonly class ParallelClassNodeExtractor
                 $stdoutPipe = $worker['stdoutPipe'];
 
                 $data = fread($stdoutPipe, 8192);
-                if ($data !== false && $data !== '') {
+                if ($emitProgress && $data !== false && $data !== '') {
                     $pending[$key]['filesAdvanced'] = $this->advanceProgress(
                         $pending[$key]['files'],
                         $pending[$key]['filesAdvanced'],
@@ -179,7 +179,7 @@ final readonly class ParallelClassNodeExtractor
                 // markers still in flight when the socket closed are redundant. Advance the remainder here
                 // rather than trusting the stream: on Windows, EOF can be observed before the last bytes
                 // the worker wrote have been read, which would otherwise silently drop those events.
-                if ($exitCode === 0) {
+                if ($exitCode === 0 && $emitProgress) {
                     $this->advanceProgress(
                         $pending[$key]['files'],
                         $pending[$key]['filesAdvanced'],
@@ -371,12 +371,12 @@ final readonly class ParallelClassNodeExtractor
         array $workerFiles,
         int $nextFileIdx,
         int $lastFileIdx,
-        ?ProgressHandlerInterface $progressHandler,
+        ProgressHandlerInterface $progressHandler,
     ): int {
         $lastFileIdx = min($lastFileIdx, count($workerFiles));
 
         for (; $nextFileIdx < $lastFileIdx; $nextFileIdx++) {
-            $progressHandler?->advance($workerFiles[$nextFileIdx]);
+            $progressHandler->advance($workerFiles[$nextFileIdx]);
         }
 
         return $nextFileIdx;
