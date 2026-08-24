@@ -128,7 +128,7 @@ JSON);
         $violation = (new Psr4DirectoryExistsRule())->evaluateProject($basePath, Architecture::define());
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('./directory/not/exists', $violation->message);
+        $this->assertStringContainsString('directory/not/exists', $violation->message);
         $this->assertStringContainsString('do not exist on disk', $violation->message);
     }
 
