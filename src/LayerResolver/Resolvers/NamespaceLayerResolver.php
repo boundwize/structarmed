@@ -59,16 +59,14 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
             foreach ($layerPaths as $layerPath) {
-                if ($layerPath['length'] <= $matchedLength) {
-                    continue;
+                if ($this->matchesLayerPath($normalised, $layerPath)) {
+                    $length = $layerPath['length'];
+                    if ($length > $matchedLength) {
+                        $matchedLayer  = $layerName;
+                        $matchedLength = $length;
+                    }
                 }
 
-                if (! $this->matchesLayerPath($normalised, $layerPath)) {
-                    continue;
-                }
-
-                $matchedLayer  = $layerName;
-                $matchedLength = $layerPath['length'];
             }
         }
 
