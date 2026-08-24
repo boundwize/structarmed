@@ -401,8 +401,9 @@ final readonly class ParallelClassNodeExtractor
         $write  = null;
         $except = null;
 
-        // The timeout only bounds how long we wait when no worker writes anything. A false return
-        // (interrupted by a signal) degrades to polling every worker once, exactly as a timeout would.
+        // The timeout only bounds how long we wait when no worker writes anything; on timeout $read is
+        // empty and no worker is touched. On error (for example, interruption by a signal) fall back to
+        // polling every worker once so progress and EOF can still be detected.
         $selected = @stream_select($read, $write, $except, 0, 50000);
 
         return $selected === false ? $all : $read;
