@@ -646,7 +646,7 @@ PHP, $i));
             return $file;
         }, range(1, 120));
 
-        $progressHandler = new RecordingProgressHandler();
+        $recordingProgressHandler = new RecordingProgressHandler();
 
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
             basePath: $dir,
@@ -655,12 +655,12 @@ PHP, $i));
             workerCount: 6,
         );
 
-        $extractionResult = $parallelClassNodeExtractor->extract($files, $progressHandler);
+        $extractionResult = $parallelClassNodeExtractor->extract($files, $recordingProgressHandler);
 
         $this->assertCount(120, $extractionResult->classNodes);
 
         $expected = $files;
-        $advanced = $progressHandler->advanced();
+        $advanced = $recordingProgressHandler->advanced();
         sort($expected);
         sort($advanced);
 
@@ -724,17 +724,17 @@ PHP, $i));
             file_put_contents($file, sprintf('<?php class %s {}', $name));
         }
 
-        $progressHandler            = new RecordingProgressHandler();
+        $recordingProgressHandler            = new RecordingProgressHandler();
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 1);
 
         try {
-            $parallelClassNodeExtractor->extract($files, $progressHandler);
+            $parallelClassNodeExtractor->extract($files, $recordingProgressHandler);
         } finally {
             $GLOBALS['mock_proc_open_command']         = null;
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
         }
 
-        $this->assertSame($files, $progressHandler->advanced());
+        $this->assertSame($files, $recordingProgressHandler->advanced());
     }
 }
