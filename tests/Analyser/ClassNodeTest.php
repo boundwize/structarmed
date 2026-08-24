@@ -102,6 +102,44 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($enumNode->isClass());
     }
 
+    public function testGetTypeReturnsClassLikeKind(): void
+    {
+        $this->assertSame('Class', $this->makeTypedNode()->getType());
+        $this->assertSame('Interface', $this->makeTypedNode(isInterface: true)->getType());
+        $this->assertSame('Trait', $this->makeTypedNode(isTrait: true)->getType());
+        $this->assertSame('Enum', $this->makeTypedNode(isEnum: true)->getType());
+    }
+
+    public function testGetTypeReturnsClassForAbstractFinalAndReadonlyClasses(): void
+    {
+        $this->assertSame('Class', $this->makeTypedNode(isAbstract: true)->getType());
+        $this->assertSame('Class', $this->makeTypedNode(isFinal: true)->getType());
+        $this->assertSame('Class', $this->makeTypedNode(isReadonly: true)->getType());
+    }
+
+    private function makeTypedNode(
+        bool $isInterface = false,
+        bool $isTrait = false,
+        bool $isEnum = false,
+        bool $isAbstract = false,
+        bool $isFinal = false,
+        bool $isReadonly = false,
+    ): ClassNode {
+        return new ClassNode(
+            className: 'App\\Domain\\Order',
+            file: '/src/Order.php',
+            line: 1,
+            layer: 'Domain',
+            extends: null,
+            isAbstract: $isAbstract,
+            isFinal: $isFinal,
+            isInterface: $isInterface,
+            isReadonly: $isReadonly,
+            isTrait: $isTrait,
+            isEnum: $isEnum,
+        );
+    }
+
     public function testDependencyInterfaceCallAndSuperglobalHelpers(): void
     {
         $classNode = new ClassNode(

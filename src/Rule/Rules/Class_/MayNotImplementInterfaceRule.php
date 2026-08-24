@@ -31,7 +31,8 @@ final readonly class MayNotImplementInterfaceRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must not implement interface [%s]',
+                '%s [%s] must not implement interface [%s]',
+                $classNode->getType(),
                 $classNode->className,
                 $this->interface
             ),

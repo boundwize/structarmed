@@ -8,14 +8,19 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MayNotCallFunctionRule::class)]
 final class MayNotCallFunctionRuleTest extends TestCase
 {
     /** @param array<string> $functionCalls */
-    private function makeNode(array $functionCalls, string $layer = 'Domain'): ClassNode
-    {
+    private function makeNode(
+        array $functionCalls,
+        string $layer = 'Domain',
+        bool $isTrait = false,
+        bool $isEnum = false,
+    ): ClassNode {
         return new ClassNode(
             className:     'App\\Domain\\OrderService',
             file:          '/fake.php',
@@ -26,7 +31,9 @@ final class MayNotCallFunctionRuleTest extends TestCase
             isFinal:       true,
             isInterface:   false,
             isReadonly:    false,
+            isTrait:       $isTrait,
             functionCalls: $functionCalls,
+            isEnum:        $isEnum,
         );
     }
 
@@ -46,7 +53,29 @@ final class MayNotCallFunctionRuleTest extends TestCase
         $violation = $mayNotCallFunctionRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('var_dump', $violation->message);
+        $this->assertSame('Class [App\\Domain\\OrderService] must not call function [var_dump()]', $violation->message);
+    }
+
+    #[DataProvider('traitAndEnumKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(string $expectedKind, bool $isTrait, bool $isEnum): void
+    {
+        $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'var_dump');
+        $classNode              = $this->makeNode(['var_dump'], isTrait: $isTrait, isEnum: $isEnum);
+
+        $violation = $mayNotCallFunctionRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Domain\\OrderService] must not call function [var_dump()]',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool}> */
+    public static function traitAndEnumKindProvider(): iterable
+    {
+        yield 'trait' => ['Trait', true, false];
+        yield 'enum'  => ['Enum', false, true];
     }
 
     public function testFunctionComparisonIsCaseInsensitive(): void

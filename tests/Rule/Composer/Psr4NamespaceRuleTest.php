@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
@@ -47,7 +48,44 @@ final class Psr4NamespaceRuleTest extends TestCase
         $violation = $psr4NamespaceRule->evaluate($this->makeNode('Foo', $file));
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('App\\Tests\\Foo', $violation->message);
+        $this->assertSame('Class [Foo] must match PSR-4 class [App\\Tests\\Foo]', $violation->message);
+    }
+
+    #[DataProvider('nonClassKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(
+        string $expectedKind,
+        bool $isInterface,
+        bool $isTrait,
+        bool $isEnum,
+    ): void {
+        $basePath = $this->makeTempProject();
+        $file     = $basePath . '/tests/Foo.php';
+
+        file_put_contents($file, '<?php namespace App\Tests; interface Bar {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $violation = $psr4NamespaceRule->evaluate($this->makeNode(
+            'App\\Tests\\Bar',
+            $file,
+            isTrait: $isTrait,
+            isInterface: $isInterface,
+            isEnum: $isEnum,
+        ));
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Tests\\Bar] must match PSR-4 class [App\\Tests\\Foo]',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool, bool}> */
+    public static function nonClassKindProvider(): iterable
+    {
+        yield 'interface' => ['Interface', true, false, false];
+        yield 'trait'     => ['Trait', false, true, false];
+        yield 'enum'      => ['Enum', false, false, true];
     }
 
     public function testDoesNotApplyOutsideConfiguredLayer(): void
@@ -307,7 +345,9 @@ final class Psr4NamespaceRuleTest extends TestCase
         string $className,
         string $file,
         string $layer = 'Source',
-        bool $isTrait = false
+        bool $isTrait = false,
+        bool $isInterface = false,
+        bool $isEnum = false,
     ): ClassNode {
         return new ClassNode(
             className:   $className,
@@ -317,9 +357,10 @@ final class Psr4NamespaceRuleTest extends TestCase
             extends:     null,
             isAbstract:  false,
             isFinal:     false,
-            isInterface: false,
+            isInterface: $isInterface,
             isReadonly:  false,
             isTrait:     $isTrait,
+            isEnum:      $isEnum,
         );
     }
 

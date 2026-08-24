@@ -362,7 +362,8 @@ final readonly class Analyser
 
                 $rulesetViolationCollection->add(new RuleViolation(
                     message:   sprintf(
-                        'Class [%s] in layer [%s] must not depend on [%s] which belongs to layer [%s]',
+                        '%s [%s] in layer [%s] must not depend on [%s] which belongs to layer [%s]',
+                        $classNode->getType(),
                         $classNode->className,
                         $classNode->layer,
                         $dependency,

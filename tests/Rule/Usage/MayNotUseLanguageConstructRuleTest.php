@@ -15,8 +15,12 @@ use PHPUnit\Framework\TestCase;
 final class MayNotUseLanguageConstructRuleTest extends TestCase
 {
     /** @param array<string> $languageConstructs */
-    private function makeNode(array $languageConstructs, string $layer = 'Domain'): ClassNode
-    {
+    private function makeNode(
+        array $languageConstructs,
+        string $layer = 'Domain',
+        bool $isTrait = false,
+        bool $isEnum = false,
+    ): ClassNode {
         return new ClassNode(
             className:          'App\\Domain\\OrderService',
             file:               '/fake.php',
@@ -27,7 +31,9 @@ final class MayNotUseLanguageConstructRuleTest extends TestCase
             isFinal:            true,
             isInterface:        false,
             isReadonly:         false,
+            isTrait:            $isTrait,
             languageConstructs: $languageConstructs,
+            isEnum:             $isEnum,
         );
     }
 
@@ -47,8 +53,32 @@ final class MayNotUseLanguageConstructRuleTest extends TestCase
         $violation = $mayNotUseLanguageConstructRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('exit', $violation->message);
-        $this->assertStringContainsString('App\\Domain\\OrderService', $violation->message);
+        $this->assertSame(
+            'Class [App\\Domain\\OrderService] must not use language construct [exit]',
+            $violation->message
+        );
+    }
+
+    #[DataProvider('traitAndEnumKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(string $expectedKind, bool $isTrait, bool $isEnum): void
+    {
+        $mayNotUseLanguageConstructRule = new MayNotUseLanguageConstructRule(layer: 'Domain', construct: 'exit');
+        $classNode                      = $this->makeNode(['exit'], isTrait: $isTrait, isEnum: $isEnum);
+
+        $violation = $mayNotUseLanguageConstructRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Domain\\OrderService] must not use language construct [exit]',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool}> */
+    public static function traitAndEnumKindProvider(): iterable
+    {
+        yield 'trait' => ['Trait', true, false];
+        yield 'enum'  => ['Enum', false, true];
     }
 
     public function testViolatesWhenDieIsUsed(): void

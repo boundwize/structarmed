@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MayNotDependOnRule::class)]
@@ -23,6 +24,9 @@ final class MayNotDependOnRuleTest extends TestCase
         array $dependencies = [],
         string $className = 'App\\Domain\\OrderService',
         array $layers = [],
+        bool $isInterface = false,
+        bool $isTrait = false,
+        bool $isEnum = false,
     ): ClassNode {
         return new ClassNode(
             className:    $className,
@@ -32,10 +36,12 @@ final class MayNotDependOnRuleTest extends TestCase
             extends:      null,
             isAbstract:   false,
             isFinal:      true,
-            isInterface:  false,
+            isInterface:  $isInterface,
             isReadonly:   false,
+            isTrait:      $isTrait,
             dependencies: $dependencies,
             layers:       $layers,
+            isEnum:       $isEnum,
         );
     }
 
@@ -68,7 +74,49 @@ final class MayNotDependOnRuleTest extends TestCase
         $violation = $mayNotDependOnRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('Infrastructure', $violation->message);
+        $this->assertSame(
+            'Class [App\\Domain\\OrderService] in layer [Domain] must not depend on '
+            . '[App\\Infrastructure\\Persistence\\DoctrineOrderRepository] which belongs to layer [Infrastructure]',
+            $violation->message
+        );
+    }
+
+    #[DataProvider('nonClassKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(
+        string $expectedKind,
+        bool $isInterface,
+        bool $isTrait,
+        bool $isEnum,
+    ): void {
+        $mayNotDependOnRule = new MayNotDependOnRule(
+            from:   'Domain',
+            to:     'Infrastructure',
+            toPath: 'Infrastructure'
+        );
+        $classNode          = $this->makeNode(
+            'Domain',
+            ['App\\Infrastructure\\Persistence\\DoctrineOrderRepository'],
+            isInterface: $isInterface,
+            isTrait: $isTrait,
+            isEnum: $isEnum,
+        );
+
+        $violation = $mayNotDependOnRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Domain\\OrderService] in layer [Domain] must not depend on '
+            . '[App\\Infrastructure\\Persistence\\DoctrineOrderRepository] which belongs to layer [Infrastructure]',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool, bool}> */
+    public static function nonClassKindProvider(): iterable
+    {
+        yield 'interface' => ['Interface', true, false, false];
+        yield 'trait'     => ['Trait', false, true, false];
+        yield 'enum'      => ['Enum', false, false, true];
     }
 
     public function testDoesNotApplyToWrongSourceLayer(): void

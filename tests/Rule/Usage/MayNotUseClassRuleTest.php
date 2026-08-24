@@ -9,14 +9,20 @@ use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use DateTime;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MayNotUseClassRule::class)]
 final class MayNotUseClassRuleTest extends TestCase
 {
     /** @param list<string> $dependencies */
-    private function makeNode(array $dependencies, string $layer = 'Domain'): ClassNode
-    {
+    private function makeNode(
+        array $dependencies,
+        string $layer = 'Domain',
+        bool $isInterface = false,
+        bool $isTrait = false,
+        bool $isEnum = false,
+    ): ClassNode {
         return new ClassNode(
             className:    'App\\Domain\\OrderValueObject',
             file:         '/fake.php',
@@ -25,9 +31,11 @@ final class MayNotUseClassRuleTest extends TestCase
             extends:      null,
             isAbstract:   false,
             isFinal:      true,
-            isInterface:  false,
+            isInterface:  $isInterface,
             isReadonly:   false,
+            isTrait:      $isTrait,
             dependencies: $dependencies,
+            isEnum:       $isEnum,
         );
     }
 
@@ -58,7 +66,39 @@ final class MayNotUseClassRuleTest extends TestCase
         $violation = $mayNotUseClassRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('DateTime', $violation->message);
+        $this->assertSame('Class [App\\Domain\\OrderValueObject] must not use [DateTime]', $violation->message);
+    }
+
+    #[DataProvider('nonClassKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(
+        string $expectedKind,
+        bool $isInterface,
+        bool $isTrait,
+        bool $isEnum,
+    ): void {
+        $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class);
+        $classNode          = $this->makeNode(
+            [DateTime::class],
+            isInterface: $isInterface,
+            isTrait: $isTrait,
+            isEnum: $isEnum,
+        );
+
+        $violation = $mayNotUseClassRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Domain\\OrderValueObject] must not use [DateTime]',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool, bool}> */
+    public static function nonClassKindProvider(): iterable
+    {
+        yield 'interface' => ['Interface', true, false, false];
+        yield 'trait'     => ['Trait', false, true, false];
+        yield 'enum'      => ['Enum', false, false, true];
     }
 
     public function testDoesNotApplyToWrongLayer(): void

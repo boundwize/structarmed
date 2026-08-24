@@ -45,7 +45,8 @@ final readonly class NamingConventionRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] matching pattern [%s] must live in layer [%s], found in layer [%s]',
+                '%s [%s] matching pattern [%s] must live in layer [%s], found in layer [%s]',
+                $classNode->getType(),
                 $classNode->className,
                 $this->classNamePattern,
                 $this->mustBeInLayer,

@@ -8,14 +8,19 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseSuperglobalsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MayNotUseSuperglobalsRule::class)]
 final class MayNotUseSuperglobalsRuleTest extends TestCase
 {
     /** @param array<string> $superglobals */
-    private function makeNode(array $superglobals, string $layer = 'Model'): ClassNode
-    {
+    private function makeNode(
+        array $superglobals,
+        string $layer = 'Model',
+        bool $isTrait = false,
+        bool $isEnum = false,
+    ): ClassNode {
         return new ClassNode(
             className:    'App\\Model\\OrderModel',
             file:         '/fake.php',
@@ -26,7 +31,9 @@ final class MayNotUseSuperglobalsRuleTest extends TestCase
             isFinal:      true,
             isInterface:  false,
             isReadonly:   false,
+            isTrait:      $isTrait,
             superglobals: $superglobals,
+            isEnum:       $isEnum,
         );
     }
 
@@ -46,7 +53,32 @@ final class MayNotUseSuperglobalsRuleTest extends TestCase
         $violation = $mayNotUseSuperglobalsRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('$_GET', $violation->message);
+        $this->assertSame(
+            'Class [App\\Model\\OrderModel] must not access superglobals directly ($_GET)',
+            $violation->message
+        );
+    }
+
+    #[DataProvider('traitAndEnumKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(string $expectedKind, bool $isTrait, bool $isEnum): void
+    {
+        $mayNotUseSuperglobalsRule = new MayNotUseSuperglobalsRule(layer: 'Model');
+        $classNode                 = $this->makeNode(['$_GET'], isTrait: $isTrait, isEnum: $isEnum);
+
+        $violation = $mayNotUseSuperglobalsRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Model\\OrderModel] must not access superglobals directly ($_GET)',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool}> */
+    public static function traitAndEnumKindProvider(): iterable
+    {
+        yield 'trait' => ['Trait', true, false];
+        yield 'enum'  => ['Enum', false, true];
     }
 
     public function testViolatesWhenPostAccessed(): void

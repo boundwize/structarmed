@@ -8,14 +8,20 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseNamespaceRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MayNotUseNamespaceRule::class)]
 final class MayNotUseNamespaceRuleTest extends TestCase
 {
     /** @param list<string> $dependencies */
-    private function makeNode(array $dependencies, string $layer = 'Domain'): ClassNode
-    {
+    private function makeNode(
+        array $dependencies,
+        string $layer = 'Domain',
+        bool $isInterface = false,
+        bool $isTrait = false,
+        bool $isEnum = false,
+    ): ClassNode {
         return new ClassNode(
             className:    'App\\Domain\\OrderValueObject',
             file:         '/fake.php',
@@ -24,9 +30,11 @@ final class MayNotUseNamespaceRuleTest extends TestCase
             extends:      null,
             isAbstract:   false,
             isFinal:      true,
-            isInterface:  false,
+            isInterface:  $isInterface,
             isReadonly:   false,
+            isTrait:      $isTrait,
             dependencies: $dependencies,
+            isEnum:       $isEnum,
         );
     }
 
@@ -46,7 +54,42 @@ final class MayNotUseNamespaceRuleTest extends TestCase
         $violation = $mayNotUseNamespaceRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('Doctrine\\ORM', $violation->message);
+        $this->assertSame(
+            'Class [App\\Domain\\OrderValueObject] must not use namespace [Doctrine\\ORM]',
+            $violation->message
+        );
+    }
+
+    #[DataProvider('nonClassKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(
+        string $expectedKind,
+        bool $isInterface,
+        bool $isTrait,
+        bool $isEnum,
+    ): void {
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
+        $classNode              = $this->makeNode(
+            ['Doctrine\\ORM\\EntityManager'],
+            isInterface: $isInterface,
+            isTrait: $isTrait,
+            isEnum: $isEnum,
+        );
+
+        $violation = $mayNotUseNamespaceRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Domain\\OrderValueObject] must not use namespace [Doctrine\\ORM]',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool, bool}> */
+    public static function nonClassKindProvider(): iterable
+    {
+        yield 'interface' => ['Interface', true, false, false];
+        yield 'trait'     => ['Trait', false, true, false];
+        yield 'enum'      => ['Enum', false, false, true];
     }
 
     public function testViolatesWhenForbiddenNamespaceHasTrailingBackslash(): void

@@ -48,14 +48,57 @@ final class MayNotImplementInterfaceRuleTest extends TestCase
         $violation = $mayNotImplementInterfaceRule->evaluate($this->makeNode([JsonSerializable::class]));
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString(JsonSerializable::class, $violation->message);
+        $this->assertSame(
+            'Class [App\\Domain\\Order] must not implement interface [JsonSerializable]',
+            $violation->message
+        );
+    }
+
+    public function testViolationMessageNamesEnumWhenEnumImplementsInterface(): void
+    {
+        $mayNotImplementInterfaceRule = new MayNotImplementInterfaceRule(
+            layer: 'Domain',
+            interface: JsonSerializable::class
+        );
+
+        $violation = $mayNotImplementInterfaceRule->evaluate(
+            $this->makeNode([JsonSerializable::class], isEnum: true)
+        );
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            'Enum [App\\Domain\\Order] must not implement interface [JsonSerializable]',
+            $violation->message
+        );
+    }
+
+    public function testViolationMessageNamesInterfaceWhenInterfaceExtendsForbiddenInterface(): void
+    {
+        $mayNotImplementInterfaceRule = new MayNotImplementInterfaceRule(
+            layer: 'Domain',
+            interface: JsonSerializable::class
+        );
+        $classNode                    = $this->makeNode([], isInterface: true);
+        $classNode->setRecursiveParents([], [JsonSerializable::class]);
+
+        $violation = $mayNotImplementInterfaceRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            'Interface [App\\Domain\\Order] must not implement interface [JsonSerializable]',
+            $violation->message
+        );
     }
 
     /**
      * @param string[] $implements
      */
-    private function makeNode(array $implements, string $layer = 'Domain'): ClassNode
-    {
+    private function makeNode(
+        array $implements,
+        string $layer = 'Domain',
+        bool $isInterface = false,
+        bool $isEnum = false,
+    ): ClassNode {
         return new ClassNode(
             className:   'App\\Domain\\Order',
             file:        '/fake.php',
@@ -64,9 +107,10 @@ final class MayNotImplementInterfaceRuleTest extends TestCase
             extends:     null,
             isAbstract:  false,
             isFinal:     false,
-            isInterface: false,
+            isInterface: $isInterface,
             isReadonly:  false,
             implements:  $implements,
+            isEnum:      $isEnum,
         );
     }
 }

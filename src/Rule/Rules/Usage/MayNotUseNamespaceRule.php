@@ -41,7 +41,8 @@ final readonly class MayNotUseNamespaceRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must not use namespace [%s]',
+                '%s [%s] must not use namespace [%s]',
+                $classNode->getType(),
                 $classNode->className,
                 $this->forbiddenNamespace
             ),

@@ -31,7 +31,8 @@ final readonly class MayNotUseSuperglobalsRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must not access superglobals directly (%s)',
+                '%s [%s] must not access superglobals directly (%s)',
+                $classNode->getType(),
                 $classNode->className,
                 implode(', ', $classNode->superglobals)
             ),

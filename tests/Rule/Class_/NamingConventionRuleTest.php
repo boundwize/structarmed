@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Class_\NamingConventionRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(NamingConventionRule::class)]
@@ -17,6 +18,8 @@ final class NamingConventionRuleTest extends TestCase
         string $className,
         string $layer,
         bool $isInterface = false,
+        bool $isTrait = false,
+        bool $isEnum = false,
     ): ClassNode {
         return new ClassNode(
             className:   $className,
@@ -28,6 +31,8 @@ final class NamingConventionRuleTest extends TestCase
             isFinal:     false,
             isInterface: $isInterface,
             isReadonly:  false,
+            isTrait:     $isTrait,
+            isEnum:      $isEnum,
         );
     }
 
@@ -53,7 +58,50 @@ final class NamingConventionRuleTest extends TestCase
         $violation = $namingConventionRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('Application', $violation->message);
+        $this->assertSame(
+            'Class [App\\Infrastructure\\OrderService] matching pattern [/Service$/] must live in layer [Application], '
+            . 'found in layer [Infrastructure]',
+            $violation->message
+        );
+    }
+
+    #[DataProvider('nonClassKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(
+        string $expectedKind,
+        bool $isInterface,
+        bool $isTrait,
+        bool $isEnum,
+    ): void {
+        $namingConventionRule = new NamingConventionRule(
+            classNamePattern: '/Service$/',
+            mustBeInLayer: 'Application'
+        );
+        $classNode            = $this->makeNode(
+            'App\\Infrastructure\\OrderService',
+            'Infrastructure',
+            isInterface: $isInterface,
+            isTrait: $isTrait,
+            isEnum: $isEnum,
+        );
+
+        $this->assertTrue($namingConventionRule->appliesTo($classNode));
+
+        $violation = $namingConventionRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Infrastructure\\OrderService] matching pattern [/Service$/] '
+            . 'must live in layer [Application], found in layer [Infrastructure]',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool, bool}> */
+    public static function nonClassKindProvider(): iterable
+    {
+        yield 'interface' => ['Interface', true, false, false];
+        yield 'trait'     => ['Trait', false, true, false];
+        yield 'enum'      => ['Enum', false, false, true];
     }
 
     public function testExcludesInterfacesWhenFlagSet(): void

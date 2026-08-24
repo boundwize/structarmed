@@ -31,7 +31,8 @@ final readonly class ClassNameMustNotHavePrefixRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must not have prefix [%s]',
+                '%s [%s] must not have prefix [%s]',
+                $classNode->getType(),
                 $classNode->className,
                 $this->prefix
             ),

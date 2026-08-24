@@ -29,7 +29,7 @@ final readonly class ClassNameMustBeStudlyCapsRule implements RuleInterface
         }
 
         return new RuleViolation(
-            message:   sprintf('Class [%s] must be declared in StudlyCaps', $classNode->className),
+            message:   sprintf('%s [%s] must be declared in StudlyCaps', $classNode->getType(), $classNode->className),
             file:      $classNode->file,
             line:      $classNode->line,
             className: $classNode->className,

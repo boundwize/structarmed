@@ -67,6 +67,23 @@ final class ClassNode
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
 
+    public function getType(): string
+    {
+        if ($this->isInterface) {
+            return 'Interface';
+        }
+
+        if ($this->isTrait) {
+            return 'Trait';
+        }
+
+        if ($this->isEnum) {
+            return 'Enum';
+        }
+
+        return 'Class';
+    }
+
     /**
      * @param list<string> $parentClasses
      * @param list<string> $parentInterfaces
