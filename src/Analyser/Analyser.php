@@ -142,13 +142,11 @@ final readonly class Analyser
             }
         }
 
-        $ruleSkipMatchers   = $this->ruleSkipMatchers($classRules, $globalSkipPaths, $ruleSkipPaths);
         $layerPatterns      = $architecture->getLayerPatterns();
         $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
-
-        $files          ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
-        $withFileAnalysis = $fileAnalysisRules !== [];
-        $extractionResult = $this->collectClassNodes(
+        $files            ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
+        $withFileAnalysis   = $fileAnalysisRules !== [];
+        $extractionResult   = $this->collectClassNodes(
             $files,
             $progressHandler,
             $layers,
@@ -157,8 +155,8 @@ final readonly class Analyser
             $analyserOptions ?? AnalyserOptions::parallel(),
             $withFileAnalysis,
         );
-        $classNodes       = $extractionResult->classNodes;
-        $classNodes       = $this->withRecursiveParents($classNodes);
+        $classNodes         = $extractionResult->classNodes;
+        $classNodes         = $this->withRecursiveParents($classNodes);
 
         if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
             $this->markClassLikeUsage(
@@ -222,28 +220,19 @@ final readonly class Analyser
             $classViolationSkipMaps[$skipClassName] = array_fill_keys($skippedDependencies, true);
         }
 
-        $rulesetSkipPaths           = $this->mergedSkipPaths($globalSkipPaths, $architecture->getRulesetSkipPaths());
-        $rulesetSkipPathMatcher     = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
-        $rulesetViolationCollection = new RuleViolationCollection();
-        $hasRuleset                 = $ruleset !== [];
-        $scanScopeLayerMap          = $hasRuleset ? $this->scanScopeLayerMap($architecture) : [];
-
-        $hasLayerAwareRules = $layerAwareRules !== [];
-
-        $classDependencyMaps      = $hasRuleset || $hasLayerAwareRules
-            ? $this->classDependencyMaps($classNodes, $hasRuleset, $hasLayerAwareRules)
-            : [
-                'dependencies'            => [],
-                'inheritanceDependencies' => [],
-                'classLayerMap'           => [],
-                'classPrimaryLayerMap'    => [],
-                'classNodeMap'            => [],
-            ];
-        $dependencyMap            = $classDependencyMaps['dependencies'];
-        $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
-        $classLayerMap            = $classDependencyMaps['classLayerMap'];
-        $classPrimaryLayerMap     = $classDependencyMaps['classPrimaryLayerMap'];
-
+        $rulesetSkipPaths              = $architecture->getRulesetSkipPaths();
+        $globalSkipPathMatcher         = SkipPathMatcher::compile($this->basePath, $globalSkipPaths);
+        $ruleSkipMatchers              = $this->ruleSkipMatchers($classRules, $ruleSkipPaths);
+        $rulesetSkipPathMatcher        = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
+        $rulesetViolationCollection    = new RuleViolationCollection();
+        $hasRuleset                    = $ruleset !== [];
+        $scanScopeLayerMap             = $hasRuleset ? $this->scanScopeLayerMap($architecture) : [];
+        $hasLayerAwareRules            = $layerAwareRules !== [];
+        $classDependencyMaps           = $this->classDependencyMaps($classNodes, $hasRuleset, $hasLayerAwareRules);
+        $dependencyMap                 = $classDependencyMaps['dependencies'];
+        $inheritanceDependencyMap      = $classDependencyMaps['inheritanceDependencies'];
+        $classLayerMap                 = $classDependencyMaps['classLayerMap'];
+        $classPrimaryLayerMap          = $classDependencyMaps['classPrimaryLayerMap'];
         $resolvedInheritedDependencies = [];
 
         foreach ($layerAwareRules as $rule) {
@@ -251,8 +240,12 @@ final readonly class Analyser
         }
 
         foreach ($classNodes as $classNode) {
+            if ($globalSkipPathMatcher->isSkipped($classNode->file)) {
+                continue;
+            }
+
             foreach ($classRules as $key => $rule) {
-                if ($ruleSkipMatchers[$key]->isSkipped($classNode->file)) {
+                if (isset($ruleSkipMatchers[$key]) && $ruleSkipMatchers[$key]->isSkipped($classNode->file)) {
                     continue;
                 }
 
@@ -298,7 +291,7 @@ final readonly class Analyser
                 continue;
             }
 
-            if ($rulesetSkipPaths !== [] && $rulesetSkipPathMatcher->isSkipped($classNode->file)) {
+            if ($rulesetSkipPathMatcher->isSkipped($classNode->file)) {
                 continue;
             }
 
@@ -491,19 +484,21 @@ final readonly class Analyser
 
     /**
      * @param array<string, RuleInterface> $classRules
-     * @param list<string>                 $globalSkipPaths
      * @param array<string, list<string>>  $ruleSkipPaths
      * @return array<string, SkipPathMatcher>
      */
-    private function ruleSkipMatchers(array $classRules, array $globalSkipPaths, array $ruleSkipPaths): array
+    private function ruleSkipMatchers(array $classRules, array $ruleSkipPaths): array
     {
         $ruleSkipMatchers = [];
 
         foreach (array_keys($classRules) as $key) {
-            $ruleSkipMatchers[$key] = SkipPathMatcher::compile(
-                $this->basePath,
-                $this->mergedSkipPaths($globalSkipPaths, $ruleSkipPaths[$key] ?? [])
-            );
+            $skipPaths = $ruleSkipPaths[$key] ?? [];
+
+            if ($skipPaths === []) {
+                continue;
+            }
+
+            $ruleSkipMatchers[$key] = SkipPathMatcher::compile($this->basePath, $skipPaths);
         }
 
         return $ruleSkipMatchers;
@@ -542,6 +537,16 @@ final readonly class Analyser
         bool $collectRulesetMaps,
         bool $collectClassNodeMap,
     ): array {
+        if (! $collectRulesetMaps && ! $collectClassNodeMap) {
+            return [
+                'dependencies'            => [],
+                'inheritanceDependencies' => [],
+                'classLayerMap'           => [],
+                'classPrimaryLayerMap'    => [],
+                'classNodeMap'            => [],
+            ];
+        }
+
         $dependencyMap            = [];
         $inheritanceDependencyMap = [];
         $classLayerMap            = [];

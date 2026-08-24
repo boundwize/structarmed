@@ -3023,6 +3023,33 @@ final class AnalyserTest extends TestCase
         );
     }
 
+    public function testAnalyserAppliesGlobalSkipPathsToPreResolvedFiles(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'              => '<?php namespace App; class Foo {}',
+            'src/Fixtures/Ignored.php' => '<?php namespace App\Fixtures; class Ignored {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skip(['src/Fixtures/'])
+            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            analyserOptions: AnalyserOptions::sequential(),
+            files: [
+                $basePath . '/src/Foo.php',
+                $basePath . '/src/Fixtures/Ignored.php',
+            ],
+        );
+
+        $violations = $ruleViolationCollection->forRule('source.must_be_final');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($violations[0]->file));
+    }
+
     public function testAnalyserSkipsEntireConfiguredScanPath(): void
     {
         $basePath = $this->makeTempProject([
