@@ -12,6 +12,10 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
+use function json_encode;
+use function mkdir;
+
+use const JSON_THROW_ON_ERROR;
 
 #[CoversClass(Psr4RootPathRule::class)]
 final class Psr4RootPathRuleTest extends TestCase
@@ -136,6 +140,66 @@ JSON);
         $this->assertStringContainsString('"Symfony\\Component\\Form\\"', $violations[0]->message);
         $this->assertStringContainsString('""', $violations[0]->message);
         $this->assertStringContainsString('autoload', $violations[0]->message);
+    }
+
+    public function testViolationWhenRelativePathTraversesBackToRoot(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Traversal\\": "src/..",
+            "DotTraversal\\": "./src/../"
+        }
+    }
+}
+JSON);
+        mkdir($basePath . '/src');
+
+        $violations = (new Psr4RootPathRule())->evaluateProjectAll($basePath, Architecture::define());
+
+        $this->assertCount(2, $violations);
+        $this->assertStringContainsString('"src/.."', $violations[0]->message);
+        $this->assertStringContainsString('"./src/../"', $violations[1]->message);
+    }
+
+    public function testViolationWhenAbsolutePathEqualsProjectRoot(): void
+    {
+        $basePath     = $this->makeTempDir();
+        $composerJson = json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'Absolute\\' => $basePath . '/',
+                ],
+            ],
+        ], JSON_THROW_ON_ERROR);
+        file_put_contents($basePath . '/composer.json', $composerJson);
+
+        $violations = (new Psr4RootPathRule())->evaluateProjectAll($basePath, Architecture::define());
+
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('"Absolute\\"', $violations[0]->message);
+    }
+
+    public function testPassesWhenRelativePathTraversesToSubdirectory(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/../src",
+            "Lib\\": "./lib/../lib/"
+        }
+    }
+}
+JSON);
+        mkdir($basePath . '/src');
+        mkdir($basePath . '/lib');
+
+        $this->assertSame(
+            [],
+            (new Psr4RootPathRule())->evaluateProjectAll($basePath, Architecture::define())
+        );
     }
 
     public function testEvaluateProjectReturnsNullWhenNoViolations(): void

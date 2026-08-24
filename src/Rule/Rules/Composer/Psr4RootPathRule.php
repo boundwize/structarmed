@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\Path;
 
 use function file_exists;
 use function is_array;
@@ -47,7 +48,8 @@ final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInt
             return [];
         }
 
-        $violations = [];
+        $violations         = [];
+        $normalisedBasePath = Path::normalise($basePath, canonicalise: true);
 
         foreach (['autoload', 'autoload-dev'] as $section) {
             $autoload = $composer[$section] ?? [];
@@ -72,9 +74,12 @@ final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInt
                         continue;
                     }
 
-                    $trimmedPath = trim($path);
+                    $resolvedPath = Path::normalise(
+                        Path::resolve(trim($path), $basePath),
+                        canonicalise: true,
+                    );
 
-                    if ($trimmedPath !== '' && rtrim($trimmedPath, '/\\') !== '.') {
+                    if ($resolvedPath !== $normalisedBasePath) {
                         continue;
                     }
 
