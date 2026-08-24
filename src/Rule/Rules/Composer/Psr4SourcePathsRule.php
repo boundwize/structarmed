@@ -68,7 +68,10 @@ final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
             return null;
         }
 
-        $autoloadPaths = $this->psr4PathResolver->paths($basePath);
+        $autoloadPaths = $this->normalisePaths(
+            $this->psr4PathResolver->paths($basePath),
+            $basePath
+        );
         $missingPaths  = [];
 
         foreach ($this->normalisePaths($this->sourcePaths, $basePath) as $sourcePath) {
