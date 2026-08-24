@@ -324,6 +324,8 @@ final class ArchitectureTest extends TestCase
         yield 'empty brackets' => ['Source[]'];
         yield 'single path' => ['Source[lib/]'];
         yield 'multiple paths' => ['Source[lib/,src/]'];
+        yield 'Windows absolute path' => ['Source[C:/project/src/]'];
+        yield 'path with spaces' => ['Source[my project/src/]'];
     }
 
     #[DataProvider('provideNonReservedLayerNames')]

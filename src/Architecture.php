@@ -140,13 +140,12 @@ final class Architecture
      */
     public function layerPattern(string $name, string|array $pattern, string|array|null $excludePattern = null): self
     {
-        if (preg_match('/^Source(?:\[[\w.\/-]*(?:,[\w.\/-]+)*\])?$/', $name, $matches)) {
-            $layerName = $matches[0];
+        if ($name === 'Source' || (str_starts_with($name, 'Source[') && str_ends_with($name, ']'))) {
             throw new InvalidArgumentException(
                 sprintf(
                     'Layer name "%s" is reserved for the path-based Source layer registered via ->layer(). '
                     . 'Use ->layer() to define source paths, or choose a different name for your layerPattern().',
-                    $layerName
+                    $name
                 )
             );
         }
