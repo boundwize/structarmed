@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Rule\Fixer\JsonRecast\ObjectItemNode\RemoveMissingPsr4
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4DirectoryExistsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use Boundwize\StructArmed\Util\Path;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -148,7 +149,7 @@ JSON, json_encode($absolutePath)));
         $violation = (new Psr4DirectoryExistsRule())->evaluateProject($basePath, Architecture::define());
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString($absolutePath, $violation->message);
+        $this->assertStringContainsString(Path::normalise($absolutePath), $violation->message);
         $this->assertStringContainsString('do not exist on disk', $violation->message);
     }
 
