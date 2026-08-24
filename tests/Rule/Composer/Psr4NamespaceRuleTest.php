@@ -51,6 +51,29 @@ final class Psr4NamespaceRuleTest extends TestCase
         $this->assertSame('Class [Foo] must match PSR-4 class [App\\Tests\\Foo]', $violation->message);
     }
 
+    public function testFailsWhenClassDoesNotMatchAbsoluteComposerPsr4Path(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-absolute');
+        mkdir($basePath . '/src');
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\' => $basePath . '/src/',
+                ],
+            ],
+        ]));
+
+        $file = $basePath . '/src/Foo.php';
+        file_put_contents($file, '<?php namespace Wrong; class Foo {}');
+
+        $violation = (new Psr4NamespaceRule('Source'))
+            ->evaluate($this->makeNode('Wrong\\Foo', $file));
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame('Class [Wrong\\Foo] must match PSR-4 class [App\\Foo]', $violation->message);
+    }
+
     #[DataProvider('nonClassKindProvider')]
     public function testViolationMessageNamesTheClassLikeKind(
         string $expectedKind,

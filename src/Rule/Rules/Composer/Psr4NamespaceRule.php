@@ -83,7 +83,7 @@ final class Psr4NamespaceRule implements RuleInterface
 
         foreach ($this->mappingsFor($basePath) as $namespace => $paths) {
             foreach ($paths as $path) {
-                $prefix = Path::normalise($basePath . '/' . $path, canonicalise: true);
+                $prefix = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
 
                 if (! str_starts_with($file, $prefix . '/')) {
                     continue;
