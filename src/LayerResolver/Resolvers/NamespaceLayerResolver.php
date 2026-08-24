@@ -19,7 +19,12 @@ use function strlen;
  */
 final readonly class NamespaceLayerResolver implements LayerResolverInterface
 {
-    /** @var array<string, list<string>> */
+    /**
+     * Path, its directory prefix and length are precomputed once so the
+     * class × layer × path hot loop in resolve()/resolveAll() is pure comparisons.
+     *
+     * @var array<string, list<array{path: string, prefix: string, length: int}>>
+     */
     private array $normalisedLayers;
 
     /**
@@ -33,10 +38,13 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($layers as $layerName => $layerPaths) {
             foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayers[$layerName][] = Path::normalise(
-                    Path::resolve($layerPath, $basePath),
-                    canonicalise: true
-                );
+                $path = Path::normalise(Path::resolve($layerPath, $basePath), canonicalise: true);
+
+                $normalisedLayers[$layerName][] = [
+                    'path'   => $path,
+                    'prefix' => $path . '/',
+                    'length' => strlen($path),
+                ];
             }
         }
 
@@ -51,14 +59,16 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
             foreach ($layerPaths as $layerPath) {
-                if ($this->matchesLayerPath($normalised, $layerPath)) {
-                    $length = strlen($layerPath);
-
-                    if ($length > $matchedLength) {
-                        $matchedLayer  = $layerName;
-                        $matchedLength = $length;
-                    }
+                if ($layerPath['length'] <= $matchedLength) {
+                    continue;
                 }
+
+                if ($normalised !== $layerPath['path'] && ! str_starts_with($normalised, $layerPath['prefix'])) {
+                    continue;
+                }
+
+                $matchedLayer  = $layerName;
+                $matchedLength = $layerPath['length'];
             }
         }
 
@@ -75,18 +85,15 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
             foreach ($layerPaths as $layerPath) {
-                if ($this->matchesLayerPath($normalised, $layerPath)) {
-                    $matched[] = $layerName;
-                    break;
+                if ($normalised !== $layerPath['path'] && ! str_starts_with($normalised, $layerPath['prefix'])) {
+                    continue;
                 }
+
+                $matched[] = $layerName;
+                break;
             }
         }
 
         return $matched;
-    }
-
-    private function matchesLayerPath(string $path, string $layerPath): bool
-    {
-        return $path === $layerPath || str_starts_with($path, $layerPath . '/');
     }
 }

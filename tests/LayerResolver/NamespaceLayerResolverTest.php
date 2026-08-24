@@ -109,6 +109,24 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertSame('Infrastructure', $layer);
     }
 
+    public function testKeepsMostSpecificMatchWhenShorterLayerPathIsRegisteredAfterIt(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                'Infrastructure' => 'src/Infrastructure/',
+                'Source'         => 'src/',
+            ],
+            basePath: $this->basePath
+        );
+
+        $layer = $namespaceLayerResolver->resolve(
+            'App\\Infrastructure\\SQLAlbumRepository',
+            $this->basePath . '/src/Infrastructure/Persistence/Album/SQLAlbumRepository.php'
+        );
+
+        $this->assertSame('Infrastructure', $layer);
+    }
+
     public function testDoesNotResolveSiblingPathWithSamePrefix(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(
