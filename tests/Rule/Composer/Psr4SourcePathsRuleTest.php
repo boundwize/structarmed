@@ -12,6 +12,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
+use function json_encode;
+
+use const JSON_THROW_ON_ERROR;
 
 #[CoversClass(Psr4SourcePathsRule::class)]
 final class Psr4SourcePathsRuleTest extends TestCase
@@ -214,6 +217,28 @@ JSON);
             $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
         $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($basePath));
+    }
+
+    public function testPassesWhenComposerUsesAbsoluteSourcePath(): void
+    {
+        $basePath = $this->makeTempDir();
+        file_put_contents(
+            $basePath . '/composer.json',
+            json_encode([
+                'autoload' => [
+                    'psr-4' => [
+                        'App\\' => $basePath . '/src/',
+                    ],
+                ],
+            ], JSON_THROW_ON_ERROR)
+        );
+
+        $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/']);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        );
     }
 
     private function makeTempProject(string $composerJson): string
