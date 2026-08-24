@@ -29,10 +29,15 @@ final readonly class MayNotImplementInterfaceRule implements RuleInterface
             return null;
         }
 
+        // Interfaces extend other interfaces; classes and enums implement them.
+        $relation = $classNode->isInterface ? 'extend' : 'implement';
+
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must not implement interface [%s]',
+                '%s [%s] must not %s interface [%s]',
+                $classNode->getType(),
                 $classNode->className,
+                $relation,
                 $this->interface
             ),
             file:      $classNode->file,

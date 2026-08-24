@@ -41,7 +41,8 @@ final readonly class MayNotUseClassRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must not use [%s]',
+                '%s [%s] must not use [%s]',
+                $classNode->getType(),
                 $classNode->className,
                 $this->forbiddenClass
             ),

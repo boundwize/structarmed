@@ -31,7 +31,8 @@ final readonly class MayNotUseLanguageConstructRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must not use language construct [%s]',
+                '%s [%s] must not use language construct [%s]',
+                $classNode->getType(),
                 $classNode->className,
                 $this->construct
             ),

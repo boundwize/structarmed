@@ -39,7 +39,8 @@ final readonly class MustBeInterfaceRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must be an interface',
+                '%s [%s] must be an interface',
+                $classNode->getType(),
                 $classNode->className
             ),
             file:      $classNode->file,

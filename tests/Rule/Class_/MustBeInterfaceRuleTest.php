@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeInterfaceRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MustBeInterfaceRule::class)]
@@ -17,6 +18,8 @@ final class MustBeInterfaceRuleTest extends TestCase
         string $className = 'App\\Domain\\Repositories\\OrderRepository',
         string $layer = 'Domain',
         bool $isInterface = false,
+        bool $isTrait = false,
+        bool $isEnum = false,
     ): ClassNode {
         return new ClassNode(
             className:   $className,
@@ -28,6 +31,8 @@ final class MustBeInterfaceRuleTest extends TestCase
             isFinal:     false,
             isInterface: $isInterface,
             isReadonly:  false,
+            isTrait:     $isTrait,
+            isEnum:      $isEnum,
         );
     }
 
@@ -47,7 +52,32 @@ final class MustBeInterfaceRuleTest extends TestCase
         $violation = $mustBeInterfaceRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('interface', $violation->message);
+        $this->assertSame(
+            'Class [App\\Domain\\Repositories\\OrderRepository] must be an interface',
+            $violation->message
+        );
+    }
+
+    #[DataProvider('traitAndEnumKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(string $expectedKind, bool $isTrait, bool $isEnum): void
+    {
+        $mustBeInterfaceRule = new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/');
+        $classNode           = $this->makeNode(isTrait: $isTrait, isEnum: $isEnum);
+
+        $violation = $mustBeInterfaceRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' [App\\Domain\\Repositories\\OrderRepository] must be an interface',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool}> */
+    public static function traitAndEnumKindProvider(): iterable
+    {
+        yield 'trait' => ['Trait', true, false];
+        yield 'enum'  => ['Enum', false, true];
     }
 
     public function testDoesNotApplyToWrongLayer(): void

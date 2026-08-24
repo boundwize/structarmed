@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Rule\Rules\Class_\ClassConstantNameMustBeUpperCaseRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ConstantNode::class)]
@@ -58,11 +59,48 @@ final class ClassConstantNameMustBeUpperCaseRuleTest extends TestCase
         $this->assertSame(7, $violations[0]->line);
     }
 
+    #[DataProvider('nonClassKindProvider')]
+    public function testViolationMessageNamesTheClassLikeKind(
+        string $expectedKind,
+        bool $isInterface,
+        bool $isTrait,
+        bool $isEnum,
+    ): void {
+        $classConstantNameMustBeUpperCaseRule = new ClassConstantNameMustBeUpperCaseRule('Source');
+
+        $violation = $classConstantNameMustBeUpperCaseRule->evaluate($this->makeNode(
+            [new ConstantNode('dateApproved')],
+            isInterface: $isInterface,
+            isTrait: $isTrait,
+            isEnum: $isEnum,
+        ));
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            $expectedKind . ' constant [App\\Order::dateApproved] must be declared in upper case '
+            . 'with underscore separators',
+            $violation->message
+        );
+    }
+
+    /** @return iterable<string, array{string, bool, bool, bool}> */
+    public static function nonClassKindProvider(): iterable
+    {
+        yield 'interface' => ['Interface', true, false, false];
+        yield 'trait'     => ['Trait', false, true, false];
+        yield 'enum'      => ['Enum', false, false, true];
+    }
+
     /**
      * @param list<ConstantNode> $constants
      */
-    private function makeNode(array $constants, string $layer = 'Source'): ClassNode
-    {
+    private function makeNode(
+        array $constants,
+        string $layer = 'Source',
+        bool $isInterface = false,
+        bool $isTrait = false,
+        bool $isEnum = false,
+    ): ClassNode {
         return new ClassNode(
             className: 'App\\Order',
             file: '/fake.php',
@@ -71,9 +109,11 @@ final class ClassConstantNameMustBeUpperCaseRuleTest extends TestCase
             extends: null,
             isAbstract: false,
             isFinal: false,
-            isInterface: false,
+            isInterface: $isInterface,
             isReadonly: false,
+            isTrait: $isTrait,
             constants: $constants,
+            isEnum: $isEnum,
         );
     }
 }

@@ -33,7 +33,8 @@ final readonly class MaxDependencyCountRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] has %d constructor dependencies, maximum allowed is %d',
+                '%s [%s] has %d constructor dependencies, maximum allowed is %d',
+                $classNode->getType(),
                 $classNode->className,
                 $count,
                 $this->maxCount

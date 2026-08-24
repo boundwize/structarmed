@@ -31,7 +31,8 @@ final readonly class ClassNameMustHaveSuffixRule implements RuleInterface
 
         return new RuleViolation(
             message:   sprintf(
-                'Class [%s] must have suffix [%s]',
+                '%s [%s] must have suffix [%s]',
+                $classNode->getType(),
                 $classNode->className,
                 $this->suffix
             ),

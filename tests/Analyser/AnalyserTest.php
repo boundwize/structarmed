@@ -3265,7 +3265,94 @@ final class AnalyserTest extends TestCase
         $this->assertTrue($ruleViolationCollection->hasViolations());
         $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
         $this->assertCount(1, $violations);
-        $this->assertStringContainsString('Database', $violations[0]->message);
+        $this->assertSame(
+            'Class [App\\HTTP\\Request] in layer [HTTP] must not depend on [App\\Database\\QueryBuilder] '
+            . 'which belongs to layer [Database]',
+            $violations[0]->message
+        );
+    }
+
+    #[DataProvider('rulesetClassLikeKindProvider')]
+    public function testAnalyserRulesetViolationMessageNamesTheClassLikeKind(string $expectedKind, string $source): void
+    {
+        $basePath = $this->makeTempProject(['src/HTTP/Request.php' => $source]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'HTTP' => [], // Database NOT allowed
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $violations = $ruleViolationCollection->forRule('ruleset.HTTP');
+        $this->assertCount(1, $violations);
+        $this->assertSame(
+            $expectedKind . ' [App\\HTTP\\Request] in layer [HTTP] must not depend on [App\\Database\\QueryBuilder] '
+            . 'which belongs to layer [Database]',
+            $violations[0]->message
+        );
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function rulesetClassLikeKindProvider(): iterable
+    {
+        yield 'interface' => [
+            'Interface',
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                interface Request
+                {
+                    public function db(): QueryBuilder;
+                }
+                PHP,
+        ];
+
+        yield 'trait' => [
+            'Trait',
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                trait Request
+                {
+                    public function db(): QueryBuilder
+                    {
+                        return new QueryBuilder();
+                    }
+                }
+                PHP,
+        ];
+
+        yield 'enum' => [
+            'Enum',
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                enum Request
+                {
+                    case Get;
+
+                    public function db(): QueryBuilder
+                    {
+                        return new QueryBuilder();
+                    }
+                }
+                PHP,
+        ];
     }
 
     public function testAnalyserEvaluatesRulesetAndDetectsLayerViolationWithPathBasedLayers(): void
