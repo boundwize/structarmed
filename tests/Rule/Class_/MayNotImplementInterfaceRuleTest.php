@@ -85,7 +85,7 @@ final class MayNotImplementInterfaceRuleTest extends TestCase
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertSame(
-            'Interface [App\\Domain\\Order] must not implement interface [JsonSerializable]',
+            'Interface [App\\Domain\\Order] must not extend interface [JsonSerializable]',
             $violation->message
         );
     }
