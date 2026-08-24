@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
+use InvalidArgumentException;
 
 use function array_filter;
 use function array_key_exists;
@@ -15,6 +16,7 @@ use function array_merge;
 use function array_unique;
 use function array_values;
 use function is_int;
+use function preg_match;
 use function sprintf;
 
 /**
@@ -138,6 +140,17 @@ final class Architecture
      */
     public function layerPattern(string $name, string|array $pattern, string|array|null $excludePattern = null): self
     {
+        if (preg_match('/^Source(?:\[[\w.\/-]*(?:,[\w.\/-]+)*\])?$/', $name, $matches)) {
+            $layerName = $matches[0];
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Layer name "%s" is reserved for the path-based Source layer registered via ->layer(). '
+                    . 'Use ->layer() to define source paths, or choose a different name for your layerPattern().',
+                    $layerName
+                )
+            );
+        }
+
         $this->layerPatterns[$name] = [
             'pattern'        => $pattern,
             'excludePattern' => $excludePattern,
