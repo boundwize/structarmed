@@ -16,14 +16,20 @@ use RuntimeException;
 
 use function array_map;
 use function bin2hex;
+use function fclose;
 use function file_put_contents;
 use function glob;
 use function is_dir;
+use function is_resource;
+use function proc_close;
+use function proc_open;
 use function random_bytes;
 use function range;
 use function rmdir;
 use function sort;
 use function sprintf;
+use function stream_get_contents;
+use function stream_select;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -681,5 +687,43 @@ PHP, $i));
         sort($advanced);
 
         $this->assertSame($expected, $advanced);
+    }
+
+    /**
+     * The extractor relies on stream_select() reporting a proc_open() ['socket'] stream as readable once the
+     * child writes. If that silently failed (returned false) the wait loop would still terminate, because it
+     * polls again, but it would have degraded into a busy loop. Assert the primitive itself on every CI OS.
+     */
+    public function testStreamSelectReportsProcOpenSocketAsReadable(): void
+    {
+        $pipes   = [];
+        $process = proc_open(
+            [PHP_BINARY, '-r', 'usleep(100000); echo "ready";'],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['socket'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+        );
+
+        $this->assertTrue(is_resource($process));
+        $this->assertArrayHasKey(1, $pipes);
+
+        $read   = [$pipes[1]];
+        $write  = null;
+        $except = null;
+
+        $selected = stream_select($read, $write, $except, 5);
+
+        $this->assertSame(1, $selected);
+        $this->assertSame([$pipes[1]], $read);
+        $this->assertSame('ready', stream_get_contents($pipes[1]));
+
+        fclose($pipes[0]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        $this->assertSame(0, proc_close($process));
     }
 }
