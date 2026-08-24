@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
+use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use Iterator;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -13,12 +14,16 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
+use function array_map;
 use function bin2hex;
 use function file_put_contents;
 use function glob;
 use function is_dir;
 use function random_bytes;
+use function range;
 use function rmdir;
+use function sort;
+use function sprintf;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -609,5 +614,72 @@ PHP);
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
         }
+    }
+
+    /**
+     * Stress the socket + stream_select() wait loop: many files spread across several workers must yield
+     * exactly one progress event per file, with none lost or duplicated. This runs on every CI OS, which
+     * matters most on Windows where proc_open() pipes are not selectable and a socket pair is used instead.
+     */
+    public function testProgressEventsAreReceivedForEveryFileAcrossManyWorkers(): void
+    {
+        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-stress');
+        $files = array_map(static function (int $i) use ($dir): string {
+            $file = sprintf('%s/Class%03d.php', $dir, $i);
+
+            file_put_contents($file, sprintf(<<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Class%03d
+{
+}
+PHP, $i));
+
+            return $file;
+        }, range(1, 120));
+
+        $progressHandler = new class implements ProgressHandlerInterface {
+            /** @var list<string> */
+            private array $advanced = [];
+
+            public function start(int $total): void
+            {
+            }
+
+            public function advance(string $file): void
+            {
+                $this->advanced[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+
+            /** @return list<string> */
+            public function advanced(): array
+            {
+                return $this->advanced;
+            }
+        };
+
+        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+            basePath: $dir,
+            layers: ['Domain' => 'App\\Domain'],
+            layerPatterns: [],
+            workerCount: 6,
+        );
+
+        $extractionResult = $parallelClassNodeExtractor->extract($files, $progressHandler);
+
+        $this->assertCount(120, $extractionResult->classNodes);
+
+        $expected = $files;
+        $advanced = $progressHandler->advanced();
+        sort($expected);
+        sort($advanced);
+
+        $this->assertSame($expected, $advanced);
     }
 }
