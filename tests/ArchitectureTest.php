@@ -13,8 +13,12 @@ use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+
+use function sprintf;
 
 #[CoversClass(Architecture::class)]
 final class ArchitectureTest extends TestCase
@@ -295,6 +299,52 @@ final class ArchitectureTest extends TestCase
             '/Exception$/',
             '/^App\\\\HTTP\\\\URI$/',
         ], $patterns['HTTP']['excludePattern']);
+    }
+
+    #[DataProvider('provideReservedSourceLayerNames')]
+    public function testLayerPatternRejectsReservedSourceLayerName(string $name): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            sprintf(
+                'Layer name "%s" is reserved for the path-based Source layer registered via ->layer().',
+                $name
+            )
+        );
+
+        Architecture::define()->layerPattern($name, '/^App\\\\.*$/');
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideReservedSourceLayerNames(): iterable
+    {
+        yield 'bare' => ['Source'];
+        yield 'empty brackets' => ['Source[]'];
+        yield 'single path' => ['Source[lib/]'];
+        yield 'multiple paths' => ['Source[lib/,src/]'];
+        yield 'Windows absolute path' => ['Source[C:/project/src/]'];
+        yield 'path with spaces' => ['Source[my project/src/]'];
+    }
+
+    #[DataProvider('provideNonReservedLayerNames')]
+    public function testLayerPatternAcceptsNonReservedLayerName(string $name): void
+    {
+        $architecture = Architecture::define()->layerPattern($name, '/^App\\\\.*$/');
+
+        $this->assertArrayHasKey($name, $architecture->getLayerPatterns());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideNonReservedLayerNames(): iterable
+    {
+        yield 'prefix' => ['SourceCode'];
+        yield 'lowercase' => ['source'];
+        yield 'unclosed bracket' => ['Source[lib/'];
+        yield 'other name' => ['HTTP'];
     }
 
     public function testRulesetIsRegistered(): void

@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
+use InvalidArgumentException;
 
 use function array_filter;
 use function array_key_exists;
@@ -16,6 +17,8 @@ use function array_unique;
 use function array_values;
 use function is_int;
 use function sprintf;
+use function str_ends_with;
+use function str_starts_with;
 
 /**
  * Fluent architecture definition builder.
@@ -138,6 +141,16 @@ final class Architecture
      */
     public function layerPattern(string $name, string|array $pattern, string|array|null $excludePattern = null): self
     {
+        if ($name === 'Source' || (str_starts_with($name, 'Source[') && str_ends_with($name, ']'))) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Layer name "%s" is reserved for the path-based Source layer registered via ->layer(). '
+                    . 'Use ->layer() to define source paths, or choose a different name for your layerPattern().',
+                    $name
+                )
+            );
+        }
+
         $this->layerPatterns[$name] = [
             'pattern'        => $pattern,
             'excludePattern' => $excludePattern,
