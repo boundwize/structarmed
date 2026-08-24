@@ -14,7 +14,6 @@ use RuntimeException;
 
 use function array_fill;
 use function array_key_exists;
-use function array_keys;
 use function array_search;
 use function arsort;
 use function assert;
@@ -144,10 +143,14 @@ final readonly class ParallelClassNodeExtractor
         $failure             = null;
 
         while ($pending !== []) {
-            $anyActivity = false;
+            $readable = $this->readableWorkers($pending);
 
-            foreach (array_keys($pending) as $key) {
-                $stdoutPipe = $pending[$key]['stdoutPipe'];
+            foreach ($pending as $key => $worker) {
+                if (! isset($readable[$key])) {
+                    continue;
+                }
+
+                $stdoutPipe = $worker['stdoutPipe'];
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
@@ -157,8 +160,6 @@ final readonly class ParallelClassNodeExtractor
                         $pending[$key]['filesAdvanced'] + substr_count($data, "\n"),
                         $progressHandler
                     );
-
-                    $anyActivity = true;
                 }
 
                 if (! feof($stdoutPipe)) {
@@ -350,11 +351,6 @@ final readonly class ParallelClassNodeExtractor
                 }
 
                 unset($pending[$key]);
-                $anyActivity = true;
-            }
-
-            if (! $anyActivity) {
-                $this->waitForWorkerOutput($pending);
             }
         }
 
@@ -387,23 +383,29 @@ final readonly class ParallelClassNodeExtractor
     }
 
     /**
-     * Blocks until at least one worker stdout stream becomes readable (or reaches EOF), instead of spinning.
+     * Waits (bounded) until at least one worker's stdout socket is readable or at EOF, and returns those
+     * workers' streams keyed like $pending, so the caller reads only streams that have something for it.
      *
      * @param array<int, array{stdoutPipe: resource}> $pending
+     * @return array<int, resource>
      */
-    private function waitForWorkerOutput(array $pending): void
+    private function readableWorkers(array $pending): array
     {
-        $read   = [];
+        $all = [];
+
+        foreach ($pending as $key => $worker) {
+            $all[$key] = $worker['stdoutPipe'];
+        }
+
+        $read   = $all;
         $write  = null;
         $except = null;
 
-        foreach ($pending as $worker) {
-            $read[] = $worker['stdoutPipe'];
-        }
+        // The timeout only bounds how long we wait when no worker writes anything. A false return
+        // (interrupted by a signal) degrades to polling every worker once, exactly as a timeout would.
+        $selected = @stream_select($read, $write, $except, 0, 50000);
 
-        // Wait at most 50 ms, returning earlier when data or EOF makes a stream readable.
-        // On error (including signal interruption), the caller polls every stream again on its next iteration.
-        @stream_select($read, $write, $except, 0, 50000);
+        return $selected === false ? $all : $read;
     }
 
     /**
