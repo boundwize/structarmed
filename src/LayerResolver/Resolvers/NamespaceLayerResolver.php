@@ -63,7 +63,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
                     continue;
                 }
 
-                if ($normalised !== $layerPath['path'] && ! str_starts_with($normalised, $layerPath['prefix'])) {
+                if (! $this->matchesLayerPath($normalised, $layerPath)) {
                     continue;
                 }
 
@@ -85,7 +85,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
             foreach ($layerPaths as $layerPath) {
-                if ($normalised !== $layerPath['path'] && ! str_starts_with($normalised, $layerPath['prefix'])) {
+                if (! $this->matchesLayerPath($normalised, $layerPath)) {
                     continue;
                 }
 
@@ -95,5 +95,13 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         }
 
         return $matched;
+    }
+
+    /**
+     * @param array{path: string, prefix: string, length: int} $layerPath
+     */
+    private function matchesLayerPath(string $path, array $layerPath): bool
+    {
+        return $path === $layerPath['path'] || str_starts_with($path, $layerPath['prefix']);
     }
 }
