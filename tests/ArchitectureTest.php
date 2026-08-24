@@ -305,7 +305,12 @@ final class ArchitectureTest extends TestCase
     public function testLayerPatternRejectsReservedSourceLayerName(string $name): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('Layer name "%s" is reserved for the path-based Source layer registered via ->layer().', $name));
+        $this->expectExceptionMessage(
+            sprintf(
+                'Layer name "%s" is reserved for the path-based Source layer registered via ->layer().',
+                $name
+            )
+        );
 
         Architecture::define()->layerPattern($name, '/^App\\\\.*$/');
     }
