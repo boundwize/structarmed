@@ -16,8 +16,9 @@ use function array_merge;
 use function array_unique;
 use function array_values;
 use function is_int;
-use function preg_match;
 use function sprintf;
+use function str_ends_with;
+use function str_starts_with;
 
 /**
  * Fluent architecture definition builder.
