@@ -724,7 +724,7 @@ PHP, $i));
             file_put_contents($file, sprintf('<?php class %s {}', $name));
         }
 
-        $recordingProgressHandler            = new RecordingProgressHandler();
+        $recordingProgressHandler   = new RecordingProgressHandler();
         $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 1);
 
         try {
