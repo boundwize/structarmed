@@ -34,11 +34,11 @@ use function mkdir;
 use function proc_close;
 use function serialize;
 use function sprintf;
+use function stream_select;
 use function stream_set_blocking;
 use function substr_count;
 use function unlink;
 use function unserialize;
-use function usleep;
 
 use const PHP_BINARY;
 
@@ -105,7 +105,9 @@ final readonly class ParallelClassNodeExtractor
                 [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
                 [
                     0 => ['pipe', 'r'],
-                    1 => ['pipe', 'w'],
+                    // Use a socket pair instead of an anonymous pipe: stream_select() cannot monitor
+                    // proc_open() pipe handles on Windows, but it can monitor socket descriptors.
+                    1 => ['socket'],
                     2 => ['file', $stderrFile, 'w'],
                 ],
                 $pipes,
@@ -342,7 +344,7 @@ final readonly class ParallelClassNodeExtractor
             }
 
             if (! $anyActivity) {
-                usleep(5000);
+                $this->waitForWorkerOutput($pending);
             }
         }
 
@@ -351,6 +353,26 @@ final readonly class ParallelClassNodeExtractor
         }
 
         return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes, $fileReferences, $fileInstantiations);
+    }
+
+    /**
+     * Blocks until at least one worker stdout stream becomes readable (or reaches EOF), instead of spinning.
+     *
+     * @param array<int, array{stdoutPipe: resource}> $pending
+     */
+    private function waitForWorkerOutput(array $pending): void
+    {
+        $read   = [];
+        $write  = null;
+        $except = null;
+
+        foreach ($pending as $worker) {
+            $read[] = $worker['stdoutPipe'];
+        }
+
+        // Wait at most 50 ms, returning earlier when data or EOF makes a stream readable.
+        // On error (including signal interruption), the caller polls every stream again on its next iteration.
+        @stream_select($read, $write, $except, 0, 50000);
     }
 
     /**
