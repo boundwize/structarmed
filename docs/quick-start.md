@@ -45,6 +45,9 @@ vendor/bin/structarmed init --preset=mvc
 # Layer isolation and DDD naming conventions
 vendor/bin/structarmed init --preset=ddd
 
+# Remove speculative abstractions: unimplemented interfaces, unextended abstract classes, unused traits
+vendor/bin/structarmed init --preset=yagni
+
 # Enable every preset at once
 vendor/bin/structarmed init --preset=all
 ```

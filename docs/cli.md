@@ -25,6 +25,7 @@ vendor/bin/structarmed init --preset=psr12
 vendor/bin/structarmed init --preset=psr15
 vendor/bin/structarmed init --preset=mvc
 vendor/bin/structarmed init --preset=ddd
+vendor/bin/structarmed init --preset=yagni
 vendor/bin/structarmed init --preset=all
 ```
 
