@@ -12,12 +12,15 @@ use Boundwize\StructArmed\Rule\Fixer\JsonRecast\ObjectItemNode\RemoveMissingPsr4
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4DirectoryExistsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use Boundwize\StructArmed\Util\Path;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function file_get_contents;
 use function file_put_contents;
+use function json_encode;
 use function mkdir;
+use function sprintf;
 
 #[CoversClass(Psr4DirectoryExistsRule::class)]
 #[CoversClass(AbstractJsonRecastFixableRule::class)]
@@ -71,6 +74,82 @@ JSON);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('directory/not/exists', $violation->message);
+        $this->assertStringContainsString('do not exist on disk', $violation->message);
+    }
+
+    public function testPassesWhenPsr4PathIsAbsoluteAndExistsOnDisk(): void
+    {
+        $absolutePath = $this->makeTempDir();
+        $basePath     = $this->makeTempProject(sprintf(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": %s
+        }
+    }
+}
+JSON, json_encode($absolutePath)));
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4DirectoryExistsRule())->evaluateProject($basePath, Architecture::define())
+        );
+    }
+
+    public function testPassesWhenPsr4PathHasDotSlashPrefixAndExistsOnDisk(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "./src/"
+        }
+    }
+}
+JSON, ['src']);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4DirectoryExistsRule())->evaluateProject($basePath, Architecture::define())
+        );
+    }
+
+    public function testFailsWhenPsr4PathHasDotSlashPrefixAndDoesNotExistOnDisk(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "View\\": "./directory/not/exists"
+        }
+    }
+}
+JSON);
+
+        $violation = (new Psr4DirectoryExistsRule())->evaluateProject($basePath, Architecture::define());
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('directory/not/exists', $violation->message);
+        $this->assertStringContainsString('do not exist on disk', $violation->message);
+    }
+
+    public function testFailsWhenPsr4PathIsAbsoluteAndDoesNotExistOnDisk(): void
+    {
+        $absolutePath = $this->makeTempDir() . '/directory/not/exists';
+        $basePath     = $this->makeTempProject(sprintf(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": %s
+        }
+    }
+}
+JSON, json_encode($absolutePath)));
+
+        $violation = (new Psr4DirectoryExistsRule())->evaluateProject($basePath, Architecture::define());
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString(Path::normalise($absolutePath), $violation->message);
         $this->assertStringContainsString('do not exist on disk', $violation->message);
     }
 

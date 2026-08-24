@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\ObjectItemNode\RemoveMissingPsr4PathVisitor;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\Path;
 
 use function dirname;
 use function file_exists;
@@ -48,7 +49,7 @@ final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRu
         $nonExistentPaths = [];
 
         foreach ($this->psr4PathResolver->paths($basePath) as $autoloadPath) {
-            if (! is_dir(rtrim($basePath, '/') . '/' . $autoloadPath)) {
+            if (! is_dir(Path::resolve($autoloadPath, $basePath))) {
                 $nonExistentPaths[] = $autoloadPath;
             }
         }
