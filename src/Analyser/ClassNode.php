@@ -33,6 +33,8 @@ final class ClassNode
      * @param string[]       $interfaceExtends    Interface names this interface extends
      * @param list<string>   $parentClasses       Direct and transitive parent class names
      * @param list<string>   $parentInterfaces    Direct and transitive implemented or extended interface names
+     * @param EnumCaseNode[] $enumCases           Cases of this enum
+     * @param string|null    $enumBackingType     `int` or `string` for a backed enum, null otherwise
      */
     public function __construct(
         public readonly string $className,
@@ -63,8 +65,15 @@ final class ClassNode
         public bool $isImplemented = false,
         public bool $isReferenced = false,
         public bool $isInstantiated = false,
+        public readonly array $enumCases = [],
+        public readonly ?string $enumBackingType = null,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
+    }
+
+    public function isBackedEnum(): bool
+    {
+        return $this->isEnum && $this->enumBackingType !== null;
     }
 
     public function getType(): string

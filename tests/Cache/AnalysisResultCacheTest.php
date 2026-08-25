@@ -8,6 +8,7 @@ use App\Foo;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
+use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 
+use function array_column;
 use function array_filter;
 use function array_values;
 use function basename;
@@ -1099,6 +1101,13 @@ final class AnalysisResultCacheTest extends TestCase
                     new PropertyNode(name: 'name', visibility: 'private', hasExplicitVisibility: true, line: 8),
                     new PropertyNode(name: 'legacy', visibility: 'public', hasExplicitVisibility: false, line: 9),
                 ],
+                isEnum:      true,
+                enumCases:   [
+                    new EnumCaseNode(name: 'Hearts', line: 4, value: 'H'),
+                    new EnumCaseNode(name: 'Spades', line: 5, value: 7),
+                    new EnumCaseNode(name: 'Joker', line: 6),
+                ],
+                enumBackingType: 'string',
             ),
         ];
 
@@ -1110,6 +1119,9 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertEquals($classNodes, $loaded);
             $this->assertTrue($loaded[0]->properties[0]->hasExplicitVisibility);
             $this->assertFalse($loaded[0]->properties[1]->hasExplicitVisibility);
+            $this->assertSame(['Hearts', 'Spades', 'Joker'], array_column($loaded[0]->enumCases, 'name'));
+            $this->assertSame(['H', 7, null], array_column($loaded[0]->enumCases, 'value'));
+            $this->assertSame('string', $loaded[0]->enumBackingType);
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -1926,6 +1938,181 @@ final class AnalysisResultCacheTest extends TestCase
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'enum cases is not an array' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => Foo::class,
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isTrait'       => false,
+                        'isEnum'        => true,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'traits'        => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'enumCases'     => 'bad',
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                        'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'enum case is not an array' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => Foo::class,
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isTrait'       => false,
+                        'isEnum'        => true,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'traits'        => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'enumCases'     => ['bad'],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                        'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'enum case has non-string keys' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => Foo::class,
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isTrait'       => false,
+                        'isEnum'        => true,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'traits'        => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'enumCases'     => [['Hearts', 4]],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                        'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'enum case has invalid types' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => Foo::class,
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isTrait'       => false,
+                        'isEnum'        => true,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'traits'        => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'enumCases'     => [['name' => 'Hearts', 'line' => 'bad']],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                        'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'enum case value has invalid type' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => Foo::class,
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isTrait'       => false,
+                        'isEnum'        => true,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'traits'        => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'enumCases'     => [['name' => 'Hearts', 'line' => 4, 'value' => ['bad']]],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                        'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'enum backing type has invalid type' => [
+            [
+                'nodes' => [
+                    [
+                        'className'       => Foo::class,
+                        'file'            => __FILE__,
+                        'line'            => 1,
+                        'layer'           => null,
+                        'extends'         => null,
+                        'isAbstract'      => false,
+                        'isFinal'         => true,
+                        'isInterface'     => false,
+                        'isTrait'         => false,
+                        'isEnum'          => true,
+                        'isReadonly'      => false,
+                        'dependencies'    => [],
+                        'implements'      => [],
+                        'traits'          => [],
+                        'methods'         => [],
+                        'constants'       => [],
+                        'properties'      => [],
+                        'enumCases'       => [],
+                        'enumBackingType' => 1,
+                        'functionCalls'   => [],
+                        'superglobals'    => [],
+                        'layers'          => [],
                     ],
                 ],
             ],

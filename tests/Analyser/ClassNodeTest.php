@@ -102,6 +102,14 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($enumNode->isClass());
     }
 
+    public function testIsBackedEnumRequiresEnumWithBackingType(): void
+    {
+        $this->assertTrue($this->makeEnumNode('string')->isBackedEnum());
+        $this->assertTrue($this->makeEnumNode('int')->isBackedEnum());
+        $this->assertFalse($this->makeEnumNode(null)->isBackedEnum());
+        $this->assertFalse($this->makeEnumNode('int', isEnum: false)->isBackedEnum());
+    }
+
     public function testGetTypeReturnsClassLikeKind(): void
     {
         $this->assertSame('Class', $this->makeTypedNode()->getType());
@@ -115,6 +123,23 @@ final class ClassNodeTest extends TestCase
         $this->assertSame('Class', $this->makeTypedNode(isAbstract: true)->getType());
         $this->assertSame('Class', $this->makeTypedNode(isFinal: true)->getType());
         $this->assertSame('Class', $this->makeTypedNode(isReadonly: true)->getType());
+    }
+
+    private function makeEnumNode(?string $enumBackingType, bool $isEnum = true): ClassNode
+    {
+        return new ClassNode(
+            className:       Foo::class,
+            file:            '/fake.php',
+            line:            1,
+            layer:           null,
+            extends:         null,
+            isAbstract:      false,
+            isFinal:         false,
+            isInterface:     false,
+            isReadonly:      false,
+            isEnum:          $isEnum,
+            enumBackingType: $enumBackingType,
+        );
     }
 
     private function makeTypedNode(

@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Cache;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
+use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
@@ -517,6 +518,8 @@ final class AnalysisResultCache
             'methods'            => array_map($this->methodNodeToArray(...), $classNode->methods),
             'constants'          => array_map($this->constantNodeToArray(...), $classNode->constants),
             'properties'         => array_map($this->propertyNodeToArray(...), $classNode->properties),
+            'enumCases'          => array_map($this->enumCaseNodeToArray(...), $classNode->enumCases),
+            'enumBackingType'    => $classNode->enumBackingType,
             'functionCalls'      => array_values($classNode->functionCalls),
             'superglobals'       => array_values($classNode->superglobals),
             'languageConstructs' => array_values($classNode->languageConstructs),
@@ -553,6 +556,8 @@ final class AnalysisResultCache
         $rawMethods         = $node['methods'] ?? null;
         $rawConstants       = $node['constants'] ?? null;
         $rawProperties      = $node['properties'] ?? null;
+        $rawEnumCases       = $node['enumCases'] ?? [];
+        $enumBackingType    = $node['enumBackingType'] ?? null;
         $functionCalls      = $node['functionCalls'] ?? null;
         $superglobals       = $node['superglobals'] ?? null;
         $languageConstructs = $node['languageConstructs'] ?? [];
@@ -635,6 +640,26 @@ final class AnalysisResultCache
             $properties[] = $propertyNode;
         }
 
+        if (! is_array($rawEnumCases) || $enumBackingType !== null && ! is_string($enumBackingType)) {
+            return null;
+        }
+
+        $enumCases = [];
+
+        foreach ($rawEnumCases as $rawEnumCase) {
+            if (! is_array($rawEnumCase)) {
+                return null;
+            }
+
+            $enumCaseNode = $this->enumCaseNodeFromArray($rawEnumCase);
+
+            if (! $enumCaseNode instanceof EnumCaseNode) {
+                return null;
+            }
+
+            $enumCases[] = $enumCaseNode;
+        }
+
         return new ClassNode(
             className:          $className,
             file:               $file,
@@ -660,6 +685,8 @@ final class AnalysisResultCache
             interfaceExtends:   array_values($interfaceExtends),
             parentClasses:      array_values($parentClasses),
             parentInterfaces:   array_values($parentInterfaces),
+            enumCases:          $enumCases,
+            enumBackingType:    $enumBackingType,
         );
     }
 
@@ -705,6 +732,18 @@ final class AnalysisResultCache
             'visibility'            => $propertyNode->visibility,
             'hasExplicitVisibility' => $propertyNode->hasExplicitVisibility,
             'line'                  => $propertyNode->line,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function enumCaseNodeToArray(EnumCaseNode $enumCaseNode): array
+    {
+        return [
+            'name'  => $enumCaseNode->name,
+            'line'  => $enumCaseNode->line,
+            'value' => $enumCaseNode->value,
         ];
     }
 
@@ -795,6 +834,32 @@ final class AnalysisResultCache
             visibility:           $property['visibility'],
             hasExplicitVisibility: $property['hasExplicitVisibility'],
             line:                 $property['line'],
+        );
+    }
+
+    /**
+     * @param array<mixed, mixed> $enumCase
+     */
+    private function enumCaseNodeFromArray(array $enumCase): ?EnumCaseNode
+    {
+        if (! $this->hasOnlyStringKeys($enumCase)) {
+            return null;
+        }
+
+        $value = $enumCase['value'] ?? null;
+
+        if (
+            ! is_string($enumCase['name'] ?? null)
+            || ! is_int($enumCase['line'] ?? null)
+            || $value !== null && ! is_int($value) && ! is_string($value)
+        ) {
+            return null;
+        }
+
+        return new EnumCaseNode(
+            name:  $enumCase['name'],
+            line:  $enumCase['line'],
+            value: $value,
         );
     }
 
