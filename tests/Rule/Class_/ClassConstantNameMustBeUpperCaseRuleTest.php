@@ -64,7 +64,6 @@ final class ClassConstantNameMustBeUpperCaseRuleTest extends TestCase
         string $expectedKind,
         bool $isInterface,
         bool $isTrait,
-        bool $isEnum,
     ): void {
         $classConstantNameMustBeUpperCaseRule = new ClassConstantNameMustBeUpperCaseRule('Source');
 
@@ -72,7 +71,6 @@ final class ClassConstantNameMustBeUpperCaseRuleTest extends TestCase
             [new ConstantNode('dateApproved')],
             isInterface: $isInterface,
             isTrait: $isTrait,
-            isEnum: $isEnum,
         ));
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
@@ -83,12 +81,20 @@ final class ClassConstantNameMustBeUpperCaseRuleTest extends TestCase
         );
     }
 
-    /** @return iterable<string, array{string, bool, bool, bool}> */
+    /** @return iterable<string, array{string, bool, bool}> */
     public static function nonClassKindProvider(): iterable
     {
-        yield 'interface' => ['Interface', true, false, false];
-        yield 'trait'     => ['Trait', false, true, false];
-        yield 'enum'      => ['Enum', false, false, true];
+        yield 'interface' => ['Interface', true, false];
+        yield 'trait'     => ['Trait', false, true];
+    }
+
+    public function testDoesNotApplyToEnums(): void
+    {
+        $classConstantNameMustBeUpperCaseRule = new ClassConstantNameMustBeUpperCaseRule('Source');
+
+        $this->assertFalse($classConstantNameMustBeUpperCaseRule->appliesTo(
+            $this->makeNode([new ConstantNode('dateApproved')], isEnum: true)
+        ));
     }
 
     /**
