@@ -3217,7 +3217,7 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $ruleViolationCollection->forRule(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE));
     }
 
-    public function testAnalyserCanCheckRuleSkipsForRealPathOutsideBasePath(): void
+    public function testFilesForAnalysisIgnoresFileSymlinks(): void
     {
         $basePath    = $this->makeTempProject([
             'src/.keep' => '',
@@ -3227,13 +3227,9 @@ final class AnalyserTest extends TestCase
         symlink($outsidePath, $basePath . '/src/Linked.php');
 
         $architecture = Architecture::define()
-            ->layer('Source', 'src/')
-            ->skip(['source.must_be_final' => ['does-not-match']])
-            ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+            ->layer('Source', 'src/');
 
-        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
-
-        $this->assertFalse($ruleViolationCollection->hasViolations());
+        $this->assertSame([], (new Analyser($basePath))->filesForAnalysis($architecture));
     }
 
     public function testAnalyserEvaluatesRulesetAndDetectsLayerViolation(): void
