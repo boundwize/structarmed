@@ -19,13 +19,16 @@ use function substr;
 
 final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface, FixableInterface
 {
+    private PhpFileFinder $phpFileFinder;
+
     /**
      * @param list<string>|null $sourcePaths
      */
     public function __construct(
-        private ?array $sourcePaths = null,
-        private ?PhpFileFinder $phpFileFinder = null,
+        ?array $sourcePaths = null,
+        ?PhpFileFinder $phpFileFinder = null,
     ) {
+        $this->phpFileFinder = $phpFileFinder ?? new PhpFileFinder($sourcePaths);
     }
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
@@ -57,9 +60,8 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
         FileAnalysisProvider $fileAnalysisProvider,
         array $skipPaths = [],
     ): array {
-        $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
-        $violations    = [];
-        $files         = $fileAnalysisProvider->filesInScope($phpFileFinder->files($basePath, $skipPaths));
+        $violations = [];
+        $files      = $this->phpFileFinder->files($basePath, $skipPaths, $fileAnalysisProvider->filesInScope());
 
         foreach ($files as $file) {
             if ($fileAnalysisProvider->hasUtf8Bom($file)) {

@@ -30,14 +30,17 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
 {
     private Parser $parser;
 
+    private PhpFileFinder $phpFileFinder;
+
     /**
      * @param list<string>|null $sourcePaths
      */
     public function __construct(
-        private ?array $sourcePaths = null,
-        private ?PhpFileFinder $phpFileFinder = null,
+        ?array $sourcePaths = null,
+        ?PhpFileFinder $phpFileFinder = null,
     ) {
-        $this->parser = (new ParserFactory())->createForNewestSupportedVersion();
+        $this->phpFileFinder = $phpFileFinder ?? new PhpFileFinder($sourcePaths);
+        $this->parser        = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
@@ -69,9 +72,8 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
         FileAnalysisProvider $fileAnalysisProvider,
         array $skipPaths = [],
     ): array {
-        $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
-        $violations    = [];
-        $files         = $fileAnalysisProvider->filesInScope($phpFileFinder->files($basePath, $skipPaths));
+        $violations = [];
+        $files      = $this->phpFileFinder->files($basePath, $skipPaths, $fileAnalysisProvider->filesInScope());
 
         foreach ($files as $file) {
             $invalidPhpTagLine = $fileAnalysisProvider->invalidPhpTagLine($file);
