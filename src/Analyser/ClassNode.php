@@ -34,7 +34,7 @@ final class ClassNode
      * @param list<string>   $parentClasses       Direct and transitive parent class names
      * @param list<string>   $parentInterfaces    Direct and transitive implemented or extended interface names
      * @param EnumCaseNode[] $enumCases           Cases of this enum
-     * @param string|null    $enumBackingType     `int` or `string` for a backed enum, null otherwise
+     * @param string|null    $enumBackingType     Backing type for a backed enum, null otherwise
      */
     public function __construct(
         public readonly string $className,
