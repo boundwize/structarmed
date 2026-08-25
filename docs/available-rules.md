@@ -73,7 +73,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 | Rule | Constructor | Checks |
 |---|---|---|
-| `ClassConstantNameMustBeUpperCaseRule` | `new ClassConstantNameMustBeUpperCaseRule(layer: 'Domain')` | Class, interface, and trait constants use upper case with underscore separators. Enums are skipped (PER Coding Style allows PascalCase enum constants). |
+| `ClassConstantNameMustBeUpperCaseRule` | `new ClassConstantNameMustBeUpperCaseRule(layer: 'Domain')` | Class, interface, and trait constants use upper case with underscore separators. Enums are skipped (PER Coding Style recommends PascalCase enum constants). |
 | `ClassImplementingInterfaceMustHaveSuffixRule` | `new ClassImplementingInterfaceMustHaveSuffixRule(layer: 'HTTP', interface: MiddlewareInterface::class, suffix: 'Middleware')` | Classes implementing a specific interface use the required suffix. |
 | `ClassNameMustBeStudlyCapsRule` | `new ClassNameMustBeStudlyCapsRule(layer: 'Source')` | Class names use StudlyCaps. |
 | `ClassNameMustHaveSuffixRule` | `new ClassNameMustHaveSuffixRule(layer: 'Controller', suffix: 'Controller')` | Classes in a layer have the required suffix. |
