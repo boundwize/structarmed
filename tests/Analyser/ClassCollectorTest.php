@@ -763,7 +763,7 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame(['Hearts', 'Spades'], array_column($classNode->enumCases, 'name'));
         $this->assertSame([4, 5], array_column($classNode->enumCases, 'line'));
         $this->assertSame(['H', 'S'], array_column($classNode->enumCases, 'value'));
-        $this->assertTrue($classNode->enumCases[0]->isBacked());
+        $this->assertTrue($classNode->enumCases[0]->hasResolvedValue());
         $this->assertSame(['Wild'], array_column($classNode->constants, 'name'));
         $this->assertSame(['label'], array_column($classNode->methods, 'name'));
     }
@@ -776,7 +776,9 @@ final class ClassCollectorTest extends TestCase
 
         $this->assertSame('int', $classNode->enumBackingType);
         $this->assertSame([1, 8, null], array_column($classNode->enumCases, 'value'));
-        $this->assertFalse($classNode->enumCases[2]->isBacked());
+        // Still a backed case: the analyser just cannot evaluate PHP_INT_MAX.
+        $this->assertTrue($classNode->isBackedEnum());
+        $this->assertFalse($classNode->enumCases[2]->hasResolvedValue());
     }
 
     public function testPureEnumHasNoBackingTypeOrCaseValues(): void
@@ -811,6 +813,24 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame('count', $classNode->properties[1]->name);
         $this->assertSame('private', $classNode->properties[1]->visibility);
         $this->assertTrue($classNode->properties[1]->hasExplicitVisibility);
+    }
+
+    public function testPropertiesFollowSourceOrderWhenConstructorPrecedesDeclaredProperties(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function __construct(public int $id) {} public string $name; }'
+        );
+
+        $this->assertSame(['id', 'name'], array_column($classNode->properties, 'name'));
+    }
+
+    public function testPropertiesFollowSourceOrderWhenDeclaredPropertiesPrecedeConstructor(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public string $name; public function __construct(public int $id) {} }'
+        );
+
+        $this->assertSame(['name', 'id'], array_column($classNode->properties, 'name'));
     }
 
     public function testDetectsImplicitPropertyVisibility(): void
