@@ -12,6 +12,11 @@ use Boundwize\StructArmed\Util\Path;
 use function array_unique;
 use function array_values;
 use function is_dir;
+use function json_encode;
+use function spl_object_id;
+
+use const JSON_INVALID_UTF8_SUBSTITUTE;
+use const JSON_THROW_ON_ERROR;
 
 final readonly class PhpFileFinder
 {
@@ -32,9 +37,23 @@ final readonly class PhpFileFinder
     public function files(string $basePath, array $skipPaths = []): array
     {
         $skipPathMatcher = SkipPathMatcher::compile($basePath, $skipPaths);
-        $files           = [];
+        $sourcePaths     = array_values(array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath)));
+        $dataKey         = [
+            'basePath'          => $basePath,
+            'sourcePaths'       => $sourcePaths,
+            'skipPathMatcherId' => spl_object_id($skipPathMatcher),
+        ];
+        $memoiseKey      = json_encode($dataKey, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
 
-        $sourcePaths = array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath));
+        /** @var array<string, list<string>> $memoisedFiles */
+        static $memoisedFiles = [];
+
+        if (isset($memoisedFiles[$memoiseKey])) {
+            return $memoisedFiles[$memoiseKey];
+        }
+
+        $files = [];
+
         foreach ($sourcePaths as $sourcePath) {
             $fullPath = Path::resolve($sourcePath, $basePath);
 
@@ -49,6 +68,6 @@ final readonly class PhpFileFinder
 
         // ensure nothing duplicated once more
         // avoid inner directory provided by multiple source paths
-        return array_values(array_unique($files));
+        return $memoisedFiles[$memoiseKey] = array_values(array_unique($files));
     }
 }
