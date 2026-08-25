@@ -226,22 +226,12 @@ final readonly class Analyser
         $rulesetViolationCollection = new RuleViolationCollection();
         $hasRuleset                 = $ruleset !== [];
         $scanScopeLayerMap          = $hasRuleset ? $this->scanScopeLayerMap($architecture) : [];
-
-        $hasLayerAwareRules = $layerAwareRules !== [];
-
-        $classDependencyMaps      = $hasRuleset || $hasLayerAwareRules
-            ? $this->classDependencyMaps($classNodes, $hasRuleset, $hasLayerAwareRules)
-            : [
-                'dependencies'            => [],
-                'inheritanceDependencies' => [],
-                'classLayerMap'           => [],
-                'classPrimaryLayerMap'    => [],
-                'classNodeMap'            => [],
-            ];
-        $dependencyMap            = $classDependencyMaps['dependencies'];
-        $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
-        $classLayerMap            = $classDependencyMaps['classLayerMap'];
-        $classPrimaryLayerMap     = $classDependencyMaps['classPrimaryLayerMap'];
+        $hasLayerAwareRules         = $layerAwareRules !== [];
+        $classDependencyMaps        = $this->classDependencyMaps($classNodes, $hasRuleset, $hasLayerAwareRules);
+        $dependencyMap              = $classDependencyMaps['dependencies'];
+        $inheritanceDependencyMap   = $classDependencyMaps['inheritanceDependencies'];
+        $classLayerMap              = $classDependencyMaps['classLayerMap'];
+        $classPrimaryLayerMap       = $classDependencyMaps['classPrimaryLayerMap'];
 
         $resolvedInheritedDependencies = [];
 
@@ -545,6 +535,16 @@ final readonly class Analyser
         bool $collectRulesetMaps,
         bool $collectClassNodeMap,
     ): array {
+        if (! $collectRulesetMaps && ! $collectClassNodeMap) {
+            return [
+                'dependencies'            => [],
+                'inheritanceDependencies' => [],
+                'classLayerMap'           => [],
+                'classPrimaryLayerMap'    => [],
+                'classNodeMap'            => [],
+            ];
+        }
+
         $dependencyMap            = [];
         $inheritanceDependencyMap = [];
         $classLayerMap            = [];
