@@ -101,18 +101,24 @@ final class FileAnalysisProvider
             $normalisedAnalyses[Path::normalise($file, canonicalise: true)] = $analysis;
         }
 
-        $normalisedScopeFiles = [];
+        $scopeFileMap = [];
 
-        foreach ($scopeFiles ?? array_keys($normalisedAnalyses) as $file) {
-            $file = Path::normalise($file, canonicalise: true);
+        if ($this->isScopeFilesEnabled) {
+            if ($scopeFiles === null) {
+                $scopeFileMap = array_fill_keys(array_keys($normalisedAnalyses), true);
+            } else {
+                foreach ($scopeFiles as $file) {
+                    $file = Path::normalise($file, canonicalise: true);
 
-            if (isset($normalisedAnalyses[$file])) {
-                $normalisedScopeFiles[] = $file;
+                    if (isset($normalisedAnalyses[$file])) {
+                        $scopeFileMap[$file] = true;
+                    }
+                }
             }
         }
 
         $this->analyses     = $normalisedAnalyses;
-        $this->scopeFileMap = array_fill_keys($normalisedScopeFiles, true);
+        $this->scopeFileMap = $scopeFileMap;
         $this->parser       = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
@@ -124,12 +130,12 @@ final class FileAnalysisProvider
      */
     public function filesInScope(?array $files = null): ?array
     {
-        if ($files === null) {
-            return $this->isScopeFilesEnabled ? array_keys($this->scopeFileMap) : null;
-        }
-
         if (! $this->isScopeFilesEnabled) {
             return $files;
+        }
+
+        if ($files === null) {
+            return array_keys($this->scopeFileMap);
         }
 
         return array_values(array_filter(
