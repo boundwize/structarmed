@@ -88,10 +88,8 @@ final readonly class PhpFileFinder
         $files = [];
 
         foreach ($sourcePaths as $sourcePath) {
-            $directoryPrefix = Path::normalise(
-                Path::resolve($sourcePath, $basePath),
-                canonicalise: true,
-            ) . '/';
+            $resolvedSourcePath = Path::resolve($sourcePath, $basePath);
+            $directoryPrefix    = Path::normalise($resolvedSourcePath, canonicalise: true) . '/';
 
             foreach ($filesByPath as $file) {
                 if (! str_starts_with($file, $directoryPrefix)) {
