@@ -26,8 +26,11 @@ final readonly class PhpFileCollector
             new RecursiveCallbackFilterIterator(
                 new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
                 static function (SplFileInfo $file) use ($skipPathMatcher): bool {
-                    $isRealDirectory = $file->isDir() && ! $file->isLink();
-                    if (! $isRealDirectory && $file->getExtension() !== 'php') {
+                    if ($file->isLink()) {
+                        return false;
+                    }
+
+                    if (! $file->isDir() && $file->getExtension() !== 'php') {
                         return false;
                     }
 
