@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
+use Boundwize\StructArmed\Util\Path;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -111,6 +112,28 @@ final class FileAnalysisProviderTest extends TestCase
         $files = ['C:/project/src/Foo.php', 'C:/project/src/Bar.php'];
 
         $this->assertSame($files, (new FileAnalysisProvider())->filesInScope($files));
+    }
+
+    public function testExposesInitialScopeInAnalyserOrderOnlyWhenEnabled(): void
+    {
+        $fooFile      = $this->source('<?php final class Foo {}');
+        $barFile      = $this->source('<?php final class Bar {}');
+        $analyses     = new FileAnalysisProvider();
+        $fileAnalysis = $analyses->analyse($fooFile);
+        $barAnalysis  = $analyses->analyse($barFile);
+
+        $this->assertNull((new FileAnalysisProvider())->filesInScope());
+
+        $fileAnalysisProvider = new FileAnalysisProvider(
+            analyses: [$fooFile => $fileAnalysis, $barFile => $barAnalysis],
+            isScopeFilesEnabled: true,
+            scopeFiles: [$barFile, '/missing.php', $fooFile],
+        );
+
+        $this->assertSame(
+            [Path::normalise($barFile), Path::normalise($fooFile)],
+            $fileAnalysisProvider->filesInScope(),
+        );
     }
 
     /** @return iterable<string, array{string, bool, bool, int|null}> */

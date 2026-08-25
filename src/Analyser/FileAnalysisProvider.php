@@ -89,27 +89,45 @@ final class FileAnalysisProvider
     /**
      * @param array<string, FileAnalysis> $analyses
      * @param bool $isScopeFilesEnabled False for standalone rule evaluation, which discovers configured paths.
+     * @param list<string>|null $scopeFiles Files in analyser order; defaults to the analysis map order.
      */
     public function __construct(
         private array $analyses = [],
         private readonly bool $isScopeFilesEnabled = false,
+        ?array $scopeFiles = null,
     ) {
         $normalisedAnalyses = [];
         foreach ($this->analyses as $file => $analysis) {
             $normalisedAnalyses[Path::normalise($file, canonicalise: true)] = $analysis;
         }
 
+        $normalisedScopeFiles = [];
+
+        foreach ($scopeFiles ?? array_keys($normalisedAnalyses) as $file) {
+            $file = Path::normalise($file, canonicalise: true);
+
+            if (isset($normalisedAnalyses[$file])) {
+                $normalisedScopeFiles[] = $file;
+            }
+        }
+
         $this->analyses     = $normalisedAnalyses;
-        $this->scopeFileMap = array_fill_keys(array_keys($normalisedAnalyses), true);
+        $this->scopeFileMap = array_fill_keys($normalisedScopeFiles, true);
         $this->parser       = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     /**
-     * @param list<string> $files
-     * @return list<string>
+     * Without candidates, returns the analyser's discovered files or null for a standalone provider.
+     *
+     * @param list<string>|null $files
+     * @return ($files is null ? list<string>|null : list<string>)
      */
-    public function filesInScope(array $files): array
+    public function filesInScope(?array $files = null): ?array
     {
+        if ($files === null) {
+            return $this->isScopeFilesEnabled ? array_keys($this->scopeFileMap) : null;
+        }
+
         if (! $this->isScopeFilesEnabled) {
             return $files;
         }

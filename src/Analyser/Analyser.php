@@ -170,6 +170,7 @@ final readonly class Analyser
             $fileAnalysisProvider = new FileAnalysisProvider(
                 analyses: $extractionResult->fileAnalyses,
                 isScopeFilesEnabled: true,
+                scopeFiles: $files,
             );
 
             foreach ($fileAnalysisRules as $key => $rule) {

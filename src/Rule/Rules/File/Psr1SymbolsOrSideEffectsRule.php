@@ -13,13 +13,16 @@ use function sprintf;
 
 final readonly class Psr1SymbolsOrSideEffectsRule implements FileAnalysisRuleInterface
 {
+    private PhpFileFinder $phpFileFinder;
+
     /**
      * @param list<string>|null $sourcePaths
      */
     public function __construct(
-        private ?array $sourcePaths = null,
-        private ?PhpFileFinder $phpFileFinder = null,
+        ?array $sourcePaths = null,
+        ?PhpFileFinder $phpFileFinder = null,
     ) {
+        $this->phpFileFinder = $phpFileFinder ?? new PhpFileFinder($sourcePaths);
     }
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
@@ -51,9 +54,8 @@ final readonly class Psr1SymbolsOrSideEffectsRule implements FileAnalysisRuleInt
         FileAnalysisProvider $fileAnalysisProvider,
         array $skipPaths = [],
     ): array {
-        $phpFileFinder = $this->phpFileFinder ?? new PhpFileFinder($this->sourcePaths);
-        $violations    = [];
-        $files         = $fileAnalysisProvider->filesInScope($phpFileFinder->files($basePath, $skipPaths));
+        $violations = [];
+        $files      = $this->phpFileFinder->files($basePath, $skipPaths, $fileAnalysisProvider->filesInScope());
 
         foreach ($files as $file) {
             $fileAnalysis = $fileAnalysisProvider->analyse($file);

@@ -25,6 +25,9 @@ use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
+use Boundwize\StructArmed\Rule\Rules\File\Psr1SymbolsOrSideEffectsRule;
+use Boundwize\StructArmed\Rule\Rules\File\Psr1Utf8WithoutBomRule;
+use Boundwize\StructArmed\Rule\Rules\File\Psr1ValidUtf8Rule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
@@ -42,6 +45,7 @@ use function file_put_contents;
 use function is_dir;
 use function mkdir;
 use function realpath;
+use function rename;
 use function sort;
 use function str_replace;
 use function symlink;
@@ -56,6 +60,53 @@ use const DIRECTORY_SEPARATOR;
 final class AnalyserTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
+
+    public function testBuiltInPsr1RulesDoNotRediscoverFilesAfterExtraction(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/InvalidTag.php'  => '<? echo "invalid tag";',
+            'src/InvalidUtf8.php' => "<?php\n// invalid: \xC3\x28\n",
+            'src/Bom.php'         => "\xEF\xBB\xBF<?php\n",
+            'src/Mixed.php'       => '<?php final class Mixed {} echo "side effect";',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('psr1.tags', new Psr1PhpTagsRule(['src/']))
+            ->rule('psr1.utf8', new Psr1ValidUtf8Rule(['src/']))
+            ->rule('psr1.bom', new Psr1Utf8WithoutBomRule(['src/']))
+            ->rule('psr1.symbols', new Psr1SymbolsOrSideEffectsRule(['src/']));
+
+        $progressHandler = new class ($basePath) implements ProgressHandlerInterface {
+            public function __construct(private readonly string $basePath)
+            {
+            }
+
+            public function start(int $total): void
+            {
+            }
+
+            public function advance(string $file): void
+            {
+            }
+
+            public function finish(): void
+            {
+                rename($this->basePath . '/src', $this->basePath . '/source-moved-after-extraction');
+            }
+        };
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            progressHandler: $progressHandler,
+            analyserOptions: AnalyserOptions::sequential(),
+        );
+
+        $this->assertCount(1, $ruleViolationCollection->forRule('psr1.tags'));
+        $this->assertCount(1, $ruleViolationCollection->forRule('psr1.utf8'));
+        $this->assertCount(1, $ruleViolationCollection->forRule('psr1.bom'));
+        $this->assertCount(1, $ruleViolationCollection->forRule('psr1.symbols'));
+    }
 
     public function testAnalyserReturnsNoViolationsForValidCode(): void
     {
