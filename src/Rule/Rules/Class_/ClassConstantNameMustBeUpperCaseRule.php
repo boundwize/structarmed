@@ -19,7 +19,7 @@ final readonly class ClassConstantNameMustBeUpperCaseRule implements MultipleRul
     }
 
     /**
-     * Enums are skipped: PSR-1 predates enums, and PER Coding Style allows
+     * Enums are skipped: PSR-1 predates enums, and PER Coding Style recommends
      * PascalCase for enum constants so they stay consistent with enum cases.
      */
     public function appliesTo(ClassNode $classNode): bool
