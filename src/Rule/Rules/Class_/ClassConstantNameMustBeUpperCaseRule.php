@@ -18,9 +18,14 @@ final readonly class ClassConstantNameMustBeUpperCaseRule implements MultipleRul
     ) {
     }
 
+    /**
+     * Enums are skipped: PSR-1 predates enums, and PER Coding Style allows
+     * PascalCase for enum constants so they stay consistent with enum cases.
+     */
     public function appliesTo(ClassNode $classNode): bool
     {
-        return $classNode->isInLayer($this->layer);
+        return $classNode->isInLayer($this->layer)
+            && ! $classNode->isEnum;
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
