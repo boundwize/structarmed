@@ -49,16 +49,13 @@ final readonly class Analyser
 {
     private string $basePath;
 
-    private string $normalisedBasePath;
-
     public function __construct(
         string $basePath = '',
         private ?AnalysisResultCache $analysisResultCache = null,
         private string $classNodeCacheNamespace = '',
         private PhpFileCollector $phpFileCollector = new PhpFileCollector(),
     ) {
-        $this->basePath           = $basePath !== '' ? $basePath : (string) getcwd();
-        $this->normalisedBasePath = Path::normalise($this->basePath, canonicalise: true);
+        $this->basePath = $basePath !== '' ? $basePath : (string) getcwd();
     }
 
     /**
@@ -1391,7 +1388,7 @@ final readonly class Analyser
         }
 
         return SkipPathMatcher::compile($this->basePath, $skipPaths)->isSkipped(
-            Path::resolve('composer.json', $this->normalisedBasePath)
+            Path::resolve('composer.json', $this->basePath)
         );
     }
 
