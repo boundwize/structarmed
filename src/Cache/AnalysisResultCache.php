@@ -640,7 +640,7 @@ final class AnalysisResultCache
             $properties[] = $propertyNode;
         }
 
-        if (! is_array($rawEnumCases) || $enumBackingType !== null && ! is_string($enumBackingType)) {
+        if (! is_array($rawEnumCases) || ($enumBackingType !== null && ! is_string($enumBackingType))) {
             return null;
         }
 
@@ -851,7 +851,7 @@ final class AnalysisResultCache
         if (
             ! is_string($enumCase['name'] ?? null)
             || ! is_int($enumCase['line'] ?? null)
-            || $value !== null && ! is_int($value) && ! is_string($value)
+            || ($value !== null && ! is_int($value) && ! is_string($value))
         ) {
             return null;
         }
