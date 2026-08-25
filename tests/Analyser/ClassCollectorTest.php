@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassCollector;
 use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
@@ -23,6 +24,7 @@ use function array_column;
 #[CoversClass(AnonymousClassNode::class)]
 #[CoversClass(ClassCollector::class)]
 #[CoversClass(ClassLikeAnalysis::class)]
+#[CoversClass(EnumCaseNode::class)]
 final class ClassCollectorTest extends TestCase
 {
     private const BASE_PATH = '/structarmed-test-project';
@@ -737,6 +739,67 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame('dateApproved', $classNode->constants[1]->name);
     }
 
+    public function testCollectsEnumCases(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            enum Suit: string
+            {
+                case Hearts = 'H';
+                case Spades = 'S';
+
+                public const Wild = self::Spades;
+
+                public function label(): string
+                {
+                    return $this->name;
+                }
+            }
+            PHP);
+
+        $this->assertTrue($classNode->isEnum);
+        $this->assertTrue($classNode->isBackedEnum());
+        $this->assertSame('string', $classNode->enumBackingType);
+        $this->assertSame(['Hearts', 'Spades'], array_column($classNode->enumCases, 'name'));
+        $this->assertSame([4, 5], array_column($classNode->enumCases, 'line'));
+        $this->assertSame(['H', 'S'], array_column($classNode->enumCases, 'value'));
+        $this->assertTrue($classNode->enumCases[0]->hasResolvedValue());
+        $this->assertSame(['Wild'], array_column($classNode->constants, 'name'));
+        $this->assertSame(['label'], array_column($classNode->methods, 'name'));
+    }
+
+    public function testCollectsIntBackedEnumCaseValues(): void
+    {
+        $classNode = $this->collect(
+            '<?php enum Status: int { case Active = 1; case Shifted = 1 << 3; case Unresolvable = PHP_INT_MAX; }'
+        );
+
+        $this->assertSame('int', $classNode->enumBackingType);
+        $this->assertSame([1, 8, null], array_column($classNode->enumCases, 'value'));
+        // Still a backed case: the analyser just cannot evaluate PHP_INT_MAX.
+        $this->assertTrue($classNode->isBackedEnum());
+        $this->assertFalse($classNode->enumCases[2]->hasResolvedValue());
+    }
+
+    public function testPureEnumHasNoBackingTypeOrCaseValues(): void
+    {
+        $classNode = $this->collect('<?php enum Suit { case Hearts; case Spades; }');
+
+        $this->assertTrue($classNode->isEnum);
+        $this->assertFalse($classNode->isBackedEnum());
+        $this->assertNull($classNode->enumBackingType);
+        $this->assertSame([null, null], array_column($classNode->enumCases, 'value'));
+    }
+
+    public function testNonEnumHasNoEnumCases(): void
+    {
+        $classNode = $this->collect('<?php class Foo { const A = 1; }');
+
+        $this->assertSame([], $classNode->enumCases);
+        $this->assertNull($classNode->enumBackingType);
+        $this->assertFalse($classNode->isBackedEnum());
+    }
+
     public function testCollectsProperties(): void
     {
         $classNode = $this->collect(
@@ -750,6 +813,24 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame('count', $classNode->properties[1]->name);
         $this->assertSame('private', $classNode->properties[1]->visibility);
         $this->assertTrue($classNode->properties[1]->hasExplicitVisibility);
+    }
+
+    public function testPropertiesFollowSourceOrderWhenConstructorPrecedesDeclaredProperties(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public function __construct(public int $id) {} public string $name; }'
+        );
+
+        $this->assertSame(['id', 'name'], array_column($classNode->properties, 'name'));
+    }
+
+    public function testPropertiesFollowSourceOrderWhenDeclaredPropertiesPrecedeConstructor(): void
+    {
+        $classNode = $this->collect(
+            '<?php class Foo { public string $name; public function __construct(public int $id) {} }'
+        );
+
+        $this->assertSame(['name', 'id'], array_column($classNode->properties, 'name'));
     }
 
     public function testDetectsImplicitPropertyVisibility(): void
