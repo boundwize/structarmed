@@ -47,7 +47,6 @@ use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use PhpParser\Token;
 
-use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
@@ -104,15 +103,13 @@ final class FileAnalysisProvider
         $scopeFileMap = [];
 
         if ($this->isScopeFilesEnabled) {
-            if ($scopeFiles === null) {
-                $scopeFileMap = array_fill_keys(array_keys($normalisedAnalyses), true);
-            } else {
-                foreach ($scopeFiles as $file) {
-                    $file = Path::normalise($file, canonicalise: true);
+            $scopeFiles ??= array_keys($normalisedAnalyses);
 
-                    if (isset($normalisedAnalyses[$file])) {
-                        $scopeFileMap[$file] = true;
-                    }
+            foreach ($scopeFiles as $scopeFile) {
+                $scopeFile = Path::normalise($scopeFile, canonicalise: true);
+
+                if (isset($normalisedAnalyses[$scopeFile])) {
+                    $scopeFileMap[$scopeFile] = true;
                 }
             }
         }
