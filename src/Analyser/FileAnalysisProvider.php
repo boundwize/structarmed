@@ -102,7 +102,7 @@ final class FileAnalysisProvider
 
         $scopeFileMap = [];
 
-        if ($this->isScopeFilesEnabled) {
+        if ($isScopeFilesEnabled) {
             $scopeFiles ??= array_keys($normalisedAnalyses);
 
             foreach ($scopeFiles as $scopeFile) {
