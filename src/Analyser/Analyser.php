@@ -897,9 +897,9 @@ final readonly class Analyser
             }
         }
 
-        foreach ($anonymousClassNodes as $anonymouClassNode) {
-            foreach ($anonymouClassNode->traits as $trait) {
-                $usersByTrait[strtolower($trait)][] = $anonymouClassNode;
+        foreach ($anonymousClassNodes as $anonymousClassNode) {
+            foreach ($anonymousClassNode->traits as $trait) {
+                $usersByTrait[strtolower($trait)][] = $anonymousClassNode;
             }
         }
 
