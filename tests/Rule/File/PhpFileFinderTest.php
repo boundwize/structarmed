@@ -44,10 +44,10 @@ final class PhpFileFinderTest extends TestCase
             $basePath . '/tests/FooTest.php',
             $basePath . '/src/composer.json',
         ];
-        $filtered   = (new PhpFileFinder(['src/', 'src/Nested/']))->files(
+        $filtered   = (new PhpFileFinder(['src/', 'src/Nested/']))->filesFromScope(
             $basePath,
-            ['src/Nested/'],
             $scopeFiles,
+            ['src/Nested/'],
         );
 
         $this->assertSame([Path::normalise($basePath . '/src/Foo.php', canonicalise: true)], $filtered);
@@ -69,9 +69,8 @@ final class PhpFileFinderTest extends TestCase
         file_put_contents($basePath . '/tests/FooTest.php', '<?php');
         file_put_contents($basePath . '/Outside.php', '<?php');
 
-        $filtered = (new PhpFileFinder())->files(
+        $filtered = (new PhpFileFinder())->filesFromScope(
             $basePath,
-            [],
             [
                 $basePath . '/src/Foo.php',
                 $basePath . '/tests/FooTest.php',
@@ -103,11 +102,11 @@ final class PhpFileFinderTest extends TestCase
 
         $this->assertSame(
             [Path::normalise($sourceFile, canonicalise: true)],
-            (new PhpFileFinder(['src/']))->files($basePath, [], $scopeFiles),
+            (new PhpFileFinder(['src/']))->filesFromScope($basePath, $scopeFiles),
         );
         $this->assertSame(
             [Path::normalise($customFile, canonicalise: true)],
-            (new PhpFileFinder(['custom/']))->files($basePath, [], $scopeFiles),
+            (new PhpFileFinder(['custom/']))->filesFromScope($basePath, $scopeFiles),
         );
     }
 }

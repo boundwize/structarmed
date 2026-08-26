@@ -29,17 +29,11 @@ final readonly class PhpFileFinder
 
     /**
      * @param list<string> $skipPaths
-     * @param list<string>|null $scopeFiles
      * @return list<string>
      */
-    public function files(string $basePath, array $skipPaths = [], ?array $scopeFiles = null): array
+    public function files(string $basePath, array $skipPaths = []): array
     {
-        $sourcePaths = array_values(array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath)));
-
-        if ($scopeFiles !== null) {
-            return $this->filesFromScope($scopeFiles, $basePath, $sourcePaths, $skipPaths);
-        }
-
+        $sourcePaths     = $this->sourcePaths($basePath);
         $skipPathMatcher = SkipPathMatcher::compile($basePath, $skipPaths);
         $files           = [];
 
@@ -61,17 +55,18 @@ final readonly class PhpFileFinder
     }
 
     /**
+     * Selects configured PHP source files from an already discovered candidate set.
+     *
      * @param list<string> $scopeFiles
-     * @param list<string> $sourcePaths
      * @param list<string> $skipPaths
      * @return list<string>
      */
-    private function filesFromScope(
-        array $scopeFiles,
+    public function filesFromScope(
         string $basePath,
-        array $sourcePaths,
-        array $skipPaths,
+        array $scopeFiles,
+        array $skipPaths = [],
     ): array {
+        $sourcePaths     = $this->sourcePaths($basePath);
         $filesByPath     = [];
         $skipPathMatcher = SkipPathMatcher::compile($basePath, $skipPaths);
 
@@ -102,5 +97,11 @@ final readonly class PhpFileFinder
         }
 
         return $files;
+    }
+
+    /** @return list<string> */
+    private function sourcePaths(string $basePath): array
+    {
+        return array_values(array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath)));
     }
 }

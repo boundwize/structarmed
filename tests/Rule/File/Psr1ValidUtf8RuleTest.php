@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\File;
 
+use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1ValidUtf8Rule;
@@ -23,6 +24,33 @@ use function unlink;
 #[CoversClass(Psr1ValidUtf8Rule::class)]
 final class Psr1ValidUtf8RuleTest extends TestCase
 {
+    public function testEvaluatesFilesFromProviderScope(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            $file = $basePath . '/src/Foo.php';
+            file_put_contents($file, "<?php\n// invalid: \xC3\x28\n");
+
+            $analysis = (new FileAnalysisProvider())->analyse($file);
+            $provider = FileAnalysisProvider::forScope([$file => $analysis], [$file]);
+
+            $violations = (new Psr1ValidUtf8Rule(['src/']))->evaluateProjectAllWithProvider(
+                $basePath,
+                Architecture::define(),
+                $provider,
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertStringEndsWith('/src/Foo.php', $violations[0]->file);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testViolatesInvalidUtf8(): void
     {
         $basePath = $this->makeTempDir();

@@ -108,6 +108,32 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $ruleViolationCollection->forRule('psr1.symbols'));
     }
 
+    public function testPsr1RulesKeepIndependentSourcePaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Invalid.php'   => '<? echo "src";',
+            'tests/Invalid.php' => '<? echo "tests";',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', ['src/', 'tests/'])
+            ->rule('psr1.src', new Psr1PhpTagsRule(['src/']))
+            ->rule('psr1.tests', new Psr1PhpTagsRule(['tests/']));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            analyserOptions: AnalyserOptions::sequential(),
+        );
+
+        $sourceViolations = $ruleViolationCollection->forRule('psr1.src');
+        $testViolations   = $ruleViolationCollection->forRule('psr1.tests');
+
+        $this->assertCount(1, $sourceViolations);
+        $this->assertStringEndsWith('/src/Invalid.php', $this->normalisePath($sourceViolations[0]->file));
+        $this->assertCount(1, $testViolations);
+        $this->assertStringEndsWith('/tests/Invalid.php', $this->normalisePath($testViolations[0]->file));
+    }
+
     public function testAnalyserReturnsNoViolationsForValidCode(): void
     {
         $architecture = Architecture::define()
@@ -3274,6 +3300,29 @@ final class AnalyserTest extends TestCase
             '/src/Foo.php',
             $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
         );
+    }
+
+    public function testAnalyserMergesGlobalAndRuleSpecificSkipPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/GloballySkipped.php' => '<? echo "global";',
+            'src/RuleSkipped.php'     => '<? echo "rule";',
+            'src/Checked.php'         => '<? echo "checked";',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->skipPath('src/GloballySkipped.php')
+            ->skip(['psr1.tags' => ['src/RuleSkipped.php']])
+            ->rule('psr1.tags', new Psr1PhpTagsRule(['src/']));
+
+        $violations = (new Analyser($basePath))->analyse(
+            $architecture,
+            analyserOptions: AnalyserOptions::sequential(),
+        )->forRule('psr1.tags');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/Checked.php', $this->normalisePath($violations[0]->file));
     }
 
     public function testAnalyserSkipsRuleConfiguredBeforePresetRegistersIt(): void

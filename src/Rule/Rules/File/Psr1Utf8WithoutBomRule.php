@@ -42,11 +42,9 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
-        return $this->evaluateProjectAllWithProvider(
-            $basePath,
-            $architecture,
+        return $this->evaluateFiles(
+            $this->phpFileFinder->files($basePath, $skipPaths),
             new FileAnalysisProvider(),
-            $skipPaths,
         );
     }
 
@@ -60,8 +58,23 @@ final readonly class Psr1Utf8WithoutBomRule implements FileAnalysisRuleInterface
         FileAnalysisProvider $fileAnalysisProvider,
         array $skipPaths = [],
     ): array {
+        return $this->evaluateFiles(
+            $this->phpFileFinder->filesFromScope(
+                $basePath,
+                $fileAnalysisProvider->scopeFiles(),
+                $skipPaths,
+            ),
+            $fileAnalysisProvider,
+        );
+    }
+
+    /**
+     * @param list<string> $files
+     * @return list<RuleViolation>
+     */
+    private function evaluateFiles(array $files, FileAnalysisProvider $fileAnalysisProvider): array
+    {
         $violations = [];
-        $files      = $this->phpFileFinder->files($basePath, $skipPaths, $fileAnalysisProvider->filesInScope());
 
         foreach ($files as $file) {
             if ($fileAnalysisProvider->hasUtf8Bom($file)) {
