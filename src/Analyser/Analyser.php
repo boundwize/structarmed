@@ -799,7 +799,7 @@ final readonly class Analyser
 
         if ($deferredMarkers !== []) {
             $this->resolveDeferredInstantiations(
-                array_values($deferredMarkers),
+                $deferredMarkers,
                 $classNodes,
                 $extractionResult->anonymousClassNodes,
                 $instantiated,
@@ -871,7 +871,7 @@ final readonly class Analyser
      * or through another trait that uses it; the trait itself is never
      * instantiated.
      *
-     * @param list<array{0: 'self'|'static'|'parent', 1: string}> $deferredMarkers
+     * @param array<string, array{0: 'self'|'static'|'parent', 1: string}> $deferredMarkers
      * @param list<ClassNode>          $classNodes
      * @param list<AnonymousClassNode> $anonymousClassNodes
      * @param array<string, true>      $instantiated                Lowercased class names
@@ -891,11 +891,15 @@ final readonly class Analyser
             if ($classNode->isTrait) {
                 $traitNames[strtolower($classNode->className)] = true;
             }
+
+            foreach ($classNode->traits as $trait) {
+                $usersByTrait[strtolower($trait)][] = $classNode;
+            }
         }
 
-        foreach ([...$classNodes, ...$anonymousClassNodes] as $node) {
-            foreach ($node->traits as $trait) {
-                $usersByTrait[strtolower($trait)][] = $node;
+        foreach ($anonymousClassNodes as $anonymousClassNode) {
+            foreach ($anonymousClassNode->traits as $trait) {
+                $usersByTrait[strtolower($trait)][] = $anonymousClassNode;
             }
         }
 
