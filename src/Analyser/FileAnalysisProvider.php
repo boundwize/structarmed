@@ -47,10 +47,8 @@ use PhpParser\Parser;
 use PhpParser\ParserFactory;
 use PhpParser\Token;
 
-use function array_filter;
 use function array_key_exists;
 use function array_keys;
-use function array_values;
 use function file_get_contents;
 use function is_array;
 use function min;
@@ -82,63 +80,58 @@ final class FileAnalysisProvider
     /** @var array<string, int|null> */
     private array $invalidPhpTagLines = [];
 
-    /** @var array<string, true> */
-    private readonly array $scopeFileMap;
+    /** @var list<string> */
+    private readonly array $scopeFiles;
 
     /**
+     * Creates a provider for analyses collected from an explicit analyser scope.
+     *
      * @param array<string, FileAnalysis> $analyses
-     * @param bool $isScopeFilesEnabled False for standalone rule evaluation, which discovers configured paths.
-     * @param list<string>|null $scopeFiles Files in analyser order; defaults to the analysis map order.
+     * @param list<string> $scopeFiles
      */
-    public function __construct(
-        private array $analyses = [],
-        private readonly bool $isScopeFilesEnabled = false,
-        ?array $scopeFiles = null,
-    ) {
-        $normalisedAnalyses = [];
-        foreach ($this->analyses as $file => $analysis) {
-            $normalisedAnalyses[Path::normalise($file, canonicalise: true)] = $analysis;
-        }
+    public static function forScope(array $analyses, array $scopeFiles): self
+    {
+        $normalisedAnalyses = self::normaliseAnalyses($analyses);
+        $scopedAnalyses     = [];
 
-        $scopeFileMap = [];
+        foreach ($scopeFiles as $scopeFile) {
+            $scopeFile = Path::normalise($scopeFile, canonicalise: true);
 
-        if ($isScopeFilesEnabled) {
-            $scopeFiles ??= array_keys($normalisedAnalyses);
-
-            foreach ($scopeFiles as $scopeFile) {
-                $scopeFile = Path::normalise($scopeFile, canonicalise: true);
-
-                if (isset($normalisedAnalyses[$scopeFile])) {
-                    $scopeFileMap[$scopeFile] = true;
-                }
+            if (isset($normalisedAnalyses[$scopeFile])) {
+                $scopedAnalyses[$scopeFile] = $normalisedAnalyses[$scopeFile];
             }
         }
 
-        $this->analyses     = $normalisedAnalyses;
-        $this->scopeFileMap = $scopeFileMap;
-        $this->parser       = (new ParserFactory())->createForNewestSupportedVersion();
+        return new self($scopedAnalyses);
+    }
+
+    /** @param array<string, FileAnalysis> $analyses */
+    public function __construct(private array $analyses = [])
+    {
+        $this->analyses   = self::normaliseAnalyses($this->analyses);
+        $this->scopeFiles = array_keys($this->analyses);
+        $this->parser     = (new ParserFactory())->createForNewestSupportedVersion();
+    }
+
+    /** @return list<string> The files represented by the analyses supplied at construction. */
+    public function scopeFiles(): array
+    {
+        return $this->scopeFiles;
     }
 
     /**
-     * Without candidates, returns the analyser's discovered files or null for a standalone provider.
-     *
-     * @param list<string>|null $files
-     * @return ($files is null ? list<string>|null : list<string>)
+     * @param array<string, FileAnalysis> $analyses
+     * @return array<string, FileAnalysis>
      */
-    public function filesInScope(?array $files = null): ?array
+    private static function normaliseAnalyses(array $analyses): array
     {
-        if (! $this->isScopeFilesEnabled) {
-            return $files;
+        $normalisedAnalyses = [];
+
+        foreach ($analyses as $file => $analysis) {
+            $normalisedAnalyses[Path::normalise($file, canonicalise: true)] = $analysis;
         }
 
-        if ($files === null) {
-            return array_keys($this->scopeFileMap);
-        }
-
-        return array_values(array_filter(
-            $files,
-            fn(string $file): bool => isset($this->scopeFileMap[Path::normalise($file, canonicalise: true)]),
-        ));
+        return $normalisedAnalyses;
     }
 
     public function analyse(string $file): FileAnalysis

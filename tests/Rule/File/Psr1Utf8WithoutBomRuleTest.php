@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\File;
 
+use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
@@ -25,6 +26,33 @@ use function unlink;
 #[CoversClass(Psr1Utf8WithoutBomRule::class)]
 final class Psr1Utf8WithoutBomRuleTest extends TestCase
 {
+    public function testEvaluatesFilesFromProviderScope(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            $file = $basePath . '/src/Foo.php';
+            file_put_contents($file, "\xEF\xBB\xBF<?php class Foo {}");
+
+            $analysis = (new FileAnalysisProvider())->analyse($file);
+            $provider = FileAnalysisProvider::forScope([$file => $analysis], [$file]);
+
+            $violations = (new Psr1Utf8WithoutBomRule(['src/']))->evaluateProjectAllWithProvider(
+                $basePath,
+                Architecture::define(),
+                $provider,
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertStringEndsWith('/src/Foo.php', $violations[0]->file);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testViolatesUtf8Bom(): void
     {
         $basePath = $this->makeTempDir();

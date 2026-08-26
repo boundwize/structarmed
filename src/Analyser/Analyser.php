@@ -166,11 +166,7 @@ final readonly class Analyser
         }
 
         if ($withFileAnalysis) {
-            $fileAnalysisProvider = new FileAnalysisProvider(
-                analyses: $extractionResult->fileAnalyses,
-                isScopeFilesEnabled: true,
-                scopeFiles: $files,
-            );
+            $fileAnalysisProvider = FileAnalysisProvider::forScope($extractionResult->fileAnalyses, $files);
 
             foreach ($fileAnalysisRules as $key => $rule) {
                 $projectRuleViolations[$key] = $rule->evaluateProjectAllWithProvider(

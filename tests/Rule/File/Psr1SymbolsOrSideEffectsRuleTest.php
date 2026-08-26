@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\File;
 
+use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\File\PhpFileFinder;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1SymbolsOrSideEffectsRule;
@@ -23,6 +24,33 @@ use function unlink;
 #[CoversClass(Psr1SymbolsOrSideEffectsRule::class)]
 final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
 {
+    public function testEvaluatesFilesFromProviderScope(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            $file = $basePath . '/src/Foo.php';
+            file_put_contents($file, "<?php\necho 'side effect';\nclass Foo {}\n");
+
+            $analysis = (new FileAnalysisProvider())->analyse($file);
+            $provider = FileAnalysisProvider::forScope([$file => $analysis], [$file]);
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAllWithProvider(
+                $basePath,
+                Architecture::define(),
+                $provider,
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(2, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testViolatesFileWithSymbolsAndSideEffects(): void
     {
         $basePath = $this->makeTempDir();

@@ -88,33 +88,7 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse('C:/project/src/Foo.php'));
     }
 
-    public function testFiltersFilesToInitialAnalysedFileScopeWhenEnabled(): void
-    {
-        $fooFile      = $this->source('<?php final class Foo {}');
-        $barFile      = $this->source('<?php final class Bar {}');
-        $fileAnalysis = (new FileAnalysisProvider())->analyse($fooFile);
-
-        $fileAnalysisProvider = new FileAnalysisProvider(
-            analyses: [$fooFile => $fileAnalysis],
-            isScopeFilesEnabled: true,
-        );
-
-        $fileAnalysisProvider->analyse($barFile);
-
-        $this->assertSame(
-            [$fooFile],
-            $fileAnalysisProvider->filesInScope([$fooFile, $barFile]),
-        );
-    }
-
-    public function testReturnsAllFilesWhenScopeIsDisabled(): void
-    {
-        $files = ['C:/project/src/Foo.php', 'C:/project/src/Bar.php'];
-
-        $this->assertSame($files, (new FileAnalysisProvider())->filesInScope($files));
-    }
-
-    public function testExposesInitialScopeInAnalyserOrderOnlyWhenEnabled(): void
+    public function testExposesInitialScopeInAnalyserOrder(): void
     {
         $fooFile      = $this->source('<?php final class Foo {}');
         $barFile      = $this->source('<?php final class Bar {}');
@@ -122,18 +96,15 @@ final class FileAnalysisProviderTest extends TestCase
         $fileAnalysis = $analyses->analyse($fooFile);
         $barAnalysis  = $analyses->analyse($barFile);
 
-        $this->assertNull((new FileAnalysisProvider())->filesInScope());
+        $this->assertSame([], (new FileAnalysisProvider())->scopeFiles());
 
-        $fileAnalysisProvider = new FileAnalysisProvider(
-            analyses: [$fooFile => $fileAnalysis, $barFile => $barAnalysis],
-            isScopeFilesEnabled: true,
-            scopeFiles: [$barFile, '/missing.php', $fooFile],
+        $fileAnalysisProvider = FileAnalysisProvider::forScope(
+            [$fooFile => $fileAnalysis, $barFile => $barAnalysis],
+            [$barFile, '/missing.php', $fooFile],
         );
+        $scopeFiles           = [Path::normalise($barFile), Path::normalise($fooFile)];
 
-        $this->assertSame(
-            [Path::normalise($barFile), Path::normalise($fooFile)],
-            $fileAnalysisProvider->filesInScope(),
-        );
+        $this->assertSame($scopeFiles, $fileAnalysisProvider->scopeFiles());
     }
 
     /** @return iterable<string, array{string, bool, bool, int|null}> */
