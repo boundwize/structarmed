@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Composer;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
@@ -72,6 +73,44 @@ final class Psr4NamespaceRuleTest extends TestCase
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertSame('Class [Wrong\\Foo] must match PSR-4 class [App\\Foo]', $violation->message);
+    }
+
+    public function testFailsForPsr4PathOutsideProjectDirectory(): void
+    {
+        $rootPath = $this->makeTemporaryDirectory('structarmed-psr4-outside-project');
+        mkdir($rootPath . '/project');
+        mkdir($rootPath . '/shared/src', 0777, true);
+
+        file_put_contents($rootPath . '/project/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\' => '../shared/src/',
+                ],
+            ],
+        ]));
+
+        $file = $rootPath . '/shared/src/Foo.php';
+        file_put_contents($file, '<?php namespace Wrong; class Foo {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluateProject($rootPath . '/project', Architecture::define())
+        );
+
+        $violation = $psr4NamespaceRule->evaluate($this->makeNode('Wrong\\Foo', $file));
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame('Class [Wrong\\Foo] must match PSR-4 class [App\\Foo]', $violation->message);
+
+        mkdir($rootPath . '/shared/src/Sub');
+        file_put_contents($rootPath . '/shared/src/Sub/Bar.php', '<?php namespace App\Sub; class Bar {}');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Sub\\Bar', $rootPath . '/shared/src/Sub/Bar.php'))
+        );
     }
 
     #[DataProvider('nonClassKindProvider')]

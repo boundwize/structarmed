@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Composer;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
+use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Util\Path;
 
 use function array_key_exists;
 use function array_key_first;
+use function array_unique;
 use function arsort;
 use function dirname;
 use function file_exists;
@@ -25,8 +28,10 @@ use function str_starts_with;
 use function strlen;
 use function substr;
 
-final class Psr4NamespaceRule implements RuleInterface
+final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
 {
+    private ?string $projectBasePath = null;
+
     /** @var array<string, array<string, list<string>>> */
     private array $mappingsByBasePath = [];
 
@@ -42,6 +47,17 @@ final class Psr4NamespaceRule implements RuleInterface
     public function appliesTo(ClassNode $classNode): bool
     {
         return $classNode->isInLayer($this->layer);
+    }
+
+    /**
+     * Records the analysed project root so PSR-4 paths pointing outside it
+     * (e.g. "../shared/src/") are still checked; project rules run before class rules.
+     */
+    public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
+    {
+        $this->projectBasePath = Path::normalise($basePath, canonicalise: true);
+
+        return null;
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
@@ -71,37 +87,39 @@ final class Psr4NamespaceRule implements RuleInterface
      */
     private function expectedClassNames(string $file): array
     {
-        $basePath = $this->basePathFor($file);
-
-        if ($basePath === null) {
-            return [];
-        }
+        $basePaths = array_unique([$this->projectBasePath, $this->basePathFor($file)]);
 
         $file = Path::normalise($file, canonicalise: true);
 
         $candidates = [];
 
-        foreach ($this->mappingsFor($basePath) as $namespace => $paths) {
-            foreach ($paths as $path) {
-                $prefix = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
+        foreach ($basePaths as $basePath) {
+            if ($basePath === null) {
+                continue;
+            }
 
-                if (! str_starts_with($file, $prefix . '/')) {
-                    continue;
+            foreach ($this->mappingsFor($basePath) as $namespace => $paths) {
+                foreach ($paths as $path) {
+                    $prefix = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
+
+                    if (! str_starts_with($file, $prefix . '/')) {
+                        continue;
+                    }
+
+                    $relativeClass = substr($file, strlen($prefix) + 1);
+
+                    if (! str_ends_with($relativeClass, '.php')) {
+                        continue;
+                    }
+
+                    $relativeClass = substr($relativeClass, 0, -4);
+                    $relativeClass = (string) preg_replace('/\.class$/i', '', $relativeClass);
+                    $relativeClass = str_replace('/', '\\', $relativeClass);
+
+                    $className = $namespace . ltrim($relativeClass, '\\');
+
+                    $candidates[$className] = max($candidates[$className] ?? 0, strlen($prefix));
                 }
-
-                $relativeClass = substr($file, strlen($prefix) + 1);
-
-                if (! str_ends_with($relativeClass, '.php')) {
-                    continue;
-                }
-
-                $relativeClass = substr($relativeClass, 0, -4);
-                $relativeClass = (string) preg_replace('/\.class$/i', '', $relativeClass);
-                $relativeClass = str_replace('/', '\\', $relativeClass);
-
-                $className = $namespace . ltrim($relativeClass, '\\');
-
-                $candidates[$className] = max($candidates[$className] ?? 0, strlen($prefix));
             }
         }
 
