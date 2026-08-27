@@ -206,9 +206,14 @@ final class ClassNode
         return false;
     }
 
+    /**
+     * Classes and enums implement interfaces; interfaces extend them. Both
+     * relations are matched here, directly or through any ancestor.
+     */
     public function implementsInterface(string $interface): bool
     {
         return $this->matchesAnyClassLike($interface, $this->implements)
+            || $this->matchesAnyClassLike($interface, $this->interfaceExtends)
             || $this->matchesAnyClassLike($interface, $this->parentInterfaces);
     }
 
@@ -219,12 +224,6 @@ final class ClassNode
         }
 
         return $this->matchesAnyClassLike($class, $this->parentClasses);
-    }
-
-    public function extendsInterface(string $interface): bool
-    {
-        return $this->matchesAnyClassLike($interface, $this->interfaceExtends)
-            || $this->matchesAnyClassLike($interface, $this->parentInterfaces);
     }
 
     /**
