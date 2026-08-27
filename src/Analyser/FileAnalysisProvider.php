@@ -48,11 +48,11 @@ use PhpParser\ParserFactory;
 
 use function array_key_exists;
 use function array_keys;
-use function ctype_space;
 use function file_get_contents;
 use function is_array;
 use function min;
 use function preg_match;
+use function str_contains;
 use function str_starts_with;
 use function substr;
 use function substr_count;
@@ -264,7 +264,7 @@ final class FileAnalysisProvider
     {
         if (
             str_starts_with($code, '<?php')
-            && ($code === '<?php' || ctype_space($code[5]))
+            && ($code === '<?php' || str_contains(" \t\n\r\v\f", $code[5]))
             && substr_count($code, '<?') === 1
         ) {
             return null;
