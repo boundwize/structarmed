@@ -49,6 +49,33 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse($file));
     }
 
+    public function testReusesAstParsedBeforeAnalysis(): void
+    {
+        $file = $this->source(<<<'PHP'
+            <?php
+
+            final class Foo {}
+            PHP);
+
+        $fileAnalysisProvider = new FileAnalysisProvider();
+        $ast                  = $fileAnalysisProvider->ast($file);
+
+        $this->assertIsArray($ast);
+        $this->assertSame($ast, $fileAnalysisProvider->ast($file));
+
+        $fileAnalysis = $fileAnalysisProvider->analyse($file);
+
+        $this->assertTrue($fileAnalysis->hasValidAst);
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertFalse($fileAnalysis->hasSideEffects);
+        $this->assertNull($fileAnalysis->invalidPhpTagLine);
+
+        $fileAnalysisProvider->releaseAst($file);
+
+        $this->assertNull($fileAnalysisProvider->ast($file));
+        $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse($file));
+    }
+
     public function testReportsInvalidTagsAndInvalidAstWithoutThrowing(): void
     {
         $file = $this->source("<? echo 'short';\n<?php this is invalid !!!!!");

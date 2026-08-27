@@ -140,7 +140,7 @@ final class FileAnalysisProvider
         }
 
         $code        = $this->contents($file);
-        $ast         = $this->parse($file);
+        $ast         = array_key_exists($file, $this->asts) ? $this->asts[$file] : $this->parse($file);
         $hasValidAst = $this->validAsts[$file];
         $fileState   = $hasValidAst ? $this->fileState($ast ?? []) : [
             'declaresSymbols' => false,
@@ -190,17 +190,13 @@ final class FileAnalysisProvider
     }
 
     /**
-     * Parses an already normalised, not yet analysed file and records its AST,
-     * validity and invalid PHP tag line in one pass over the parser output.
+     * Parses an already normalised file that has neither a cached AST nor an
+     * analysis, recording its AST, validity and invalid PHP tag line in one pass.
      *
      * @return array<Node\Stmt>|null
      */
     private function parse(string $file): ?array
     {
-        if (array_key_exists($file, $this->asts)) {
-            return $this->asts[$file];
-        }
-
         $code    = $this->contents($file);
         $ast     = null;
         $isValid = true;
