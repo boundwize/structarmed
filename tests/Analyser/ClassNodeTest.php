@@ -192,8 +192,7 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\OrderService'));
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\RootOrderService'));
         $this->assertTrue($classNode->extendsClass('App\\Support\\BaseOrderService'));
-        $this->assertTrue($classNode->extendsInterface('App\\Contracts\\BaseOrderService'));
-        $this->assertTrue($classNode->extendsInterface('App\\Contracts\\RootOrderService'));
+        $this->assertTrue($classNode->implementsInterface('App\\Contracts\\BaseOrderService'));
         $this->assertTrue($classNode->callsFunction('var_dump'));
         $this->assertTrue($classNode->callsFunction('VAR_DUMP'));
         $this->assertFalse($classNode->callsFunction('array_map'));
@@ -282,7 +281,7 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->extendsClass('App\\Support\\OtherClass'));
     }
 
-    public function testExtendsInterfaceIsCaseInsensitive(): void
+    public function testImplementsInterfaceMatchesInterfaceExtendsCaseInsensitively(): void
     {
         $classNode = new ClassNode(
             className:        'App\\Contracts\\FooInterface',
@@ -298,9 +297,9 @@ final class ClassNodeTest extends TestCase
             parentInterfaces: ['App\\Contracts\\rootinterface'],
         );
 
-        $this->assertTrue($classNode->extendsInterface('App\\Contracts\\BaseInterface'));
-        $this->assertTrue($classNode->extendsInterface('App\\Contracts\\RootInterface'));
-        $this->assertFalse($classNode->extendsInterface('App\\Contracts\\OtherInterface'));
+        $this->assertTrue($classNode->implementsInterface('App\\Contracts\\BaseInterface'));
+        $this->assertTrue($classNode->implementsInterface('App\\Contracts\\RootInterface'));
+        $this->assertFalse($classNode->implementsInterface('App\\Contracts\\OtherInterface'));
     }
 
     public function testSetRecursiveParents(): void

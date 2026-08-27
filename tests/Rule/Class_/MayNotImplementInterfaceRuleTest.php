@@ -90,14 +90,60 @@ final class MayNotImplementInterfaceRuleTest extends TestCase
         );
     }
 
+    public function testViolatesWhenInterfaceDirectlyExtendsForbiddenInterface(): void
+    {
+        $mayNotImplementInterfaceRule = new MayNotImplementInterfaceRule(
+            layer: 'Domain',
+            interface: JsonSerializable::class
+        );
+
+        $violation = $mayNotImplementInterfaceRule->evaluate($this->makeNode(
+            [],
+            isInterface: true,
+            interfaceExtends: [JsonSerializable::class],
+        ));
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            'Interface [App\\Domain\\Order] must not extend interface [JsonSerializable]',
+            $violation->message
+        );
+    }
+
+    public function testViolatesWhenInterfaceIndirectlyExtendsForbiddenInterface(): void
+    {
+        $mayNotImplementInterfaceRule = new MayNotImplementInterfaceRule(
+            layer: 'Domain',
+            interface: JsonSerializable::class
+        );
+
+        // App\Domain\Order extends App\Domain\Serializable, which extends JsonSerializable.
+        $classNode = $this->makeNode(
+            [],
+            isInterface: true,
+            interfaceExtends: ['App\\Domain\\Serializable'],
+        );
+        $classNode->setRecursiveParents([], ['App\\Domain\\Serializable', JsonSerializable::class]);
+
+        $violation = $mayNotImplementInterfaceRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            'Interface [App\\Domain\\Order] must not extend interface [JsonSerializable]',
+            $violation->message
+        );
+    }
+
     /**
      * @param string[] $implements
+     * @param string[] $interfaceExtends
      */
     private function makeNode(
         array $implements,
         string $layer = 'Domain',
         bool $isInterface = false,
         bool $isEnum = false,
+        array $interfaceExtends = [],
     ): ClassNode {
         return new ClassNode(
             className:   'App\\Domain\\Order',
@@ -109,8 +155,9 @@ final class MayNotImplementInterfaceRuleTest extends TestCase
             isFinal:     false,
             isInterface: $isInterface,
             isReadonly:  false,
-            implements:  $implements,
-            isEnum:      $isEnum,
+            implements:       $implements,
+            isEnum:           $isEnum,
+            interfaceExtends: $interfaceExtends,
         );
     }
 }
