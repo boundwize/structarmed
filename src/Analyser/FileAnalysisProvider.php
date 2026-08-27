@@ -74,7 +74,7 @@ final class FileAnalysisProvider
     /** @var array<string, string> */
     private array $contents = [];
 
-    /** @var array<string, int|null> Computed eagerly at parse time so token arrays are never retained. */
+    /** @var array<string, int|null> Computed eagerly at parse time so token arrays are not retained by the provider. */
     private array $invalidPhpTagLines = [];
 
     /** @var list<string> */
@@ -222,6 +222,7 @@ final class FileAnalysisProvider
             $this->asts[$file],
             $this->validAsts[$file],
             $this->contents[$file],
+            $this->invalidPhpTagLines[$file],
         );
     }
 
