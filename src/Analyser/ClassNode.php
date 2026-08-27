@@ -207,8 +207,7 @@ final class ClassNode
     }
 
     /**
-     * Classes and enums implement interfaces; interfaces extend them. Both
-     * relations are matched here, directly or through any ancestor.
+     * Implemented directly, extended directly (for interfaces), or via any parent class or interface.
      */
     public function implementsInterface(string $interface): bool
     {
