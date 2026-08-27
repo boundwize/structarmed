@@ -157,14 +157,6 @@ JSON);
             RuleViolation::class,
             $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
-        $this->assertSame(['app', 'tests', 'specs'], $psr4SourcePathsRule->sourcePathsFor($basePath));
-    }
-
-    public function testNormalisesExplicitSourcePaths(): void
-    {
-        $psr4SourcePathsRule = new Psr4SourcePathsRule([' src/ ', 'tests\\']);
-
-        $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($this->makeTempDir()));
     }
 
     public function testPassesWhenDotRelativeSourcePathsExistInComposerPsr4Autoloads(): void
@@ -190,7 +182,6 @@ JSON);
             RuleViolation::class,
             $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
-        $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($basePath));
     }
 
     public function testPassesWhenAbsoluteSourcePathsExistInComposerPsr4Autoloads(): void
@@ -216,7 +207,6 @@ JSON);
             RuleViolation::class,
             $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
-        $this->assertSame(['src', 'tests'], $psr4SourcePathsRule->sourcePathsFor($basePath));
     }
 
     public function testPassesWhenComposerUsesAbsoluteSourcePath(): void

@@ -32,18 +32,6 @@ final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
     ) {
     }
 
-    /**
-     * @return list<string>
-     */
-    public function sourcePathsFor(string $basePath): array
-    {
-        if ($this->sourcePaths === null) {
-            return $this->psr4PathResolver->paths($basePath);
-        }
-
-        return $this->normalisePaths($this->sourcePaths, $basePath);
-    }
-
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
         $composerFile = rtrim($basePath, '/') . '/composer.json';
