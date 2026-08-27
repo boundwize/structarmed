@@ -16,6 +16,10 @@ jobs:
       matrix:
         operating-system: [ubuntu-latest, macos-latest, windows-latest]
         php-versions: ["8.2", "8.3", "8.4", "8.5"]
+        include:
+          - operating-system: ubuntu-latest
+            php-versions: "8.2"
+            coverage: pcov
 
     steps:
       - name: Checkout
@@ -25,7 +29,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-versions }}
-          coverage: pcov
+          coverage: ${{ matrix.coverage || 'none' }}
 
       - name: Get composer cache directory
         id: composer-cache
@@ -55,15 +59,15 @@ jobs:
         run: composer rector
 
       - name: Run tests with coverage
-        if: matrix.php-versions == '8.2' && matrix.operating-system == 'ubuntu-latest'
+        if: matrix.coverage
         run: composer test -- --coverage-clover coverage.xml
 
       - name: Run tests
-        if: matrix.php-versions != '8.2' || matrix.operating-system != 'ubuntu-latest'
+        if: "!matrix.coverage"
         run: composer test
 
       - name: Upload coverage to Codecov
-        if: matrix.php-versions == '8.2' && matrix.operating-system == 'ubuntu-latest'
+        if: matrix.coverage
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
