@@ -45,7 +45,6 @@ use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
-use PhpParser\Token;
 
 use function array_key_exists;
 use function array_keys;
@@ -53,6 +52,7 @@ use function file_get_contents;
 use function is_array;
 use function min;
 use function preg_match;
+use function str_contains;
 use function str_starts_with;
 use function substr;
 use function substr_count;
@@ -71,13 +71,10 @@ final class FileAnalysisProvider
     /** @var array<string, bool> */
     private array $validAsts = [];
 
-    /** @var array<string, array<Token>> */
-    private array $tokens = [];
-
     /** @var array<string, string> */
     private array $contents = [];
 
-    /** @var array<string, int|null> */
+    /** @var array<string, int|null> Computed eagerly at parse time so token arrays are not retained by the provider. */
     private array $invalidPhpTagLines = [];
 
     /** @var list<string> */
@@ -143,7 +140,7 @@ final class FileAnalysisProvider
         }
 
         $code        = $this->contents($file);
-        $ast         = $this->ast($file);
+        $ast         = array_key_exists($file, $this->asts) ? $this->asts[$file] : $this->parse($file);
         $hasValidAst = $this->validAsts[$file];
         $fileState   = $hasValidAst ? $this->fileState($ast ?? []) : [
             'declaresSymbols' => false,
@@ -155,7 +152,7 @@ final class FileAnalysisProvider
             file: $file,
             hasUtf8Bom: str_starts_with($code, "\xEF\xBB\xBF"),
             hasValidUtf8: preg_match('//u', $code) === 1,
-            invalidPhpTagLine: $this->invalidPhpTagLine($file),
+            invalidPhpTagLine: $this->invalidPhpTagLines[$file],
             hasValidAst: $hasValidAst,
             declaresSymbols: $fileState['declaresSymbols'],
             hasSideEffects: $fileState['hasSideEffects'],
@@ -189,18 +186,30 @@ final class FileAnalysisProvider
             return null;
         }
 
+        return $this->parse($file);
+    }
+
+    /**
+     * Parses an already normalised file that has neither a cached AST nor an
+     * analysis, recording its AST, validity and invalid PHP tag line in one pass.
+     *
+     * @return array<Node\Stmt>|null
+     */
+    private function parse(string $file): ?array
+    {
+        $code    = $this->contents($file);
         $ast     = null;
         $isValid = true;
 
         try {
-            $ast = $this->parser->parse($this->contents($file));
+            $ast = $this->parser->parse($code);
         } catch (Error) {
             $isValid = false;
         }
 
-        $this->asts[$file]      = $ast;
-        $this->validAsts[$file] = $isValid;
-        $this->tokens[$file]    = $this->parser->getTokens();
+        $this->asts[$file]               = $ast;
+        $this->validAsts[$file]          = $isValid;
+        $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineForCode($code);
 
         return $ast;
     }
@@ -212,8 +221,8 @@ final class FileAnalysisProvider
         unset(
             $this->asts[$file],
             $this->validAsts[$file],
-            $this->tokens[$file],
             $this->contents[$file],
+            $this->invalidPhpTagLines[$file],
         );
     }
 
@@ -239,22 +248,36 @@ final class FileAnalysisProvider
             return $this->analyses[$file]->invalidPhpTagLine;
         }
 
-        if (array_key_exists($file, $this->invalidPhpTagLines)) {
-            return $this->invalidPhpTagLines[$file];
+        if (! array_key_exists($file, $this->invalidPhpTagLines)) {
+            $this->parse($file);
         }
 
-        if (! isset($this->tokens[$file])) {
-            $this->ast($file);
-        }
-
-        return $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineFromTokens($this->tokens[$file] ?? []);
+        return $this->invalidPhpTagLines[$file];
     }
 
-    /** @param array<Token> $tokens */
-    private function invalidPhpTagLineFromTokens(array $tokens): ?int
+    /**
+     * Must be called right after parsing $code, while the parser still holds its tokens.
+     * A file that opens with a well-formed `<?php` tag and contains no other `<?`
+     * cannot hold an invalid tag, which skips the token walk for the common case.
+     */
+    private function invalidPhpTagLineForCode(string $code): ?int
     {
-        foreach ($tokens as $token) {
-            $invalidLine = $this->invalidPhpTagLineForToken($token->id, $token->text, $token->line);
+        if (
+            str_starts_with($code, '<?php')
+            && ($code === '<?php' || str_contains(" \t\n\r\v\f", $code[5]))
+            && substr_count($code, '<?') === 1
+        ) {
+            return null;
+        }
+
+        foreach ($this->parser->getTokens() as $token) {
+            $id = $token->id;
+
+            if ($id !== T_OPEN_TAG && $id !== T_INLINE_HTML) {
+                continue;
+            }
+
+            $invalidLine = $this->invalidPhpTagLineForToken($id, $token->text, $token->line);
 
             if ($invalidLine !== null) {
                 return $invalidLine;
@@ -280,10 +303,9 @@ final class FileAnalysisProvider
         return $tokenLine + substr_count(substr($text, 0, $tagOffset), "\n");
     }
 
+    /** @param string $file An already normalised path. */
     private function contents(string $file): string
     {
-        $file = Path::normalise($file, canonicalise: true);
-
         return $this->contents[$file] ??= (string) file_get_contents($file);
     }
 
@@ -415,6 +437,9 @@ final class FileAnalysisProvider
                 $sideEffectLine = $sideEffectLine === null
                     ? $node->getStartLine()
                     : min($sideEffectLine, $node->getStartLine());
+
+                // Descendants start on or after this node's line, so they cannot lower the minimum.
+                continue;
             }
 
             if ($node instanceof FunctionLike || $node instanceof ClassLike) {

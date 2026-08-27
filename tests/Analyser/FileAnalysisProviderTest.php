@@ -13,6 +13,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function base64_encode;
+use function file_put_contents;
+use function sys_get_temp_dir;
+use function tempnam;
+use function unlink;
 
 #[CoversClass(FileAnalysis::class)]
 #[CoversClass(FileAnalysisProvider::class)]
@@ -47,6 +51,53 @@ final class FileAnalysisProviderTest extends TestCase
 
         $this->assertNull($fileAnalysisProvider->ast($file));
         $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse($file));
+    }
+
+    public function testReusesAstParsedBeforeAnalysis(): void
+    {
+        $file = $this->source(<<<'PHP'
+            <?php
+
+            final class Foo {}
+            PHP);
+
+        $fileAnalysisProvider = new FileAnalysisProvider();
+        $ast                  = $fileAnalysisProvider->ast($file);
+
+        $this->assertIsArray($ast);
+        $this->assertSame($ast, $fileAnalysisProvider->ast($file));
+
+        $fileAnalysis = $fileAnalysisProvider->analyse($file);
+
+        $this->assertTrue($fileAnalysis->hasValidAst);
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertFalse($fileAnalysis->hasSideEffects);
+        $this->assertNull($fileAnalysis->invalidPhpTagLine);
+
+        $fileAnalysisProvider->releaseAst($file);
+
+        $this->assertNull($fileAnalysisProvider->ast($file));
+        $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse($file));
+    }
+
+    public function testReleaseAstDropsInvalidPhpTagLineCache(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'structarmed');
+        file_put_contents($file, '<?php final class Foo {}');
+
+        try {
+            $fileAnalysisProvider = new FileAnalysisProvider();
+
+            $this->assertIsArray($fileAnalysisProvider->ast($file));
+            $this->assertNull($fileAnalysisProvider->invalidPhpTagLine($file));
+
+            $fileAnalysisProvider->releaseAst($file);
+            file_put_contents($file, "<? echo 'changed';");
+
+            $this->assertSame(1, $fileAnalysisProvider->invalidPhpTagLine($file));
+        } finally {
+            unlink($file);
+        }
     }
 
     public function testReportsInvalidTagsAndInvalidAstWithoutThrowing(): void
