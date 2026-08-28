@@ -109,4 +109,18 @@ final class PhpFileFinderTest extends TestCase
             (new PhpFileFinder(['custom/']))->filesFromScope($basePath, $scopeFiles),
         );
     }
+
+    public function testIgnoresDuplicateScopeFiles(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-php-file-finder');
+        mkdir($basePath . '/src');
+
+        $sourceFile = $basePath . '/src/Foo.php';
+        file_put_contents($sourceFile, '<?php');
+
+        $this->assertSame(
+            [Path::normalise($sourceFile, canonicalise: true)],
+            (new PhpFileFinder(['src/']))->filesFromScope($basePath, [$sourceFile, $sourceFile]),
+        );
+    }
 }

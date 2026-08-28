@@ -76,16 +76,24 @@ final readonly class PhpFileFinder
 
         $files = [];
 
-        foreach ($scopeFiles as $file) {
-            $file = Path::normalise($file, canonicalise: true);
+        foreach ($scopeFiles as $scopeFile) {
+            $scopeFile = Path::normalise($scopeFile, canonicalise: true);
 
-            if (! str_ends_with($file, '.php') || isset($files[$file]) || $skipPathMatcher->isSkipped($file)) {
+            if (isset($files[$scopeFile])) {
+                continue;
+            }
+
+            if (! str_ends_with($scopeFile, '.php')) {
+                continue;
+            }
+
+            if ($skipPathMatcher->isSkipped($scopeFile)) {
                 continue;
             }
 
             foreach ($directoryPrefixes as $directoryPrefix) {
-                if (str_starts_with($file, $directoryPrefix)) {
-                    $files[$file] = true;
+                if (str_starts_with($scopeFile, $directoryPrefix)) {
+                    $files[$scopeFile] = true;
                     continue 2;
                 }
             }
