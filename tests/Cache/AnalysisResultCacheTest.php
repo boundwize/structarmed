@@ -1291,6 +1291,35 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testClassNodesWithFileAnalysisMissesMalformedNodesWhenFactsAreValid(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeClassNodes(
+                $sourceFile,
+                'config',
+                [$this->makeClassNode($sourceFile)],
+                new FileAnalysis($sourceFile, false, true, null, true, true, false, 1),
+            );
+
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($payload);
+            $payload['nodes'] = 'invalid';
+            $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
+
+            $this->assertNull($analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testClassNodesMissWhenFileMetadataChanges(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
