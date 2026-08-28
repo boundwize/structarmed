@@ -197,26 +197,7 @@ final class AnalysisResultCache
             return null;
         }
 
-        $classNodes          = $this->classNodesFromPayload($payload);
-        $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
-        $fileReferences      = $this->fileReferencesFromPayload($payload);
-        $fileInstantiations  = $this->fileInstantiationsFromPayload($payload);
-
-        if (
-            $classNodes === null
-            || $anonymousClassNodes === null
-            || $fileReferences === null
-            || $fileInstantiations === null
-        ) {
-            return null;
-        }
-
-        return [
-            'classNodes'          => $classNodes,
-            'anonymousClassNodes' => $anonymousClassNodes,
-            'fileReferences'      => $fileReferences,
-            'fileInstantiations'  => $fileInstantiations,
-        ];
+        return $this->classNodeResultFromPayload($payload);
     }
 
     /**
@@ -236,20 +217,46 @@ final class AnalysisResultCache
             return null;
         }
 
+        $fileAnalysis = is_array($payload['fileAnalysis'] ?? null)
+            ? $this->fileAnalysisFromArray($payload['fileAnalysis'])
+            : null;
+
+        if (! $fileAnalysis instanceof FileAnalysis) {
+            return null;
+        }
+
+        $result = $this->classNodeResultFromPayload($payload);
+
+        if ($result === null) {
+            return null;
+        }
+
+        $result['fileAnalysis'] = $fileAnalysis;
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{
+     *     classNodes: list<ClassNode>,
+     *     anonymousClassNodes: list<AnonymousClassNode>,
+     *     fileReferences: list<string>,
+     *     fileInstantiations: list<string>
+     * }|null
+     */
+    private function classNodeResultFromPayload(array $payload): ?array
+    {
         $classNodes          = $this->classNodesFromPayload($payload);
         $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
         $fileReferences      = $this->fileReferencesFromPayload($payload);
         $fileInstantiations  = $this->fileInstantiationsFromPayload($payload);
-        $fileAnalysis        = is_array($payload['fileAnalysis'] ?? null)
-            ? $this->fileAnalysisFromArray($payload['fileAnalysis'])
-            : null;
 
         if (
             $classNodes === null
             || $anonymousClassNodes === null
             || $fileReferences === null
             || $fileInstantiations === null
-            || ! $fileAnalysis instanceof FileAnalysis
         ) {
             return null;
         }
@@ -259,7 +266,6 @@ final class AnalysisResultCache
             'anonymousClassNodes' => $anonymousClassNodes,
             'fileReferences'      => $fileReferences,
             'fileInstantiations'  => $fileInstantiations,
-            'fileAnalysis'        => $fileAnalysis,
         ];
     }
 
@@ -367,10 +373,6 @@ final class AnalysisResultCache
      */
     private function ruleViolationFromArray(array $violation): ?RuleViolation
     {
-        if (! $this->hasOnlyStringKeys($violation)) {
-            return null;
-        }
-
         $ruleKey   = $violation['rule'] ?? null;
         $message   = $violation['message'] ?? null;
         $file      = $violation['file'] ?? null;
@@ -462,7 +464,7 @@ final class AnalysisResultCache
         $anonymousClassNodes = [];
 
         foreach ($rawNodes as $rawNode) {
-            if (! is_array($rawNode) || ! $this->hasOnlyStringKeys($rawNode)) {
+            if (! is_array($rawNode)) {
                 return null;
             }
 
@@ -532,10 +534,6 @@ final class AnalysisResultCache
      */
     private function classNodeFromArray(array $node): ?ClassNode
     {
-        if (! $this->hasOnlyStringKeys($node)) {
-            return null;
-        }
-
         $className          = $node['className'] ?? null;
         $file               = $node['file'] ?? null;
         $line               = $node['line'] ?? null;
@@ -752,10 +750,6 @@ final class AnalysisResultCache
      */
     private function methodNodeFromArray(array $method): ?MethodNode
     {
-        if (! $this->hasOnlyStringKeys($method)) {
-            return null;
-        }
-
         if (
             ! is_string($method['name'] ?? null)
             || ! is_string($method['visibility'] ?? null)
@@ -790,10 +784,6 @@ final class AnalysisResultCache
      */
     private function constantNodeFromArray(array $constant): ?ConstantNode
     {
-        if (! $this->hasOnlyStringKeys($constant)) {
-            return null;
-        }
-
         if (
             ! is_string($constant['name'] ?? null)
             || ! is_string($constant['visibility'] ?? null)
@@ -816,10 +806,6 @@ final class AnalysisResultCache
      */
     private function propertyNodeFromArray(array $property): ?PropertyNode
     {
-        if (! $this->hasOnlyStringKeys($property)) {
-            return null;
-        }
-
         if (
             ! is_string($property['name'] ?? null)
             || ! is_string($property['visibility'] ?? null)
@@ -842,10 +828,6 @@ final class AnalysisResultCache
      */
     private function enumCaseNodeFromArray(array $enumCase): ?EnumCaseNode
     {
-        if (! $this->hasOnlyStringKeys($enumCase)) {
-            return null;
-        }
-
         $value = $enumCase['value'] ?? null;
 
         if (
@@ -882,8 +864,7 @@ final class AnalysisResultCache
     private function fileAnalysisFromArray(array $analysis): ?FileAnalysis
     {
         if (
-            ! $this->hasOnlyStringKeys($analysis)
-            || ! is_string($analysis['file'] ?? null)
+            ! is_string($analysis['file'] ?? null)
             || ! is_bool($analysis['hasUtf8Bom'] ?? null)
             || ! is_bool($analysis['hasValidUtf8'] ?? null)
             || ! array_key_exists('invalidPhpTagLine', $analysis)
