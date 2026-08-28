@@ -9,6 +9,7 @@ use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Util\Path;
 
+use function array_keys;
 use function array_unique;
 use function array_values;
 use function is_dir;
@@ -66,37 +67,31 @@ final readonly class PhpFileFinder
         array $scopeFiles,
         array $skipPaths = [],
     ): array {
-        $sourcePaths     = $this->sourcePaths($basePath);
-        $filesByPath     = [];
-        $skipPathMatcher = SkipPathMatcher::compile($basePath, $skipPaths);
+        $skipPathMatcher   = SkipPathMatcher::compile($basePath, $skipPaths);
+        $directoryPrefixes = [];
 
-        foreach ($scopeFiles as $file) {
-            $file = Path::normalise($file, canonicalise: true);
-
-            if (! str_ends_with($file, '.php') || $skipPathMatcher->isSkipped($file)) {
-                continue;
-            }
-
-            $filesByPath[$file] = $file;
+        foreach ($this->sourcePaths($basePath) as $sourcePath) {
+            $directoryPrefixes[] = Path::normalise(Path::resolve($sourcePath, $basePath), canonicalise: true) . '/';
         }
 
         $files = [];
 
-        foreach ($sourcePaths as $sourcePath) {
-            $resolvedSourcePath = Path::resolve($sourcePath, $basePath);
-            $directoryPrefix    = Path::normalise($resolvedSourcePath, canonicalise: true) . '/';
+        foreach ($scopeFiles as $file) {
+            $file = Path::normalise($file, canonicalise: true);
 
-            foreach ($filesByPath as $file) {
-                if (! str_starts_with($file, $directoryPrefix)) {
-                    continue;
+            if (! str_ends_with($file, '.php') || isset($files[$file]) || $skipPathMatcher->isSkipped($file)) {
+                continue;
+            }
+
+            foreach ($directoryPrefixes as $directoryPrefix) {
+                if (str_starts_with($file, $directoryPrefix)) {
+                    $files[$file] = true;
+                    continue 2;
                 }
-
-                $files[] = $file;
-                unset($filesByPath[$file]);
             }
         }
 
-        return $files;
+        return array_keys($files);
     }
 
     /** @return list<string> */
