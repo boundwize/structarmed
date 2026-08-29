@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser;
 
+use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
@@ -15,18 +15,18 @@ use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
 
-#[CoversClass(ClassNodeExtractor::class)]
+#[CoversClass(AnalysisNodeExtractor::class)]
 #[CoversClass(ExtractionResult::class)]
-final class ClassNodeExtractorTest extends TestCase
+final class AnalysisNodeExtractorTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
 
     public function testExtractReturnsEmptyArrayForNoFiles(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], '/tmp');
-        $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
+        $analysisNodeExtractor  = new AnalysisNodeExtractor($namespaceLayerResolver);
 
-        $extractionResult = $classNodeExtractor->extract([]);
+        $extractionResult = $analysisNodeExtractor->extract([]);
 
         $this->assertSame([], $extractionResult->classNodes);
         $this->assertSame([], $extractionResult->fileAnalyses);
@@ -48,9 +48,9 @@ final class Foo
 PHP);
 
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
-        $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
+        $analysisNodeExtractor  = new AnalysisNodeExtractor($namespaceLayerResolver);
 
-        $extractionResult = $classNodeExtractor->extract([$file]);
+        $extractionResult = $analysisNodeExtractor->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
         $this->assertInstanceOf(ClassNode::class, $extractionResult->classNodes[0]);
@@ -65,9 +65,9 @@ PHP);
         file_put_contents($file, '<?php this is not valid php !!!!!');
 
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
-        $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
+        $analysisNodeExtractor  = new AnalysisNodeExtractor($namespaceLayerResolver);
 
-        $extractionResult = $classNodeExtractor->extract([$file]);
+        $extractionResult = $analysisNodeExtractor->extract([$file]);
 
         $this->assertSame([], $extractionResult->classNodes);
     }
@@ -80,9 +80,9 @@ PHP);
         file_put_contents($file, '<?php');
 
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
-        $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
+        $analysisNodeExtractor  = new AnalysisNodeExtractor($namespaceLayerResolver);
 
-        $extractionResult = $classNodeExtractor->extract([$file]);
+        $extractionResult = $analysisNodeExtractor->extract([$file]);
 
         $this->assertSame([], $extractionResult->classNodes);
     }
@@ -95,7 +95,7 @@ PHP);
         file_put_contents($file, '<?php final class Foo {} echo "side effect";');
 
         $namespaceLayerResolver = new NamespaceLayerResolver(['Source' => ''], $dir);
-        $extractionResult       = (new ClassNodeExtractor($namespaceLayerResolver))
+        $extractionResult       = (new AnalysisNodeExtractor($namespaceLayerResolver))
             ->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
@@ -112,7 +112,7 @@ PHP);
         file_put_contents($file, '<?php final class Foo {}');
 
         $namespaceLayerResolver = new NamespaceLayerResolver(['Source' => ''], $dir);
-        $extractionResult       = (new ClassNodeExtractor($namespaceLayerResolver))
+        $extractionResult       = (new AnalysisNodeExtractor($namespaceLayerResolver))
             ->extract([$file], withFileAnalysis: false);
 
         $this->assertCount(1, $extractionResult->classNodes);
@@ -135,7 +135,7 @@ final class Bar
 PHP);
 
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
-        $classNodeExtractor     = new ClassNodeExtractor($namespaceLayerResolver);
+        $analysisNodeExtractor  = new AnalysisNodeExtractor($namespaceLayerResolver);
 
         $advanced = [];
 
@@ -161,7 +161,7 @@ PHP);
             }
         };
 
-        $classNodeExtractor->extract([$file], $progressHandler);
+        $analysisNodeExtractor->extract([$file], $progressHandler);
 
         $this->assertCount(1, $advanced);
         $this->assertSame($file, $advanced[0]);

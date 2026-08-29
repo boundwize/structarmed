@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
-use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
+use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Throwable;
 
@@ -17,7 +17,10 @@ use function unserialize;
 
 use const STDOUT;
 
-final readonly class ClassNodeWorker
+/**
+ * @internal
+ */
+final readonly class AnalysisNodeWorker
 {
     /** @param resource|null $outputStream */
     public static function run(string $inputFile, string $outputFile, mixed $outputStream = null): int
@@ -53,7 +56,7 @@ final readonly class ClassNodeWorker
 
             $progressHandler = $emitProgress ? new WorkerProgressHandler($stream) : null;
 
-            $result = (new ClassNodeExtractor($layerResolver))->extract(
+            $result = (new AnalysisNodeExtractor($layerResolver))->extract(
                 $files,
                 $progressHandler,
                 $withFileAnalysis,

@@ -49,7 +49,7 @@ return Architecture::define()
             __DIR__ . '/src/Preset/Preset.php',
         ],
         Psr1Preset::FILES_SHOULD_DECLARE_SYMBOLS_OR_SIDE_EFFECTS => [
-            __DIR__ . '/tests/Analyser/Parallel/ParallelClassNodeExtractorTest.php',
+            __DIR__ . '/tests/Analyser/Parallel/ParallelAnalysisNodeExtractorTest.php',
             __DIR__ . '/tests/Analyser/Parallel/MockFunctions.php',
         ],
     ])

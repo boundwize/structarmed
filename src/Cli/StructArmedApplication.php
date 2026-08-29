@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cli;
 
-use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
+use Boundwize\StructArmed\Analyser\Parallel\AnalysisNodeWorker;
 use Boundwize\StructArmed\Version;
 
 use function array_slice;
@@ -23,7 +23,7 @@ final readonly class StructArmedApplication
         $command    = $argv[1] ?? null;
 
         if ($command === '--internal-worker') {
-            return ClassNodeWorker::run($argv[2] ?? '', $argv[3] ?? '');
+            return AnalysisNodeWorker::run($argv[2] ?? '', $argv[3] ?? '');
         }
 
         if (in_array($command, ['--version', '-V'], true)) {
