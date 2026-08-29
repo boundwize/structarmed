@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
-use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
-use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
+use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
@@ -1221,7 +1221,7 @@ final readonly class Analyser
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
         if ($options->isParallel()) {
-            $parsedResult = (new ParallelClassNodeExtractor(
+            $parsedResult = (new ParallelAnalysisNodeExtractor(
                 $this->basePath,
                 $layers,
                 $layerPatterns,
@@ -1229,7 +1229,7 @@ final readonly class Analyser
                 $this->analysisResultCache?->getCacheDirectory(),
             ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         } else {
-            $parsedResult = (new ClassNodeExtractor($chainLayerResolver))->extract(
+            $parsedResult = (new AnalysisNodeExtractor($chainLayerResolver))->extract(
                 $filesToParse,
                 $progressHandler,
                 $withFileAnalysis,

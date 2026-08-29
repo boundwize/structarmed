@@ -42,7 +42,10 @@ use function usleep;
 
 use const PHP_BINARY;
 
-final readonly class ParallelClassNodeExtractor
+/**
+ * @internal
+ */
+final readonly class ParallelAnalysisNodeExtractor
 {
     /**
      * @param array<string, string|list<string>> $layers

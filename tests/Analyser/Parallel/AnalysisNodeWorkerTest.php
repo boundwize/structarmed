@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
-use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
+use Boundwize\StructArmed\Analyser\Parallel\AnalysisNodeWorker;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerFailedException;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerProgressHandler;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
@@ -18,10 +18,10 @@ use function fopen;
 use function serialize;
 use function unserialize;
 
-#[CoversClass(ClassNodeWorker::class)]
+#[CoversClass(AnalysisNodeWorker::class)]
 #[CoversClass(WorkerProgressHandler::class)]
 #[CoversClass(WorkerFailedException::class)]
-final class ClassNodeWorkerTest extends TestCase
+final class AnalysisNodeWorkerTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
 
@@ -50,7 +50,7 @@ PHP);
             'files'         => [$srcFile],
         ]));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 
@@ -70,7 +70,7 @@ PHP);
 
         file_put_contents($inputFile, serialize('not-an-array'));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(1, $exitCode);
 
@@ -114,7 +114,7 @@ PHP);
             'files'         => [$srcFile],
         ]));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 

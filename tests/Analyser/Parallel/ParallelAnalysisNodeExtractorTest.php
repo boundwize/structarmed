@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
+use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use Iterator;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -24,21 +24,21 @@ use function unlink;
 
 use const PHP_BINARY;
 
-#[CoversClass(ParallelClassNodeExtractor::class)]
-final class ParallelClassNodeExtractorTest extends TestCase
+#[CoversClass(ParallelAnalysisNodeExtractor::class)]
+final class ParallelAnalysisNodeExtractorTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
 
     public function testExtractWithEmptyFilesReturnsEmpty(): void
     {
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: '/tmp',
             layers: ['Domain' => 'App\\Domain'],
             layerPatterns: [],
             workerCount: 4,
         );
 
-        $extractionResult = $parallelClassNodeExtractor->extract([]);
+        $extractionResult = $parallelAnalysisNodeExtractor->extract([]);
 
         $this->assertSame([], $extractionResult->classNodes);
         $this->assertSame([], $extractionResult->fileAnalyses);
@@ -59,14 +59,14 @@ final class Foo
 }
 PHP);
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
             layerPatterns: [],
             workerCount: 1,
         );
 
-        $extractionResult = $parallelClassNodeExtractor->extract([$file]);
+        $extractionResult = $parallelAnalysisNodeExtractor->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
         $this->assertInstanceOf(ClassNode::class, $extractionResult->classNodes[0]);
@@ -99,14 +99,14 @@ final class Bar
 }
 PHP);
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
             layerPatterns: [],
             workerCount: 2,
         );
 
-        $extractionResult = $parallelClassNodeExtractor->extract([$file1, $file2]);
+        $extractionResult = $parallelAnalysisNodeExtractor->extract([$file1, $file2]);
 
         $this->assertCount(2, $extractionResult->classNodes);
         $classNames = [$extractionResult->classNodes[0]->className, $extractionResult->classNodes[1]->className];
@@ -121,7 +121,7 @@ PHP);
 
         file_put_contents($file, '<?php final class Foo {} echo "side effect";');
 
-        $extractionResult = (new ParallelClassNodeExtractor($dir, ['Source' => ''], [], 2))
+        $extractionResult = (new ParallelAnalysisNodeExtractor($dir, ['Source' => ''], [], 2))
             ->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
@@ -146,7 +146,7 @@ final class Baz
 }
 PHP);
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
             layerPatterns: [],
@@ -154,7 +154,7 @@ PHP);
             cacheDirectory: $cacheDir,
         );
 
-        $extractionResult = $parallelClassNodeExtractor->extract([$file]);
+        $extractionResult = $parallelAnalysisNodeExtractor->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
         $this->assertSame('App\\Domain\\Baz', $extractionResult->classNodes[0]->className);
@@ -175,14 +175,14 @@ final class FooService
 }
 PHP);
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
             layerPatterns: ['Domain' => ['pattern' => '/Service$/', 'excludePattern' => null]],
             workerCount: 2,
         );
 
-        $extractionResult = $parallelClassNodeExtractor->extract([$file]);
+        $extractionResult = $parallelAnalysisNodeExtractor->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
     }
@@ -202,14 +202,14 @@ final class FooService
 }
 PHP);
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
             layerPatterns: ['Domain' => ['pattern' => '/Service$/', 'excludePattern' => null]],
             workerCount: 1,
         );
 
-        $extractionResult = $parallelClassNodeExtractor->extract([$file]);
+        $extractionResult = $parallelAnalysisNodeExtractor->extract([$file]);
 
         $this->assertCount(1, $extractionResult->classNodes);
         $this->assertSame('App\\Domain\\FooService', $extractionResult->classNodes[0]->className);
@@ -219,11 +219,11 @@ PHP);
     {
         $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
         // A null byte in a file path causes PHP 8 to throw ValueError in file_get_contents,
-        // which is NOT caught by ClassNodeExtractor's catch(PhpParser\Error), so it
-        // propagates to ClassNodeWorker's catch(Throwable) → worker exits with code 1
+        // which is NOT caught by AnalysisNodeExtractor's catch(PhpParser\Error), so it
+        // propagates to AnalysisNodeWorker's catch(Throwable) → worker exits with code 1
         $fileWithNullByte = $dir . "/foo\x00.php";
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
             layerPatterns: [],
@@ -231,7 +231,7 @@ PHP);
         );
 
         $this->expectException(RuntimeException::class);
-        $parallelClassNodeExtractor->extract([$fileWithNullByte]);
+        $parallelAnalysisNodeExtractor->extract([$fileWithNullByte]);
     }
 
     public function testExtractWithNonExistentCacheDirectoryCreatesIt(): void
@@ -250,7 +250,7 @@ final class Qux
 }
 PHP);
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor(
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: $dir,
             layers: ['Domain' => 'App\\Domain'],
             layerPatterns: [],
@@ -259,7 +259,7 @@ PHP);
         );
 
         try {
-            $result = $parallelClassNodeExtractor->extract([$file]);
+            $result = $parallelAnalysisNodeExtractor->extract([$file]);
             $this->assertCount(1, $result->classNodes);
         } finally {
             if (is_dir($cacheDir)) {
@@ -280,13 +280,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Unable to start parallel analysis worker.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_proc_open'] = false;
         }
@@ -294,7 +294,7 @@ PHP);
 
     public function testExtractReportsStderrWhenWorkerDiesBeforeWritingPayload(): void
     {
-        // Simulates a worker killed by OOM / fatal error before ClassNodeWorker can serialize a result:
+        // Simulates a worker killed by OOM / fatal error before AnalysisNodeWorker can serialize a result:
         // non-zero exit code, empty output file, diagnostic on stderr.
         $GLOBALS['mock_proc_open_command'] = [
             PHP_BINARY,
@@ -306,10 +306,10 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
             $this->fail('Expected RuntimeException was not thrown.');
         } catch (RuntimeException $runtimeException) {
             $this->assertStringContainsString('Parallel analysis worker failed:', $runtimeException->getMessage());
@@ -329,13 +329,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Unable to create temporary file for parallel analysis.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_tempnam'] = false;
         }
@@ -349,13 +349,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned an invalid payload.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -372,13 +372,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker failed: simulated payload error');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -393,13 +393,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned an invalid error payload.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -418,13 +418,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid file analyses.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -443,13 +443,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid file analyses.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -469,13 +469,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid anonymous class nodes.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -495,13 +495,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid anonymous class nodes.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -522,13 +522,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid file references.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -570,13 +570,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid file instantiations.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -598,13 +598,13 @@ PHP);
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        $parallelClassNodeExtractor = new ParallelClassNodeExtractor($dir, [], [], 2);
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Parallel analysis worker returned invalid file references.');
 
         try {
-            $parallelClassNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];

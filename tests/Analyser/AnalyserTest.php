@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
-use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
+use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;
@@ -54,7 +54,7 @@ use function unlink;
 use const DIRECTORY_SEPARATOR;
 
 #[CoversClass(Analyser::class)]
-#[CoversClass(ParallelClassNodeExtractor::class)]
+#[CoversClass(ParallelAnalysisNodeExtractor::class)]
 #[CoversClass(PhpFileCollector::class)]
 #[CoversClass(SkipPathMatcher::class)]
 final class AnalyserTest extends TestCase

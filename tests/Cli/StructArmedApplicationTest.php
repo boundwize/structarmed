@@ -1479,7 +1479,7 @@ PHP);
         }
     }
 
-    public function testInternalWorkerRoutesDelegatestoClassNodeWorker(): void
+    public function testInternalWorkerRoutesDelegatestoAnalysisNodeWorker(): void
     {
         $inputFile  = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-input-');
         $outputFile = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-output-');

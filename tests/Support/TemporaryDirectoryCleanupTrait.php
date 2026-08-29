@@ -45,7 +45,7 @@ trait TemporaryDirectoryCleanupTrait
 
         $this->temporaryPaths[] = $basePath;
         // also clean up the default cache directory derived from this base path,
-        // created e.g. by ParallelClassNodeExtractor when no cache directory is configured
+        // created e.g. by ParallelAnalysisNodeExtractor when no cache directory is configured
         $this->temporaryPaths[] = CachePathFactory::getPath(null, $basePath);
 
         return $basePath;

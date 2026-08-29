@@ -9,7 +9,10 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 
-final readonly class ClassNodeExtractor
+/**
+ * @internal
+ */
+final readonly class AnalysisNodeExtractor
 {
     private FileAnalysisProvider $fileAnalysisProvider;
 
