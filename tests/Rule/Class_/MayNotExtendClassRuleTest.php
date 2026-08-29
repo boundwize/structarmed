@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function sprintf;
 use function strtolower;
 
 #[CoversClass(MayNotExtendClassRule::class)]
@@ -58,7 +59,10 @@ final class MayNotExtendClassRuleTest extends TestCase
         $violation = $mayNotExtendClassRule->evaluate($this->makeNode(self::MODEL));
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertSame('Class [App\\Domain\\Order] must not extend class [Illuminate\\Database\\Eloquent\\Model]', $violation->message);
+        $this->assertSame(
+            sprintf('Class [App\\Domain\\Order] must not extend class [%s]', self::MODEL),
+            $violation->message
+        );
     }
 
     public function testMatchesClassNameCaseInsensitively(): void
@@ -82,7 +86,10 @@ final class MayNotExtendClassRuleTest extends TestCase
         $violation = $mayNotExtendClassRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertSame('Class [App\\Domain\\Order] must not extend class [Illuminate\\Database\\Eloquent\\Model]', $violation->message);
+        $this->assertSame(
+            sprintf('Class [App\\Domain\\Order] must not extend class [%s]', self::MODEL),
+            $violation->message
+        );
     }
 
     private function makeNode(
