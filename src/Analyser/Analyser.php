@@ -144,7 +144,7 @@ final readonly class Analyser
 
         $files          ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
         $withFileAnalysis = $fileAnalysisRules !== [];
-        $extractionResult = $this->collectClassNodes(
+        $extractionResult = $this->collectAnalysisNodes(
             $files,
             $progressHandler,
             $layers,
@@ -1128,7 +1128,7 @@ final readonly class Analyser
      *     excludePattern: string|list<string|null>|null
      * }> $layerPatterns
      */
-    private function collectClassNodes(
+    private function collectAnalysisNodes(
         array $files,
         ?ProgressHandlerInterface $progressHandler,
         array $layers,
