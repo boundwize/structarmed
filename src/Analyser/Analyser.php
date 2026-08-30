@@ -35,6 +35,7 @@ use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
+use function array_push;
 use function array_unique;
 use function array_values;
 use function count;
@@ -1230,78 +1231,28 @@ final readonly class Analyser
         $filesToParse           = [];
 
         foreach ($files as $file) {
-            if ($withFileAnalysis) {
-                $cachedResult = $this->analysisResultCache?->loadAnalysisNodesWithFileAnalysis(
+            $cachedResult = $withFileAnalysis
+                ? $this->analysisResultCache?->loadAnalysisNodesWithFileAnalysis(
                     $file,
                     $this->analysisNodeCacheNamespace
-                );
-
-                if ($cachedResult === null) {
-                    $filesToParse[] = $file;
-                    continue;
-                }
-
-                foreach ($cachedResult['classNodes'] as $cachedClassNode) {
-                    $classNodes[] = $cachedClassNode;
-                }
-
-                foreach ($cachedResult['anonymousClassNodes'] as $cachedAnonymousClassNode) {
-                    $anonymousClassNodes[] = $cachedAnonymousClassNode;
-                }
-
-                if ($cachedResult['fileReferences'] !== []) {
-                    $fileReferences[$file] = $cachedResult['fileReferences'];
-                }
-
-                if ($cachedResult['fileInstantiations'] !== []) {
-                    $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
-                }
-
-                foreach ($cachedResult['functionNodes'] as $cachedFunctionNode) {
-                    $functionNodes[] = $cachedFunctionNode;
-                }
-
-                foreach ($cachedResult['anonymousFunctionNodes'] as $cachedAnonymousFunctionNode) {
-                    $anonymousFunctionNodes[] = $cachedAnonymousFunctionNode;
-                }
-
-                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
-
-                continue;
-            }
-
-            $cachedResult = $this->analysisResultCache?->loadAnalysisNodes(
-                $file,
-                $this->analysisNodeCacheNamespace,
-            );
+                )
+                : $this->analysisResultCache?->loadAnalysisNodes($file, $this->analysisNodeCacheNamespace);
 
             if ($cachedResult === null) {
                 $filesToParse[] = $file;
                 continue;
             }
 
-            foreach ($cachedResult['classNodes'] as $cachedClassNode) {
-                $classNodes[] = $cachedClassNode;
-            }
+            array_push($classNodes, ...$cachedResult['classNodes']);
+            array_push($anonymousClassNodes, ...$cachedResult['anonymousClassNodes']);
+            array_push($functionNodes, ...$cachedResult['functionNodes']);
+            array_push($anonymousFunctionNodes, ...$cachedResult['anonymousFunctionNodes']);
 
-            foreach ($cachedResult['anonymousClassNodes'] as $cachedAnonymousClassNode) {
-                $anonymousClassNodes[] = $cachedAnonymousClassNode;
-            }
+            $fileReferences[$file]     = $cachedResult['fileReferences'];
+            $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
 
-            if ($cachedResult['fileReferences'] !== []) {
-                $fileReferences[$file] = $cachedResult['fileReferences'];
-            }
-
-            if ($cachedResult['fileInstantiations'] !== []) {
-                $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
-            }
-
-            foreach ($cachedResult['functionNodes'] as $cachedFunctionNode) {
-                $functionNodes[] = $cachedFunctionNode;
-            }
-
-            foreach ($cachedResult['anonymousFunctionNodes'] as $cachedAnonymousFunctionNode) {
-                $anonymousFunctionNodes[] = $cachedAnonymousFunctionNode;
+            if (isset($cachedResult['fileAnalysis'])) {
+                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
             }
         }
 
@@ -1324,93 +1275,36 @@ final readonly class Analyser
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
         if ($options->isParallel()) {
+            // Workers write their own files' cache payloads while other workers are
+            // still parsing, instead of the coordinator doing it serially afterwards.
             $parsedResult = (new ParallelAnalysisNodeExtractor(
                 $this->basePath,
                 $layers,
                 $layerPatterns,
                 $options->workerCount,
                 $this->analysisResultCache?->getCacheDirectory(),
+                $this->analysisResultCache,
+                $this->analysisNodeCacheNamespace,
             ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         } else {
-            $parsedResult = (new AnalysisNodeExtractor($chainLayerResolver))->extract(
-                $filesToParse,
-                $progressHandler,
-                $withFileAnalysis,
-            );
-        }
-
-        $classNodesByFile = array_fill_keys($filesToParse, []);
-        foreach ($parsedResult->classNodes as $parsedClassNode) {
-            $classNodes[] = $parsedClassNode;
-
-            if (isset($classNodesByFile[$parsedClassNode->file])) {
-                $classNodesByFile[$parsedClassNode->file][] = $parsedClassNode;
-            }
-        }
-
-        $anonymousClassNodesByFile = array_fill_keys($filesToParse, []);
-        foreach ($parsedResult->anonymousClassNodes as $parsedAnonymousClassNode) {
-            $anonymousClassNodes[] = $parsedAnonymousClassNode;
-
-            if (isset($anonymousClassNodesByFile[$parsedAnonymousClassNode->file])) {
-                $anonymousClassNodesByFile[$parsedAnonymousClassNode->file][] = $parsedAnonymousClassNode;
-            }
-        }
-
-        foreach ($parsedResult->fileAnalyses as $file => $fileAnalysis) {
-            $fileAnalyses[$file] = $fileAnalysis;
-        }
-
-        foreach ($parsedResult->fileReferences as $file => $parsedFileReferences) {
-            $fileReferences[$file] = $parsedFileReferences;
-        }
-
-        foreach ($parsedResult->fileInstantiations as $file => $parsedFileInstantiations) {
-            $fileInstantiations[$file] = $parsedFileInstantiations;
-        }
-
-        $functionNodesByFile = array_fill_keys($filesToParse, []);
-        foreach ($parsedResult->functionNodes as $parsedFunctionNode) {
-            $functionNodes[] = $parsedFunctionNode;
-
-            if (isset($functionNodesByFile[$parsedFunctionNode->file])) {
-                $functionNodesByFile[$parsedFunctionNode->file][] = $parsedFunctionNode;
-            }
-        }
-
-        $anonymousFunctionNodesByFile = array_fill_keys($filesToParse, []);
-        foreach ($parsedResult->anonymousFunctionNodes as $parsedAnonymousFunctionNode) {
-            $anonymousFunctionNodes[] = $parsedAnonymousFunctionNode;
-
-            if (isset($anonymousFunctionNodesByFile[$parsedAnonymousFunctionNode->file])) {
-                $anonymousFunctionNodesByFile[$parsedAnonymousFunctionNode->file][] = $parsedAnonymousFunctionNode;
-            }
-        }
-
-        foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
-            $this->analysisResultCache?->storeAnalysisNodes(
-                $fileToParse,
-                $this->analysisNodeCacheNamespace,
-                $fileClassNodes,
-                $fileAnalyses[$fileToParse] ?? null,
-                $anonymousClassNodesByFile[$fileToParse] ?? [],
-                $fileReferences[$fileToParse] ?? [],
-                $fileInstantiations[$fileToParse] ?? [],
-                $functionNodesByFile[$fileToParse] ?? [],
-                $anonymousFunctionNodesByFile[$fileToParse] ?? [],
-            );
+            $parsedResult = (new AnalysisNodeExtractor(
+                $chainLayerResolver,
+                analysisResultCache: $this->analysisResultCache,
+                analysisNodeCacheNamespace: $this->analysisNodeCacheNamespace,
+            ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         }
 
         $progressHandler?->finish();
 
+        // Cached nodes first, then the freshly parsed ones.
         return new ExtractionResult(
-            $classNodes,
-            $fileAnalyses,
-            $anonymousClassNodes,
-            $fileReferences,
-            $fileInstantiations,
-            $functionNodes,
-            $anonymousFunctionNodes,
+            classNodes: [...$classNodes, ...$parsedResult->classNodes],
+            fileAnalyses: $fileAnalyses + $parsedResult->fileAnalyses,
+            anonymousClassNodes: [...$anonymousClassNodes, ...$parsedResult->anonymousClassNodes],
+            fileReferences: $fileReferences + $parsedResult->fileReferences,
+            fileInstantiations: $fileInstantiations + $parsedResult->fileInstantiations,
+            functionNodes: [...$functionNodes, ...$parsedResult->functionNodes],
+            anonymousFunctionNodes: [...$anonymousFunctionNodes, ...$parsedResult->anonymousFunctionNodes],
         );
     }
 

@@ -7,6 +7,8 @@ namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 use Boundwize\StructArmed\Analyser\Parallel\AnalysisNodeWorker;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerFailedException;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerProgressHandler;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -61,6 +63,44 @@ PHP);
         $this->assertArrayHasKey('error', $result);
         $this->assertNull($result['error']);
         $this->assertIsArray($result['nodes']);
+    }
+
+    public function testRunStoresAnalysisNodesInSuppliedCache(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-worker-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-worker-cache');
+        $srcFile  = $dir . '/Foo.php';
+
+        file_put_contents($srcFile, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Foo
+{
+}
+PHP);
+
+        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
+        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
+
+        file_put_contents($inputFile, serialize([
+            'basePath'       => $dir,
+            'layers'         => ['Domain' => 'App\\Domain'],
+            'layerPatterns'  => [],
+            'files'          => [$srcFile],
+            'cache'          => new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
+            'cacheNamespace' => 'namespace',
+        ]));
+
+        $this->assertSame(0, AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream()));
+
+        $cached = (new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir))
+            ->loadAnalysisNodesWithFileAnalysis($srcFile, 'namespace');
+
+        $this->assertNotNull($cached);
+        $this->assertCount(1, $cached['classNodes']);
+        $this->assertSame('App\\Domain\\Foo', $cached['classNodes'][0]->className);
     }
 
     public function testRunWithInvalidPayloadReturnsOneAndWritesError(): void

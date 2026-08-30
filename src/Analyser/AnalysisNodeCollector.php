@@ -74,6 +74,7 @@ use function array_pop;
 use function array_push;
 use function array_unique;
 use function array_values;
+use function assert;
 use function count;
 use function end;
 use function in_array;
@@ -584,9 +585,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
-        if (! $node instanceof ClassLike) {
-            return null;
-        }
+        // Every remaining LEAVE_NODES entry is a class-like statement.
+        assert($node instanceof ClassLike);
 
         array_pop($this->activeClassLikeScopes);
         array_pop($this->activeClassLikeNames);

@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\CachePathFactory;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
@@ -63,6 +64,8 @@ final readonly class ParallelAnalysisNodeExtractor
         private array $layerPatterns,
         private int $workerCount,
         private ?string $cacheDirectory = null,
+        private ?AnalysisResultCache $analysisResultCache = null,
+        private string $analysisNodeCacheNamespace = '',
     ) {
     }
 
@@ -101,6 +104,8 @@ final readonly class ParallelAnalysisNodeExtractor
                 'files'            => $chunk,
                 'emitProgress'     => $emitProgress,
                 'withFileAnalysis' => $withFileAnalysis,
+                'cache'            => $this->analysisResultCache,
+                'cacheNamespace'   => $this->analysisNodeCacheNamespace,
             ]));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName

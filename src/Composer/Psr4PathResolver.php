@@ -8,17 +8,17 @@ use Boundwize\StructArmed\Util\Path;
 
 use function array_merge;
 use function array_values;
-use function file_exists;
-use function file_get_contents;
 use function is_array;
-use function is_int;
 use function is_string;
-use function json_decode;
-use function rtrim;
 use function trim;
 
-final class Psr4PathResolver
+final readonly class Psr4PathResolver
 {
+    public function __construct(
+        private ComposerJsonProvider $composerJsonProvider = new ComposerJsonProvider(),
+    ) {
+    }
+
     /**
      * @return list<string>
      */
@@ -72,29 +72,7 @@ final class Psr4PathResolver
      */
     public function composerConfig(string $basePath): ?array
     {
-        $composerFile = rtrim($basePath, '/') . '/composer.json';
-
-        if (! file_exists($composerFile)) {
-            return null;
-        }
-
-        $composer = json_decode((string) file_get_contents($composerFile), true);
-
-        if (! is_array($composer)) {
-            return null;
-        }
-
-        $config = [];
-
-        foreach ($composer as $key => $value) {
-            if (is_int($key)) {
-                return null;
-            }
-
-            $config[$key] = $value;
-        }
-
-        return $config;
+        return $this->composerJsonProvider->config($basePath);
     }
 
     /**

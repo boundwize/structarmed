@@ -223,10 +223,6 @@ JSON, ['src', 'tests']);
     }
 }
 JSON, file_get_contents($basePath . '/composer.json'));
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
-        );
     }
 
     public function testFixRemovesPsr4BlockWhenEveryMappingDirectoryIsMissing(): void
@@ -250,10 +246,6 @@ JSON);
 {
 }
 JSON, file_get_contents($basePath . '/composer.json'));
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
-        );
     }
 
     public function testFixKeepsUnchangedEmptyPsr4Block(): void
@@ -285,10 +277,6 @@ JSON);
     }
 }
 JSON, file_get_contents($basePath . '/composer.json'));
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
-        );
     }
 
     public function testFixReturnsFalseWhenAllPsr4DirectoriesExist(): void

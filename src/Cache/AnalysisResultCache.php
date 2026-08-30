@@ -9,13 +9,16 @@ use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
+use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
+use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
+use function array_fill_keys;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
@@ -34,6 +37,7 @@ use function json_decode;
 use function json_encode;
 use function mkdir;
 use function rmdir;
+use function rtrim;
 use function sprintf;
 use function unlink;
 
@@ -63,6 +67,9 @@ final class AnalysisResultCache
 
     private readonly string $cacheDirectory;
 
+    /** Hash of the project composer.json: its PSR-4 mappings decide layer assignments. */
+    private readonly string $composerHash;
+
     private bool $isCacheInitialised = false;
 
     public function __construct(
@@ -71,8 +78,11 @@ final class AnalysisResultCache
         ?string $cacheDirectory = null,
         private readonly string $configHash = '',
         private readonly string $composerGeneratedVersionHash = '',
+        private readonly ComposerJsonProvider $composerJsonProvider = new ComposerJsonProvider(),
     ) {
         $this->cacheDirectory = CachePathFactory::getPath($cacheDirectory, $basePath);
+        $composerFile         = rtrim($basePath, '/') . '/composer.json';
+        $this->composerHash   = file_exists($composerFile) ? $fileHashProvider->hash($composerFile) : '';
     }
 
     /**
@@ -130,6 +140,7 @@ final class AnalysisResultCache
     {
         $this->isCacheInitialised = false;
         $this->fileHashProvider->clear();
+        $this->composerJsonProvider->clear();
 
         if (! is_dir($this->cacheDirectory)) {
             return;
@@ -168,7 +179,8 @@ final class AnalysisResultCache
 
         return ($payload['version'] ?? null) !== self::FORMAT_VERSION
             || ($payload['configHash'] ?? null) !== $this->configHash
-            || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash;
+            || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash
+            || ($payload['composerHash'] ?? null) !== $this->composerHash;
     }
 
     private function ensureCacheInitialised(): void
@@ -188,6 +200,7 @@ final class AnalysisResultCache
                 'version'                      => self::FORMAT_VERSION,
                 'configHash'                   => $this->configHash,
                 'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash,
+                'composerHash'                 => $this->composerHash,
             ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
         }
 
@@ -333,6 +346,59 @@ final class AnalysisResultCache
         }
 
         return $nodes;
+    }
+
+    /**
+     * Stores the parsed nodes of every file in $files from one extraction result,
+     * one payload per file (files without nodes get an empty payload too, so they
+     * are cache hits next run).
+     *
+     * @param list<string> $files
+     */
+    public function storeExtractionResult(array $files, string $namespace, ExtractionResult $extractionResult): void
+    {
+        $classNodesByFile             = array_fill_keys($files, []);
+        $anonymousClassNodesByFile    = $classNodesByFile;
+        $functionNodesByFile          = $classNodesByFile;
+        $anonymousFunctionNodesByFile = $classNodesByFile;
+
+        foreach ($extractionResult->classNodes as $classNode) {
+            if (isset($classNodesByFile[$classNode->file])) {
+                $classNodesByFile[$classNode->file][] = $classNode;
+            }
+        }
+
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            if (isset($anonymousClassNodesByFile[$anonymousClassNode->file])) {
+                $anonymousClassNodesByFile[$anonymousClassNode->file][] = $anonymousClassNode;
+            }
+        }
+
+        foreach ($extractionResult->functionNodes as $functionNode) {
+            if (isset($functionNodesByFile[$functionNode->file])) {
+                $functionNodesByFile[$functionNode->file][] = $functionNode;
+            }
+        }
+
+        foreach ($extractionResult->anonymousFunctionNodes as $anonymousFunctionNode) {
+            if (isset($anonymousFunctionNodesByFile[$anonymousFunctionNode->file])) {
+                $anonymousFunctionNodesByFile[$anonymousFunctionNode->file][] = $anonymousFunctionNode;
+            }
+        }
+
+        foreach ($files as $file) {
+            $this->storeAnalysisNodes(
+                $file,
+                $namespace,
+                $classNodesByFile[$file],
+                $extractionResult->fileAnalyses[$file] ?? null,
+                $anonymousClassNodesByFile[$file],
+                $extractionResult->fileReferences[$file] ?? [],
+                $extractionResult->fileInstantiations[$file] ?? [],
+                $functionNodesByFile[$file],
+                $anonymousFunctionNodesByFile[$file],
+            );
+        }
     }
 
     /**
