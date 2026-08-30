@@ -25,21 +25,22 @@ final class ComposerJsonProviderTest extends TestCase
         $this->assertNull($composerJsonProvider->config($this->makeTempProject('["not", "an", "object"]')));
     }
 
-    public function testRedecodesComposerJsonWhenItIsRewritten(): void
+    public function testMemoisesDecodedComposerJsonAcrossInstancesUntilCleared(): void
     {
         $basePath             = $this->makeTempProject('{"name": "app/first"}');
         $composerJsonProvider = new ComposerJsonProvider();
 
         $this->assertSame(['name' => 'app/first'], $composerJsonProvider->config($basePath));
+
+        // Same byte length, rewritten immediately: the memo is lifecycle-bound,
+        // not tied to filesystem metadata, so it is served until cleared.
+        file_put_contents($basePath . '/composer.json', '{"name": "app/other"}');
+
         $this->assertSame(['name' => 'app/first'], (new ComposerJsonProvider())->config($basePath . '/'));
-
-        file_put_contents($basePath . '/composer.json', '{"name": "app/second"}');
-
-        $this->assertSame(['name' => 'app/second'], $composerJsonProvider->config($basePath));
 
         $composerJsonProvider->clear();
 
-        $this->assertSame(['name' => 'app/second'], $composerJsonProvider->config($basePath));
+        $this->assertSame(['name' => 'app/other'], $composerJsonProvider->config($basePath));
     }
 
     private function makeTempProject(string $composerJson): string
