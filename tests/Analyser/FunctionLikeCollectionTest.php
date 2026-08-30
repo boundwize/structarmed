@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\FunctionLikeAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use PhpParser\Node\Expr\Closure;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
@@ -92,6 +93,27 @@ final class FunctionLikeCollectionTest extends TestCase
         $this->assertFalse($functionNode->hasReturnType);
         $this->assertSame(0, $functionNode->paramCount);
         $this->assertSame(0, $functionNode->lineCount);
+    }
+
+    public function testSelectsMostSpecificLayerWhenMultipleLayersMatch(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            ['Source' => 'src/', 'Domain' => 'src/Domain/'],
+            self::BASE_PATH
+        );
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
+        $ast                    = $parser->parse('<?php namespace App\Domain; function helper(): void {}');
+
+        $analysisNodeCollector->setCurrentFile(self::FILE);
+
+        $nodeTraverser = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
+        $nodeTraverser->traverse($ast ?? []);
+
+        $functionNode = $analysisNodeCollector->getFunctionNodes()[0];
+
+        $this->assertSame('Domain', $functionNode->layer);
+        $this->assertSame(['Source', 'Domain'], $functionNode->layers);
     }
 
     public function testCollectsFunctionDependenciesWithoutSeedingNamespaceImports(): void
@@ -365,6 +387,16 @@ final class FunctionLikeCollectionTest extends TestCase
         );
 
         $this->assertTrue($anonymousFunctionNode->usesThis);
+    }
+
+    public function testIgnoresFunctionLikeExitWithoutMatchingEntry(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+
+        $analysisNodeCollector->leaveNode(new Closure());
+
+        $this->assertSame([], $analysisNodeCollector->getAnonymousFunctionNodes());
     }
 
     public function testMethodComplexityStillAggregatesNestedClosureBranches(): void
