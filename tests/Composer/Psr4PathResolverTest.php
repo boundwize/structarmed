@@ -115,6 +115,19 @@ JSON);
         $this->assertSame([], $psr4PathResolver->namespacePaths($basePath));
     }
 
+    public function testRereadsComposerJsonAfterItIsRewritten(): void
+    {
+        $basePath         = $this->makeTempProject('{"autoload": {"psr-4": {"App\\\\": "src/"}}}');
+        $psr4PathResolver = new Psr4PathResolver();
+
+        $this->assertSame(['src'], $psr4PathResolver->paths($basePath));
+
+        file_put_contents($basePath . '/composer.json', '{"autoload": {"psr-4": {"App\\\\": "lib/"}}}');
+
+        $this->assertSame(['lib'], (new Psr4PathResolver())->paths($basePath));
+        $this->assertSame(['lib'], $psr4PathResolver->paths($basePath . '/'));
+    }
+
     private function makeTempProject(string $composerJson): string
     {
         $basePath = $this->makeTempDir();

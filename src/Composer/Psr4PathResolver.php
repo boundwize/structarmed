@@ -14,11 +14,18 @@ use function is_array;
 use function is_int;
 use function is_string;
 use function json_decode;
-use function rtrim;
 use function trim;
 
 final class Psr4PathResolver
 {
+    /**
+     * Decoded composer.json per file, keyed by raw contents so a rewritten file
+     * is re-decoded while repeated reads of an unchanged file are not.
+     *
+     * @var array<string, array{string, array<string, mixed>|null}>
+     */
+    private static array $decodedByFile = [];
+
     /**
      * @return list<string>
      */
@@ -72,13 +79,29 @@ final class Psr4PathResolver
      */
     public function composerConfig(string $basePath): ?array
     {
-        $composerFile = rtrim($basePath, '/') . '/composer.json';
+        $composerFile = Path::normalise(Path::resolve('composer.json', $basePath), canonicalise: true);
 
         if (! file_exists($composerFile)) {
             return null;
         }
 
-        $composer = json_decode((string) file_get_contents($composerFile), true);
+        $contents = (string) file_get_contents($composerFile);
+
+        if (isset(self::$decodedByFile[$composerFile]) && self::$decodedByFile[$composerFile][0] === $contents) {
+            return self::$decodedByFile[$composerFile][1];
+        }
+
+        self::$decodedByFile[$composerFile] = [$contents, $this->decode($contents)];
+
+        return self::$decodedByFile[$composerFile][1];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function decode(string $contents): ?array
+    {
+        $composer = json_decode($contents, true);
 
         if (! is_array($composer)) {
             return null;
