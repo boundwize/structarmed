@@ -576,6 +576,65 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandCountsEveryViolationResolvedByOneFix(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        // Two flagged closures start on the same line: fixing the first one
+        // makes both static, so the second has nothing left to fix, yet both
+        // violations are gone and must be counted.
+        file_put_contents($basePath . '/src/Handler.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace App;
+
+final class Handler
+{
+    public function handle(): array
+    {
+        return [fn () => 1, fn () => $this->value, function () { return 2; }];
+    }
+}
+PHP);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('2 violations have been fixed.', $this->withoutAnsi($output));
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertStringContainsString(
+                'return [static fn () => 1, fn () => $this->value, static function () { return 2; }];',
+                (string) file_get_contents($basePath . '/src/Handler.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandFixesCascadingYagniViolationsInOneRun(): void
     {
         $basePath = $this->createProjectDirectory();

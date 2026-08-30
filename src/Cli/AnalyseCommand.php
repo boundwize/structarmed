@@ -27,6 +27,7 @@ use function explode;
 use function in_array;
 use function is_dir;
 use function is_file;
+use function max;
 use function microtime;
 use function sprintf;
 use function str_starts_with;
@@ -195,7 +196,7 @@ final readonly class AnalyseCommand
                     break;
                 }
 
-                $fixedCount += $passFixedCount;
+                $violationCountBeforePass = $ruleViolationCollection->count();
                 $analysisResultCache->clear();
 
                 $files                             = $analyser->filesForAnalysis($architecture, $scanPaths);
@@ -226,7 +227,15 @@ final readonly class AnalyseCommand
                     return $this->reportError($runtimeException);
                 }
 
-                $elapsed = microtime(true) - $start;
+                // One fix can resolve several violations at once (e.g. two
+                // closures starting on the same line), and the later ones
+                // then report nothing to fix. Count what the re-analysis shows
+                // resolved, never less than the fixes that reported success.
+                $fixedCount += max(
+                    $passFixedCount,
+                    $violationCountBeforePass - $ruleViolationCollection->count()
+                );
+                $elapsed     = microtime(true) - $start;
             }
         }
 
