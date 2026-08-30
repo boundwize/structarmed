@@ -680,7 +680,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        $child = array_pop($this->activeFunctionLikeAnalyses);
+        $functionLikeAnalysis = array_pop($this->activeFunctionLikeAnalyses);
 
         if ($activeCount === 1) {
             return;
@@ -688,13 +688,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $parent = $this->activeFunctionLikeAnalyses[$activeCount - 2];
 
-        array_push($parent->dependencies, ...$child->dependencies);
-        array_push($parent->functionCallNames, ...$child->functionCallNames);
-        array_push($parent->superglobals, ...$child->superglobals);
-        array_push($parent->languageConstructs, ...$child->languageConstructs);
+        array_push($parent->dependencies, ...$functionLikeAnalysis->dependencies);
+        array_push($parent->functionCallNames, ...$functionLikeAnalysis->functionCallNames);
+        array_push($parent->superglobals, ...$functionLikeAnalysis->superglobals);
+        array_push($parent->languageConstructs, ...$functionLikeAnalysis->languageConstructs);
 
-        if ($child->cyclomaticComplexity > 1) {
-            $parent->cyclomaticComplexity += $child->cyclomaticComplexity - 1;
+        if ($functionLikeAnalysis->cyclomaticComplexity > 1) {
+            $parent->cyclomaticComplexity += $functionLikeAnalysis->cyclomaticComplexity - 1;
         }
     }
 
