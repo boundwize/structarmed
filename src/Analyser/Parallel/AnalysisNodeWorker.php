@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Throwable;
 
@@ -56,11 +57,15 @@ final readonly class AnalysisNodeWorker
 
             $progressHandler = $emitProgress ? new WorkerProgressHandler($stream) : null;
 
-            $result = (new AnalysisNodeExtractor($layerResolver))->extract(
-                $files,
-                $progressHandler,
-                $withFileAnalysis,
-            );
+            $cache = $payload['cache'] ?? null;
+            /** @var string $cacheNamespace */
+            $cacheNamespace = $payload['cacheNamespace'] ?? '';
+
+            $result = (new AnalysisNodeExtractor(
+                $layerResolver,
+                analysisResultCache: $cache instanceof AnalysisResultCache ? $cache : null,
+                analysisNodeCacheNamespace: $cacheNamespace,
+            ))->extract($files, $progressHandler, $withFileAnalysis);
 
             file_put_contents($outputFile, serialize([
                 'nodes'                  => $result->classNodes,

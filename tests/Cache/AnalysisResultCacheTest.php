@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
+use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
@@ -575,6 +576,32 @@ final class AnalysisResultCacheTest extends TestCase
             );
         } finally {
             $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testStoreExtractionResultStoresOnePayloadPerFile(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $fileWithNodes       = __FILE__;
+        $fileWithoutNodes    = __DIR__ . '/FileHashProviderTest.php';
+
+        try {
+            $analysisResultCache->storeExtractionResult(
+                [$fileWithNodes, $fileWithoutNodes],
+                'namespace',
+                new ExtractionResult([$this->makeClassNode($fileWithNodes)], [])
+            );
+
+            $withNodes    = $analysisResultCache->loadAnalysisNodes($fileWithNodes, 'namespace');
+            $withoutNodes = $analysisResultCache->loadAnalysisNodes($fileWithoutNodes, 'namespace');
+
+            $this->assertNotNull($withNodes);
+            $this->assertCount(1, $withNodes['classNodes']);
+            $this->assertNotNull($withoutNodes);
+            $this->assertSame([], $withoutNodes['classNodes']);
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
         }
     }
 

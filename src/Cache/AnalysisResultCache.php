@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
+use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
@@ -17,6 +18,7 @@ use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
+use function array_fill_keys;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
@@ -344,6 +346,59 @@ final class AnalysisResultCache
         }
 
         return $nodes;
+    }
+
+    /**
+     * Stores the parsed nodes of every file in $files from one extraction result,
+     * one payload per file (files without nodes get an empty payload too, so they
+     * are cache hits next run).
+     *
+     * @param list<string> $files
+     */
+    public function storeExtractionResult(array $files, string $namespace, ExtractionResult $extractionResult): void
+    {
+        $classNodesByFile             = array_fill_keys($files, []);
+        $anonymousClassNodesByFile    = $classNodesByFile;
+        $functionNodesByFile          = $classNodesByFile;
+        $anonymousFunctionNodesByFile = $classNodesByFile;
+
+        foreach ($extractionResult->classNodes as $classNode) {
+            if (isset($classNodesByFile[$classNode->file])) {
+                $classNodesByFile[$classNode->file][] = $classNode;
+            }
+        }
+
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            if (isset($anonymousClassNodesByFile[$anonymousClassNode->file])) {
+                $anonymousClassNodesByFile[$anonymousClassNode->file][] = $anonymousClassNode;
+            }
+        }
+
+        foreach ($extractionResult->functionNodes as $functionNode) {
+            if (isset($functionNodesByFile[$functionNode->file])) {
+                $functionNodesByFile[$functionNode->file][] = $functionNode;
+            }
+        }
+
+        foreach ($extractionResult->anonymousFunctionNodes as $anonymousFunctionNode) {
+            if (isset($anonymousFunctionNodesByFile[$anonymousFunctionNode->file])) {
+                $anonymousFunctionNodesByFile[$anonymousFunctionNode->file][] = $anonymousFunctionNode;
+            }
+        }
+
+        foreach ($files as $file) {
+            $this->storeAnalysisNodes(
+                $file,
+                $namespace,
+                $classNodesByFile[$file],
+                $extractionResult->fileAnalyses[$file] ?? null,
+                $anonymousClassNodesByFile[$file],
+                $extractionResult->fileReferences[$file] ?? [],
+                $extractionResult->fileInstantiations[$file] ?? [],
+                $functionNodesByFile[$file],
+                $anonymousFunctionNodesByFile[$file],
+            );
+        }
     }
 
     /**

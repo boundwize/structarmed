@@ -1324,37 +1324,31 @@ final readonly class Analyser
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
         if ($options->isParallel()) {
+            // Workers write their own files' cache payloads while other workers are
+            // still parsing, instead of the coordinator doing it serially afterwards.
             $parsedResult = (new ParallelAnalysisNodeExtractor(
                 $this->basePath,
                 $layers,
                 $layerPatterns,
                 $options->workerCount,
                 $this->analysisResultCache?->getCacheDirectory(),
+                $this->analysisResultCache,
+                $this->analysisNodeCacheNamespace,
             ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         } else {
-            $parsedResult = (new AnalysisNodeExtractor($chainLayerResolver))->extract(
-                $filesToParse,
-                $progressHandler,
-                $withFileAnalysis,
-            );
+            $parsedResult = (new AnalysisNodeExtractor(
+                $chainLayerResolver,
+                analysisResultCache: $this->analysisResultCache,
+                analysisNodeCacheNamespace: $this->analysisNodeCacheNamespace,
+            ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         }
 
-        $classNodesByFile = array_fill_keys($filesToParse, []);
         foreach ($parsedResult->classNodes as $parsedClassNode) {
             $classNodes[] = $parsedClassNode;
-
-            if (isset($classNodesByFile[$parsedClassNode->file])) {
-                $classNodesByFile[$parsedClassNode->file][] = $parsedClassNode;
-            }
         }
 
-        $anonymousClassNodesByFile = array_fill_keys($filesToParse, []);
         foreach ($parsedResult->anonymousClassNodes as $parsedAnonymousClassNode) {
             $anonymousClassNodes[] = $parsedAnonymousClassNode;
-
-            if (isset($anonymousClassNodesByFile[$parsedAnonymousClassNode->file])) {
-                $anonymousClassNodesByFile[$parsedAnonymousClassNode->file][] = $parsedAnonymousClassNode;
-            }
         }
 
         foreach ($parsedResult->fileAnalyses as $file => $fileAnalysis) {
@@ -1369,36 +1363,12 @@ final readonly class Analyser
             $fileInstantiations[$file] = $parsedFileInstantiations;
         }
 
-        $functionNodesByFile = array_fill_keys($filesToParse, []);
         foreach ($parsedResult->functionNodes as $parsedFunctionNode) {
             $functionNodes[] = $parsedFunctionNode;
-
-            if (isset($functionNodesByFile[$parsedFunctionNode->file])) {
-                $functionNodesByFile[$parsedFunctionNode->file][] = $parsedFunctionNode;
-            }
         }
 
-        $anonymousFunctionNodesByFile = array_fill_keys($filesToParse, []);
         foreach ($parsedResult->anonymousFunctionNodes as $parsedAnonymousFunctionNode) {
             $anonymousFunctionNodes[] = $parsedAnonymousFunctionNode;
-
-            if (isset($anonymousFunctionNodesByFile[$parsedAnonymousFunctionNode->file])) {
-                $anonymousFunctionNodesByFile[$parsedAnonymousFunctionNode->file][] = $parsedAnonymousFunctionNode;
-            }
-        }
-
-        foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
-            $this->analysisResultCache?->storeAnalysisNodes(
-                $fileToParse,
-                $this->analysisNodeCacheNamespace,
-                $fileClassNodes,
-                $fileAnalyses[$fileToParse] ?? null,
-                $anonymousClassNodesByFile[$fileToParse] ?? [],
-                $fileReferences[$fileToParse] ?? [],
-                $fileInstantiations[$fileToParse] ?? [],
-                $functionNodesByFile[$fileToParse] ?? [],
-                $anonymousFunctionNodesByFile[$fileToParse] ?? [],
-            );
         }
 
         $progressHandler?->finish();
