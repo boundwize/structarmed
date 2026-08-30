@@ -67,11 +67,11 @@ final readonly class AnalysisCacheMetadataFactory
     }
 
     /**
-     * Cached ClassNodes store resolved layer assignments, which depend on the
+     * Cached analysis nodes store resolved layer assignments, which depend on the
      * composer.json PSR-4 mappings as well as the config, so both hashes must
      * key the namespace or a composer.json change would reuse stale layers.
      */
-    public function classNodeCacheNamespace(string $basePath, string $configHash): string
+    public function analysisNodeCacheNamespace(string $basePath, string $configHash): string
     {
         return hash('xxh128', $configHash . "\0" . $this->composerHash($basePath));
     }

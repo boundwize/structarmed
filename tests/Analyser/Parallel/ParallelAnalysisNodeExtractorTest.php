@@ -583,6 +583,67 @@ PHP);
         }
     }
 
+    #[DataProvider('invalidFunctionNodesProvider')]
+    public function testExtractThrowsWhenFunctionNodesPayloadIsInvalid(mixed $invalidFunctionNodes): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'         => [],
+            'fileAnalyses'  => [],
+            'functionNodes' => $invalidFunctionNodes,
+            'error'         => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid function nodes.');
+
+        try {
+            $parallelAnalysisNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    /** @return Iterator<string, array{0: mixed}> */
+    public static function invalidFunctionNodesProvider(): Iterator
+    {
+        yield 'not an array' => ['invalid'];
+        yield 'entry is not a node' => [['invalid']];
+    }
+
+    #[DataProvider('invalidFunctionNodesProvider')]
+    public function testExtractThrowsWhenAnonymousFunctionNodesPayloadIsInvalid(mixed $invalidNodes): void
+    {
+        $GLOBALS['mock_file_get_contents_payload'] = [
+            'nodes'                  => [],
+            'fileAnalyses'           => [],
+            'anonymousFunctionNodes' => $invalidNodes,
+            'error'                  => null,
+        ];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Parallel analysis worker returned invalid anonymous function nodes.');
+
+        try {
+            $parallelAnalysisNodeExtractor->extract([$file]);
+        } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
     #[DataProvider('invalidFileReferencesEntryProvider')]
     public function testExtractThrowsWhenFileReferencesEntryIsInvalid(mixed $invalidFileReferences): void
     {

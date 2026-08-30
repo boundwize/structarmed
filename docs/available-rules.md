@@ -98,6 +98,15 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `Psr4DirectoryExistsRule`, `Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `ExtendedClassMustBeAbstractOrInstantiatedRule`, `MustBeFinalRule`, `MustBeUsedInterfaceRule`, `MustBeUsedAbstractClassRule`, `MustBeUsedTraitRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically remove PSR-4 mappings for missing directories, normalize invalid PHP opening tags, remove UTF-8 byte order marks, add the `final` or `abstract` class modifier, remove unused interfaces, abstract classes, and traits (deleting their file when only `declare`/`namespace`/`use` boilerplate remains), and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
+## Function Rules
+
+Namespace: `Boundwize\StructArmed\Rule\Rules\Function_`.
+
+| Rule | Constructor | Checks |
+|---|---|---|
+| `MustBeStaticAnonymousFunctionRule` | `new MustBeStaticAnonymousFunctionRule(layer: 'Domain')` | Closures and arrow functions in a layer are declared `static`. Anonymous functions that read `$this` (directly or through a nested closure) are skipped, since a static closure cannot access `$this`. Supports `--fix` by adding the `static` modifier. |
+{: .rule-table }
+
 ## Layer Rules
 
 Namespace: `Boundwize\StructArmed\Rule\Rules\Layer`.

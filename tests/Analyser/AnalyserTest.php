@@ -6,7 +6,9 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
+use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
@@ -21,7 +23,9 @@ use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
@@ -38,7 +42,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+use function array_filter;
 use function array_map;
+use function array_values;
 use function count;
 use function dirname;
 use function file_put_contents;
@@ -60,6 +66,198 @@ use const DIRECTORY_SEPARATOR;
 final class AnalyserTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
+
+    /**
+     * A rule flagging every named function and every anonymous function that
+     * accesses a superglobal, implementing both function-like interfaces.
+     */
+    private function makeNoSuperglobalsInFunctionsRule(): FunctionRuleInterface&AnonymousFunctionRuleInterface
+    {
+        return new class implements FunctionRuleInterface, AnonymousFunctionRuleInterface {
+            public function appliesToFunction(FunctionNode $functionNode): bool
+            {
+                return $functionNode->isInLayer('Source');
+            }
+
+            public function evaluateFunction(FunctionNode $functionNode): ?RuleViolation
+            {
+                if (! $functionNode->accessesSuperglobals()) {
+                    return null;
+                }
+
+                return new RuleViolation(
+                    message:      'Function [' . $functionNode->functionName . '] must not access superglobals',
+                    file:         $functionNode->file,
+                    line:         $functionNode->line,
+                    className:    $functionNode->functionName,
+                    layer:        $functionNode->layer,
+                    functionName: $functionNode->functionName,
+                );
+            }
+
+            public function appliesToAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): bool
+            {
+                return $anonymousFunctionNode->isInLayer('Source');
+            }
+
+            public function evaluateAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
+            {
+                if (! $anonymousFunctionNode->accessesSuperglobals()) {
+                    return null;
+                }
+
+                return new RuleViolation(
+                    message:   $anonymousFunctionNode->getType() . ' in ['
+                        . $anonymousFunctionNode->enclosingScopeName()
+                        . '] must not access superglobals',
+                    file:      $anonymousFunctionNode->file,
+                    line:      $anonymousFunctionNode->line,
+                    className: $anonymousFunctionNode->enclosingScopeName(),
+                    layer:     $anonymousFunctionNode->layer,
+                );
+            }
+        };
+    }
+
+    /** @return array<string, string> */
+    private function functionRuleProjectFiles(): array
+    {
+        return [
+            'src/helpers.php'      => '<?php' . "\n"
+                . 'namespace App;' . "\n"
+                . 'function clean(): string { return "clean"; }' . "\n"
+                . 'function dirty(): string { return $_GET["x"]; }' . "\n"
+                . '$closure = function () { return $_POST["y"]; };' . "\n",
+            'src/Handler.php'      => '<?php' . "\n"
+                . 'namespace App;' . "\n"
+                . 'final class Handler {' . "\n"
+                . '    public function handle(): callable { return fn () => $_SERVER["z"]; }' . "\n"
+                . '}' . "\n",
+            'src/Skipped/skip.php' => '<?php' . "\n"
+                . 'namespace App\\Skipped;' . "\n"
+                . 'function skipped(): string { return $_GET["x"]; }' . "\n",
+        ];
+    }
+
+    public function testFunctionRulesAreEvaluatedAgainstFunctionsAndAnonymousFunctions(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles());
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skip(['functions.no_superglobals' => ['src/Skipped/']]);
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $violations = (new Analyser($basePath))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule('functions.no_superglobals');
+
+            $messages = array_map(
+                static fn(RuleViolation $ruleViolation): string => $ruleViolation->message,
+                $violations
+            );
+            sort($messages);
+
+            $this->assertSame([
+                'Arrow function in [App\\Handler] must not access superglobals',
+                'Closure in [file scope] must not access superglobals',
+                'Function [App\\dirty] must not access superglobals',
+            ], $messages);
+
+            foreach ($violations as $violation) {
+                $this->assertSame('functions.no_superglobals', $violation->ruleKey);
+                $this->assertSame('Source', $violation->layer);
+                $this->assertFalse($violation->fixable);
+            }
+
+            $functionViolation = array_values(array_filter(
+                $violations,
+                static fn(RuleViolation $ruleViolation): bool => $ruleViolation->functionName !== null
+            ));
+
+            $this->assertCount(1, $functionViolation);
+            $this->assertSame('App\\dirty', $functionViolation[0]->functionName);
+            $this->assertSame(4, $functionViolation[0]->line);
+        }
+    }
+
+    public function testFunctionRulesHonourGlobalSkipPaths(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles());
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skipPaths(['src/helpers.php', 'src/Skipped/']);
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/Handler.php', $this->normalisePath($violations[0]->file));
+    }
+
+    public function testFunctionRuleViolationsSurviveTheAnalysisNodeCache(): void
+    {
+        $basePath            = $this->makeTempProject($this->functionRuleProjectFiles());
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skip(['functions.no_superglobals' => ['src/Skipped/']]);
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $coldViolations);
+        $this->assertEquals($coldViolations, $warmViolations);
+    }
+
+    public function testFunctionRuleViolationsSurviveTheAnalysisNodeCacheWithFileAnalysis(): void
+    {
+        $basePath            = $this->makeTempProject($this->functionRuleProjectFiles());
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        // A file-analysis rule makes the warm run load nodes through the
+        // file-analysis cache path, which must also restore function-likes.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']))
+            ->skip(['functions.no_superglobals' => ['src/Skipped/']]);
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $coldViolations);
+        $this->assertEquals($coldViolations, $warmViolations);
+    }
+
+    public function testSkippedFunctionRuleIsNotEvaluated(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles());
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skipRule('functions.no_superglobals');
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
 
     public function testBuiltInPsr1RulesDoNotRediscoverFilesAfterExtraction(): void
     {

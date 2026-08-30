@@ -136,8 +136,8 @@ final readonly class AnalyseCommand
             $configHash,
             $composerGeneratedVersionHash
         );
-        $classNodeCacheNamespace      = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, $configHash);
-        $analyser                     = new Analyser($basePath, $analysisResultCache, $classNodeCacheNamespace);
+        $analysisNodeCacheNamespace   = $analysisCacheMetadataFactory->analysisNodeCacheNamespace($basePath, $configHash);
+        $analyser                     = new Analyser($basePath, $analysisResultCache, $analysisNodeCacheNamespace);
 
         if (isset($options['clear-cache']) || $analysisResultCache->shouldInvalidate()) {
             $analysisResultCache->clear();

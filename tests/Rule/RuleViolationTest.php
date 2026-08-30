@@ -69,6 +69,28 @@ final class RuleViolationTest extends TestCase
         ], $ruleViolation->toArray());
     }
 
+    public function testViolationSerializesFunctionNameWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:      'Broken rule',
+            file:         '/src/helpers.php',
+            line:         7,
+            className:    'App\\Support\\format',
+            ruleKey:      'first.rule',
+            functionName: 'App\\Support\\format',
+        );
+
+        $this->assertSame([
+            'rule'     => 'first.rule',
+            'message'  => 'Broken rule',
+            'file'     => '/src/helpers.php',
+            'line'     => 7,
+            'class'    => 'App\\Support\\format',
+            'layer'    => null,
+            'function' => 'App\\Support\\format',
+        ], $ruleViolation->toArray());
+    }
+
     public function testNonFixableViolationDoesNotSerializeFixableFlag(): void
     {
         $this->assertArrayNotHasKey('fixable', $this->violation('first.rule', 'Domain')->toArray());

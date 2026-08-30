@@ -13,10 +13,12 @@ use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
@@ -52,7 +54,7 @@ final readonly class Analyser
     public function __construct(
         string $basePath = '',
         private ?AnalysisResultCache $analysisResultCache = null,
-        private string $classNodeCacheNamespace = '',
+        private string $analysisNodeCacheNamespace = '',
         private PhpFileCollector $phpFileCollector = new PhpFileCollector(),
     ) {
         $this->basePath = $basePath !== '' ? $basePath : (string) getcwd();
@@ -80,6 +82,8 @@ final readonly class Analyser
         $projectRuleViolations     = [];
         $fileAnalysisRules         = [];
         $classRules                = [];
+        $functionRules             = [];
+        $anonymousFunctionRules    = [];
         $layerAwareRules           = [];
         $hasExtendedClassAwareRule = false;
         $hasUsedInterfaceAwareRule = false;
@@ -92,6 +96,14 @@ final readonly class Analyser
 
             if ($rule instanceof RuleInterface) {
                 $classRules[$key] = $rule;
+            }
+
+            if ($rule instanceof FunctionRuleInterface) {
+                $functionRules[$key] = $rule;
+            }
+
+            if ($rule instanceof AnonymousFunctionRuleInterface) {
+                $anonymousFunctionRules[$key] = $rule;
             }
 
             if ($rule instanceof LayerAwareRuleInterface) {
@@ -193,6 +205,7 @@ final readonly class Analyser
                     methodName: $violation->methodName,
                     constantName: $violation->constantName,
                     propertyName: $violation->propertyName,
+                    functionName: $violation->functionName,
                 ));
             }
         }
@@ -216,7 +229,10 @@ final readonly class Analyser
         }
 
         $globalSkipPathMatcher      = SkipPathMatcher::compile($this->basePath, $globalSkipPaths);
-        $ruleSkipMatchers           = $this->ruleSkipMatchers($classRules, $ruleSkipPaths);
+        $ruleSkipMatchers           = $this->ruleSkipMatchers(
+            $classRules + $functionRules + $anonymousFunctionRules,
+            $ruleSkipPaths
+        );
         $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
         $rulesetSkipPathMatcher     = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
         $rulesetViolationCollection = new RuleViolationCollection();
@@ -275,6 +291,7 @@ final readonly class Analyser
                         methodName: $violation->methodName,
                         constantName: $violation->constantName,
                         propertyName: $violation->propertyName,
+                        functionName: $violation->functionName,
                     ));
                 }
             }
@@ -367,9 +384,75 @@ final readonly class Analyser
             }
         }
 
+        // Function-likes are not part of the class hierarchy, so they take no
+        // part in the declarative ruleset; only rules that opt in see them.
+        foreach ($extractionResult->functionNodes as $functionNode) {
+            if ($globalSkipPathMatcher->isSkipped($functionNode->file)) {
+                continue;
+            }
+
+            foreach ($functionRules as $key => $rule) {
+                if (isset($ruleSkipMatchers[$key]) && $ruleSkipMatchers[$key]->isSkipped($functionNode->file)) {
+                    continue;
+                }
+
+                if (! $rule->appliesToFunction($functionNode)) {
+                    continue;
+                }
+
+                $violation = $rule->evaluateFunction($functionNode);
+
+                if ($violation instanceof RuleViolation) {
+                    $ruleViolationCollection->add($this->withRuleKey($violation, $key, $rule));
+                }
+            }
+        }
+
+        foreach ($extractionResult->anonymousFunctionNodes as $anonymousFunctionNode) {
+            if ($globalSkipPathMatcher->isSkipped($anonymousFunctionNode->file)) {
+                continue;
+            }
+
+            foreach ($anonymousFunctionRules as $key => $rule) {
+                if (
+                    isset($ruleSkipMatchers[$key])
+                    && $ruleSkipMatchers[$key]->isSkipped($anonymousFunctionNode->file)
+                ) {
+                    continue;
+                }
+
+                if (! $rule->appliesToAnonymousFunction($anonymousFunctionNode)) {
+                    continue;
+                }
+
+                $violation = $rule->evaluateAnonymousFunction($anonymousFunctionNode);
+
+                if ($violation instanceof RuleViolation) {
+                    $ruleViolationCollection->add($this->withRuleKey($violation, $key, $rule));
+                }
+            }
+        }
+
         $ruleViolationCollection->merge($rulesetViolationCollection);
 
         return $ruleViolationCollection;
+    }
+
+    private function withRuleKey(RuleViolation $ruleViolation, string $key, object $rule): RuleViolation
+    {
+        return new RuleViolation(
+            message:      $ruleViolation->message,
+            file:         $ruleViolation->file,
+            line:         $ruleViolation->line,
+            className:    $ruleViolation->className,
+            layer:        $ruleViolation->layer,
+            ruleKey:      $key,
+            fixable:      $rule instanceof FixableInterface,
+            methodName:   $ruleViolation->methodName,
+            constantName: $ruleViolation->constantName,
+            propertyName: $ruleViolation->propertyName,
+            functionName: $ruleViolation->functionName,
+        );
     }
 
     /**
@@ -479,7 +562,7 @@ final readonly class Analyser
     }
 
     /**
-     * @param array<string, RuleInterface> $classRules
+     * @param array<string, RuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface> $classRules
      * @param array<string, list<string>>  $ruleSkipPaths
      * @return array<string, SkipPathMatcher>
      */
@@ -782,7 +865,7 @@ final readonly class Analyser
 
         foreach ($extractionResult->fileInstantiations as $instantiations) {
             foreach ($instantiations as $instantiation) {
-                $deferredMarker = ClassCollector::parseDeferredInstantiationMarker($instantiation);
+                $deferredMarker = AnalysisNodeCollector::parseDeferredInstantiationMarker($instantiation);
 
                 if ($deferredMarker === null) {
                     $instantiated[strtolower($instantiation)] = true;
@@ -1137,18 +1220,20 @@ final readonly class Analyser
         ?AnalyserOptions $analyserOptions = null,
         bool $withFileAnalysis = true,
     ): ExtractionResult {
-        $classNodes          = [];
-        $fileAnalyses        = [];
-        $anonymousClassNodes = [];
-        $fileReferences      = [];
-        $fileInstantiations  = [];
-        $filesToParse        = [];
+        $classNodes             = [];
+        $fileAnalyses           = [];
+        $anonymousClassNodes    = [];
+        $fileReferences         = [];
+        $fileInstantiations     = [];
+        $functionNodes          = [];
+        $anonymousFunctionNodes = [];
+        $filesToParse           = [];
 
         foreach ($files as $file) {
             if ($withFileAnalysis) {
-                $cachedResult = $this->analysisResultCache?->loadClassNodesWithFileAnalysis(
+                $cachedResult = $this->analysisResultCache?->loadAnalysisNodesWithFileAnalysis(
                     $file,
-                    $this->classNodeCacheNamespace
+                    $this->analysisNodeCacheNamespace
                 );
 
                 if ($cachedResult === null) {
@@ -1172,14 +1257,22 @@ final readonly class Analyser
                     $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
                 }
 
+                foreach ($cachedResult['functionNodes'] as $cachedFunctionNode) {
+                    $functionNodes[] = $cachedFunctionNode;
+                }
+
+                foreach ($cachedResult['anonymousFunctionNodes'] as $cachedAnonymousFunctionNode) {
+                    $anonymousFunctionNodes[] = $cachedAnonymousFunctionNode;
+                }
+
                 $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
 
                 continue;
             }
 
-            $cachedResult = $this->analysisResultCache?->loadClassNodes(
+            $cachedResult = $this->analysisResultCache?->loadAnalysisNodes(
                 $file,
-                $this->classNodeCacheNamespace,
+                $this->analysisNodeCacheNamespace,
             );
 
             if ($cachedResult === null) {
@@ -1202,6 +1295,14 @@ final readonly class Analyser
             if ($cachedResult['fileInstantiations'] !== []) {
                 $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
             }
+
+            foreach ($cachedResult['functionNodes'] as $cachedFunctionNode) {
+                $functionNodes[] = $cachedFunctionNode;
+            }
+
+            foreach ($cachedResult['anonymousFunctionNodes'] as $cachedAnonymousFunctionNode) {
+                $anonymousFunctionNodes[] = $cachedAnonymousFunctionNode;
+            }
         }
 
         $progressHandler?->start(count($filesToParse));
@@ -1215,6 +1316,8 @@ final readonly class Analyser
                 $anonymousClassNodes,
                 $fileReferences,
                 $fileInstantiations,
+                $functionNodes,
+                $anonymousFunctionNodes,
             );
         }
 
@@ -1266,15 +1369,35 @@ final readonly class Analyser
             $fileInstantiations[$file] = $parsedFileInstantiations;
         }
 
+        $functionNodesByFile = array_fill_keys($filesToParse, []);
+        foreach ($parsedResult->functionNodes as $parsedFunctionNode) {
+            $functionNodes[] = $parsedFunctionNode;
+
+            if (isset($functionNodesByFile[$parsedFunctionNode->file])) {
+                $functionNodesByFile[$parsedFunctionNode->file][] = $parsedFunctionNode;
+            }
+        }
+
+        $anonymousFunctionNodesByFile = array_fill_keys($filesToParse, []);
+        foreach ($parsedResult->anonymousFunctionNodes as $parsedAnonymousFunctionNode) {
+            $anonymousFunctionNodes[] = $parsedAnonymousFunctionNode;
+
+            if (isset($anonymousFunctionNodesByFile[$parsedAnonymousFunctionNode->file])) {
+                $anonymousFunctionNodesByFile[$parsedAnonymousFunctionNode->file][] = $parsedAnonymousFunctionNode;
+            }
+        }
+
         foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
-            $this->analysisResultCache?->storeClassNodes(
+            $this->analysisResultCache?->storeAnalysisNodes(
                 $fileToParse,
-                $this->classNodeCacheNamespace,
+                $this->analysisNodeCacheNamespace,
                 $fileClassNodes,
                 $fileAnalyses[$fileToParse] ?? null,
                 $anonymousClassNodesByFile[$fileToParse] ?? [],
                 $fileReferences[$fileToParse] ?? [],
                 $fileInstantiations[$fileToParse] ?? [],
+                $functionNodesByFile[$fileToParse] ?? [],
+                $anonymousFunctionNodesByFile[$fileToParse] ?? [],
             );
         }
 
@@ -1286,6 +1409,8 @@ final readonly class Analyser
             $anonymousClassNodes,
             $fileReferences,
             $fileInstantiations,
+            $functionNodes,
+            $anonymousFunctionNodes,
         );
     }
 
