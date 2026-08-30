@@ -177,6 +177,91 @@ The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedI
 
 Trade-off: only usage within the scanned paths is known. A class-like used solely by a consumer outside the scan — a vendor package, an unscanned directory, runtime-fed dynamic construction — is reported as if unused. Widen the scan, or use `skipRule()` and skip paths where such consumers exist.
 
+## Analysing Functions And Closures
+
+Named functions, closures, and arrow functions are collected alongside classes:
+
+| Node | Represents | Identified by |
+| --- | --- | --- |
+| `Boundwize\StructArmed\Analyser\FunctionNode` | A named function declaration (`function foo() {}`), global or namespaced | `$functionName` (fully qualified) |
+| `Boundwize\StructArmed\Analyser\AnonymousFunctionNode` | A closure (`function () {}`) or arrow function (`fn () => ...`) | `$file` and `$line`, plus `$enclosingClassName` / `$enclosingFunctionName` |
+
+Both carry the body-level facts a `ClassNode` has — `$dependencies`, `$functionCalls`, `$superglobals`, `$languageConstructs`, `$layer` / `$layers` — plus `$paramCount`, `$hasReturnType`, `$cyclomaticComplexity`, and `$lineCount`. The same query helpers are available: `isInLayer()`, `dependsOn()`, `dependsOnNamespace()`, `callsFunction()`, `usesLanguageConstruct()`, and `accessesSuperglobals()`. A `FunctionNode` also has `shortName()`, `nameStartsWith()`, `nameEndsWith()`, and `nameMatches()`; an `AnonymousFunctionNode` has `$isArrowFunction`, `$isStatic`, `getType()`, and `enclosingScopeName()`.
+
+A closure declared inside a class or a named function is counted on both nodes: the enclosing `ClassNode` (or `FunctionNode`) keeps seeing everything the closure does, exactly as it sees its own method bodies, and the `AnonymousFunctionNode` reports the closure body on its own.
+
+Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface` and/or `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`. Their method names differ from `RuleInterface` (`appliesToFunction()` / `evaluateFunction()` and `appliesToAnonymousFunction()` / `evaluateAnonymousFunction()`), so one rule class can implement all three and check classes, functions, and closures alike. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes are not part of the declarative `ruleset()` layer-dependency check.
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
+use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final readonly class FunctionsMustNotAccessSuperglobalsRule implements
+    FunctionRuleInterface,
+    AnonymousFunctionRuleInterface
+{
+    public function __construct(private string $layer)
+    {
+    }
+
+    public function appliesToFunction(FunctionNode $functionNode): bool
+    {
+        return $functionNode->isInLayer($this->layer);
+    }
+
+    public function evaluateFunction(FunctionNode $functionNode): ?RuleViolation
+    {
+        if (! $functionNode->accessesSuperglobals()) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:      sprintf('Function [%s()] must not access superglobals', $functionNode->functionName),
+            file:         $functionNode->file,
+            line:         $functionNode->line,
+            className:    $functionNode->functionName,
+            layer:        $functionNode->layer,
+            functionName: $functionNode->functionName,
+        );
+    }
+
+    public function appliesToAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): bool
+    {
+        return $anonymousFunctionNode->isInLayer($this->layer);
+    }
+
+    public function evaluateAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
+    {
+        if (! $anonymousFunctionNode->accessesSuperglobals()) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:   sprintf(
+                '%s in [%s] must not access superglobals',
+                $anonymousFunctionNode->getType(),
+                $anonymousFunctionNode->enclosingScopeName()
+            ),
+            file:      $anonymousFunctionNode->file,
+            line:      $anonymousFunctionNode->line,
+            className: $anonymousFunctionNode->enclosingScopeName(),
+            layer:     $anonymousFunctionNode->layer,
+        );
+    }
+}
+```
+
+`RuleViolation::$className` is required, so a function rule passes the function name there (and, optionally, in the dedicated `functionName` field, which the JSON report emits as `"function"`); an anonymous-function rule passes `enclosingScopeName()`, which is the enclosing class-like or named function, or `AnonymousFunctionNode::FILE_SCOPE` (`'file scope'`) for a closure in top-level procedural code.
+
 ## Making A Custom Rule Fixable
 
 Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
@@ -291,6 +376,6 @@ return Architecture::define()
 
 Use `rule()` when one project needs one extra check.
 
-Use a custom `RuleInterface` class when the check itself is new behavior.
+Use a custom `RuleInterface` class when the check itself is new behavior; add `FunctionRuleInterface` / `AnonymousFunctionRuleInterface` when it must also cover named functions and closures.
 
 Use a custom `PresetInterface` class when several layers and rules should be applied together or reused across repositories.

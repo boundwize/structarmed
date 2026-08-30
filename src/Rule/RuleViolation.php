@@ -19,6 +19,7 @@ final readonly class RuleViolation
         public ?string $methodName = null,
         public ?string $constantName = null,
         public ?string $propertyName = null,
+        public ?string $functionName = null,
     ) {
     }
 
@@ -59,6 +60,10 @@ final readonly class RuleViolation
 
         if ($this->propertyName !== null) {
             $data['property'] = $this->propertyName;
+        }
+
+        if ($this->functionName !== null) {
+            $data['function'] = $this->functionName;
         }
 
         return $data;

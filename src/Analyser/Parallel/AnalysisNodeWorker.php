@@ -63,23 +63,27 @@ final readonly class AnalysisNodeWorker
             );
 
             file_put_contents($outputFile, serialize([
-                'nodes'               => $result->classNodes,
-                'fileAnalyses'        => $result->fileAnalyses,
-                'anonymousClassNodes' => $result->anonymousClassNodes,
-                'fileReferences'      => $result->fileReferences,
-                'fileInstantiations'  => $result->fileInstantiations,
-                'error'               => null,
+                'nodes'                  => $result->classNodes,
+                'fileAnalyses'           => $result->fileAnalyses,
+                'anonymousClassNodes'    => $result->anonymousClassNodes,
+                'fileReferences'         => $result->fileReferences,
+                'fileInstantiations'     => $result->fileInstantiations,
+                'functionNodes'          => $result->functionNodes,
+                'anonymousFunctionNodes' => $result->anonymousFunctionNodes,
+                'error'                  => null,
             ]));
 
             return 0;
         } catch (Throwable $throwable) {
             file_put_contents($outputFile, serialize([
-                'nodes'               => [],
-                'fileAnalyses'        => [],
-                'anonymousClassNodes' => [],
-                'fileReferences'      => [],
-                'fileInstantiations'  => [],
-                'error'               => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
+                'nodes'                  => [],
+                'fileAnalyses'           => [],
+                'anonymousClassNodes'    => [],
+                'fileReferences'         => [],
+                'fileInstantiations'     => [],
+                'functionNodes'          => [],
+                'anonymousFunctionNodes' => [],
+                'error'                  => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
             ]));
 
             return 1;

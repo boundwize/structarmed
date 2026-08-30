@@ -29,9 +29,9 @@ final readonly class AnalysisNodeExtractor
         ?ProgressHandlerInterface $progressHandler = null,
         bool $withFileAnalysis = true,
     ): ExtractionResult {
-        $classCollector = new ClassCollector($this->layerResolver);
-        $nodeTraverser  = new NodeTraverser(new NameResolver(), $classCollector);
-        $fileAnalyses   = [];
+        $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver);
+        $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
+        $fileAnalyses          = [];
 
         foreach ($files as $file) {
             try {
@@ -45,7 +45,7 @@ final readonly class AnalysisNodeExtractor
                     continue;
                 }
 
-                $classCollector->setCurrentFile($file);
+                $analysisNodeCollector->setCurrentFile($file);
                 $nodeTraverser->traverse($ast);
             } finally {
                 if ($withFileAnalysis) {
@@ -57,11 +57,13 @@ final readonly class AnalysisNodeExtractor
         }
 
         return new ExtractionResult(
-            $classCollector->getNodes(),
+            $analysisNodeCollector->getNodes(),
             $fileAnalyses,
-            $classCollector->getAnonymousClassNodes(),
-            $classCollector->getFileReferences(),
-            $classCollector->getFileInstantiations(),
+            $analysisNodeCollector->getAnonymousClassNodes(),
+            $analysisNodeCollector->getFileReferences(),
+            $analysisNodeCollector->getFileInstantiations(),
+            $analysisNodeCollector->getFunctionNodes(),
+            $analysisNodeCollector->getAnonymousFunctionNodes(),
         );
     }
 }

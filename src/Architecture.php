@@ -6,6 +6,8 @@ namespace Boundwize\StructArmed;
 
 use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
+use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use InvalidArgumentException;
@@ -48,7 +50,10 @@ final class Architecture
     /** @var array<string, string|list<string>> name → path prefixes */
     private array $layers = [];
 
-    /** @var array<string, RuleInterface|ProjectRuleInterface> key → rule */
+    /**
+     * @var array<string, RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface>
+     *      key → rule
+     */
     private array $rules = [];
 
     /** @var array<class-string<PresetInterface>, list<string>|null> */
@@ -350,8 +355,10 @@ final class Architecture
      * Add a new custom rule.
      * If a rule with this key already exists it will be replaced.
      */
-    public function rule(string $key, RuleInterface|ProjectRuleInterface $rule): self
-    {
+    public function rule(
+        string $key,
+        RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface $rule,
+    ): self {
         $this->rules[$key] = $rule;
         $this->resolvePendingRuleSkip($key);
 
@@ -365,8 +372,10 @@ final class Architecture
      *
      * @throws RuleNotFoundException
      */
-    public function replaceRule(string $key, RuleInterface|ProjectRuleInterface $rule): self
-    {
+    public function replaceRule(
+        string $key,
+        RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface $rule,
+    ): self {
         if (! isset($this->rules[$key])) {
             throw new RuleNotFoundException(sprintf(
                 'Cannot replace rule [%s] — rule not found. '
@@ -425,7 +434,9 @@ final class Architecture
         return $this->rulesetSkipPaths;
     }
 
-    /** @return array<string, RuleInterface|ProjectRuleInterface> */
+    /**
+     * @return array<string, RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface>
+     */
     public function getRules(): array
     {
         return $this->rules;
