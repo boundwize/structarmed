@@ -71,6 +71,7 @@ use PhpParser\NodeVisitorAbstract;
 
 use function array_keys;
 use function array_pop;
+use function array_push;
 use function array_unique;
 use function array_values;
 use function count;
@@ -279,9 +280,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $fileFunctionLikeAnalyses = [];
 
-    /** @var array<string, array{0: string|null, 1: list<string>}> */
-    private array $resolvedLayerData = [];
-
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
@@ -320,7 +318,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
-        $this->resolvedLayerData                 = [];
     }
 
     /** @return list<ClassNode> */
@@ -490,7 +487,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // ClassLike are statements, so one instanceof splits the two groups.
         if ($node instanceof Expr) {
             if ($node instanceof Closure || $node instanceof ArrowFunction) {
-                array_pop($this->activeFunctionLikeAnalyses);
+                $this->finishFunctionLikeAnalysis();
 
                 return null;
             }
@@ -529,7 +526,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($node instanceof Function_) {
-            array_pop($this->activeFunctionLikeAnalyses);
+            $this->finishFunctionLikeAnalysis();
             array_pop($this->activeFunctionNames);
 
             return null;
@@ -670,6 +667,37 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         array_pop($this->activeMethodIds);
     }
 
+    /**
+     * Roll a completed function-like's body facts into its lexical parent.
+     * Class-like facts are still collected directly during traversal, so a
+     * top-level function-like has no additional merge target here.
+     */
+    private function finishFunctionLikeAnalysis(): void
+    {
+        $activeCount = count($this->activeFunctionLikeAnalyses);
+
+        if ($activeCount === 0) {
+            return;
+        }
+
+        $child = array_pop($this->activeFunctionLikeAnalyses);
+
+        if ($activeCount === 1) {
+            return;
+        }
+
+        $parent = $this->activeFunctionLikeAnalyses[$activeCount - 2];
+
+        array_push($parent->dependencies, ...$child->dependencies);
+        array_push($parent->functionCallNames, ...$child->functionCallNames);
+        array_push($parent->superglobals, ...$child->superglobals);
+        array_push($parent->languageConstructs, ...$child->languageConstructs);
+
+        if ($child->cyclomaticComplexity > 1) {
+            $parent->cyclomaticComplexity += $child->cyclomaticComplexity - 1;
+        }
+    }
+
     private function collectNodeAnalysis(Node $node): void
     {
         // A class-name-shaped string literal may feed `new $class`,
@@ -726,8 +754,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
             }
 
-            foreach ($this->activeFunctionLikeAnalyses as $activeFunctionLikeAnalysis) {
-                $activeFunctionLikeAnalysis->cyclomaticComplexity++;
+            $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
+
+            if ($activeFunctionLikeCount > 0) {
+                $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->cyclomaticComplexity++;
             }
 
             return;
@@ -983,8 +1013,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $activeClassLikeAnalysis->dependencies[] = $dependency;
         }
 
-        foreach ($this->activeFunctionLikeAnalyses as $activeFunctionLikeAnalysis) {
-            $activeFunctionLikeAnalysis->dependencies[] = $dependency;
+        $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
+
+        if ($activeFunctionLikeCount > 0) {
+            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->dependencies[] = $dependency;
         }
     }
 
@@ -994,8 +1026,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $activeClassLikeAnalysis->functionCallNames[] = $functionCallName;
         }
 
-        foreach ($this->activeFunctionLikeAnalyses as $activeFunctionLikeAnalysis) {
-            $activeFunctionLikeAnalysis->functionCallNames[] = $functionCallName;
+        $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
+
+        if ($activeFunctionLikeCount > 0) {
+            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->functionCallNames[] = $functionCallName;
         }
     }
 
@@ -1005,8 +1039,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $activeClassLikeAnalysis->superglobals[] = $superglobal;
         }
 
-        foreach ($this->activeFunctionLikeAnalyses as $activeFunctionLikeAnalysis) {
-            $activeFunctionLikeAnalysis->superglobals[] = $superglobal;
+        $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
+
+        if ($activeFunctionLikeCount > 0) {
+            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->superglobals[] = $superglobal;
         }
     }
 
@@ -1032,8 +1068,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $activeClassLikeAnalysis->languageConstructs[] = $languageConstruct;
         }
 
-        foreach ($this->activeFunctionLikeAnalyses as $activeFunctionLikeAnalysis) {
-            $activeFunctionLikeAnalysis->languageConstructs[] = $languageConstruct;
+        $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
+
+        if ($activeFunctionLikeCount > 0) {
+            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->languageConstructs[] = $languageConstruct;
         }
     }
 
@@ -1153,18 +1191,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
-     * Resolve and cache both layer representations for a scope. With zero or
-     * one match, resolveAll() already determines the primary layer; the
-     * separate resolve() pass is only needed for overlapping layer matches.
+     * Resolve both layer representations for a scope. With zero or one match,
+     * resolveAll() already determines the primary layer; the separate
+     * resolve() pass is only needed for overlapping layer matches. Repeated
+     * lookups are cached by ChainLayerResolver.
      *
      * @return array{0: string|null, 1: list<string>}
      */
     private function resolveLayerData(string $scopeName): array
     {
-        if (isset($this->resolvedLayerData[$scopeName])) {
-            return $this->resolvedLayerData[$scopeName];
-        }
-
         $layers = $this->layerResolver->resolveAll($scopeName, $this->currentFile);
         $layer  = match (count($layers)) {
             0       => null,
@@ -1172,7 +1207,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             default => $this->layerResolver->resolve($scopeName, $this->currentFile),
         };
 
-        return $this->resolvedLayerData[$scopeName] = [$layer, $layers];
+        return [$layer, $layers];
     }
 
     private function resolveFunctionDeclarationName(Function_ $function): string
