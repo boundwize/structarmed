@@ -175,6 +175,50 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         List_::class  => 'list',
     ];
 
+    /**
+     * Every node class enterNode() acts on: the scope-tracking statements,
+     * function-likes, and everything collectNodeAnalysis() records. The
+     * parser only ever instantiates these exact classes, so a single ::class
+     * hash lookup lets the large majority of nodes (identifiers, arguments,
+     * scalars, assignments, ...) return before any instanceof check.
+     */
+    private const ENTER_NODES = self::COMPLEXITY_BRANCH_NODES + self::LANGUAGE_CONSTRUCT_NODES + [
+        Namespace_::class      => true,
+        Use_::class            => true,
+        GroupUse::class        => true,
+        Function_::class       => true,
+        Class_::class          => true,
+        Interface_::class      => true,
+        Trait_::class          => true,
+        Enum_::class           => true,
+        ClassMethod::class     => true,
+        Closure::class         => true,
+        ArrowFunction::class   => true,
+        String_::class         => true,
+        FullyQualified::class  => true,
+        Variable::class        => true,
+        FuncCall::class        => true,
+        Exit_::class           => true,
+        Include_::class        => true,
+    ];
+
+    /**
+     * Every node class leaveNode() acts on, see ENTER_NODES.
+     */
+    private const LEAVE_NODES = [
+        Closure::class            => true,
+        ArrowFunction::class      => true,
+        New_::class               => true,
+        MethodCall::class         => true,
+        NullsafeMethodCall::class => true,
+        ClassMethod::class        => true,
+        Function_::class          => true,
+        Class_::class             => true,
+        Interface_::class         => true,
+        Trait_::class             => true,
+        Enum_::class              => true,
+    ];
+
     /** @var list<ClassNode> */
     private array $nodes = [];
 
@@ -409,6 +453,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     public function enterNode(Node $node): null
     {
+        if (! isset(self::ENTER_NODES[$node::class])) {
+            return null;
+        }
+
         // The scope-tracking node types are all statements, so the far more
         // frequent expression/name/identifier nodes skip their checks with a
         // single instanceof.
@@ -481,6 +529,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     public function leaveNode(Node $node): null
     {
+        if (! isset(self::LEAVE_NODES[$node::class])) {
+            return null;
+        }
+
         // Both instantiation handlers run on leave, once the NameResolver
         // has resolved the nested name nodes (e.g. Base::class inside the
         // class expression). They only match expressions, and ClassMethod /
