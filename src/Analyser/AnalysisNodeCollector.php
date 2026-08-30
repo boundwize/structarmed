@@ -69,6 +69,7 @@ use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 
+use function array_keys;
 use function array_pop;
 use function array_unique;
 use function array_values;
@@ -188,7 +189,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var array<string, list<string>> */
     private array $fileReferences = [];
 
-    /** @var list<string> */
+    /** @var array<string, true> */
     private array $currentFileReferences = [];
 
     /**
@@ -206,7 +207,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
 
-    /** @var list<string> */
+    /** @var array<string, true> */
     private array $currentFileInstantiations = [];
 
     private readonly ConstExprEvaluator $constExprEvaluator;
@@ -278,6 +279,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $fileFunctionLikeAnalyses = [];
 
+    /** @var array<string, array{0: string|null, 1: list<string>}> */
+    private array $resolvedLayerData = [];
+
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
@@ -316,6 +320,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
+        $this->resolvedLayerData                 = [];
     }
 
     /** @return list<ClassNode> */
@@ -446,13 +451,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof ClassLike) {
-                $this->activeClassLikeScopes[]             = $this->createClassLikeScope($node);
-                $this->activeClassLikeNames[]              = $node->name instanceof Identifier
+                $classLikeName = $node->name instanceof Identifier
                     ? $this->resolveClassName($node)
                     : null;
+
+                $this->activeClassLikeScopes[]             = $this->createClassLikeScope($node, $classLikeName);
+                $this->activeClassLikeNames[]              = $classLikeName;
                 $this->functionLikeDepthAtClassLikeEntry[] = count($this->activeFunctionLikeAnalyses);
 
-                if ($node->name instanceof Identifier) {
+                if ($classLikeName !== null) {
                     $this->startClassLikeAnalysis($node);
                 }
 
@@ -571,14 +578,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($this->currentFileReferences !== []) {
-            $this->fileReferences[$this->currentFile] = array_values(array_unique($this->currentFileReferences));
+            $this->fileReferences[$this->currentFile] = array_keys($this->currentFileReferences);
             $this->currentFileReferences              = [];
         }
 
         if ($this->currentFileInstantiations !== []) {
-            $this->fileInstantiations[$this->currentFile] = array_values(
-                array_unique($this->currentFileInstantiations)
-            );
+            $this->fileInstantiations[$this->currentFile] = array_keys($this->currentFileInstantiations);
             $this->currentFileInstantiations              = [];
         }
 
@@ -681,7 +686,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1
                 && ! isset(self::KEYWORD_CONSTANTS[strtolower($value)])
             ) {
-                $this->currentFileReferences[] = $value;
+                $this->currentFileReferences[$value] = true;
             }
 
             return;
@@ -699,7 +704,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 // top-level statements, top-level anonymous class bodies — a
                 // class-like reference still keeps the referenced class-like
                 // alive.
-                $this->currentFileReferences[] = $name;
+                $this->currentFileReferences[$name] = true;
             }
 
             $this->addDependency($name);
@@ -714,7 +719,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // Branch nodes (conditions, loops, boolean operators) are among the
         // most frequent remaining node types, so they dispatch on one hash
         // lookup before the rarer per-type checks below.
-        if (isset(self::COMPLEXITY_BRANCH_NODES[$node::class])) {
+        $nodeClass = $node::class;
+
+        if (isset(self::COMPLEXITY_BRANCH_NODES[$nodeClass])) {
             foreach ($this->activeMethodIds as $activeMethodId) {
                 $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
             }
@@ -777,7 +784,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        $languageConstruct = self::LANGUAGE_CONSTRUCT_NODES[$node::class] ?? null;
+        $languageConstruct = self::LANGUAGE_CONSTRUCT_NODES[$nodeClass] ?? null;
 
         if ($languageConstruct !== null) {
             $this->addLanguageConstruct($languageConstruct);
@@ -792,7 +799,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $className = $this->resolveClassLikeName($class);
 
             if ($className !== null) {
-                $this->currentFileInstantiations[] = $className;
+                $this->currentFileInstantiations[$className] = true;
             }
 
             return;
@@ -811,7 +818,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $className = $this->resolveClassNameExpr($class);
 
         if ($className !== null) {
-            $this->currentFileInstantiations[] = $className;
+            $this->currentFileInstantiations[$className] = true;
         }
     }
 
@@ -847,29 +854,27 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *
      * @return array{self: string|null, static: string|null, parent: string|null}
      */
-    private function createClassLikeScope(ClassLike $classLike): array
+    private function createClassLikeScope(ClassLike $classLike, ?string $classLikeName): array
     {
         $parent = $classLike instanceof Class_ && $classLike->extends instanceof Name
             ? $classLike->extends->toString()
             : null;
 
-        if (! $classLike->name instanceof Identifier) {
+        if ($classLikeName === null) {
             return ['self' => null, 'static' => null, 'parent' => $parent];
         }
 
-        $name = $this->resolveClassName($classLike);
-
         if ($classLike instanceof Trait_) {
             return [
-                'self'   => self::deferredInstantiationMarker('self', $name),
-                'static' => self::deferredInstantiationMarker('static', $name),
-                'parent' => self::deferredInstantiationMarker('parent', $name),
+                'self'   => self::deferredInstantiationMarker('self', $classLikeName),
+                'static' => self::deferredInstantiationMarker('static', $classLikeName),
+                'parent' => self::deferredInstantiationMarker('parent', $classLikeName),
             ];
         }
 
         return [
-            'self'   => $name,
-            'static' => self::deferredInstantiationMarker('static', $name),
+            'self'   => $classLikeName,
+            'static' => self::deferredInstantiationMarker('static', $classLikeName),
             'parent' => $parent,
         ];
     }
@@ -908,7 +913,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $reflectionTarget = $this->resolveReflectionTarget($new);
 
         if ($reflectionTarget !== null) {
-            $this->currentFileInstantiations[] = $reflectionTarget;
+            $this->currentFileInstantiations[$reflectionTarget] = true;
         }
     }
 
@@ -1037,8 +1042,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $classLikeId      = spl_object_id($classLike);
         $analysis         = $this->collectClassLikeAnalysis($classLikeId);
         $className        = $this->resolveClassName($classLike);
-        $layers           = $this->layerResolver->resolveAll($className, $this->currentFile);
-        $layer            = $this->layerResolver->resolve($className, $this->currentFile);
+        [$layer, $layers] = $this->resolveLayerData($className);
         $implements       = $this->collectImplements($classLike);
         $interfaceExtends = $this->collectInterfaceExtends($classLike);
 
@@ -1097,13 +1101,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $lineCount          = $this->calculateLineCount($functionLike);
 
         if ($functionLike instanceof Function_) {
-            $functionName = $this->resolveFunctionDeclarationName($functionLike);
+            $functionName     = $this->resolveFunctionDeclarationName($functionLike);
+            [$layer, $layers] = $this->resolveLayerData($functionName);
 
             $this->functionNodes[] = new FunctionNode(
                 functionName:         $functionName,
                 file:                 $this->currentFile,
                 line:                 $functionLike->getStartLine(),
-                layer:                $this->layerResolver->resolve($functionName, $this->currentFile),
+                layer:                $layer,
                 hasReturnType:        $hasReturnType,
                 paramCount:           $paramCount,
                 cyclomaticComplexity: $functionLikeAnalysis->cyclomaticComplexity,
@@ -1112,7 +1117,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 functionCalls:        $functionCalls,
                 superglobals:         $superglobals,
                 languageConstructs:   $languageConstructs,
-                layers:               $this->layerResolver->resolveAll($functionName, $this->currentFile),
+                layers:               $layers,
             );
 
             return;
@@ -1120,14 +1125,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         // The layer of an anonymous function is resolved by its file and, for
         // class-name pattern layers, by the named scope declaring it.
-        $scopeName = $functionLikeAnalysis->enclosingClassName
+        $scopeName        = $functionLikeAnalysis->enclosingClassName
             ?? $functionLikeAnalysis->enclosingFunctionName
             ?? '';
+        [$layer, $layers] = $this->resolveLayerData($scopeName);
 
         $this->anonymousFunctionNodes[] = new AnonymousFunctionNode(
             file:                  $this->currentFile,
             line:                  $functionLike->getStartLine(),
-            layer:                 $this->layerResolver->resolve($scopeName, $this->currentFile),
+            layer:                 $layer,
             isArrowFunction:       $functionLike instanceof ArrowFunction,
             isStatic:              ($functionLike instanceof Closure || $functionLike instanceof ArrowFunction)
                                        && $functionLike->static,
@@ -1142,8 +1148,31 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             functionCalls:         $functionCalls,
             superglobals:          $superglobals,
             languageConstructs:    $languageConstructs,
-            layers:                $this->layerResolver->resolveAll($scopeName, $this->currentFile),
+            layers:                $layers,
         );
+    }
+
+    /**
+     * Resolve and cache both layer representations for a scope. With zero or
+     * one match, resolveAll() already determines the primary layer; the
+     * separate resolve() pass is only needed for overlapping layer matches.
+     *
+     * @return array{0: string|null, 1: list<string>}
+     */
+    private function resolveLayerData(string $scopeName): array
+    {
+        if (isset($this->resolvedLayerData[$scopeName])) {
+            return $this->resolvedLayerData[$scopeName];
+        }
+
+        $layers = $this->layerResolver->resolveAll($scopeName, $this->currentFile);
+        $layer  = match (count($layers)) {
+            0       => null,
+            1       => $layers[0],
+            default => $this->layerResolver->resolve($scopeName, $this->currentFile),
+        };
+
+        return $this->resolvedLayerData[$scopeName] = [$layer, $layers];
     }
 
     private function resolveFunctionDeclarationName(Function_ $function): string
