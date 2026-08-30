@@ -33,7 +33,7 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
     public function merge(self $other): void
     {
         foreach ($other as $violation) {
-            $this->add($violation);
+            $this->violations[] = $violation;
         }
     }
 
