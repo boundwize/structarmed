@@ -6,7 +6,6 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 
-use function fflush;
 use function fwrite;
 
 final readonly class WorkerProgressHandler implements ProgressHandlerInterface
@@ -23,7 +22,6 @@ final readonly class WorkerProgressHandler implements ProgressHandlerInterface
     public function advance(string $file): void
     {
         fwrite($this->stream, "\n");
-        fflush($this->stream);
     }
 
     public function finish(): void
