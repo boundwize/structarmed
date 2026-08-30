@@ -660,24 +660,28 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
         $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
-
-        foreach ($classLike->getMethods() as $classMethod) {
-            $this->methodClassLikeAnalyses[spl_object_id($classMethod)] = $classLikeAnalysis;
-        }
     }
 
+    /**
+     * The owning analysis is the innermost active class-like: an anonymous
+     * class (null name) starts no analysis, so its methods are not tracked.
+     */
     private function startMethodAnalysis(ClassMethod $classMethod): void
     {
-        $methodId = spl_object_id($classMethod);
+        if ($this->activeClassLikeNames === [] || end($this->activeClassLikeNames) === null) {
+            return;
+        }
 
-        $analysis = $this->methodClassLikeAnalyses[$methodId] ?? null;
+        $analysis = end($this->activeClassLikeAnalyses);
 
         if (! $analysis instanceof ClassLikeAnalysis) {
             return;
         }
 
-        $this->activeMethodIds[] = $methodId;
+        $methodId = spl_object_id($classMethod);
 
+        $this->activeMethodIds[]                   = $methodId;
+        $this->methodClassLikeAnalyses[$methodId]  = $analysis;
         $analysis->complexityByMethodId[$methodId] = 1;
     }
 
