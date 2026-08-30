@@ -73,7 +73,11 @@ final readonly class AnalysisNodeExtractor
             $analysisNodeCollector->getAnonymousFunctionNodes(),
         );
 
-        $this->analysisResultCache?->storeExtractionResult($files, $this->analysisNodeCacheNamespace, $extractionResult);
+        $this->analysisResultCache?->storeExtractionResult(
+            $files,
+            $this->analysisNodeCacheNamespace,
+            $extractionResult
+        );
 
         return $extractionResult;
     }
