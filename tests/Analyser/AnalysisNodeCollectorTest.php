@@ -766,6 +766,24 @@ final class AnalysisNodeCollectorTest extends TestCase
         $this->assertSame(['label'], array_column($classNode->methods, 'name'));
     }
 
+    public function testResolvesImportedClassNameInEnumCaseValue(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            namespace App;
+
+            use Vendor\Foo as AliasedFoo;
+
+            enum Type: string
+            {
+                case Foo = AliasedFoo::class;
+                case Own = self::class;
+            }
+            PHP);
+
+        $this->assertSame(['Vendor\Foo', 'App\Type'], array_column($classNode->enumCases, 'value'));
+    }
+
     public function testCollectsIntBackedEnumCaseValues(): void
     {
         $classNode = $this->collect(

@@ -178,12 +178,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * Class-like member statements collected on enter, see collectMember().
+     * EnumCase is collected on leave instead: its value expression may hold
+     * class names that the NameResolver only resolves on entering the
+     * expression's own nodes, after this visitor has entered the case.
      */
     private const MEMBER_NODES = [
         Property::class   => true,
         ClassConst::class => true,
         TraitUse::class   => true,
-        EnumCase::class   => true,
     ];
 
     /**
@@ -226,6 +228,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
         ClassMethod::class        => true,
+        EnumCase::class           => true,
         Function_::class          => true,
         Class_::class             => true,
         Interface_::class         => true,
@@ -599,6 +602,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
+        if ($node instanceof EnumCase) {
+            $this->collectEnumCase($node);
+
+            return null;
+        }
+
         if ($node instanceof Function_) {
             $this->finishFunctionLikeAnalysis();
             array_pop($this->activeFunctionNames);
@@ -749,25 +758,26 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        if ($stmt instanceof TraitUse) {
-            if ($analysis->isInterface) {
-                return;
-            }
-
+        if ($stmt instanceof TraitUse && ! $analysis->isInterface) {
             foreach ($stmt->traits as $trait) {
                 $analysis->traits[] = $trait->toString();
             }
+        }
+    }
 
+    private function collectEnumCase(EnumCase $enumCase): void
+    {
+        $analysis = $this->declaringClassLikeAnalysis();
+
+        if (! $analysis instanceof ClassLikeAnalysis) {
             return;
         }
 
-        if ($stmt instanceof EnumCase) {
-            $analysis->enumCases[] = new EnumCaseNode(
-                name:  (string) $stmt->name,
-                line:  $stmt->getStartLine(),
-                value: $this->resolveEnumCaseValue($stmt->expr),
-            );
-        }
+        $analysis->enumCases[] = new EnumCaseNode(
+            name:  (string) $enumCase->name,
+            line:  $enumCase->getStartLine(),
+            value: $this->resolveEnumCaseValue($enumCase->expr),
+        );
     }
 
     /**
