@@ -590,7 +590,39 @@ final class AnalysisResultCacheTest extends TestCase
             $analysisResultCache->storeExtractionResult(
                 [$fileWithNodes, $fileWithoutNodes],
                 'namespace',
-                new ExtractionResult([$this->makeClassNode($fileWithNodes)], [])
+                new ExtractionResult(
+                    classNodes: [$this->makeClassNode($fileWithNodes)],
+                    fileAnalyses: [],
+                    anonymousClassNodes: [new AnonymousClassNode(file: $fileWithNodes, line: 7, extends: null)],
+                    functionNodes: [
+                        new FunctionNode(
+                            functionName:         'App\\format',
+                            file:                 $fileWithNodes,
+                            line:                 3,
+                            layer:                'Source',
+                            hasReturnType:        true,
+                            paramCount:           0,
+                            cyclomaticComplexity: 1,
+                            lineCount:            1,
+                        ),
+                    ],
+                    anonymousFunctionNodes: [
+                        new AnonymousFunctionNode(
+                            file:                  $fileWithNodes,
+                            line:                  5,
+                            layer:                 null,
+                            isArrowFunction:       true,
+                            isStatic:              true,
+                            enclosingClassName:    null,
+                            enclosingFunctionName: 'App\\format',
+                            usesThis:              false,
+                            hasReturnType:         false,
+                            paramCount:            0,
+                            cyclomaticComplexity:  1,
+                            lineCount:             1,
+                        ),
+                    ],
+                )
             );
 
             $withNodes    = $analysisResultCache->loadAnalysisNodes($fileWithNodes, 'namespace');
@@ -598,8 +630,12 @@ final class AnalysisResultCacheTest extends TestCase
 
             $this->assertNotNull($withNodes);
             $this->assertCount(1, $withNodes['classNodes']);
+            $this->assertCount(1, $withNodes['anonymousClassNodes']);
+            $this->assertCount(1, $withNodes['functionNodes']);
+            $this->assertCount(1, $withNodes['anonymousFunctionNodes']);
             $this->assertNotNull($withoutNodes);
             $this->assertSame([], $withoutNodes['classNodes']);
+            $this->assertSame([], $withoutNodes['functionNodes']);
         } finally {
             $this->removeTempDirectory($cacheDirectory);
         }
