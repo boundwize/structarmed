@@ -135,8 +135,64 @@ final class AnalyserTest extends TestCase
                 . '}' . "\n",
             'src/Skipped/skip.php' => '<?php' . "\n"
                 . 'namespace App\\Skipped;' . "\n"
-                . 'function skipped(): string { return $_GET["x"]; }' . "\n",
+                . 'function skipped(): string { return $_GET["x"]; }' . "\n"
+                . '$skippedClosure = fn () => $_GET["x"];' . "\n",
         ];
+    }
+
+    public function testFunctionRulesSkipNodesTheyDoNotApplyTo(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles() + [
+            'other/helpers.php' => '<?php' . "\n"
+                . 'namespace Other;' . "\n"
+                . 'function dirty(): string { return $_GET["x"]; }' . "\n"
+                . '$closure = fn () => $_POST["y"];' . "\n",
+        ]);
+
+        // The rule applies to the Source layer only; nodes in Other are seen
+        // by the analyser but the rule declines them.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layer('Other', 'other/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skip(['functions.no_superglobals' => ['src/Skipped/']]);
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $violations);
+
+        foreach ($violations as $violation) {
+            $this->assertStringNotContainsString('/other/', $this->normalisePath($violation->file));
+        }
+    }
+
+    public function testFunctionRulesHonourGlobalSkipPathsForPreResolvedFiles(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles());
+
+        // A caller-supplied file list bypasses file discovery, so a globally
+        // skipped file can reach extraction; its nodes must still be skipped.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skipPaths(['src/Skipped/']);
+
+        $files      = [
+            $basePath . '/src/helpers.php',
+            $basePath . '/src/Handler.php',
+            $basePath . '/src/Skipped/skip.php',
+        ];
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential(), $files)
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $violations);
+
+        foreach ($violations as $violation) {
+            $this->assertStringNotContainsString('/Skipped/', $this->normalisePath($violation->file));
+        }
     }
 
     public function testFunctionRulesAreEvaluatedAgainstFunctionsAndAnonymousFunctions(): void

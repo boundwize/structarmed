@@ -346,6 +346,16 @@ final class FunctionLikeCollectionTest extends TestCase
         $this->assertTrue($anonymousFunctionNodes[4]->isStatic);
     }
 
+    public function testIgnoresVariableVariablesWhenTrackingThisAndSuperglobals(): void
+    {
+        $anonymousFunctionNode = $this->collectAnonymousFunction(
+            '<?php $name = "this"; $fn = function () use ($name) { return $$name; };'
+        );
+
+        $this->assertFalse($anonymousFunctionNode->usesThis);
+        $this->assertFalse($anonymousFunctionNode->accessesSuperglobals());
+    }
+
     public function testTracksThisUsageInTopLevelClosure(): void
     {
         $anonymousFunctionNode = $this->collectAnonymousFunction(
