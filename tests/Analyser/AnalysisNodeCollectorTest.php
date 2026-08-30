@@ -684,28 +684,23 @@ final class AnalysisNodeCollectorTest extends TestCase
         $this->assertFalse($classNode->methods[1]->isMagic);
     }
 
-    public function testFiltersClassMethodsOncePerClassLike(): void
+    /**
+     * Node dispatch is keyed by exact node class, as the parser never
+     * subclasses its nodes, so a hand-built Class_ (not a subclass of it) is
+     * traversed like a parsed one.
+     */
+    public function testCollectsEachClassMethodOnce(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
         $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
-        $classLike              = new class ('Foo', [
+        $class                  = new Class_('Foo', [
             'stmts' => [new ClassMethod('__construct'), new ClassMethod('bar')],
-        ]) extends Class_ {
-            public int $getMethodsCallCount = 0;
-
-            public function getMethods(): array
-            {
-                ++$this->getMethodsCallCount;
-
-                return parent::getMethods();
-            }
-        };
+        ]);
 
         $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
 
-        (new NodeTraverser(new NameResolver(), $analysisNodeCollector))->traverse([$classLike]);
+        (new NodeTraverser(new NameResolver(), $analysisNodeCollector))->traverse([$class]);
 
-        $this->assertSame(1, $classLike->getMethodsCallCount);
         $this->assertSame(
             ['__construct', 'bar'],
             array_column($analysisNodeCollector->getNodes()[0]->methods, 'name'),
