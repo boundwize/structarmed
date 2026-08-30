@@ -47,11 +47,19 @@ use const JSON_THROW_ON_ERROR;
 final class AnalysisResultCache
 {
     /**
-     * Marker file recording the config and structarmed version hashes the cache
-     * contents were built with. Never collides with payload files: those are
-     * named by hex hash keys or a "class-nodes-" prefix.
+     * Marker file recording the cache format version and the config and
+     * structarmed version hashes the cache contents were built with. Never
+     * collides with payload files: those are named by hex hash keys or an
+     * "analysis-nodes-" prefix.
      */
     private const METADATA_FILE = '_metadata.json';
+
+    /**
+     * Format version of the analysis-node payload files. Bump it whenever
+     * their shape or naming changes: it is recorded in the metadata marker,
+     * so a cache written by an older format is cleared on its next use.
+     */
+    public const FORMAT_VERSION = 1;
 
     private readonly string $cacheDirectory;
 
@@ -147,7 +155,8 @@ final class AnalysisResultCache
     /**
      * Compares against the single metadata marker instead of scanning every
      * payload, so the check stays O(1) regardless of cache size. A populated
-     * cache without a marker predates this format and must be invalidated.
+     * cache without a marker, or with a marker from an older cache format
+     * version, must be invalidated.
      */
     public function shouldInvalidate(): bool
     {
@@ -157,7 +166,8 @@ final class AnalysisResultCache
 
         $payload = $this->readPath($this->cacheDirectory . '/' . self::METADATA_FILE);
 
-        return ($payload['configHash'] ?? null) !== $this->configHash
+        return ($payload['version'] ?? null) !== self::FORMAT_VERSION
+            || ($payload['configHash'] ?? null) !== $this->configHash
             || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash;
     }
 
@@ -175,6 +185,7 @@ final class AnalysisResultCache
 
         if (! file_exists($metadataFile)) {
             file_put_contents($metadataFile, json_encode([
+                'version'                      => self::FORMAT_VERSION,
                 'configHash'                   => $this->configHash,
                 'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash,
             ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
@@ -1177,7 +1188,7 @@ final class AnalysisResultCache
 
     private function analysisNodesKey(string $file, string $namespace): string
     {
-        return 'class-nodes-' . hash('xxh128', $namespace . "\0" . $file);
+        return 'analysis-nodes-' . hash('xxh128', $namespace . "\0" . $file);
     }
 
     /**

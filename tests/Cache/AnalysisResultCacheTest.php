@@ -411,6 +411,45 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testCacheFromOlderFormatVersionIsInvalidated(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'same',
+            'composer-hash',
+        );
+
+        try {
+            // A marker written by a release before the format version was
+            // recorded, or by an older format version, with otherwise
+            // matching hashes.
+            file_put_contents($cacheDirectory . '/_metadata.json', json_encode([
+                'configHash'                   => 'same',
+                'composerGeneratedVersionHash' => 'composer-hash',
+            ], JSON_THROW_ON_ERROR));
+
+            $this->assertTrue($analysisResultCache->shouldInvalidate());
+
+            file_put_contents($cacheDirectory . '/_metadata.json', json_encode([
+                'version'                      => AnalysisResultCache::FORMAT_VERSION - 1,
+                'configHash'                   => 'same',
+                'composerGeneratedVersionHash' => 'composer-hash',
+            ], JSON_THROW_ON_ERROR));
+
+            $this->assertTrue($analysisResultCache->shouldInvalidate());
+
+            $analysisResultCache->clear();
+            $analysisResultCache->store('key', [], new RuleViolationCollection());
+
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testPopulatedCacheWithoutMetadataMarkerIsInvalidated(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
@@ -1177,7 +1216,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'layers'             => [],
                     ],
                 ],
-            ], 'class-nodes-' . hash('xxh128', "config\0" . $sourceFile) . '.json');
+            ], 'analysis-nodes-' . hash('xxh128', "config\0" . $sourceFile) . '.json');
 
             $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
