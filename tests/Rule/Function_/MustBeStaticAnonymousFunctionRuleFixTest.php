@@ -23,6 +23,57 @@ final class MustBeStaticAnonymousFunctionRuleFixTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
 
+    public function testFixDoesNotChangeOtherAnonymousFunctionOnSameLine(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-static-closure-line');
+        mkdir($basePath . '/src');
+
+        $file = $basePath . '/src/Handler.php';
+
+        file_put_contents(
+            $file,
+            "<?php\n\n"
+            . "namespace App;\n\n"
+            . "final class Handler\n"
+            . "{\n"
+            . "    public function handle(): array\n"
+            . "    {\n"
+            . "        return [fn () => 1, fn () => \$this->value, function () { return 2; }];\n"
+            . "    }\n"
+            . "}\n"
+        );
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.static_closures');
+
+        $this->assertCount(2, $violations);
+        $this->assertSame(9, $violations[0]->line);
+        $this->assertSame(9, $violations[1]->line);
+
+        $rule = $architecture->getRules()['source.static_closures'];
+        $this->assertInstanceOf(MustBeStaticAnonymousFunctionRule::class, $rule);
+
+        $this->assertTrue($rule->fix($violations[0]));
+
+        $this->assertSame(
+            "<?php\n\n"
+            . "namespace App;\n\n"
+            . "final class Handler\n"
+            . "{\n"
+            . "    public function handle(): array\n"
+            . "    {\n"
+            . "        return [static fn () => 1, fn () => \$this->value, static function () { return 2; }];\n"
+            . "    }\n"
+            . "}\n",
+            file_get_contents($file)
+        );
+    }
+
     public function testAnalyseThenFixAddsStaticOnlyToFlaggedAnonymousFunctions(): void
     {
         $basePath = $this->makeTemporaryDirectory('structarmed-static-closure');
