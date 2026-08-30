@@ -13,6 +13,7 @@ use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
+use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
@@ -34,6 +35,7 @@ use function json_decode;
 use function json_encode;
 use function mkdir;
 use function rmdir;
+use function rtrim;
 use function sprintf;
 use function unlink;
 
@@ -63,6 +65,9 @@ final class AnalysisResultCache
 
     private readonly string $cacheDirectory;
 
+    /** Hash of the project composer.json: its PSR-4 mappings decide layer assignments. */
+    private readonly string $composerHash;
+
     private bool $isCacheInitialised = false;
 
     public function __construct(
@@ -71,8 +76,11 @@ final class AnalysisResultCache
         ?string $cacheDirectory = null,
         private readonly string $configHash = '',
         private readonly string $composerGeneratedVersionHash = '',
+        private readonly ComposerJsonProvider $composerJsonProvider = new ComposerJsonProvider(),
     ) {
         $this->cacheDirectory = CachePathFactory::getPath($cacheDirectory, $basePath);
+        $composerFile         = rtrim($basePath, '/') . '/composer.json';
+        $this->composerHash   = file_exists($composerFile) ? $fileHashProvider->hash($composerFile) : '';
     }
 
     /**
@@ -130,6 +138,7 @@ final class AnalysisResultCache
     {
         $this->isCacheInitialised = false;
         $this->fileHashProvider->clear();
+        $this->composerJsonProvider->clear();
 
         if (! is_dir($this->cacheDirectory)) {
             return;
@@ -168,7 +177,8 @@ final class AnalysisResultCache
 
         return ($payload['version'] ?? null) !== self::FORMAT_VERSION
             || ($payload['configHash'] ?? null) !== $this->configHash
-            || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash;
+            || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash
+            || ($payload['composerHash'] ?? null) !== $this->composerHash;
     }
 
     private function ensureCacheInitialised(): void
@@ -188,6 +198,7 @@ final class AnalysisResultCache
                 'version'                      => self::FORMAT_VERSION,
                 'configHash'                   => $this->configHash,
                 'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash,
+                'composerHash'                 => $this->composerHash,
             ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
         }
 

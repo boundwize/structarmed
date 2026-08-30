@@ -29,7 +29,7 @@ return Architecture::define()
     ->ruleset([
         'Analyser'      => ['+Cache', 'Composer', 'LayerResolver', 'Progress', 'Util'],
         'Baseline'      => ['Core', 'Rule', 'Util'],
-        'Cache'         => ['Analyser', 'Core', 'Rule', 'Util'],
+        'Cache'         => ['Analyser', 'Composer', 'Core', 'Rule', 'Util'],
         'Cli'           => ['Baseline', '+Cache', 'Config', 'Progress', 'Report', 'Util'],
         'Composer'      => ['Util'],
         'Config'        => ['Core'],

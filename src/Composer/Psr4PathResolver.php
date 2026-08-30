@@ -8,23 +8,16 @@ use Boundwize\StructArmed\Util\Path;
 
 use function array_merge;
 use function array_values;
-use function file_exists;
-use function file_get_contents;
 use function is_array;
-use function is_int;
 use function is_string;
-use function json_decode;
 use function trim;
 
-final class Psr4PathResolver
+final readonly class Psr4PathResolver
 {
-    /**
-     * Decoded composer.json per file, keyed by raw contents so a rewritten file
-     * is re-decoded while repeated reads of an unchanged file are not.
-     *
-     * @var array<string, array{string, array<string, mixed>|null}>
-     */
-    private static array $decodedByFile = [];
+    public function __construct(
+        private ComposerJsonProvider $composerJsonProvider = new ComposerJsonProvider(),
+    ) {
+    }
 
     /**
      * @return list<string>
@@ -79,45 +72,7 @@ final class Psr4PathResolver
      */
     public function composerConfig(string $basePath): ?array
     {
-        $composerFile = Path::normalise(Path::resolve('composer.json', $basePath), canonicalise: true);
-
-        if (! file_exists($composerFile)) {
-            return null;
-        }
-
-        $contents = (string) file_get_contents($composerFile);
-
-        if (isset(self::$decodedByFile[$composerFile]) && self::$decodedByFile[$composerFile][0] === $contents) {
-            return self::$decodedByFile[$composerFile][1];
-        }
-
-        self::$decodedByFile[$composerFile] = [$contents, $this->decode($contents)];
-
-        return self::$decodedByFile[$composerFile][1];
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function decode(string $contents): ?array
-    {
-        $composer = json_decode($contents, true);
-
-        if (! is_array($composer)) {
-            return null;
-        }
-
-        $config = [];
-
-        foreach ($composer as $key => $value) {
-            if (is_int($key)) {
-                return null;
-            }
-
-            $config[$key] = $value;
-        }
-
-        return $config;
+        return $this->composerJsonProvider->config($basePath);
     }
 
     /**

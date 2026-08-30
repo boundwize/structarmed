@@ -450,6 +450,29 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testCacheIsInvalidatedWhenComposerJsonChanges(): void
+    {
+        $basePath       = $this->createTempDirectory();
+        $cacheDirectory = $this->createTempDirectory();
+        file_put_contents($basePath . '/composer.json', '{"autoload": {"psr-4": {"App\\\\": "src/"}}}');
+
+        try {
+            $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), $cacheDirectory);
+            $analysisResultCache->store('key', [], new RuleViolationCollection());
+
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
+
+            file_put_contents($basePath . '/composer.json', '{"autoload": {"psr-4": {"App\\\\": "lib/"}}}');
+
+            $this->assertTrue(
+                (new AnalysisResultCache($basePath, new FileHashProvider(), $cacheDirectory))->shouldInvalidate()
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testPopulatedCacheWithoutMetadataMarkerIsInvalidated(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
