@@ -40,7 +40,6 @@ use function getcwd;
 use function in_array;
 use function is_dir;
 use function is_file;
-use function rtrim;
 use function sprintf;
 use function str_starts_with;
 use function strtolower;
@@ -1366,7 +1365,7 @@ final readonly class Analyser
      * parent, so it is omitted. Files are kept as-is: they are cheap and
      * preserving them keeps the resulting order stable.
      *
-     * @param list<string> $paths Canonicalised absolute paths
+     * @param list<string> $paths Normalised absolute paths (no trailing slash)
      * @return list<string>
      */
     private function traversalRoots(array $paths): array
@@ -1377,7 +1376,7 @@ final readonly class Analyser
         foreach ($paths as $path) {
             if (in_array($path, $directories, true)) {
                 foreach ($directories as $directory) {
-                    if ($directory !== $path && str_starts_with($path, rtrim($directory, '/') . '/')) {
+                    if (str_starts_with($path, $directory . '/')) {
                         continue 2;
                     }
                 }

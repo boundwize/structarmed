@@ -30,6 +30,14 @@ final class PathTest extends TestCase
         yield 'windows UNC forward slashes' => ['//server/share//src/', '//server/share/src'];
     }
 
+    public function testNormaliseCanonicalisedDirectoryHasNoTrailingSlash(): void
+    {
+        $normalised = Path::normalise(__DIR__ . '/', canonicalise: true);
+
+        $this->assertStringEndsNotWith('/', $normalised);
+        $this->assertSame(Path::normalise(__DIR__, canonicalise: true), $normalised);
+    }
+
     #[DataProvider('provideNormalise')]
     public function testNormalise(string $path, string $expected): void
     {
