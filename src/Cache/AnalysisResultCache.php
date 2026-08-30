@@ -212,7 +212,7 @@ final class AnalysisResultCache
             return null;
         }
 
-        return $this->analysisNodeResultFromPayload($payload);
+        return $this->analysisNodeResultFromPayload($payload, $file);
     }
 
     /**
@@ -242,7 +242,7 @@ final class AnalysisResultCache
             return null;
         }
 
-        $result = $this->analysisNodeResultFromPayload($payload);
+        $result = $this->analysisNodeResultFromPayload($payload, $file);
 
         if ($result === null) {
             return null;
@@ -264,14 +264,14 @@ final class AnalysisResultCache
      *     anonymousFunctionNodes: list<AnonymousFunctionNode>
      * }|null
      */
-    private function analysisNodeResultFromPayload(array $payload): ?array
+    private function analysisNodeResultFromPayload(array $payload, string $file): ?array
     {
         $classNodes             = $this->classNodesFromPayload($payload);
         $anonymousClassNodes    = $this->anonymousClassNodesFromPayload($payload);
         $fileReferences         = $this->fileReferencesFromPayload($payload);
         $fileInstantiations     = $this->fileInstantiationsFromPayload($payload);
-        $functionNodes          = $this->functionNodesFromPayload($payload);
-        $anonymousFunctionNodes = $this->anonymousFunctionNodesFromPayload($payload);
+        $functionNodes          = $this->functionNodesFromPayload($payload, $file);
+        $anonymousFunctionNodes = $this->anonymousFunctionNodesFromPayload($payload, $file);
 
         if (
             $classNodes === null
@@ -358,17 +358,24 @@ final class AnalysisResultCache
         $this->ensureCacheInitialised();
 
         $payload = [
-            'metadata'               => $this->fileMetadata($file, $namespace),
-            'nodes'                  => array_map($this->classNodeToArray(...), $classNodes),
-            'anonymousClassNodes'    => array_map($this->anonymousClassNodeToArray(...), $anonymousClassNodes),
-            'fileReferences'         => $fileReferences,
-            'fileInstantiations'     => $fileInstantiations,
-            'functionNodes'          => array_map($this->functionNodeToArray(...), $functionNodes),
-            'anonymousFunctionNodes' => array_map(
+            'metadata'            => $this->fileMetadata($file, $namespace),
+            'nodes'               => array_map($this->classNodeToArray(...), $classNodes),
+            'anonymousClassNodes' => array_map($this->anonymousClassNodeToArray(...), $anonymousClassNodes),
+            'fileReferences'      => $fileReferences,
+            'fileInstantiations'  => $fileInstantiations,
+        ];
+
+        // Most files declare no function-likes; leave their keys out entirely.
+        if ($functionNodes !== []) {
+            $payload['functionNodes'] = array_map($this->functionNodeToArray(...), $functionNodes);
+        }
+
+        if ($anonymousFunctionNodes !== []) {
+            $payload['anonymousFunctionNodes'] = array_map(
                 $this->anonymousFunctionNodeToArray(...),
                 $anonymousFunctionNodes
-            ),
-        ];
+            );
+        }
 
         if ($fileAnalysis instanceof FileAnalysis) {
             $payload['fileAnalysis'] = $this->fileAnalysisToArray($fileAnalysis);
@@ -536,28 +543,78 @@ final class AnalysisResultCache
      */
     private function functionNodeToArray(FunctionNode $functionNode): array
     {
-        return [
-            'functionName'         => $functionNode->functionName,
-            'file'                 => $functionNode->file,
-            'line'                 => $functionNode->line,
-            'layer'                => $functionNode->layer,
-            'hasReturnType'        => $functionNode->hasReturnType,
-            'paramCount'           => $functionNode->paramCount,
-            'cyclomaticComplexity' => $functionNode->cyclomaticComplexity,
-            'lineCount'            => $functionNode->lineCount,
-            'dependencies'         => $functionNode->dependencies,
-            'functionCalls'        => array_values($functionNode->functionCalls),
-            'superglobals'         => array_values($functionNode->superglobals),
-            'languageConstructs'   => array_values($functionNode->languageConstructs),
-            'layers'               => $functionNode->layers,
+        return ['functionName' => $functionNode->functionName] + $this->functionLikeBodyToArray(
+            $functionNode->line,
+            $functionNode->layer,
+            $functionNode->hasReturnType,
+            $functionNode->paramCount,
+            $functionNode->cyclomaticComplexity,
+            $functionNode->lineCount,
+            $functionNode->dependencies,
+            $functionNode->functionCalls,
+            $functionNode->superglobals,
+            $functionNode->languageConstructs,
+            $functionNode->layers,
+        );
+    }
+
+    /**
+     * The fields FunctionNode and AnonymousFunctionNode share. The file is
+     * not stored: the payload belongs to one file, known when loading. Empty
+     * lists — the common case for a closure — are left out and default on
+     * load, which keeps the many small function-like entries small.
+     *
+     * @param list<string> $dependencies
+     * @param string[]     $functionCalls
+     * @param string[]     $superglobals
+     * @param string[]     $languageConstructs
+     * @param list<string> $layers
+     * @return array<string, mixed>
+     */
+    private function functionLikeBodyToArray(
+        int $line,
+        ?string $layer,
+        bool $hasReturnType,
+        int $paramCount,
+        int $cyclomaticComplexity,
+        int $lineCount,
+        array $dependencies,
+        array $functionCalls,
+        array $superglobals,
+        array $languageConstructs,
+        array $layers,
+    ): array {
+        $body = [
+            'line'                 => $line,
+            'layer'                => $layer,
+            'hasReturnType'        => $hasReturnType,
+            'paramCount'           => $paramCount,
+            'cyclomaticComplexity' => $cyclomaticComplexity,
+            'lineCount'            => $lineCount,
         ];
+
+        $lists = [
+            'dependencies'       => $dependencies,
+            'functionCalls'      => $functionCalls,
+            'superglobals'       => $superglobals,
+            'languageConstructs' => $languageConstructs,
+            'layers'             => $layers,
+        ];
+
+        foreach ($lists as $key => $list) {
+            if ($list !== []) {
+                $body[$key] = array_values($list);
+            }
+        }
+
+        return $body;
     }
 
     /**
      * @param array<string, mixed> $payload
      * @return list<FunctionNode>|null
      */
-    private function functionNodesFromPayload(array $payload): ?array
+    private function functionNodesFromPayload(array $payload, string $file): ?array
     {
         $rawNodes = $payload['functionNodes'] ?? [];
 
@@ -573,7 +630,7 @@ final class AnalysisResultCache
             }
 
             $functionName = $rawNode['functionName'] ?? null;
-            $body         = $this->functionLikeBodyFromArray($rawNode);
+            $body         = $this->functionLikeBodyFromArray($rawNode, $file);
 
             if (! is_string($functionName) || $body === null) {
                 return null;
@@ -605,31 +662,31 @@ final class AnalysisResultCache
     private function anonymousFunctionNodeToArray(AnonymousFunctionNode $anonymousFunctionNode): array
     {
         return [
-            'file'                  => $anonymousFunctionNode->file,
-            'line'                  => $anonymousFunctionNode->line,
-            'layer'                 => $anonymousFunctionNode->layer,
             'isArrowFunction'       => $anonymousFunctionNode->isArrowFunction,
             'isStatic'              => $anonymousFunctionNode->isStatic,
             'enclosingClassName'    => $anonymousFunctionNode->enclosingClassName,
             'enclosingFunctionName' => $anonymousFunctionNode->enclosingFunctionName,
             'usesThis'              => $anonymousFunctionNode->usesThis,
-            'hasReturnType'         => $anonymousFunctionNode->hasReturnType,
-            'paramCount'            => $anonymousFunctionNode->paramCount,
-            'cyclomaticComplexity'  => $anonymousFunctionNode->cyclomaticComplexity,
-            'lineCount'             => $anonymousFunctionNode->lineCount,
-            'dependencies'          => $anonymousFunctionNode->dependencies,
-            'functionCalls'         => array_values($anonymousFunctionNode->functionCalls),
-            'superglobals'          => array_values($anonymousFunctionNode->superglobals),
-            'languageConstructs'    => array_values($anonymousFunctionNode->languageConstructs),
-            'layers'                => $anonymousFunctionNode->layers,
-        ];
+        ] + $this->functionLikeBodyToArray(
+            $anonymousFunctionNode->line,
+            $anonymousFunctionNode->layer,
+            $anonymousFunctionNode->hasReturnType,
+            $anonymousFunctionNode->paramCount,
+            $anonymousFunctionNode->cyclomaticComplexity,
+            $anonymousFunctionNode->lineCount,
+            $anonymousFunctionNode->dependencies,
+            $anonymousFunctionNode->functionCalls,
+            $anonymousFunctionNode->superglobals,
+            $anonymousFunctionNode->languageConstructs,
+            $anonymousFunctionNode->layers,
+        );
     }
 
     /**
      * @param array<string, mixed> $payload
      * @return list<AnonymousFunctionNode>|null
      */
-    private function anonymousFunctionNodesFromPayload(array $payload): ?array
+    private function anonymousFunctionNodesFromPayload(array $payload, string $file): ?array
     {
         $rawNodes = $payload['anonymousFunctionNodes'] ?? [];
 
@@ -649,7 +706,7 @@ final class AnalysisResultCache
             $enclosingClassName    = $rawNode['enclosingClassName'] ?? null;
             $enclosingFunctionName = $rawNode['enclosingFunctionName'] ?? null;
             $usesThis              = $rawNode['usesThis'] ?? null;
-            $body                  = $this->functionLikeBodyFromArray($rawNode);
+            $body                  = $this->functionLikeBodyFromArray($rawNode, $file);
 
             if (
                 ! is_bool($isArrowFunction)
@@ -705,24 +762,22 @@ final class AnalysisResultCache
      *     layers: list<string>
      * }|null
      */
-    private function functionLikeBodyFromArray(array $node): ?array
+    private function functionLikeBodyFromArray(array $node, string $file): ?array
     {
-        $file                 = $node['file'] ?? null;
         $line                 = $node['line'] ?? null;
         $layer                = $node['layer'] ?? null;
         $hasReturnType        = $node['hasReturnType'] ?? null;
         $paramCount           = $node['paramCount'] ?? null;
         $cyclomaticComplexity = $node['cyclomaticComplexity'] ?? null;
         $lineCount            = $node['lineCount'] ?? null;
-        $dependencies         = $node['dependencies'] ?? null;
-        $functionCalls        = $node['functionCalls'] ?? null;
-        $superglobals         = $node['superglobals'] ?? null;
-        $languageConstructs   = $node['languageConstructs'] ?? null;
-        $layers               = $node['layers'] ?? null;
+        $dependencies         = $node['dependencies'] ?? [];
+        $functionCalls        = $node['functionCalls'] ?? [];
+        $superglobals         = $node['superglobals'] ?? [];
+        $languageConstructs   = $node['languageConstructs'] ?? [];
+        $layers               = $node['layers'] ?? [];
 
         if (
-            ! is_string($file)
-            || ! is_int($line)
+            ! is_int($line)
             || ($layer !== null && ! is_string($layer))
             || ! is_bool($hasReturnType)
             || ! is_int($paramCount)

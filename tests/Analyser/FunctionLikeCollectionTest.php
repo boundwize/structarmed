@@ -94,7 +94,7 @@ final class FunctionLikeCollectionTest extends TestCase
         $this->assertSame(0, $functionNode->lineCount);
     }
 
-    public function testCollectsFunctionDependenciesIncludingNamespaceImports(): void
+    public function testCollectsFunctionDependenciesWithoutSeedingNamespaceImports(): void
     {
         $functionNode = $this->collectFunction(
             '<?php namespace App\Domain;' . "\n"
@@ -104,8 +104,10 @@ final class FunctionLikeCollectionTest extends TestCase
             . ' $x = \App\Domain\Order::class; }'
         );
 
+        // Unlike a class-like, the function does not inherit the unused
+        // LoggerInterface import: a file's imports are not each function's.
         $this->assertSame(
-            ['App\Infrastructure\Mailer', 'Psr\Log\LoggerInterface', 'DateTimeImmutable', 'App\Domain\Order'],
+            ['App\Infrastructure\Mailer', 'DateTimeImmutable', 'App\Domain\Order'],
             $functionNode->dependencies
         );
     }
@@ -248,7 +250,7 @@ final class FunctionLikeCollectionTest extends TestCase
         $this->assertSame('App\Domain\Handler', $anonymousFunctionNode->enclosingScopeName());
         $this->assertSame(5, $anonymousFunctionNode->line);
 
-        // The closure does not inherit the namespace imports; the class does.
+        // Neither function-like inherits the namespace imports; the class does.
         $this->assertSame(['App\Infrastructure\Mailer'], $anonymousFunctionNode->dependencies);
         $this->assertSame(['App\Infrastructure\Mailer'], $classNode->dependencies);
 

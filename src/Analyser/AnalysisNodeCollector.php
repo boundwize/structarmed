@@ -440,7 +440,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
                 $this->fileFunctions[$functionName] = true;
                 $this->activeFunctionNames[]        = $functionName;
-                $this->startFunctionLikeAnalysis($node, $this->currentNamespaceUses);
+                $this->startFunctionLikeAnalysis($node);
 
                 return null;
             }
@@ -628,21 +628,18 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
-     * A named function seeds its dependencies with the namespace imports, as
-     * a class-like does; a closure or arrow function only records what its
-     * own body references.
-     *
-     * @param list<string> $dependencies
+     * Unlike a class-like, a function-like does not seed its dependencies
+     * with the namespace imports: a file may declare hundreds of functions,
+     * and its imports belong to the file, not to each of them. Only what the
+     * signature and body reference is recorded.
      */
-    private function startFunctionLikeAnalysis(FunctionLike $functionLike, array $dependencies = []): void
+    private function startFunctionLikeAnalysis(FunctionLike $functionLike): void
     {
         $functionLikeAnalysis = new FunctionLikeAnalysis(
             $functionLike,
             $this->innermostActiveClassLikeName(),
             $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
         );
-
-        $functionLikeAnalysis->dependencies = $dependencies;
 
         $this->activeFunctionLikeAnalyses[] = $functionLikeAnalysis;
         $this->fileFunctionLikeAnalyses[]   = $functionLikeAnalysis;

@@ -747,6 +747,24 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertEquals($functionNodes, $loaded['functionNodes']);
             $this->assertEquals($anonymousFunctionNodes, $loaded['anonymousFunctionNodes']);
 
+            // Compact payload: no per-node file, and empty lists are omitted.
+            $payload = json_decode((string) file_get_contents($this->firstJsonFile($cacheDirectory)), true);
+
+            $this->assertIsArray($payload);
+            $this->assertIsArray($payload['functionNodes']);
+            $this->assertIsArray($payload['anonymousFunctionNodes']);
+
+            $storedFunction = $payload['functionNodes'][0];
+            $storedClosure  = $payload['anonymousFunctionNodes'][0];
+
+            $this->assertIsArray($storedFunction);
+            $this->assertIsArray($storedClosure);
+            $this->assertArrayNotHasKey('file', $storedFunction);
+            $this->assertArrayNotHasKey('file', $storedClosure);
+            $this->assertArrayNotHasKey('superglobals', $storedClosure);
+            $this->assertArrayNotHasKey('layers', $storedClosure);
+            $this->assertSame(['App\\helper'], $storedClosure['functionCalls']);
+
             // Function-likes also survive the file-analysis load path.
             $analysisResultCache->storeAnalysisNodes(
                 $sourceFile,
@@ -774,7 +792,7 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testClassNodesLoadOldCachePayloadWithoutFunctionLikeNodes(): void
+    public function testFilesWithoutFunctionLikesOmitTheirKeysAndLoadAsEmpty(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -786,12 +804,11 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', []);
 
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-            $payload   = json_decode((string) file_get_contents($cacheFile), true);
+            $payload = json_decode((string) file_get_contents($this->firstJsonFile($cacheDirectory)), true);
 
             $this->assertIsArray($payload);
-            unset($payload['functionNodes'], $payload['anonymousFunctionNodes']);
-            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
+            $this->assertArrayNotHasKey('functionNodes', $payload);
+            $this->assertArrayNotHasKey('anonymousFunctionNodes', $payload);
 
             $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config');
 
@@ -887,7 +904,7 @@ final class AnalysisResultCacheTest extends TestCase
             ['anonymousFunctionNodes' => [['enclosingFunctionName' => 1] + $validClosure]],
         ];
         yield 'anonymous function node with invalid body' => [
-            ['anonymousFunctionNodes' => [['file' => 1] + $validClosure]],
+            ['anonymousFunctionNodes' => [['lineCount' => '0'] + $validClosure]],
         ];
     }
 
