@@ -784,6 +784,28 @@ final class AnalysisNodeCollectorTest extends TestCase
         $this->assertSame(['Vendor\Foo', 'App\Type'], array_column($classNode->enumCases, 'value'));
     }
 
+    public function testIgnoresEnumCaseDeclaredInAnonymousClass(): void
+    {
+        // php-parser accepts a case in a class body; only PHP's compiler
+        // rejects it, so the collector must not attribute it to any class.
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            enum Outer: int
+            {
+                case One = 1;
+
+                public function make(): object
+                {
+                    return new class {
+                        case Stray = 2;
+                    };
+                }
+            }
+            PHP);
+
+        $this->assertSame(['One'], array_column($classNode->enumCases, 'name'));
+    }
+
     public function testCollectsIntBackedEnumCaseValues(): void
     {
         $classNode = $this->collect(
