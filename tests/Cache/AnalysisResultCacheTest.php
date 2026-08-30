@@ -613,7 +613,6 @@ final class AnalysisResultCacheTest extends TestCase
                             layer:                 null,
                             isArrowFunction:       true,
                             isStatic:              true,
-                            enclosingClassName:    null,
                             enclosingFunctionName: 'App\\format',
                             usesThis:              false,
                             hasReturnType:         false,
