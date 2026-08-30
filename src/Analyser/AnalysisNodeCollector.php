@@ -177,31 +177,46 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     ];
 
     /**
+     * Class-like member statements collected on enter, see collectMember().
+     * EnumCase is collected on leave instead: its value expression may hold
+     * class names that the NameResolver only resolves on entering the
+     * expression's own nodes, after this visitor has entered the case.
+     */
+    private const MEMBER_NODES = [
+        Property::class   => true,
+        ClassConst::class => true,
+        TraitUse::class   => true,
+    ];
+
+    /**
      * Every node class enterNode() acts on: the scope-tracking statements,
      * function-likes, and everything collectNodeAnalysis() records. The
      * parser only ever instantiates these exact classes, so a single ::class
      * hash lookup lets the large majority of nodes (identifiers, arguments,
      * scalars, assignments, ...) return before any instanceof check.
      */
-    private const ENTER_NODES = self::COMPLEXITY_BRANCH_NODES + self::LANGUAGE_CONSTRUCT_NODES + [
-        Namespace_::class     => true,
-        Use_::class           => true,
-        GroupUse::class       => true,
-        Function_::class      => true,
-        Class_::class         => true,
-        Interface_::class     => true,
-        Trait_::class         => true,
-        Enum_::class          => true,
-        ClassMethod::class    => true,
-        Closure::class        => true,
-        ArrowFunction::class  => true,
-        String_::class        => true,
-        FullyQualified::class => true,
-        Variable::class       => true,
-        FuncCall::class       => true,
-        Exit_::class          => true,
-        Include_::class       => true,
-    ];
+    private const ENTER_NODES = self::COMPLEXITY_BRANCH_NODES
+        + self::LANGUAGE_CONSTRUCT_NODES
+        + self::MEMBER_NODES
+        + [
+            Namespace_::class     => true,
+            Use_::class           => true,
+            GroupUse::class       => true,
+            Function_::class      => true,
+            Class_::class         => true,
+            Interface_::class     => true,
+            Trait_::class         => true,
+            Enum_::class          => true,
+            ClassMethod::class    => true,
+            Closure::class        => true,
+            ArrowFunction::class  => true,
+            String_::class        => true,
+            FullyQualified::class => true,
+            Variable::class       => true,
+            FuncCall::class       => true,
+            Exit_::class          => true,
+            Include_::class       => true,
+        ];
 
     /**
      * Every node class leaveNode() acts on, see ENTER_NODES.
@@ -213,6 +228,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
         ClassMethod::class        => true,
+        EnumCase::class           => true,
         Function_::class          => true,
         Class_::class             => true,
         Interface_::class         => true,
@@ -286,11 +302,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var list<ClassLikeAnalysis> */
     private array $activeClassLikeAnalyses = [];
 
-    /** @var list<int> */
-    private array $activeMethodIds = [];
-
-    /** @var array<int, ClassLikeAnalysis> */
-    private array $methodClassLikeAnalyses = [];
+    /**
+     * Cyclomatic complexity of each tracked method currently being entered,
+     * innermost last. A branch node increments every entry: a method nested
+     * through an anonymous class still adds to its enclosing method.
+     *
+     * @var list<int>
+     */
+    private array $activeMethodComplexities = [];
 
     /**
      * Names of the class-likes currently being entered, innermost last; an
@@ -356,8 +375,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->fileFunctions                     = [];
         $this->classLikeAnalysis                 = [];
         $this->activeClassLikeAnalyses           = [];
-        $this->activeMethodIds                   = [];
-        $this->methodClassLikeAnalyses           = [];
+        $this->activeMethodComplexities          = [];
         $this->activeClassLikeNames              = [];
         $this->activeFunctionNames               = [];
         $this->activeFunctionLikeAnalyses        = [];
@@ -513,7 +531,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof ClassMethod) {
-                $this->startMethodAnalysis($node);
+                $this->startMethodAnalysis();
+
+                return null;
+            }
+
+            if (isset(self::MEMBER_NODES[$node::class])) {
+                $this->collectMember($node);
 
                 return null;
             }
@@ -574,6 +598,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($node instanceof ClassMethod) {
             $this->finishMethodAnalysis($node);
+
+            return null;
+        }
+
+        if ($node instanceof EnumCase) {
+            $this->collectEnumCase($node);
 
             return null;
         }
@@ -640,8 +670,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->classLikeAnalysis                 = [];
         $this->activeClassLikeAnalyses           = [];
         $this->activeClassLikeScopes             = [];
-        $this->activeMethodIds                   = [];
-        $this->methodClassLikeAnalyses           = [];
+        $this->activeMethodComplexities          = [];
         $this->activeClassLikeNames              = [];
         $this->activeFunctionNames               = [];
         $this->activeFunctionLikeAnalyses        = [];
@@ -654,31 +683,101 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function startClassLikeAnalysis(ClassLike $classLike): void
     {
         $classLikeId       = spl_object_id($classLike);
-        $classLikeAnalysis = new ClassLikeAnalysis();
+        $classLikeAnalysis = new ClassLikeAnalysis($classLike instanceof Interface_);
 
         $classLikeAnalysis->dependencies = $this->currentNamespaceUses;
 
         $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
         $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
+    }
 
-        foreach ($classLike->getMethods() as $classMethod) {
-            $this->methodClassLikeAnalyses[spl_object_id($classMethod)] = $classLikeAnalysis;
+    /**
+     * The analysis of the class-like declaring the member being entered: the
+     * innermost active class-like. An anonymous class (null name) starts no
+     * analysis, so its members are not collected.
+     */
+    private function declaringClassLikeAnalysis(): ?ClassLikeAnalysis
+    {
+        if (end($this->activeClassLikeNames) === null) {
+            return null;
+        }
+
+        $analysis = end($this->activeClassLikeAnalyses);
+
+        return $analysis instanceof ClassLikeAnalysis ? $analysis : null;
+    }
+
+    private function startMethodAnalysis(): void
+    {
+        if ($this->declaringClassLikeAnalysis() instanceof ClassLikeAnalysis) {
+            $this->activeMethodComplexities[] = 1;
         }
     }
 
-    private function startMethodAnalysis(ClassMethod $classMethod): void
+    /**
+     * Members other than methods carry no body facts, so they are recorded
+     * completely the moment the traverser enters them.
+     */
+    private function collectMember(Stmt $stmt): void
     {
-        $methodId = spl_object_id($classMethod);
-
-        $analysis = $this->methodClassLikeAnalyses[$methodId] ?? null;
+        $analysis = $this->declaringClassLikeAnalysis();
 
         if (! $analysis instanceof ClassLikeAnalysis) {
             return;
         }
 
-        $this->activeMethodIds[] = $methodId;
+        if ($stmt instanceof Property) {
+            $visibility            = $this->resolveVisibilityName($stmt);
+            $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
 
-        $analysis->complexityByMethodId[$methodId] = 1;
+            foreach ($stmt->props as $prop) {
+                $analysis->properties[] = new PropertyNode(
+                    name:                 (string) $prop->name,
+                    visibility:           $visibility,
+                    hasExplicitVisibility: $hasExplicitVisibility,
+                    line:                 $prop->getStartLine(),
+                );
+            }
+
+            return;
+        }
+
+        if ($stmt instanceof ClassConst) {
+            $visibility            = $this->resolveVisibilityName($stmt);
+            $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
+
+            foreach ($stmt->consts as $const) {
+                $analysis->constants[] = new ConstantNode(
+                    name:                 (string) $const->name,
+                    visibility:           $visibility,
+                    hasExplicitVisibility: $hasExplicitVisibility,
+                    line:                 $const->getStartLine(),
+                );
+            }
+
+            return;
+        }
+
+        if ($stmt instanceof TraitUse && ! $analysis->isInterface) {
+            foreach ($stmt->traits as $trait) {
+                $analysis->traits[] = $trait->toString();
+            }
+        }
+    }
+
+    private function collectEnumCase(EnumCase $enumCase): void
+    {
+        $analysis = $this->declaringClassLikeAnalysis();
+
+        if (! $analysis instanceof ClassLikeAnalysis) {
+            return;
+        }
+
+        $analysis->enumCases[] = new EnumCaseNode(
+            name:  (string) $enumCase->name,
+            line:  $enumCase->getStartLine(),
+            value: $this->resolveEnumCaseValue($enumCase->expr),
+        );
     }
 
     /**
@@ -710,13 +809,54 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         return null;
     }
 
+    /**
+     * The method's complexity is final once its body has been left, so the
+     * MethodNode is built here; a constructor's promoted parameters are the
+     * class's properties.
+     */
     private function finishMethodAnalysis(ClassMethod $classMethod): void
     {
-        if (! isset($this->methodClassLikeAnalyses[spl_object_id($classMethod)])) {
+        $analysis = $this->declaringClassLikeAnalysis();
+
+        if (! $analysis instanceof ClassLikeAnalysis) {
             return;
         }
 
-        array_pop($this->activeMethodIds);
+        $cyclomaticComplexity = array_pop($this->activeMethodComplexities);
+
+        $analysis->methods[] = new MethodNode(
+            name:                 (string) $classMethod->name,
+            visibility:           $this->resolveVisibilityName($classMethod),
+            hasReturnType:        $classMethod->returnType instanceof Node,
+            isStatic:             $classMethod->isStatic(),
+            paramCount:           count($classMethod->params),
+            cyclomaticComplexity: $cyclomaticComplexity ?? 1,
+            lineCount:            $this->calculateLineCount($classMethod),
+            hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($classMethod->flags),
+            line:                 $classMethod->getStartLine(),
+            isMagic:              $classMethod->isMagic(),
+        );
+
+        if ($classMethod->name->toLowerString() !== '__construct') {
+            return;
+        }
+
+        foreach ($classMethod->params as $param) {
+            if (
+                ! $param->isPromoted()
+                || ! $param->var instanceof Variable
+                || ! is_string($param->var->name)
+            ) {
+                continue;
+            }
+
+            $analysis->properties[] = new PropertyNode(
+                name:                  (string) $param->var->name,
+                visibility:            $this->resolveVisibilityName($param),
+                hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($param->flags),
+                line:                  $param->getStartLine(),
+            );
+        }
     }
 
     /**
@@ -802,9 +942,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $nodeClass = $node::class;
 
         if (isset(self::COMPLEXITY_BRANCH_NODES[$nodeClass])) {
-            foreach ($this->activeMethodIds as $activeMethodId) {
-                $this->methodClassLikeAnalyses[$activeMethodId]->complexityByMethodId[$activeMethodId]++;
+            foreach ($this->activeMethodComplexities as &$activeMethodComplexity) {
+                $activeMethodComplexity++;
             }
+
+            unset($activeMethodComplexity);
 
             $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
 
@@ -1136,11 +1278,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $implements       = $this->collectImplements($classLike);
         $interfaceExtends = $this->collectInterfaceExtends($classLike);
 
-        [$traits, $constants, $properties, $methods, $enumCases] = $this->collectMembers(
-            $classLike,
-            $analysis['complexityByMethodId']
-        );
-
         $this->nodes[] = new ClassNode(
             className:          $className,
             file:               $this->currentFile,
@@ -1156,17 +1293,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             isTrait:            $classLike instanceof Trait_,
             dependencies:       $analysis['dependencies'],
             implements:         $implements,
-            traits:             $traits,
-            methods:            $methods,
-            constants:          $constants,
-            properties:         $properties,
+            traits:             $analysis['traits'],
+            methods:            $analysis['methods'],
+            constants:          $analysis['constants'],
+            properties:         $analysis['properties'],
             functionCalls:      $analysis['functionCalls'],
             superglobals:       $analysis['superglobals'],
             languageConstructs: $analysis['languageConstructs'],
             layers:             $layers,
             isEnum:             $classLike instanceof Enum_,
             interfaceExtends:   $interfaceExtends,
-            enumCases:          $enumCases,
+            enumCases:          $analysis['enumCases'],
             enumBackingType:    $classLike instanceof Enum_ && $classLike->scalarType instanceof Identifier
                                     ? $classLike->scalarType->toLowerString()
                                     : null,
@@ -1269,117 +1406,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             : (string) $function->name;
     }
 
-    /**
-     * Collect traits, constants, properties, methods, and enum cases in a single
-     * pass over the class-like statements instead of one loop per member kind.
-     *
-     * @param array<int, int> $complexityByMethodId
-     * @return array{0: string[], 1: ConstantNode[], 2: PropertyNode[], 3: MethodNode[], 4: EnumCaseNode[]}
-     */
-    private function collectMembers(ClassLike $classLike, array $complexityByMethodId): array
-    {
-        $isInterface = $classLike instanceof Interface_;
-        $traits      = [];
-        $constants   = [];
-        $properties  = [];
-        $methods     = [];
-        $enumCases   = [];
-
-        foreach ($classLike->stmts as $stmt) {
-            if ($stmt instanceof TraitUse) {
-                if ($isInterface) {
-                    continue;
-                }
-
-                foreach ($stmt->traits as $trait) {
-                    $traits[] = $trait->toString();
-                }
-
-                continue;
-            }
-
-            if ($stmt instanceof ClassConst) {
-                $visibility            = $this->resolveVisibilityName($stmt);
-                $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
-
-                foreach ($stmt->consts as $const) {
-                    $constants[] = new ConstantNode(
-                        name:                 (string) $const->name,
-                        visibility:           $visibility,
-                        hasExplicitVisibility: $hasExplicitVisibility,
-                        line:                 $const->getStartLine(),
-                    );
-                }
-
-                continue;
-            }
-
-            if ($stmt instanceof Property) {
-                $visibility            = $this->resolveVisibilityName($stmt);
-                $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
-
-                foreach ($stmt->props as $prop) {
-                    $properties[] = new PropertyNode(
-                        name:                 (string) $prop->name,
-                        visibility:           $visibility,
-                        hasExplicitVisibility: $hasExplicitVisibility,
-                        line:                 $prop->getStartLine(),
-                    );
-                }
-
-                continue;
-            }
-
-            if ($stmt instanceof EnumCase) {
-                $enumCases[] = new EnumCaseNode(
-                    name:  (string) $stmt->name,
-                    line:  $stmt->getStartLine(),
-                    value: $this->resolveEnumCaseValue($stmt->expr),
-                );
-
-                continue;
-            }
-
-            if ($stmt instanceof ClassMethod) {
-                $methods[] = new MethodNode(
-                    name:                 (string) $stmt->name,
-                    visibility:           $this->resolveVisibilityName($stmt),
-                    hasReturnType:        $stmt->returnType instanceof Node,
-                    isStatic:             $stmt->isStatic(),
-                    paramCount:           count($stmt->params),
-                    cyclomaticComplexity: $complexityByMethodId[spl_object_id($stmt)] ?? 1,
-                    lineCount:            $this->calculateLineCount($stmt),
-                    hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags),
-                    line:                 $stmt->getStartLine(),
-                    isMagic:              $stmt->isMagic(),
-                );
-
-                if ($stmt->name->toLowerString() !== '__construct') {
-                    continue;
-                }
-
-                foreach ($stmt->params as $param) {
-                    if (
-                        ! $param->isPromoted()
-                        || ! $param->var instanceof Variable
-                        || ! is_string($param->var->name)
-                    ) {
-                        continue;
-                    }
-
-                    $properties[] = new PropertyNode(
-                        name:                  (string) $param->var->name,
-                        visibility:            $this->resolveVisibilityName($param),
-                        hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($param->flags),
-                        line:                  $param->getStartLine(),
-                    );
-                }
-            }
-        }
-
-        return [$traits, $constants, $properties, $methods, $enumCases];
-    }
-
     private function resolveClassName(ClassLike $classLike): string
     {
         return isset($classLike->namespacedName)
@@ -1393,12 +1419,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *     functionCalls: string[],
      *     superglobals: string[],
      *     languageConstructs: string[],
-     *     complexityByMethodId: array<int, int>
+     *     traits: string[],
+     *     constants: ConstantNode[],
+     *     properties: PropertyNode[],
+     *     methods: MethodNode[],
+     *     enumCases: EnumCaseNode[]
      * }
      */
     private function collectClassLikeAnalysis(int $classLikeId): array
     {
-        $analysis      = $this->classLikeAnalysis[$classLikeId] ?? new ClassLikeAnalysis();
+        $analysis      = $this->classLikeAnalysis[$classLikeId] ?? new ClassLikeAnalysis(false);
         $functionCalls = [];
 
         foreach ($analysis->functionCallNames as $functionCallName) {
@@ -1406,11 +1436,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         return [
-            'dependencies'         => array_values(array_unique($analysis->dependencies)),
-            'functionCalls'        => array_values(array_unique($functionCalls)),
-            'superglobals'         => array_values(array_unique($analysis->superglobals)),
-            'languageConstructs'   => array_values(array_unique($analysis->languageConstructs)),
-            'complexityByMethodId' => $analysis->complexityByMethodId,
+            'dependencies'       => array_values(array_unique($analysis->dependencies)),
+            'functionCalls'      => array_values(array_unique($functionCalls)),
+            'superglobals'       => array_values(array_unique($analysis->superglobals)),
+            'languageConstructs' => array_values(array_unique($analysis->languageConstructs)),
+            'traits'             => $analysis->traits,
+            'constants'          => $analysis->constants,
+            'properties'         => $analysis->properties,
+            'methods'            => $analysis->methods,
+            'enumCases'          => $analysis->enumCases,
         ];
     }
 

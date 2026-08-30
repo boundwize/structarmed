@@ -7,6 +7,9 @@ namespace Boundwize\StructArmed\Analyser;
 use PhpParser\Node\Name;
 
 /**
+ * Facts collected while traversing a named class-like: body-level references
+ * plus its members, each recorded as the traverser passes the declaring node.
+ *
  * @internal
  */
 final class ClassLikeAnalysis
@@ -23,6 +26,23 @@ final class ClassLikeAnalysis
     /** @var string[] */
     public array $languageConstructs = [];
 
-    /** @var array<int, int> */
-    public array $complexityByMethodId = [];
+    /** @var string[] */
+    public array $traits = [];
+
+    /** @var ConstantNode[] */
+    public array $constants = [];
+
+    /** @var PropertyNode[] */
+    public array $properties = [];
+
+    /** @var MethodNode[] */
+    public array $methods = [];
+
+    /** @var EnumCaseNode[] */
+    public array $enumCases = [];
+
+    public function __construct(
+        public readonly bool $isInterface,
+    ) {
+    }
 }
