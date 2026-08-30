@@ -39,8 +39,12 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
         $mustBeStaticAnonymousFunctionRule = new MustBeStaticAnonymousFunctionRule(layer: 'Domain');
 
         $this->assertTrue($mustBeStaticAnonymousFunctionRule->appliesToAnonymousFunction($this->makeNode()));
-        $this->assertFalse($mustBeStaticAnonymousFunctionRule->appliesToAnonymousFunction($this->makeNode(layer: 'Infrastructure')));
-        $this->assertFalse($mustBeStaticAnonymousFunctionRule->appliesToAnonymousFunction($this->makeNode(layer: null)));
+        $this->assertFalse(
+            $mustBeStaticAnonymousFunctionRule->appliesToAnonymousFunction($this->makeNode(layer: 'Infrastructure'))
+        );
+        $this->assertFalse(
+            $mustBeStaticAnonymousFunctionRule->appliesToAnonymousFunction($this->makeNode(layer: null))
+        );
     }
 
     public function testPassesWhenAlreadyStatic(): void
@@ -66,7 +70,9 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
     public function testViolatesForNonStaticClosure(): void
     {
         $mustBeStaticAnonymousFunctionRule = new MustBeStaticAnonymousFunctionRule(layer: 'Domain');
-        $violation                         = $mustBeStaticAnonymousFunctionRule->evaluateAnonymousFunction($this->makeNode());
+        $violation                         = $mustBeStaticAnonymousFunctionRule->evaluateAnonymousFunction(
+            $this->makeNode()
+        );
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertSame('Closure in [App\\Domain\\Handler] must be declared static', $violation->message);
@@ -96,7 +102,10 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
     public function testCreatesStaticAnonymousFunctionFixerVisitor(): void
     {
         $mustBeStaticAnonymousFunctionRule = new MustBeStaticAnonymousFunctionRule(layer: 'Domain');
-        $reflectionMethod                  = new ReflectionMethod($mustBeStaticAnonymousFunctionRule, 'createFixerVisitor');
+        $reflectionMethod                  = new ReflectionMethod(
+            $mustBeStaticAnonymousFunctionRule,
+            'createFixerVisitor'
+        );
         $visitor                           = $reflectionMethod->invoke(
             $mustBeStaticAnonymousFunctionRule,
             new RuleViolation(

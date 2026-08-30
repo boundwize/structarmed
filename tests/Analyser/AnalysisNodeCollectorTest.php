@@ -204,7 +204,10 @@ final class AnalysisNodeCollectorTest extends TestCase
         foreach (['self', 'static', 'parent'] as $keyword) {
             $marker = AnalysisNodeCollector::deferredInstantiationMarker($keyword, 'App\\Factory');
 
-            $this->assertSame([$keyword, 'App\\Factory'], AnalysisNodeCollector::parseDeferredInstantiationMarker($marker));
+            $this->assertSame(
+                [$keyword, 'App\\Factory'],
+                AnalysisNodeCollector::parseDeferredInstantiationMarker($marker)
+            );
         }
 
         $this->assertNull(AnalysisNodeCollector::parseDeferredInstantiationMarker('App\\Factory'));

@@ -57,6 +57,11 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
     {
         $addStaticAnonymousFunctionVisitor = new AddStaticAnonymousFunctionVisitor(12);
 
-        $this->assertNotInstanceOf(Node::class, $addStaticAnonymousFunctionVisitor->enterNode(new ClassMethod('save', [], ['startLine' => 12])));
+        $this->assertNotInstanceOf(
+            Node::class,
+            $addStaticAnonymousFunctionVisitor->enterNode(
+                new ClassMethod('save', [], ['startLine' => 12])
+            )
+        );
     }
 }
