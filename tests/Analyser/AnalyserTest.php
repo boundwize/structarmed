@@ -37,6 +37,7 @@ use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 use function array_map;
 use function count;
@@ -2761,6 +2762,51 @@ final class AnalyserTest extends TestCase
 
         $this->assertCount(1, $files);
         $this->assertStringEndsWith('/src/Foo.php', $this->normalisePath($files[0]));
+    }
+
+    public function testFilesForAnalysisCollapsesNestedLayerDirectories(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Foo.php'            => '<?php namespace App; final class Foo {}',
+            'src/Domain/Bar.php'     => '<?php namespace App\\Domain; final class Bar {}',
+            'src/Domain/Sub/Baz.php' => '<?php namespace App\\Domain\\Sub; final class Baz {}',
+            'lib/Qux.php'            => '<?php namespace Lib; final class Qux {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Sub', 'src/Domain/Sub')
+            ->layer('Source', 'src')
+            ->layer('Lib', 'lib/')
+            ->layer('Bar', 'src/Domain/Bar.php');
+
+        $analyser = new Analyser($basePath);
+
+        $files = array_map($this->normalisePath(...), $analyser->filesForAnalysis($architecture));
+        sort($files);
+
+        $this->assertCount(4, $files);
+        $this->assertStringEndsWith('/lib/Qux.php', $files[0]);
+        $this->assertStringEndsWith('/src/Domain/Bar.php', $files[1]);
+        $this->assertStringEndsWith('/src/Domain/Sub/Baz.php', $files[2]);
+        $this->assertStringEndsWith('/src/Foo.php', $files[3]);
+
+        $reflectionMethod = new ReflectionMethod($analyser, 'traversalRoots');
+        $paths            = $reflectionMethod->invoke($analyser, [
+            $basePath . '/src/Domain',
+            $basePath . '/src/Domain/Sub',
+            $basePath . '/src',
+            $basePath . '/lib',
+            $basePath . '/src/Domain/Bar.php',
+            $basePath . '/srcfoo',
+        ]);
+
+        $this->assertSame([
+            $basePath . '/src',
+            $basePath . '/lib',
+            $basePath . '/src/Domain/Bar.php',
+            $basePath . '/srcfoo',
+        ], $paths);
     }
 
     public function testFilesForAnalysisWithAbsoluteScanPath(): void

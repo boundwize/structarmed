@@ -40,6 +40,7 @@ use function getcwd;
 use function in_array;
 use function is_dir;
 use function is_file;
+use function rtrim;
 use function sprintf;
 use function str_starts_with;
 use function strtolower;
@@ -1325,16 +1326,20 @@ final readonly class Analyser
             $scanPaths[] = 'composer.json';
         }
 
+        $fullPaths = [];
+
         foreach (array_values(array_unique($scanPaths)) as $layerPath) {
             $fullPath = Path::normalise(
                 Path::resolve($layerPath, $this->basePath),
                 canonicalise: true
             );
 
-            if ($skipPathMatcher->isSkipped($fullPath)) {
-                continue;
+            if (! $skipPathMatcher->isSkipped($fullPath)) {
+                $fullPaths[] = $fullPath;
             }
+        }
 
+        foreach ($this->traversalRoots($fullPaths) as $fullPath) {
             if (is_file($fullPath)) {
                 if (Path::isAnalysableFile($fullPath, $this->basePath)) {
                     $files[] = $fullPath;
@@ -1353,6 +1358,35 @@ final readonly class Analyser
         }
 
         return array_values(array_unique($files));
+    }
+
+    /**
+     * Reduces the scan paths to the roots that need traversing: a directory
+     * nested inside another listed directory is already reached through its
+     * parent, so it is omitted. Files are kept as-is: they are cheap and
+     * preserving them keeps the resulting order stable.
+     *
+     * @param list<string> $paths Canonicalised absolute paths
+     * @return list<string>
+     */
+    private function traversalRoots(array $paths): array
+    {
+        $directories = array_values(array_unique(array_filter($paths, is_dir(...))));
+        $result      = [];
+
+        foreach ($paths as $path) {
+            if (in_array($path, $directories, true)) {
+                foreach ($directories as $directory) {
+                    if ($directory !== $path && str_starts_with($path, rtrim($directory, '/') . '/')) {
+                        continue 2;
+                    }
+                }
+            }
+
+            $result[] = $path;
+        }
+
+        return $result;
     }
 
     private function shouldAnalyseComposerJson(Architecture $architecture): bool
