@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustHaveSuffixRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ClassNameMustNotHavePrefixRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MaxDependencyCountRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\Function_\MustHaveReturnTypeFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxCyclomaticComplexityRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
@@ -96,6 +97,9 @@ final readonly class MvcPreset implements PresetInterface
 
     public const SERVICE_MUST_HAVE_RETURN_TYPES = 'mvc.service.must_have_return_types';
 
+    // Helper rules
+    public const HELPER_MUST_HAVE_RETURN_TYPES = 'mvc.helper.must_have_return_types';
+
     public function __construct(
         private int $controllerMaxComplexity = 5,
         private int $controllerMaxMethodLength = 20,
@@ -114,6 +118,7 @@ final readonly class MvcPreset implements PresetInterface
             ->applyModelRules($architecture)
             ->applyViewRules($architecture)
             ->applyServiceRules($architecture)
+            ->applyHelperRules($architecture)
             ->applySafetyRules($architecture);
     }
 
@@ -134,6 +139,11 @@ final readonly class MvcPreset implements PresetInterface
             ],
             'View'       => 'src/View/',
             'Service'    => 'src/Service/',
+            'Helper'     => [
+                'src/Helper/',
+                'src/Helpers/',
+                'app/Helpers/',
+            ],
         ];
 
         foreach ($defaultLayers as $layer => $path) {
@@ -156,6 +166,7 @@ final readonly class MvcPreset implements PresetInterface
             'Model'      => '/(?:^|\\\\)Models?(?:\\\\|$)/',
             'View'       => '/(?:^|\\\\)Views?(?:\\\\|$)/',
             'Service'    => '/(?:^|\\\\)Services?(?:\\\\|$)/',
+            'Helper'     => '/(?:^|\\\\)Helpers?(?:\\\\|$)/',
         ];
         $testNamespaceOrClassPattern = '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/';
 
@@ -352,6 +363,16 @@ final readonly class MvcPreset implements PresetInterface
         $architecture->rule(
             self::SERVICE_MUST_HAVE_RETURN_TYPES,
             new MustHaveReturnTypeRule(layer: 'Service')
+        );
+
+        return $this;
+    }
+
+    private function applyHelperRules(Architecture $architecture): self
+    {
+        $architecture->rule(
+            self::HELPER_MUST_HAVE_RETURN_TYPES,
+            new MustHaveReturnTypeFunctionRule(layer: 'Helper')
         );
 
         return $this;

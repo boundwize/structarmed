@@ -105,6 +105,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Function_`.
 | Rule | Constructor | Checks |
 |---|---|---|
 | `MustBeStaticAnonymousFunctionRule` | `new MustBeStaticAnonymousFunctionRule(layer: 'Domain')` | Closures and arrow functions in a layer are declared `static`. Anonymous functions that read `$this` (directly or through a nested closure) are skipped, since a static closure cannot access `$this`. Supports `--fix` by adding the `static` modifier. |
+| `MustHaveReturnTypeFunctionRule` | `new MustHaveReturnTypeFunctionRule(layer: 'Helper')` | Named function declarations in a layer declare a return type. |
 {: .rule-table }
 
 ## Layer Rules

@@ -387,6 +387,11 @@ final class PresetTest extends TestCase
                 ],
                 'View'       => 'src/View/',
                 'Service'    => 'src/Service/',
+                'Helper'     => [
+                    'src/Helper/',
+                    'src/Helpers/',
+                    'app/Helpers/',
+                ],
             ],
             $architecture->getLayers()
         );
@@ -407,6 +412,10 @@ final class PresetTest extends TestCase
                 'pattern'        => '/(?:^|\\\\)Services?(?:\\\\|$)/',
                 'excludePattern' => '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/',
             ],
+            'Helper'     => [
+                'pattern'        => '/(?:^|\\\\)Helpers?(?:\\\\|$)/',
+                'excludePattern' => '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/',
+            ],
         ], $architecture->getLayerPatterns());
 
         $rules = $architecture->getRules();
@@ -416,6 +425,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(MvcPreset::MODEL_MUST_HAVE_RETURN_TYPES, $rules);
         $this->assertArrayHasKey(MvcPreset::VIEW_NO_SUPERGLOBALS, $rules);
         $this->assertArrayHasKey(MvcPreset::SERVICE_MUST_HAVE_RETURN_TYPES, $rules);
+        $this->assertArrayHasKey(MvcPreset::HELPER_MUST_HAVE_RETURN_TYPES, $rules);
         $this->assertArrayHasKey('mvc.safety.controller_no_dd', $rules);
         $this->assertArrayHasKey('mvc.safety.service_no_exit', $rules);
     }
@@ -438,6 +448,11 @@ final class PresetTest extends TestCase
                 ],
                 'View'       => 'src/View/',
                 'Service'    => 'src/Service/',
+                'Helper'     => [
+                    'src/Helper/',
+                    'src/Helpers/',
+                    'app/Helpers/',
+                ],
             ],
             $architecture->getLayers()
         );
