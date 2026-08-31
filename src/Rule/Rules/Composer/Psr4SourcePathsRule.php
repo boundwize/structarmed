@@ -34,7 +34,7 @@ final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
-        $composerFile = rtrim($basePath, '/') . '/composer.json';
+        $composerFile = Path::normalise(rtrim($basePath, '/') . '/composer.json', canonicalise: true);
 
         if (! file_exists($composerFile)) {
             return $this->violation(
