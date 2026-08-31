@@ -16,7 +16,7 @@ use function strlen;
 
 use const PHP_EOL;
 
-class ConsoleReport implements ReportInterface
+final class ConsoleReport implements ReportInterface
 {
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
