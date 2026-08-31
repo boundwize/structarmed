@@ -9,9 +9,9 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\Path;
 
 use function array_keys;
-use function file_exists;
 use function is_array;
 use function is_string;
 use function rtrim;
@@ -38,17 +38,13 @@ final readonly class Psr4EmptyNamespacePrefixRule implements
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
-        $composerFile = rtrim($basePath, '/') . '/composer.json';
-
-        if (! file_exists($composerFile)) {
-            return [];
-        }
-
         $composer = $this->psr4PathResolver->composerConfig($basePath);
 
         if ($composer === null) {
             return [];
         }
+
+        $composerFile = Path::normalise(rtrim($basePath, '/') . '/composer.json', canonicalise: true);
 
         $violations = [];
 
