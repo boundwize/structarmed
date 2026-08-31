@@ -16,7 +16,7 @@ use function strlen;
 
 use const PHP_EOL;
 
-final class ConsoleReport implements ReportInterface
+class ConsoleReport implements ReportInterface
 {
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
@@ -52,7 +52,7 @@ final class ConsoleReport implements ReportInterface
             }
 
             if ($violation->fixable) {
-                $lines[] = '   Hint: run again with --fix to automatically fix this violation.';
+                $lines[] = '   💡 Hint: run again with --fix to automatically fix this violation.';
             }
         }
 
