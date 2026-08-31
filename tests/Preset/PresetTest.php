@@ -15,6 +15,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerNameTrait;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
@@ -218,6 +219,10 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(DddPreset::VALUE_OBJECT_MUST_BE_FINAL, $rules);
         $this->assertArrayHasKey(DddPreset::EVENT_MUST_BE_FINAL, $rules);
         $this->assertArrayHasKey(DddPreset::DOMAIN_NO_JSON_SERIALIZABLE, $rules);
+        $this->assertInstanceOf(
+            MayNotExtendClassRule::class,
+            $rules[DddPreset::DOMAIN_MUST_NOT_EXTEND_DOCTRINE_ENTITY_REPOSITORY] ?? null
+        );
         $this->assertArrayHasKey('ddd.safety.domain_no_dd', $rules);
         $this->assertArrayHasKey('ddd.safety.application_no_exit', $rules);
     }

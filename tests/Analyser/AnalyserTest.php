@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
@@ -416,6 +417,48 @@ final class AnalyserTest extends TestCase
 
         // BadOrderEntity.php uses DateTime and is not final — should have violations
         $this->assertTrue($ruleViolationCollection->hasViolations());
+    }
+
+    public function testDddPresetRejectsDoctrineEntityRepositoryInheritanceOnlyInDomain(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Domain/Order/OrderStore.php'                       => <<<'PHP'
+                <?php
+
+                namespace App\Domain\Order;
+
+                use Doctrine\ORM\EntityRepository;
+
+                final class OrderStore extends EntityRepository
+                {
+                }
+                PHP,
+            'src/Infrastructure/Persistence/DoctrineOrderStore.php' => <<<'PHP'
+                <?php
+
+                namespace App\Infrastructure\Persistence;
+
+                use Doctrine\ORM\EntityRepository;
+
+                final class DoctrineOrderStore extends EntityRepository
+                {
+                }
+                PHP,
+        ]);
+
+        $violations = (new Analyser($basePath))
+            ->analyse(
+                Architecture::define()->withPreset(Preset::DDD()),
+                analyserOptions: AnalyserOptions::sequential(),
+            )
+            ->forRule(DddPreset::DOMAIN_MUST_NOT_EXTEND_DOCTRINE_ENTITY_REPOSITORY);
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\Domain\\Order\\OrderStore', $violations[0]->className);
+        $this->assertSame(
+            'Class [App\\Domain\\Order\\OrderStore] must not extend class [Doctrine\\ORM\\EntityRepository]',
+            $violations[0]->message
+        );
     }
 
     public function testAnalyserCollectsClassNodesWithSequentialRunner(): void

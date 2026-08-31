@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
+use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotImplementInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeInterfaceRule;
@@ -51,6 +52,9 @@ final readonly class DddPreset implements PresetInterface
     public const REPOSITORY_MUST_BE_INTERFACE = 'ddd.repository.must_be_interface';
 
     public const REPOSITORY_IMPL_IN_INFRASTRUCTURE = 'ddd.repository.implementation_in_infrastructure';
+
+    public const DOMAIN_MUST_NOT_EXTEND_DOCTRINE_ENTITY_REPOSITORY =
+        'ddd.repository.domain_must_not_extend_doctrine_entity_repository';
 
     // Service rules
     public const DOMAIN_SERVICE_IN_DOMAIN = 'ddd.service.domain_service_in_domain';
@@ -173,6 +177,14 @@ final readonly class DddPreset implements PresetInterface
 
     private function applyRepositoryRules(Architecture $architecture): self
     {
+        $architecture->rule(
+            self::DOMAIN_MUST_NOT_EXTEND_DOCTRINE_ENTITY_REPOSITORY,
+            new MayNotExtendClassRule(
+                layer: 'Domain',
+                class: 'Doctrine\\ORM\\EntityRepository'
+            )
+        );
+
         $architecture->rule(
             self::REPOSITORY_MUST_BE_INTERFACE,
             new MustBeInterfaceRule(layer: 'Domain', classNamePattern: '/Repository$/')

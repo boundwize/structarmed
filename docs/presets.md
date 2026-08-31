@@ -23,7 +23,7 @@ StructArmed ships with presets for common PHP standards and architecture styles.
 | `Preset::PSR12()` | Extends PSR-1: all methods, constants, and properties must declare explicit visibility |
 | `Preset::PSR15()` | `*Middleware` classes must implement PSR-15 `MiddlewareInterface`; `*Handler` classes must implement PSR-15 `RequestHandlerInterface`; StructArmed also enforces matching `Middleware`/`Handler` suffixes for implementations of those interfaces |
 | `Preset::PSR4()` | Verifies configured source paths exist in composer.json `autoload` or `autoload-dev` PSR-4 mappings |
-| `Preset::DDD()` | Layer isolation, entity/VO/repository/event/service conventions |
+| `Preset::DDD()` | Layer isolation, entity/VO/repository/event/service conventions, including keeping Doctrine ORM repository inheritance out of the Domain layer |
 | `Preset::MVC()` | Layer isolation, thin controllers, model/view/service rules, return types for helper functions |
 | `Preset::YAGNI()` | Speculative-abstraction cleanup: interfaces must be implemented by a class or extended by another interface, abstract classes must be extended, traits must be used, and extended classes that are never instantiated must be abstract — a dependency reference (type hint, `instanceof`, `::class`, static call, a class-name string, ...) also counts as usage within the scanned paths, while only instantiation (`new X`, `new self`/`static`/`parent`, or a constant class expression such as `new (X::class)`) keeps an extended class concrete. All rules support `--fix`, removing the unused declaration or adding the `abstract` modifier |
 
