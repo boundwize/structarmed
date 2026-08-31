@@ -8,20 +8,20 @@
         .header { fill: #cccccc; font-weight: bold; }
         .version { fill: #cccccc; }
     </style>
-    
+
     <g transform="translate(16, 24)">
         <!-- Line 1: Prompt and Command -->
         <text x="0" y="0" class="text"><tspan class="prompt">➜  </tspan><tspan class="dir">prj-ddd </tspan><tspan class="cmd">vendor/bin/structarmed analyze</tspan></text>
 
         <!-- Line 3: Title and Version -->
-        <text x="0" y="35" class="text header">StructArmed <tspan class="version">0.16.29</tspan> — Architecture Enforcement</text>
+        <text x="0" y="35" class="text header">StructArmed <tspan class="version">0.16.30</tspan> — Architecture Enforcement</text>
 
         <!-- Line 4: Separator (Reduced length) -->
         <text x="0" y="49" class="text">===============================================</text>
 
         <!-- Line 6: No violations -->
         <text x="0" y="80" class="text">✅  No violations found. (0.00s)</text>
-        
+
         <!-- Line 7: Final Prompt -->
         <text x="0" y="104" class="text"><tspan class="prompt">➜  </tspan><tspan class="dir">prj-ddd </tspan>█</text>
     </g>
