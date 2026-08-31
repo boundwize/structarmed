@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Composer\Psr4PathResolver;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Util\Path;
 
 use function array_keys;
 use function is_array;
@@ -43,7 +44,7 @@ final readonly class Psr4EmptyNamespacePrefixRule implements
             return [];
         }
 
-        $composerFile = rtrim($basePath, '/') . '/composer.json';
+        $composerFile = Path::normalise(rtrim($basePath, '/') . '/composer.json', canonicalise: true);
 
         $violations = [];
 

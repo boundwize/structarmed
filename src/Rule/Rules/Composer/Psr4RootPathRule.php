@@ -41,7 +41,7 @@ final readonly class Psr4RootPathRule implements MultipleProjectRuleViolationInt
             return [];
         }
 
-        $composerFile = rtrim($basePath, '/') . '/composer.json';
+        $composerFile = Path::normalise(rtrim($basePath, '/') . '/composer.json', canonicalise: true);
 
         $violations         = [];
         $normalisedBasePath = Path::normalise($basePath, canonicalise: true);
