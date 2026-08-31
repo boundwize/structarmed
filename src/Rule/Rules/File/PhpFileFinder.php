@@ -105,6 +105,10 @@ final readonly class PhpFileFinder
     /** @return list<string> */
     private function sourcePaths(string $basePath): array
     {
-        return array_values(array_unique($this->sourcePaths ?? $this->psr4PathResolver->paths($basePath)));
+        if ($this->sourcePaths === null) {
+            return $this->psr4PathResolver->paths($basePath);
+        }
+
+        return array_values(array_unique($this->sourcePaths));
     }
 }
