@@ -5,23 +5,29 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Baseline;
 
 use App\Foo;
+use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Baseline\Baseline;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Util\Path;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 use function bin2hex;
+use function chdir;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function getcwd;
 use function is_dir;
 use function mkdir;
 use function random_bytes;
 use function restore_error_handler;
 use function rmdir;
 use function set_error_handler;
+use function str_replace;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -230,6 +236,43 @@ PHP);
             $this->assertCount(0, $filtered);
         } finally {
             $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src']);
+        }
+    }
+
+    public function testFilterMatchesComposerViolationWithWindowsPathSeparators(): void
+    {
+        $basePath                = Path::normalise($this->createTempDirectory(), canonicalise: true);
+        $workingPath             = $this->createTempDirectory();
+        $ruleViolationCollection = new RuleViolationCollection();
+        $workingDirectory        = getcwd();
+
+        self::assertIsString($workingDirectory);
+        file_put_contents($workingPath . '/composer.json', '{}');
+
+        try {
+            $violation = (new Psr4SourcePathsRule(['src/']))->evaluateProject(
+                str_replace('/', '\\', $basePath) . '\\',
+                Architecture::define()
+            );
+
+            self::assertInstanceOf(RuleViolation::class, $violation);
+            self::assertSame(
+                Path::normalise(Path::resolve('composer.json', $basePath)),
+                $violation->file
+            );
+            $ruleViolationCollection->add($violation);
+
+            (new Baseline())->generate($ruleViolationCollection, 'baseline.php', $basePath);
+
+            self::assertTrue(chdir($workingPath));
+
+            $filtered = (new Baseline())->filter($ruleViolationCollection, 'baseline.php', $basePath);
+
+            $this->assertCount(0, $filtered);
+        } finally {
+            chdir($workingDirectory);
+            $this->removeTempDirectory($basePath, ['baseline.php']);
+            $this->removeTempDirectory($workingPath, ['composer.json']);
         }
     }
 

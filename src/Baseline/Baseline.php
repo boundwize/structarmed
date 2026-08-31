@@ -236,7 +236,7 @@ final readonly class Baseline
     private function relativePath(string $path, string $basePath): string
     {
         $normalisedBasePath = Path::normalise($basePath, canonicalise: true);
-        $normalisedPath     = Path::normalise($path, canonicalise: true);
+        $normalisedPath     = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
 
         if ($normalisedPath === $normalisedBasePath) {
             return '';

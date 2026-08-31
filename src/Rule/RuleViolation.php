@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule;
 
+use Boundwize\StructArmed\Util\Path;
+
 use function sprintf;
 
 final readonly class RuleViolation
 {
+    public string $file;
+
     public function __construct(
         public string $message,
-        public string $file,
+        string $file,
         public int $line,
         public string $className,
         public ?string $layer = null,
@@ -20,6 +24,7 @@ final readonly class RuleViolation
         public ?string $constantName = null,
         public ?string $propertyName = null,
     ) {
+        $this->file = Path::normalise($file);
     }
 
     public function toString(): string
