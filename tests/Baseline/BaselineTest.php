@@ -246,7 +246,7 @@ PHP);
         $ruleViolationCollection = new RuleViolationCollection();
         $workingDirectory        = getcwd();
 
-        self::assertIsString($workingDirectory);
+        $this->assertIsString($workingDirectory);
         file_put_contents($workingPath . '/composer.json', '{}');
 
         try {
@@ -255,16 +255,13 @@ PHP);
                 Architecture::define()
             );
 
-            self::assertInstanceOf(RuleViolation::class, $violation);
-            self::assertSame(
-                Path::normalise(Path::resolve('composer.json', $basePath)),
-                $violation->file
-            );
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame(Path::normalise(Path::resolve('composer.json', $basePath)), $violation->file);
             $ruleViolationCollection->add($violation);
 
             (new Baseline())->generate($ruleViolationCollection, 'baseline.php', $basePath);
 
-            self::assertTrue(chdir($workingPath));
+            $this->assertTrue(chdir($workingPath));
 
             $filtered = (new Baseline())->filter($ruleViolationCollection, 'baseline.php', $basePath);
 
