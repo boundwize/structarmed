@@ -190,7 +190,49 @@ Both carry the body-level facts a `ClassNode` has — `$dependencies`, `$functio
 
 A closure declared inside a class or a named function is counted on both nodes: the enclosing `ClassNode` (or `FunctionNode`) keeps seeing everything the closure does, exactly as it sees its own method bodies, and the `AnonymousFunctionNode` reports the closure body on its own.
 
-Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface` and/or `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`. Both share the `appliesTo()` / `evaluate()` method names with `RuleInterface`, each typed against its own node kind; a rule class implementing more than one of them widens the parameter to a union type and branches on the node type, as in the example below. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes are not part of the declarative `ruleset()` layer-dependency check.
+Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface` and/or `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`. Both share the `appliesTo()` / `evaluate()` method names with `RuleInterface`, each typed against its own node kind. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes are not part of the declarative `ruleset()` layer-dependency check.
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final readonly class FunctionsMustNotAccessSuperglobalsRule implements FunctionRuleInterface
+{
+    public function __construct(private string $layer)
+    {
+    }
+
+    public function appliesTo(FunctionNode $functionNode): bool
+    {
+        return $functionNode->isInLayer($this->layer);
+    }
+
+    public function evaluate(FunctionNode $functionNode): ?RuleViolation
+    {
+        if (! $functionNode->accessesSuperglobals()) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:      sprintf('Function [%s()] must not access superglobals', $functionNode->functionName),
+            file:         $functionNode->file,
+            line:         $functionNode->line,
+            className:    $functionNode->functionName,
+            layer:        $functionNode->layer,
+            functionName: $functionNode->functionName,
+        );
+    }
+}
+```
+
+An anonymous-function rule looks the same with `AnonymousFunctionNode` in the signatures:
 
 ```php
 <?php
@@ -198,57 +240,44 @@ Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\Function
 namespace App\Architecture\Rules;
 
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
-use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
-use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class FunctionsMustNotAccessSuperglobalsRule implements
-    FunctionRuleInterface,
-    AnonymousFunctionRuleInterface
+final readonly class ClosuresMustNotAccessSuperglobalsRule implements AnonymousFunctionRuleInterface
 {
     public function __construct(private string $layer)
     {
     }
 
-    public function appliesTo(FunctionNode|AnonymousFunctionNode $node): bool
+    public function appliesTo(AnonymousFunctionNode $anonymousFunctionNode): bool
     {
-        return $node->isInLayer($this->layer);
+        return $anonymousFunctionNode->isInLayer($this->layer);
     }
 
-    public function evaluate(FunctionNode|AnonymousFunctionNode $node): ?RuleViolation
+    public function evaluate(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
     {
-        if (! $node->accessesSuperglobals()) {
+        if (! $anonymousFunctionNode->accessesSuperglobals()) {
             return null;
-        }
-
-        if ($node instanceof FunctionNode) {
-            return new RuleViolation(
-                message:      sprintf('Function [%s()] must not access superglobals', $node->functionName),
-                file:         $node->file,
-                line:         $node->line,
-                className:    $node->functionName,
-                layer:        $node->layer,
-                functionName: $node->functionName,
-            );
         }
 
         return new RuleViolation(
             message:   sprintf(
                 '%s in [%s] must not access superglobals',
-                $node->getType(),
-                $node->enclosingScopeName()
+                $anonymousFunctionNode->getType(),
+                $anonymousFunctionNode->enclosingScopeName()
             ),
-            file:      $node->file,
-            line:      $node->line,
-            className: $node->enclosingScopeName(),
-            layer:     $node->layer,
+            file:      $anonymousFunctionNode->file,
+            line:      $anonymousFunctionNode->line,
+            className: $anonymousFunctionNode->enclosingScopeName(),
+            layer:     $anonymousFunctionNode->layer,
         );
     }
 }
 ```
+
+One rule class can also implement several of these interfaces at once; PHP then requires the shared methods to widen the parameter to a union type (for example `appliesTo(FunctionNode|AnonymousFunctionNode $node): bool`) and the rule branches on the node type inside.
 
 `RuleViolation::$className` is required, so a function rule passes the function name there (and, optionally, in the dedicated `functionName` field, which the JSON report emits as `"function"`); an anonymous-function rule passes `enclosingScopeName()`, which is the enclosing class-like or named function, or `AnonymousFunctionNode::FILE_SCOPE` (`'file scope'`) for a closure in top-level procedural code.
 
