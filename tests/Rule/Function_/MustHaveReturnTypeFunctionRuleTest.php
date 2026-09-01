@@ -34,7 +34,7 @@ final class MustHaveReturnTypeFunctionRuleTest extends TestCase
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $mustHaveReturnTypeFunctionRule->evaluateFunction($functionNode)
+            $mustHaveReturnTypeFunctionRule->evaluate($functionNode)
         );
     }
 
@@ -43,7 +43,7 @@ final class MustHaveReturnTypeFunctionRuleTest extends TestCase
         $mustHaveReturnTypeFunctionRule = new MustHaveReturnTypeFunctionRule(layer: 'Helper');
         $functionNode                   = $this->makeNode(hasReturnType: false);
 
-        $violation = $mustHaveReturnTypeFunctionRule->evaluateFunction($functionNode);
+        $violation = $mustHaveReturnTypeFunctionRule->evaluate($functionNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('App\\Helper\\format_price()', $violation->message);
@@ -55,7 +55,7 @@ final class MustHaveReturnTypeFunctionRuleTest extends TestCase
     {
         $mustHaveReturnTypeFunctionRule = new MustHaveReturnTypeFunctionRule(layer: 'Helper');
 
-        $this->assertTrue($mustHaveReturnTypeFunctionRule->appliesToFunction($this->makeNode()));
+        $this->assertTrue($mustHaveReturnTypeFunctionRule->appliesTo($this->makeNode()));
     }
 
     public function testDoesNotApplyToWrongLayer(): void
@@ -63,7 +63,7 @@ final class MustHaveReturnTypeFunctionRuleTest extends TestCase
         $mustHaveReturnTypeFunctionRule = new MustHaveReturnTypeFunctionRule(layer: 'Helper');
         $functionNode                   = $this->makeNode(layer: 'Controller');
 
-        $this->assertFalse($mustHaveReturnTypeFunctionRule->appliesToFunction($functionNode));
+        $this->assertFalse($mustHaveReturnTypeFunctionRule->appliesTo($functionNode));
     }
 
     public function testSingleRuleInstanceReportsOneViolationPerFunction(): void
@@ -72,10 +72,10 @@ final class MustHaveReturnTypeFunctionRuleTest extends TestCase
         // node, so multiple functions yield multiple independent violations.
         $mustHaveReturnTypeFunctionRule = new MustHaveReturnTypeFunctionRule(layer: 'Helper');
 
-        $firstViolation  = $mustHaveReturnTypeFunctionRule->evaluateFunction(
+        $firstViolation  = $mustHaveReturnTypeFunctionRule->evaluate(
             $this->makeNode(functionName: 'App\\Helper\\format_price')
         );
-        $secondViolation = $mustHaveReturnTypeFunctionRule->evaluateFunction(
+        $secondViolation = $mustHaveReturnTypeFunctionRule->evaluate(
             $this->makeNode(functionName: 'App\\Helper\\format_date')
         );
 

@@ -82,9 +82,7 @@ final readonly class Analyser
 
         $projectRuleViolations     = [];
         $fileAnalysisRules         = [];
-        $classRules                = [];
-        $functionRules             = [];
-        $anonymousFunctionRules    = [];
+        $nodeRules                 = [];
         $layerAwareRules           = [];
         $hasExtendedClassAwareRule = false;
         $hasUsedInterfaceAwareRule = false;
@@ -95,16 +93,12 @@ final readonly class Analyser
                 continue;
             }
 
-            if ($rule instanceof RuleInterface) {
-                $classRules[$key] = $rule;
-            }
-
-            if ($rule instanceof FunctionRuleInterface) {
-                $functionRules[$key] = $rule;
-            }
-
-            if ($rule instanceof AnonymousFunctionRuleInterface) {
-                $anonymousFunctionRules[$key] = $rule;
+            if (
+                $rule instanceof RuleInterface
+                || $rule instanceof FunctionRuleInterface
+                || $rule instanceof AnonymousFunctionRuleInterface
+            ) {
+                $nodeRules[$key] = $rule;
             }
 
             if ($rule instanceof LayerAwareRuleInterface) {
@@ -230,10 +224,7 @@ final readonly class Analyser
         }
 
         $globalSkipPathMatcher      = SkipPathMatcher::compile($this->basePath, $globalSkipPaths);
-        $ruleSkipMatchers           = $this->ruleSkipMatchers(
-            $classRules + $functionRules + $anonymousFunctionRules,
-            $ruleSkipPaths
-        );
+        $ruleSkipMatchers           = $this->ruleSkipMatchers($nodeRules, $ruleSkipPaths);
         $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
         $rulesetSkipPathMatcher     = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
         $rulesetViolationCollection = new RuleViolationCollection();
@@ -248,56 +239,24 @@ final readonly class Analyser
 
         $resolvedInheritedDependencies = [];
 
-        foreach ($layerAwareRules as $rule) {
-            $rule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
+        foreach ($layerAwareRules as $layerAwareRule) {
+            $layerAwareRule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
         }
 
-        foreach ($classNodes as $classNode) {
+        // Function-likes are not part of the class hierarchy, so they take no
+        // part in the declarative ruleset below; a rule only sees the node
+        // kind whose interface it implements.
+        $this->evaluateNodeRules(
+            [...$classNodes, ...$extractionResult->functionNodes, ...$extractionResult->anonymousFunctionNodes],
+            $nodeRules,
+            $globalSkipPathMatcher,
+            $ruleSkipMatchers,
+            $ruleViolationCollection
+        );
+
+        // Declarative ruleset dependency checks, per class node.
+        foreach ($hasRuleset ? $classNodes : [] as $classNode) {
             if ($globalSkipPathMatcher->isSkipped($classNode->file)) {
-                continue;
-            }
-
-            foreach ($classRules as $key => $rule) {
-                if (isset($ruleSkipMatchers[$key]) && $ruleSkipMatchers[$key]->isSkipped($classNode->file)) {
-                    continue;
-                }
-
-                if (! $rule->appliesTo($classNode)) {
-                    continue;
-                }
-
-                if ($rule instanceof MultipleRuleViolationInterface) {
-                    $violations = $rule->evaluateAll($classNode);
-                } else {
-                    $violation = $rule->evaluate($classNode);
-                    if (! $violation instanceof RuleViolation) {
-                        continue;
-                    }
-
-                    $violations = [$violation];
-                }
-
-                $isFixable = $rule instanceof FixableInterface;
-
-                foreach ($violations as $violation) {
-                    // Inject the rule key into the violation
-                    $ruleViolationCollection->add(new RuleViolation(
-                        message:   $violation->message,
-                        file:      $violation->file,
-                        line:      $violation->line,
-                        className: $violation->className,
-                        layer:     $violation->layer,
-                        ruleKey:   $key,
-                        fixable:   $isFixable,
-                        methodName: $violation->methodName,
-                        constantName: $violation->constantName,
-                        propertyName: $violation->propertyName,
-                        functionName: $violation->functionName,
-                    ));
-                }
-            }
-
-            if (! $hasRuleset) {
                 continue;
             }
 
@@ -385,58 +344,68 @@ final readonly class Analyser
             }
         }
 
-        // Function-likes are not part of the class hierarchy, so they take no
-        // part in the declarative ruleset; only rules that opt in see them.
-        foreach ($extractionResult->functionNodes as $functionNode) {
-            if ($globalSkipPathMatcher->isSkipped($functionNode->file)) {
-                continue;
-            }
-
-            foreach ($functionRules as $key => $rule) {
-                if (isset($ruleSkipMatchers[$key]) && $ruleSkipMatchers[$key]->isSkipped($functionNode->file)) {
-                    continue;
-                }
-
-                if (! $rule->appliesToFunction($functionNode)) {
-                    continue;
-                }
-
-                $violation = $rule->evaluateFunction($functionNode);
-
-                if ($violation instanceof RuleViolation) {
-                    $ruleViolationCollection->add($this->withRuleKey($violation, $key, $rule));
-                }
-            }
-        }
-
-        foreach ($extractionResult->anonymousFunctionNodes as $anonymousFunctionNode) {
-            if ($globalSkipPathMatcher->isSkipped($anonymousFunctionNode->file)) {
-                continue;
-            }
-
-            foreach ($anonymousFunctionRules as $key => $rule) {
-                if (
-                    isset($ruleSkipMatchers[$key])
-                    && $ruleSkipMatchers[$key]->isSkipped($anonymousFunctionNode->file)
-                ) {
-                    continue;
-                }
-
-                if (! $rule->appliesToAnonymousFunction($anonymousFunctionNode)) {
-                    continue;
-                }
-
-                $violation = $rule->evaluateAnonymousFunction($anonymousFunctionNode);
-
-                if ($violation instanceof RuleViolation) {
-                    $ruleViolationCollection->add($this->withRuleKey($violation, $key, $rule));
-                }
-            }
-        }
-
         $ruleViolationCollection->merge($rulesetViolationCollection);
 
         return $ruleViolationCollection;
+    }
+
+    /**
+     * Evaluates rules against nodes of the matching kind in a single loop:
+     * all three rule interfaces share the appliesTo()/evaluate() method
+     * names, and a rule only receives the node kind whose interface it
+     * implements.
+     *
+     * @param list<ClassNode|FunctionNode|AnonymousFunctionNode> $nodes
+     * @param array<string, RuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface> $rules
+     * @param array<string, SkipPathMatcher> $ruleSkipMatchers
+     */
+    private function evaluateNodeRules(
+        array $nodes,
+        array $rules,
+        SkipPathMatcher $globalSkipPathMatcher,
+        array $ruleSkipMatchers,
+        RuleViolationCollection $ruleViolationCollection
+    ): void {
+        foreach ($nodes as $node) {
+            if ($globalSkipPathMatcher->isSkipped($node->file)) {
+                continue;
+            }
+
+            foreach ($rules as $key => $rule) {
+                $ruleHandlesNode = match (true) {
+                    $node instanceof ClassNode => $rule instanceof RuleInterface,
+                    $node instanceof FunctionNode => $rule instanceof FunctionRuleInterface,
+                    default => $rule instanceof AnonymousFunctionRuleInterface,
+                };
+
+                if (! $ruleHandlesNode) {
+                    continue;
+                }
+
+                if (isset($ruleSkipMatchers[$key]) && $ruleSkipMatchers[$key]->isSkipped($node->file)) {
+                    continue;
+                }
+
+                if (! $rule->appliesTo($node)) {
+                    continue;
+                }
+
+                if ($rule instanceof MultipleRuleViolationInterface && $node instanceof ClassNode) {
+                    $violations = $rule->evaluateAll($node);
+                } else {
+                    $violation = $rule->evaluate($node);
+                    if (! $violation instanceof RuleViolation) {
+                        continue;
+                    }
+
+                    $violations = [$violation];
+                }
+
+                foreach ($violations as $violation) {
+                    $ruleViolationCollection->add($this->withRuleKey($violation, $key, $rule));
+                }
+            }
+        }
     }
 
     private function withRuleKey(RuleViolation $ruleViolation, string $key, object $rule): RuleViolation
@@ -563,16 +532,16 @@ final readonly class Analyser
     }
 
     /**
-     * @param array<string, RuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface> $classRules
+     * @param array<string, RuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface> $nodeRules
      * @param array<string, list<string>>  $ruleSkipPaths
      * @return array<string, SkipPathMatcher>
      */
-    private function ruleSkipMatchers(array $classRules, array $ruleSkipPaths): array
+    private function ruleSkipMatchers(array $nodeRules, array $ruleSkipPaths): array
     {
         $ruleSkipMatchers = [];
 
         foreach ($ruleSkipPaths as $key => $skipPaths) {
-            if (! isset($classRules[$key]) || $skipPaths === []) {
+            if (! isset($nodeRules[$key]) || $skipPaths === []) {
                 continue;
             }
 

@@ -75,46 +75,36 @@ final class AnalyserTest extends TestCase
     private function makeNoSuperglobalsInFunctionsRule(): FunctionRuleInterface&AnonymousFunctionRuleInterface
     {
         return new class implements FunctionRuleInterface, AnonymousFunctionRuleInterface {
-            public function appliesToFunction(FunctionNode $functionNode): bool
+            public function appliesTo(FunctionNode|AnonymousFunctionNode $node): bool
             {
-                return $functionNode->isInLayer('Source');
+                return $node->isInLayer('Source');
             }
 
-            public function evaluateFunction(FunctionNode $functionNode): ?RuleViolation
+            public function evaluate(FunctionNode|AnonymousFunctionNode $node): ?RuleViolation
             {
-                if (! $functionNode->accessesSuperglobals()) {
+                if (! $node->accessesSuperglobals()) {
                     return null;
                 }
 
-                return new RuleViolation(
-                    message:      'Function [' . $functionNode->functionName . '] must not access superglobals',
-                    file:         $functionNode->file,
-                    line:         $functionNode->line,
-                    className:    $functionNode->functionName,
-                    layer:        $functionNode->layer,
-                    functionName: $functionNode->functionName,
-                );
-            }
-
-            public function appliesToAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): bool
-            {
-                return $anonymousFunctionNode->isInLayer('Source');
-            }
-
-            public function evaluateAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
-            {
-                if (! $anonymousFunctionNode->accessesSuperglobals()) {
-                    return null;
+                if ($node instanceof FunctionNode) {
+                    return new RuleViolation(
+                        message:      'Function [' . $node->functionName . '] must not access superglobals',
+                        file:         $node->file,
+                        line:         $node->line,
+                        className:    $node->functionName,
+                        layer:        $node->layer,
+                        functionName: $node->functionName,
+                    );
                 }
 
                 return new RuleViolation(
-                    message:   $anonymousFunctionNode->getType() . ' in ['
-                        . $anonymousFunctionNode->enclosingScopeName()
+                    message:   $node->getType() . ' in ['
+                        . $node->enclosingScopeName()
                         . '] must not access superglobals',
-                    file:      $anonymousFunctionNode->file,
-                    line:      $anonymousFunctionNode->line,
-                    className: $anonymousFunctionNode->enclosingScopeName(),
-                    layer:     $anonymousFunctionNode->layer,
+                    file:      $node->file,
+                    line:      $node->line,
+                    className: $node->enclosingScopeName(),
+                    layer:     $node->layer,
                 );
             }
         };

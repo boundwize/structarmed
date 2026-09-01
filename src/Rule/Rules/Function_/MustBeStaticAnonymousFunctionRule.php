@@ -24,12 +24,12 @@ final readonly class MustBeStaticAnonymousFunctionRule extends AbstractPhpParser
     ) {
     }
 
-    public function appliesToAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): bool
+    public function appliesTo(AnonymousFunctionNode $anonymousFunctionNode): bool
     {
         return $anonymousFunctionNode->isInLayer($this->layer);
     }
 
-    public function evaluateAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
+    public function evaluate(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
     {
         // A closure reading `$this` cannot be static: PHP raises an error
         // when a static closure accesses `$this`.
