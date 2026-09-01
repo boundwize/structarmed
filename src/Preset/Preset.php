@@ -19,8 +19,8 @@ use Boundwize\StructArmed\Preset\Presets\YagniPreset;
  * Usage:
  *   ->withPreset(Preset::DDD())
  *   ->withPreset(Preset::DDD(maxComplexity: 3))
- *   ->withPreset(Preset::PSR1())
  *   ->withPreset(Preset::PSR4())
+ *   ->withPreset(Preset::PSR1())
  *   ->withPreset(Preset::PSR12())
  *   ->withPreset(Preset::PER())
  *   ->withPreset(Preset::PSR15())
