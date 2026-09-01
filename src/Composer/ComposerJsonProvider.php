@@ -58,16 +58,12 @@ final class ComposerJsonProvider
             return null;
         }
 
-        $config = [];
-
-        foreach ($composer as $key => $value) {
+        foreach ($composer as $key => $_) {
             if (is_int($key)) {
                 return null;
             }
-
-            $config[$key] = $value;
         }
 
-        return $config;
+        return $composer;
     }
 }
