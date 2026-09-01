@@ -190,7 +190,7 @@ Both carry the body-level facts a `ClassNode` has — `$dependencies`, `$functio
 
 A closure declared inside a class or a named function is counted on both nodes: the enclosing `ClassNode` (or `FunctionNode`) keeps seeing everything the closure does, exactly as it sees its own method bodies, and the `AnonymousFunctionNode` reports the closure body on its own.
 
-Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface` and/or `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`. Their method names differ from `RuleInterface` (`appliesToFunction()` / `evaluateFunction()` and `appliesToAnonymousFunction()` / `evaluateAnonymousFunction()`), so one rule class can implement all three and check classes, functions, and closures alike. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes are not part of the declarative `ruleset()` layer-dependency check.
+Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface` and/or `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`. Both share the `appliesTo()` / `evaluate()` method names with `RuleInterface`, each typed against its own node kind; a rule class implementing more than one of them widens the parameter to a union type and branches on the node type, as in the example below. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes are not part of the declarative `ruleset()` layer-dependency check.
 
 ```php
 <?php
@@ -213,48 +213,38 @@ final readonly class FunctionsMustNotAccessSuperglobalsRule implements
     {
     }
 
-    public function appliesToFunction(FunctionNode $functionNode): bool
+    public function appliesTo(FunctionNode|AnonymousFunctionNode $node): bool
     {
-        return $functionNode->isInLayer($this->layer);
+        return $node->isInLayer($this->layer);
     }
 
-    public function evaluateFunction(FunctionNode $functionNode): ?RuleViolation
+    public function evaluate(FunctionNode|AnonymousFunctionNode $node): ?RuleViolation
     {
-        if (! $functionNode->accessesSuperglobals()) {
+        if (! $node->accessesSuperglobals()) {
             return null;
         }
 
-        return new RuleViolation(
-            message:      sprintf('Function [%s()] must not access superglobals', $functionNode->functionName),
-            file:         $functionNode->file,
-            line:         $functionNode->line,
-            className:    $functionNode->functionName,
-            layer:        $functionNode->layer,
-            functionName: $functionNode->functionName,
-        );
-    }
-
-    public function appliesToAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): bool
-    {
-        return $anonymousFunctionNode->isInLayer($this->layer);
-    }
-
-    public function evaluateAnonymousFunction(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
-    {
-        if (! $anonymousFunctionNode->accessesSuperglobals()) {
-            return null;
+        if ($node instanceof FunctionNode) {
+            return new RuleViolation(
+                message:      sprintf('Function [%s()] must not access superglobals', $node->functionName),
+                file:         $node->file,
+                line:         $node->line,
+                className:    $node->functionName,
+                layer:        $node->layer,
+                functionName: $node->functionName,
+            );
         }
 
         return new RuleViolation(
             message:   sprintf(
                 '%s in [%s] must not access superglobals',
-                $anonymousFunctionNode->getType(),
-                $anonymousFunctionNode->enclosingScopeName()
+                $node->getType(),
+                $node->enclosingScopeName()
             ),
-            file:      $anonymousFunctionNode->file,
-            line:      $anonymousFunctionNode->line,
-            className: $anonymousFunctionNode->enclosingScopeName(),
-            layer:     $anonymousFunctionNode->layer,
+            file:      $node->file,
+            line:      $node->line,
+            className: $node->enclosingScopeName(),
+            layer:     $node->layer,
         );
     }
 }
