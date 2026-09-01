@@ -8,7 +8,7 @@
         .header { fill: #cccccc; font-weight: bold; }
         .version { fill: #cccccc; }
     </style>
-
+    
     <g transform="translate(16, 24)">
         <!-- Line 1: Prompt and Command -->
         <text x="0" y="0" class="text"><tspan class="prompt">➜  </tspan><tspan class="dir">prj-ddd </tspan><tspan class="cmd">vendor/bin/structarmed analyze</tspan></text>
@@ -21,7 +21,7 @@
 
         <!-- Line 6: No violations -->
         <text x="0" y="80" class="text">✅  No violations found. (0.00s)</text>
-
+        
         <!-- Line 7: Final Prompt -->
         <text x="0" y="104" class="text"><tspan class="prompt">➜  </tspan><tspan class="dir">prj-ddd </tspan>█</text>
     </g>
