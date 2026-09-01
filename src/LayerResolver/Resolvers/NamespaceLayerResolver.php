@@ -19,7 +19,13 @@ use function strlen;
  */
 final readonly class NamespaceLayerResolver implements LayerResolverInterface
 {
-    /** @var array<string, list<string>> */
+    /**
+     * Layer paths stored with a trailing '/' so a single str_starts_with()
+     * against the file path (also suffixed with '/') covers both exact and
+     * descendant matches.
+     *
+     * @var array<string, list<string>>
+     */
     private array $normalisedLayers;
 
     /**
@@ -36,7 +42,7 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
                 $normalisedLayers[$layerName][] = Path::normalise(
                     Path::resolve($layerPath, $basePath),
                     canonicalise: true
-                );
+                ) . '/';
             }
         }
 
@@ -45,13 +51,13 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
 
     public function resolve(string $className, string $filePath): ?string
     {
-        $normalised    = Path::normalise($filePath, canonicalise: true);
+        $pathWithSlash = Path::normalise($filePath, canonicalise: true) . '/';
         $matchedLayer  = null;
         $matchedLength = -1;
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
             foreach ($layerPaths as $layerPath) {
-                if ($this->matchesLayerPath($normalised, $layerPath)) {
+                if (str_starts_with($pathWithSlash, $layerPath)) {
                     $length = strlen($layerPath);
 
                     if ($length > $matchedLength) {
@@ -70,12 +76,12 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
      */
     public function resolveAll(string $className, string $filePath): array
     {
-        $normalised = Path::normalise($filePath, canonicalise: true);
-        $matched    = [];
+        $pathWithSlash = Path::normalise($filePath, canonicalise: true) . '/';
+        $matched       = [];
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
             foreach ($layerPaths as $layerPath) {
-                if ($this->matchesLayerPath($normalised, $layerPath)) {
+                if (str_starts_with($pathWithSlash, $layerPath)) {
                     $matched[] = $layerName;
                     break;
                 }
@@ -83,10 +89,5 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         }
 
         return $matched;
-    }
-
-    private function matchesLayerPath(string $path, string $layerPath): bool
-    {
-        return $path === $layerPath || str_starts_with($path, $layerPath . '/');
     }
 }
