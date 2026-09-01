@@ -58,7 +58,7 @@ final class ComposerJsonProvider
             return null;
         }
 
-        foreach ($composer as $key => $_) {
+        foreach ($composer as $key => $value) {
             if (is_int($key)) {
                 return null;
             }
