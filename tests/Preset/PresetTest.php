@@ -142,6 +142,8 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(PerPreset::ENUM_CASES_MUST_BE_PASCAL_CASE, $rules);
+        $this->assertArrayHasKey(PerPreset::ENUM_METHODS_MAY_NOT_BE_PROTECTED, $rules);
+        $this->assertArrayHasKey(PerPreset::ENUM_CONSTANTS_MAY_NOT_BE_PROTECTED, $rules);
     }
 
     public function testPerPresetUsesComposerSourcePathsByDefault(): void
@@ -153,6 +155,14 @@ final class PresetTest extends TestCase
         $this->assertSame(['Source' => []], $architecture->getLayers());
         $this->assertArrayHasKey(
             PerPreset::ENUM_CASES_MUST_BE_PASCAL_CASE,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            PerPreset::ENUM_METHODS_MAY_NOT_BE_PROTECTED,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            PerPreset::ENUM_CONSTANTS_MAY_NOT_BE_PROTECTED,
             $architecture->getRules()
         );
     }
