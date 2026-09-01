@@ -3682,6 +3682,42 @@ final class AnalyserTest extends TestCase
         );
     }
 
+    public function testAnalyserRulesetSkipsGloballySkippedFileFromPreResolvedList(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->skip(['src/HTTP/'])
+            ->ruleset([
+                'HTTP' => [], // Database NOT allowed
+            ]);
+
+        // A pre-resolved file list bypasses filesForAnalysis(), so the ruleset
+        // loop itself must honour the global skip paths.
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            ['src/'],
+            files: [$basePath . '/src/HTTP/Request.php']
+        );
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
+
     #[DataProvider('rulesetClassLikeKindProvider')]
     public function testAnalyserRulesetViolationMessageNamesTheClassLikeKind(string $expectedKind, string $source): void
     {
