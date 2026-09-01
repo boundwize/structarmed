@@ -18,7 +18,7 @@ use function substr;
  */
 final readonly class FunctionNode
 {
-    use FunctionLikeNodeTrait;
+    use NodeQueryTrait;
 
     /** @var list<string> */
     public array $layers;
