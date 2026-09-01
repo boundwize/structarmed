@@ -152,6 +152,11 @@ PHP);
             '    ->withPreset(Preset::MVC());',
         ];
 
+        yield 'per' => [
+            ['--preset=per'],
+            '    ->withPreset(Preset::PER());',
+        ];
+
         yield 'psr1' => [
             ['--preset=psr1'],
             '    ->withPreset(Preset::PSR1());',
@@ -180,10 +185,11 @@ PHP);
         yield 'all' => [
             ['--preset=all'],
             "    ->withPresets(\n"
+            . "        Preset::PSR4(),\n"
             . "        Preset::PSR1(),\n"
             . "        Preset::PSR12(),\n"
+            . "        Preset::PER(),\n"
             . "        Preset::PSR15(),\n"
-            . "        Preset::PSR4(),\n"
             . "        Preset::DDD(),\n"
             . "        Preset::MVC(),\n"
             . "        Preset::YAGNI()\n"
