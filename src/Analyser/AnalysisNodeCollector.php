@@ -237,7 +237,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     ];
 
     /** @var list<ClassNode> */
-    private array $nodes = [];
+    private array $classNodes = [];
 
     /** @var list<AnonymousClassNode> */
     private array $anonymousClassNodes = [];
@@ -384,9 +384,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /** @return list<ClassNode> */
-    public function getNodes(): array
+    public function getClassNodes(): array
     {
-        return $this->nodes;
+        return $this->classNodes;
     }
 
     /** @return list<FunctionNode> */
@@ -1278,7 +1278,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $implements       = $this->collectImplements($classLike);
         $interfaceExtends = $this->collectInterfaceExtends($classLike);
 
-        $this->nodes[] = new ClassNode(
+        $this->classNodes[] = new ClassNode(
             className:          $className,
             file:               $this->currentFile,
             line:               $classLike->getStartLine(),

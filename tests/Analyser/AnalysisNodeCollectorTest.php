@@ -40,7 +40,7 @@ final class AnalysisNodeCollectorTest extends TestCase
     /** @return ClassNode[] */
     private function collectNodes(string $code): array
     {
-        return $this->makeCollector($code)->getNodes();
+        return $this->makeCollector($code)->getClassNodes();
     }
 
     /** @return list<AnonymousClassNode> */
@@ -703,7 +703,7 @@ final class AnalysisNodeCollectorTest extends TestCase
 
         $this->assertSame(
             ['__construct', 'bar'],
-            array_column($analysisNodeCollector->getNodes()[0]->methods, 'name'),
+            array_column($analysisNodeCollector->getClassNodes()[0]->methods, 'name'),
         );
     }
 
@@ -1836,6 +1836,6 @@ PHP;
         $analysisNodeCollector->enterNode($classMethod);
         $analysisNodeCollector->leaveNode($classMethod);
 
-        $this->assertSame([], $analysisNodeCollector->getNodes());
+        $this->assertSame([], $analysisNodeCollector->getClassNodes());
     }
 }

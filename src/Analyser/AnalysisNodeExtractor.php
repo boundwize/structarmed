@@ -64,7 +64,7 @@ final readonly class AnalysisNodeExtractor
         }
 
         $extractionResult = new ExtractionResult(
-            $analysisNodeCollector->getNodes(),
+            $analysisNodeCollector->getClassNodes(),
             $fileAnalyses,
             $analysisNodeCollector->getAnonymousClassNodes(),
             $analysisNodeCollector->getFileReferences(),

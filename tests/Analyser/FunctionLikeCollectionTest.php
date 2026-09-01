@@ -206,7 +206,7 @@ final class FunctionLikeCollectionTest extends TestCase
             . 'function second(): void {}'
         );
 
-        $this->assertSame(['App\Domain\Foo'], [$analysisNodeCollector->getNodes()[0]->className]);
+        $this->assertSame(['App\Domain\Foo'], [$analysisNodeCollector->getClassNodes()[0]->className]);
         $this->assertSame(
             ['App\Domain\first', 'App\Domain\second'],
             [
@@ -265,7 +265,7 @@ final class FunctionLikeCollectionTest extends TestCase
         );
 
         $anonymousFunctionNode = $analysisNodeCollector->getAnonymousFunctionNodes()[0];
-        $classNode             = $analysisNodeCollector->getNodes()[0];
+        $classNode             = $analysisNodeCollector->getClassNodes()[0];
 
         $this->assertSame('App\Domain\Handler', $anonymousFunctionNode->enclosingClassName);
         $this->assertNull($anonymousFunctionNode->enclosingFunctionName);
@@ -405,7 +405,7 @@ final class FunctionLikeCollectionTest extends TestCase
             '<?php namespace App\Domain;' . "\n"
             . 'final class Handler { public function handle(): void {'
             . ' $fn = function () { if (true) { return; } }; if (false) { return; } } }'
-        )->getNodes()[0];
+        )->getClassNodes()[0];
 
         $this->assertSame(3, $classNode->methods[0]->cyclomaticComplexity);
     }
