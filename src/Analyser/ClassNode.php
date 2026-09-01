@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
-use function in_array;
 use function preg_match;
-use function rtrim;
 use function str_ends_with;
 use function str_starts_with;
 use function strcasecmp;
@@ -16,6 +14,8 @@ use function substr;
 
 final class ClassNode
 {
+    use NodeQueryTrait;
+
     /** @var list<string> */
     public readonly array $layers;
 
@@ -163,11 +163,6 @@ final class ClassNode
             : substr($this->className, $position + 1);
     }
 
-    public function isInLayer(string $layer): bool
-    {
-        return in_array($layer, $this->layers, true);
-    }
-
     public function isClass(): bool
     {
         return ! $this->isInterface && ! $this->isTrait && ! $this->isEnum;
@@ -186,24 +181,6 @@ final class ClassNode
     public function nameMatches(string $pattern, bool $isFullName = false): bool
     {
         return (bool) preg_match($pattern, $isFullName ? $this->className : $this->shortName());
-    }
-
-    public function dependsOn(string $class): bool
-    {
-        return in_array($class, $this->dependencies, true);
-    }
-
-    public function dependsOnNamespace(string $namespace): bool
-    {
-        $prefix = rtrim($namespace, '\\') . '\\';
-
-        foreach ($this->dependencies as $dependency) {
-            if (str_starts_with($dependency, $prefix)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -240,36 +217,6 @@ final class ClassNode
         }
 
         return false;
-    }
-
-    public function callsFunction(string $function): bool
-    {
-        foreach ($this->functionCalls as $functionCall) {
-            if (strcasecmp($functionCall, $function) === 0) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public function usesLanguageConstruct(string $construct): bool
-    {
-        if (in_array($construct, $this->languageConstructs, true)) {
-            return true;
-        }
-
-        // `die` is a pure alias of `exit`, so banning either spelling catches both.
-        return match ($construct) {
-            'exit'  => in_array('die', $this->languageConstructs, true),
-            'die'   => in_array('exit', $this->languageConstructs, true),
-            default => false,
-        };
-    }
-
-    public function accessesSuperglobals(): bool
-    {
-        return $this->superglobals !== [];
     }
 
     public function constructorParamCount(): int

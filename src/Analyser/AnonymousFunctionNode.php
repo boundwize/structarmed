@@ -18,7 +18,7 @@ use function array_filter;
  */
 final readonly class AnonymousFunctionNode
 {
-    use FunctionLikeNodeTrait;
+    use NodeQueryTrait;
 
     /**
      * Scope label reported by {@see enclosingScopeName()} for an anonymous
