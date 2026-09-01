@@ -38,12 +38,12 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
     {
         $mustBeStaticAnonymousFunctionRule = new MustBeStaticAnonymousFunctionRule(layer: 'Domain');
 
-        $this->assertTrue($mustBeStaticAnonymousFunctionRule->appliesToAnonymousFunction($this->makeNode()));
+        $this->assertTrue($mustBeStaticAnonymousFunctionRule->appliesTo($this->makeNode()));
         $this->assertFalse(
-            $mustBeStaticAnonymousFunctionRule->appliesToAnonymousFunction($this->makeNode(layer: 'Infrastructure'))
+            $mustBeStaticAnonymousFunctionRule->appliesTo($this->makeNode(layer: 'Infrastructure'))
         );
         $this->assertFalse(
-            $mustBeStaticAnonymousFunctionRule->appliesToAnonymousFunction($this->makeNode(layer: null))
+            $mustBeStaticAnonymousFunctionRule->appliesTo($this->makeNode(layer: null))
         );
     }
 
@@ -53,7 +53,7 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $mustBeStaticAnonymousFunctionRule->evaluateAnonymousFunction($this->makeNode(isStatic: true))
+            $mustBeStaticAnonymousFunctionRule->evaluate($this->makeNode(isStatic: true))
         );
     }
 
@@ -63,14 +63,14 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $mustBeStaticAnonymousFunctionRule->evaluateAnonymousFunction($this->makeNode(usesThis: true))
+            $mustBeStaticAnonymousFunctionRule->evaluate($this->makeNode(usesThis: true))
         );
     }
 
     public function testViolatesForNonStaticClosure(): void
     {
         $mustBeStaticAnonymousFunctionRule = new MustBeStaticAnonymousFunctionRule(layer: 'Domain');
-        $violation                         = $mustBeStaticAnonymousFunctionRule->evaluateAnonymousFunction(
+        $violation                         = $mustBeStaticAnonymousFunctionRule->evaluate(
             $this->makeNode()
         );
 
@@ -85,7 +85,7 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
     public function testViolatesForNonStaticArrowFunctionAtFileScope(): void
     {
         $mustBeStaticAnonymousFunctionRule = new MustBeStaticAnonymousFunctionRule(layer: 'Domain');
-        $violation                         = $mustBeStaticAnonymousFunctionRule->evaluateAnonymousFunction(
+        $violation                         = $mustBeStaticAnonymousFunctionRule->evaluate(
             $this->makeNode(isArrowFunction: true, enclosingClassName: null)
         );
 

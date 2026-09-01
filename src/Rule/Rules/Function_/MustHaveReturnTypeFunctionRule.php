@@ -17,12 +17,12 @@ final readonly class MustHaveReturnTypeFunctionRule implements FunctionRuleInter
     ) {
     }
 
-    public function appliesToFunction(FunctionNode $functionNode): bool
+    public function appliesTo(FunctionNode $functionNode): bool
     {
         return $functionNode->isInLayer($this->layer);
     }
 
-    public function evaluateFunction(FunctionNode $functionNode): ?RuleViolation
+    public function evaluate(FunctionNode $functionNode): ?RuleViolation
     {
         if ($functionNode->hasReturnType) {
             return null;
