@@ -168,6 +168,35 @@ PHP);
         $this->assertSame('Keyword constant [TRUE] must use lowercase [true]', $violations[0]->message);
     }
 
+    public function testLeavesRelativeKeywordLikeConstantAloneWhenFixingTheSameLine(): void
+    {
+        // namespace\TRUE names the case-sensitive constant Foo\TRUE, not the keyword.
+        $basePath = $this->makeProject(<<<'PHP'
+<?php
+
+namespace Foo;
+
+$value = TRUE ? namespace\TRUE : false;
+PHP);
+
+        $mustUseLowercaseKeywordConstantRule = new MustUseLowercaseKeywordConstantRule(['src/']);
+        $violations                          = $mustUseLowercaseKeywordConstantRule->evaluateProjectAll(
+            $basePath,
+            Architecture::define()
+        );
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('Keyword constant [TRUE] must use lowercase [true]', $violations[0]->message);
+        $this->assertTrue($mustUseLowercaseKeywordConstantRule->fix($violations[0]));
+        $this->assertSame(<<<'PHP'
+<?php
+
+namespace Foo;
+
+$value = true ? namespace\TRUE : false;
+PHP, file_get_contents($basePath . '/src/Foo.php'));
+    }
+
     public function testFixesNestedExpressionsPreservingSurroundingCode(): void
     {
         $basePath = $this->makeProject(<<<'PHP'

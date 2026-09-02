@@ -16,7 +16,9 @@ use function strtolower;
 /**
  * Lowercases every `true`, `false`, or `null` fetch on a line that is not yet
  * spelled in lowercase. The Name is replaced by one of the same kind, so a
- * fully qualified `\TRUE` keeps its leading `\` and becomes `\true`.
+ * fully qualified `\TRUE` keeps its leading `\` and becomes `\true`. A
+ * relative `namespace\TRUE` names the case-sensitive constant `Ns\TRUE`, not
+ * the keyword, so it is left alone.
  */
 final class LowercaseKeywordConstantVisitor extends NodeVisitorAbstract
 {
@@ -43,6 +45,7 @@ final class LowercaseKeywordConstantVisitor extends NodeVisitorAbstract
             $this->spelling === null
             || ! $node instanceof ConstFetch
             || $node->getStartLine() !== $this->line
+            || $node->name instanceof Relative
         ) {
             return null;
         }
@@ -55,11 +58,9 @@ final class LowercaseKeywordConstantVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        $node->name = match (true) {
-            $name instanceof FullyQualified => new FullyQualified($keyword, $name->getAttributes()),
-            $name instanceof Relative       => new Relative($keyword, $name->getAttributes()),
-            default                         => new Name($keyword, $name->getAttributes()),
-        };
+        $node->name = $name instanceof FullyQualified
+            ? new FullyQualified($keyword, $name->getAttributes())
+            : new Name($keyword, $name->getAttributes());
 
         return $node;
     }

@@ -30,11 +30,22 @@ final class LowercaseKeywordConstantVisitorTest extends TestCase
         );
     }
 
-    public function testKeepsRelativeSpelling(): void
+    public function testIgnoresRelativeKeywordLikeConstant(): void
     {
         $this->assertSame(
-            'return namespace\false;',
+            'return namespace\FALSE;',
             $this->apply('<?php return namespace\FALSE;', new LowercaseKeywordConstantVisitor(1, 'FALSE'))
+        );
+    }
+
+    public function testIgnoresRelativeKeywordLikeConstantNextToRealViolation(): void
+    {
+        $this->assertSame(
+            '$value = true ? namespace\TRUE : false;',
+            $this->apply(
+                '<?php $value = TRUE ? namespace\TRUE : false;',
+                new LowercaseKeywordConstantVisitor(1, 'TRUE')
+            )
         );
     }
 
