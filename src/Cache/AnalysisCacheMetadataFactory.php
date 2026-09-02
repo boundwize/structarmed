@@ -83,13 +83,13 @@ final readonly class AnalysisCacheMetadataFactory
      */
     private function filesHash(array $files): string
     {
-        $context = hash_init('xxh128');
+        $hashContext = hash_init('xxh128');
 
         foreach ($files as $file) {
-            hash_update($context, $file . "\0" . $this->fileHashProvider->hash($file) . "\0");
+            hash_update($hashContext, $file . "\0" . $this->fileHashProvider->hash($file) . "\0");
         }
 
-        return hash_final($context);
+        return hash_final($hashContext);
     }
 
     private function composerHash(string $basePath): string
