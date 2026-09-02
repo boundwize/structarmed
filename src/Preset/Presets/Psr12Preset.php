@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareConstantVisibilityRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclarePropertyVisibilityRule;
+use Boundwize\StructArmed\Rule\Rules\File\MustUseLowercaseKeywordConstantRule;
 
 final readonly class Psr12Preset implements PresetInterface
 {
@@ -19,6 +20,9 @@ final readonly class Psr12Preset implements PresetInterface
     public const CONSTANTS_MUST_DECLARE_VISIBILITY = 'psr12.constants.must_declare_visibility';
 
     public const PROPERTIES_MUST_DECLARE_VISIBILITY = 'psr12.properties.must_declare_visibility';
+
+    public const FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS =
+        'psr12.files.must_use_lowercase_keyword_constants';
 
     /**
      * @param list<string>|null $sourcePaths
@@ -41,6 +45,10 @@ final readonly class Psr12Preset implements PresetInterface
         $layerName = $this->resolveLayerName($architecture, $sourcePathsForPsr12);
         $architecture->layer($layerName, $sourcePathsForPsr12 ?? []);
 
+        $architecture->rule(
+            self::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS,
+            new MustUseLowercaseKeywordConstantRule($sourcePathsForPsr12)
+        );
         $architecture->rule(
             self::METHODS_MUST_DECLARE_VISIBILITY,
             new MustDeclareMethodVisibilityRule($layerName)
