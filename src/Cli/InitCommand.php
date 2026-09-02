@@ -89,6 +89,7 @@ PHP);
             'per' => '    ->withPreset(Preset::PER());',
             'psr15' => '    ->withPreset(Preset::PSR15());',
             'yagni' => '    ->withPreset(Preset::YAGNI());',
+            'codequality' => '    ->withPreset(Preset::CODEQUALITY());',
             'all' => "    ->withPresets(\n"
                 . "        Preset::PSR4(),\n"
                 . "        Preset::PSR1(),\n"
@@ -97,7 +98,8 @@ PHP);
                 . "        Preset::PSR15(),\n"
                 . "        Preset::DDD(),\n"
                 . "        Preset::MVC(),\n"
-                . "        Preset::YAGNI()\n"
+                . "        Preset::YAGNI(),\n"
+                . "        Preset::CODEQUALITY()\n"
                 . "    );",
             default => null,
         };

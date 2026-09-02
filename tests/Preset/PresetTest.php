@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Preset;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\CodeQualityPreset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\PerPreset;
@@ -20,10 +21,13 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
+use Boundwize\StructArmed\Rule\Rules\File\LargeNumericLiteralMustUseSeparatorRule;
+use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Preset::class)]
+#[CoversClass(CodeQualityPreset::class)]
 #[CoversClass(DddPreset::class)]
 #[CoversClass(MvcPreset::class)]
 #[CoversClass(PerPreset::class)]
@@ -72,6 +76,46 @@ final class PresetTest extends TestCase
 
         // A null source path list defers to Composer-discovered PSR-4 paths.
         $this->assertSame(['Source' => []], $architecture->getLayers());
+    }
+
+    public function testCodeQualityPresetRegistersSourceLayerAndRules(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::CODEQUALITY(
+            sourcePaths: ['src/'],
+        )->apply($architecture);
+
+        $this->assertSame(['Source' => ['src/']], $architecture->getLayers());
+
+        $rules = $architecture->getRules();
+        $this->assertCount(2, $rules);
+        $this->assertInstanceOf(
+            MustBeStaticAnonymousFunctionRule::class,
+            $rules[CodeQualityPreset::ANONYMOUS_FUNCTIONS_MUST_BE_STATIC] ?? null
+        );
+        $this->assertInstanceOf(
+            LargeNumericLiteralMustUseSeparatorRule::class,
+            $rules[CodeQualityPreset::LARGE_NUMERIC_LITERALS_MUST_USE_SEPARATOR] ?? null
+        );
+    }
+
+    public function testCodeQualityPresetUsesComposerSourcePathsByDefault(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::CODEQUALITY()->apply($architecture);
+
+        // A null source path list defers to Composer-discovered PSR-4 paths.
+        $this->assertSame(['Source' => []], $architecture->getLayers());
+        $this->assertArrayHasKey(
+            CodeQualityPreset::ANONYMOUS_FUNCTIONS_MUST_BE_STATIC,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            CodeQualityPreset::LARGE_NUMERIC_LITERALS_MUST_USE_SEPARATOR,
+            $architecture->getRules()
+        );
     }
 
     public function testPsr1PresetRegistersSourceLayerAndRules(): void

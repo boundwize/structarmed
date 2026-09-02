@@ -182,6 +182,11 @@ PHP);
             '    ->withPreset(Preset::YAGNI());',
         ];
 
+        yield 'codequality' => [
+            ['--preset=codequality'],
+            '    ->withPreset(Preset::CODEQUALITY());',
+        ];
+
         yield 'all' => [
             ['--preset=all'],
             "    ->withPresets(\n"
@@ -192,7 +197,8 @@ PHP);
             . "        Preset::PSR15(),\n"
             . "        Preset::DDD(),\n"
             . "        Preset::MVC(),\n"
-            . "        Preset::YAGNI()\n"
+            . "        Preset::YAGNI(),\n"
+            . "        Preset::CODEQUALITY()\n"
             . "    );",
         ];
     }
