@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Rule\Fixer\PhpParser\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Rule\Rules\File\MustUseLowercaseKeywordConstantRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use Boundwize\StructArmed\Util\Path;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -324,18 +325,23 @@ PHP, file_get_contents($basePath . '/src/Foo.php'));
         $this->assertSame('Null', $violations[1]->constantName);
     }
 
-    public function testFixWithoutConstantNameLowercasesFirstKeywordConstantOnLine(): void
+    public function testFixWithoutConstantNameDoesNothing(): void
     {
-        $basePath                            = $this->makeProject("<?php\n\n\$value = FOO ?? Null;\n");
+        $basePath                            = $this->makeProject("<?php\n\n\$value = TRUE ? FALSE : NULL;\n");
         $mustUseLowercaseKeywordConstantRule = new MustUseLowercaseKeywordConstantRule(['src/']);
 
-        $this->assertTrue($mustUseLowercaseKeywordConstantRule->fix(new RuleViolation(
-            message:   'Keyword constant [Null] must use lowercase [null]',
+        // Without the spelling the violation does not identify an occurrence,
+        // so the fixer must not widen the change to every keyword on the line.
+        $this->assertFalse($mustUseLowercaseKeywordConstantRule->fix(new RuleViolation(
+            message:   'Keyword constant [TRUE] must use lowercase [true]',
             file:      $basePath . '/src/Foo.php',
             line:      3,
             className: '',
         )));
-        $this->assertSame("<?php\n\n\$value = FOO ?? null;\n", file_get_contents($basePath . '/src/Foo.php'));
+        $this->assertSame(
+            "<?php\n\n\$value = TRUE ? FALSE : NULL;\n",
+            file_get_contents($basePath . '/src/Foo.php')
+        );
     }
 
     public function testFixReturnsFalseForMissingFile(): void
@@ -404,11 +410,12 @@ PHP);
         mkdir($basePath . '/src');
         file_put_contents($basePath . '/src/Foo.php', $code);
 
-        // Violations carry canonical paths, which differ from the temporary directory on macOS.
+        // Violations carry canonical, forward-slash paths: realpath() differs from the
+        // temporary directory on macOS and uses backslashes on Windows.
         $realBasePath = realpath($basePath);
         $this->assertIsString($realBasePath);
 
-        return $realBasePath;
+        return Path::normalise($realBasePath, canonicalise: true);
     }
 
     /** @param list<array{int, string}> $nonCanonicalKeywordConstants */

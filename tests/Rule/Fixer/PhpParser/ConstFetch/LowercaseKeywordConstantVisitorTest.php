@@ -18,7 +18,7 @@ final class LowercaseKeywordConstantVisitorTest extends TestCase
     {
         $this->assertSame(
             "\$a = FOO;\n\$b = true;",
-            $this->apply("<?php\n\$a = FOO;\n\$b = tRuE;", new LowercaseKeywordConstantVisitor(3))
+            $this->apply("<?php\n\$a = FOO;\n\$b = tRuE;", new LowercaseKeywordConstantVisitor(3, 'tRuE'))
         );
     }
 
@@ -34,7 +34,7 @@ final class LowercaseKeywordConstantVisitorTest extends TestCase
     {
         $this->assertSame(
             'return namespace\false;',
-            $this->apply('<?php return namespace\FALSE;', new LowercaseKeywordConstantVisitor(1))
+            $this->apply('<?php return namespace\FALSE;', new LowercaseKeywordConstantVisitor(1, 'FALSE'))
         );
     }
 
@@ -42,7 +42,7 @@ final class LowercaseKeywordConstantVisitorTest extends TestCase
     {
         $this->assertSame(
             "\$a = TRUE;\n\$b = FALSE;",
-            $this->apply("<?php\n\$a = TRUE;\n\$b = FALSE;", new LowercaseKeywordConstantVisitor(4))
+            $this->apply("<?php\n\$a = TRUE;\n\$b = FALSE;", new LowercaseKeywordConstantVisitor(4, 'TRUE'))
         );
     }
 
@@ -52,7 +52,7 @@ final class LowercaseKeywordConstantVisitorTest extends TestCase
 
         $this->assertSame(
             '$a = FOO ?? \BAR ?? Foo\BAZ ?? Some::TRUE ?? true ?? \null;',
-            $this->apply($code, new LowercaseKeywordConstantVisitor(1))
+            $this->apply($code, new LowercaseKeywordConstantVisitor(1, 'TRUE'))
         );
     }
 
@@ -61,6 +61,14 @@ final class LowercaseKeywordConstantVisitorTest extends TestCase
         $this->assertSame(
             '$a = True && true;',
             $this->apply('<?php $a = True && TRUE;', new LowercaseKeywordConstantVisitor(1, 'TRUE'))
+        );
+    }
+
+    public function testDoesNothingWithoutSpelling(): void
+    {
+        $this->assertSame(
+            '$a = TRUE ? FALSE : NULL;',
+            $this->apply('<?php $a = TRUE ? FALSE : NULL;', new LowercaseKeywordConstantVisitor(1, null))
         );
     }
 

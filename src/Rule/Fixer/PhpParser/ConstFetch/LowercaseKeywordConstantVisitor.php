@@ -27,18 +27,23 @@ final class LowercaseKeywordConstantVisitor extends NodeVisitorAbstract
     ];
 
     /**
-     * @param string|null $spelling The spelling as written without a leading `\`, e.g. `TRUE`;
-     *                              null lowercases every keyword constant on the line.
+     * @param string|null $spelling The spelling as written without a leading `\`, e.g. `TRUE`.
+     *                              A violation without it does not identify an occurrence, so
+     *                              the visitor then changes nothing rather than widening the fix.
      */
     public function __construct(
         private readonly int $line,
-        private readonly ?string $spelling = null,
+        private readonly ?string $spelling,
     ) {
     }
 
     public function enterNode(Node $node): ?Node
     {
-        if (! $node instanceof ConstFetch || $node->getStartLine() !== $this->line) {
+        if (
+            $this->spelling === null
+            || ! $node instanceof ConstFetch
+            || $node->getStartLine() !== $this->line
+        ) {
             return null;
         }
 
@@ -46,11 +51,7 @@ final class LowercaseKeywordConstantVisitor extends NodeVisitorAbstract
         $spelling = $name->toString();
         $keyword  = strtolower($spelling);
 
-        if (
-            ! isset(self::KEYWORD_CONSTANTS[$keyword])
-            || $spelling === $keyword
-            || ($this->spelling !== null && $spelling !== $this->spelling)
-        ) {
+        if (! isset(self::KEYWORD_CONSTANTS[$keyword]) || $spelling === $keyword || $spelling !== $this->spelling) {
             return null;
         }
 
