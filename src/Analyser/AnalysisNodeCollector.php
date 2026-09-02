@@ -1057,7 +1057,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function collectKeywordConstant(Name $name): void
     {
         $spelling = $name->toString();
-        $keyword  = strtolower($spelling);
+        $length   = strlen($spelling);
+
+        if ($length !== 4 && $length !== 5) {
+            return;
+        }
+
+        $keyword = strtolower($spelling);
 
         if (! isset(self::KEYWORD_CONSTANTS[$keyword]) || $spelling === $keyword) {
             return;
