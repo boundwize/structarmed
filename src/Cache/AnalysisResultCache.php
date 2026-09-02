@@ -33,6 +33,7 @@ use function hash;
 use function is_array;
 use function is_bool;
 use function is_dir;
+use function is_float;
 use function is_int;
 use function is_string;
 use function json_decode;
@@ -65,7 +66,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 2;
+    public const FORMAT_VERSION = 3;
 
     private readonly string $cacheDirectory;
 
@@ -493,17 +494,18 @@ final class AnalysisResultCache
      */
     private function ruleViolationFromArray(array $violation): ?RuleViolation
     {
-        $ruleKey   = $violation['rule'] ?? null;
-        $message   = $violation['message'] ?? null;
-        $file      = $violation['file'] ?? null;
-        $line      = $violation['line'] ?? null;
-        $className = $violation['class'] ?? null;
-        $layer     = $violation['layer'] ?? null;
-        $method    = $violation['method'] ?? null;
-        $constant  = $violation['constant'] ?? null;
-        $property  = $violation['property'] ?? null;
-        $function  = $violation['function'] ?? null;
-        $fixable   = $violation['fixable'] ?? false;
+        $ruleKey        = $violation['rule'] ?? null;
+        $message        = $violation['message'] ?? null;
+        $file           = $violation['file'] ?? null;
+        $line           = $violation['line'] ?? null;
+        $className      = $violation['class'] ?? null;
+        $layer          = $violation['layer'] ?? null;
+        $method         = $violation['method'] ?? null;
+        $constant       = $violation['constant'] ?? null;
+        $property       = $violation['property'] ?? null;
+        $function       = $violation['function'] ?? null;
+        $numericLiteral = $violation['numericLiteral'] ?? null;
+        $fixable        = $violation['fixable'] ?? false;
 
         if (
             ! is_string($ruleKey)
@@ -516,6 +518,7 @@ final class AnalysisResultCache
             || ($constant !== null && ! is_string($constant))
             || ($property !== null && ! is_string($property))
             || ($function !== null && ! is_string($function))
+            || ($numericLiteral !== null && ! is_string($numericLiteral))
             || ! is_bool($fixable)
         ) {
             return null;
@@ -533,6 +536,7 @@ final class AnalysisResultCache
             constantName: $constant,
             propertyName: $property,
             functionName: $function,
+            numericLiteral: $numericLiteral,
         );
     }
 
@@ -1251,6 +1255,7 @@ final class AnalysisResultCache
             'hasSideEffects'               => $fileAnalysis->hasSideEffects,
             'sideEffectLine'               => $fileAnalysis->sideEffectLine,
             'nonCanonicalKeywordConstants' => $fileAnalysis->nonCanonicalKeywordConstants,
+            'numericLiterals'              => $fileAnalysis->numericLiterals,
         ];
     }
 
@@ -1268,6 +1273,7 @@ final class AnalysisResultCache
             || ! is_bool($analysis['hasSideEffects'] ?? null)
             || ! is_int($analysis['sideEffectLine'] ?? null)
             || ! $this->isKeywordConstantList($analysis['nonCanonicalKeywordConstants'] ?? null)
+            || ! $this->isNumericLiteralList($analysis['numericLiterals'] ?? null)
         ) {
             return null;
         }
@@ -1282,6 +1288,7 @@ final class AnalysisResultCache
             hasSideEffects: $analysis['hasSideEffects'],
             sideEffectLine: $analysis['sideEffectLine'],
             nonCanonicalKeywordConstants: $analysis['nonCanonicalKeywordConstants'],
+            numericLiterals: $analysis['numericLiterals'],
         );
     }
 
@@ -1300,6 +1307,30 @@ final class AnalysisResultCache
                 || count($keywordConstant) !== 2
                 || ! is_int($keywordConstant[0] ?? null)
                 || ! is_string($keywordConstant[1] ?? null)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @phpstan-assert-if-true list<array{int, string, int|float}> $value
+     */
+    private function isNumericLiteralList(mixed $value): bool
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return false;
+        }
+
+        foreach ($value as $numericLiteral) {
+            if (
+                ! is_array($numericLiteral)
+                || count($numericLiteral) !== 3
+                || ! is_int($numericLiteral[0] ?? null)
+                || ! is_string($numericLiteral[1] ?? null)
+                || (! is_int($numericLiteral[2] ?? null) && ! is_float($numericLiteral[2] ?? null))
             ) {
                 return false;
             }

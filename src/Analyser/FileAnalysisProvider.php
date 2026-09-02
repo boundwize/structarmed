@@ -136,9 +136,14 @@ final class FileAnalysisProvider
      *                                                               analysis-node traversal recorded
      *                                                               for the file; the provider never
      *                                                               walks the AST for them itself.
+     * @param list<array{int, string, int|float}> $numericLiterals Numeric literals recorded by the
+     *                                                               same analysis-node traversal.
      */
-    public function analyse(string $file, array $nonCanonicalKeywordConstants = []): FileAnalysis
-    {
+    public function analyse(
+        string $file,
+        array $nonCanonicalKeywordConstants = [],
+        array $numericLiterals = [],
+    ): FileAnalysis {
         $file = Path::normalise($file, canonicalise: true);
 
         if (isset($this->analyses[$file])) {
@@ -164,6 +169,7 @@ final class FileAnalysisProvider
             hasSideEffects: $fileState['hasSideEffects'],
             sideEffectLine: $fileState['sideEffectLine'],
             nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
+            numericLiterals: $numericLiterals,
         );
 
         $this->analyses[$file] = $fileAnalysis;

@@ -125,6 +125,7 @@ final class AnalysisResultCacheTest extends TestCase
             methodName: 'save',
             constantName: 'VERSION',
             propertyName: 'status',
+            numericLiteral: '10000',
         ));
 
         try {
@@ -1576,6 +1577,7 @@ final class AnalysisResultCacheTest extends TestCase
             hasSideEffects: false,
             sideEffectLine: 1,
             nonCanonicalKeywordConstants: [[3, 'TRUE'], [5, '\\NULL']],
+            numericLiterals: [[7, '10000', 10000], [8, '1e10', 10000000000.0]],
         );
 
         file_put_contents($sourceFile, '<?php class Foo {}');
@@ -1628,6 +1630,7 @@ final class AnalysisResultCacheTest extends TestCase
             'hasSideEffects'               => false,
             'sideEffectLine'               => 1,
             'nonCanonicalKeywordConstants' => [],
+            'numericLiterals'              => [],
         ];
 
         yield 'numeric keys' => [[0 => 'bad']];
@@ -1670,6 +1673,12 @@ final class AnalysisResultCacheTest extends TestCase
         ];
         yield 'keyword constant with invalid line' => [[...$valid, 'nonCanonicalKeywordConstants' => [['1', 'TRUE']]]];
         yield 'keyword constant with invalid spelling' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1, 1]]]];
+        yield 'missing numeric literals' => [[...$valid, 'numericLiterals' => null]];
+        yield 'numeric literals not a list' => [[...$valid, 'numericLiterals' => ['bad' => [1, '10000', 10000]]]];
+        yield 'numeric literal not a triple' => [[...$valid, 'numericLiterals' => [[1, '10000']]]];
+        yield 'numeric literal with invalid line' => [[...$valid, 'numericLiterals' => [['1', '10000', 10000]]]];
+        yield 'numeric literal with invalid spelling' => [[...$valid, 'numericLiterals' => [[1, 10000, 10000]]]];
+        yield 'numeric literal with invalid value' => [[...$valid, 'numericLiterals' => [[1, '10000', '10000']]]];
     }
 
     /** @param array<mixed, mixed> $fileAnalysis */

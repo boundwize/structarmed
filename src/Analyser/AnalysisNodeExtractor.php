@@ -48,18 +48,24 @@ final readonly class AnalysisNodeExtractor
             try {
                 $ast                          = $this->fileAnalysisProvider->ast($file, $withFileAnalysis);
                 $nonCanonicalKeywordConstants = [];
+                $numericLiterals              = [];
 
                 if ($ast !== null && $ast !== []) {
                     $analysisNodeCollector->setCurrentFile($file);
                     $nodeTraverser->traverse($ast);
 
                     $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();
+                    $numericLiterals              = $analysisNodeCollector->getNumericLiterals();
                 }
 
                 // Analysed after the traversal so the facts only the collector
                 // records reach the file analysis without a second AST walk.
                 if ($withFileAnalysis) {
-                    $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse($file, $nonCanonicalKeywordConstants);
+                    $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse(
+                        $file,
+                        $nonCanonicalKeywordConstants,
+                        $numericLiterals,
+                    );
                 }
             } finally {
                 if ($withFileAnalysis) {

@@ -64,6 +64,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\File`.
 | `Psr1ValidUtf8Rule` | `new Psr1ValidUtf8Rule(sourcePaths: ['src/'])` | PHP files use valid UTF-8 encoding. |
 | `Psr1Utf8WithoutBomRule` | `new Psr1Utf8WithoutBomRule(sourcePaths: ['src/'])` | PHP files do not start with a byte order mark. Supports `--fix`. |
 | `MustUseLowercaseKeywordConstantRule` | `new MustUseLowercaseKeywordConstantRule(sourcePaths: ['src/'])` | PHP's special keyword constants `true`, `false`, and `null` use their canonical lowercase spelling. Fully qualified forms such as `\TRUE` are preserved as `\true`. Supports `--fix`. |
+| `LargeNumericLiteralMustUseSeparatorRule` | `new LargeNumericLiteralMustUseSeparatorRule(minimum: 10_000, sourcePaths: ['src/'])` | Plain decimal integer and float literals whose magnitude is at least `minimum` (default `10_000`) group their integer digits in threes with `_` separators, so `1000500.001` becomes `1_000_500.001`. Hexadecimal, octal, binary, exponent, and already separated literals are ignored. Supports `--fix`. |
 {: .rule-table }
 
 Pass `sourcePaths: null` or omit it to let the rule read PSR-4 paths from `composer.json`.
@@ -100,7 +101,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`Psr4DirectoryExistsRule`, `Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `MustUseLowercaseKeywordConstantRule`, `ExtendedClassMustBeAbstractOrInstantiatedRule`, `MustBeFinalRule`, `MustBeUsedInterfaceRule`, `MustBeUsedAbstractClassRule`, `MustBeUsedTraitRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically remove PSR-4 mappings for missing directories, normalize invalid PHP opening tags, remove UTF-8 byte order marks, lowercase `TRUE`/`FALSE`/`NULL` keyword constants, add the `final` or `abstract` class modifier, remove unused interfaces, abstract classes, and traits (deleting their file when only `declare`/`namespace`/`use` boilerplate remains), and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+`Psr4DirectoryExistsRule`, `Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `MustUseLowercaseKeywordConstantRule`, `LargeNumericLiteralMustUseSeparatorRule`, `ExtendedClassMustBeAbstractOrInstantiatedRule`, `MustBeFinalRule`, `MustBeUsedInterfaceRule`, `MustBeUsedAbstractClassRule`, `MustBeUsedTraitRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically remove PSR-4 mappings for missing directories, normalize invalid PHP opening tags, remove UTF-8 byte order marks, lowercase `TRUE`/`FALSE`/`NULL` keyword constants, add `_` separators to large numeric literals, add the `final` or `abstract` class modifier, remove unused interfaces, abstract classes, and traits (deleting their file when only `declare`/`namespace`/`use` boilerplate remains), and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
 
 ## Function Rules
 

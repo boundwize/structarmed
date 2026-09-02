@@ -213,6 +213,7 @@ final readonly class Analyser
                     constantName: $violation->constantName,
                     propertyName: $violation->propertyName,
                     functionName: $violation->functionName,
+                    numericLiteral: $violation->numericLiteral,
                 ));
             }
         }
@@ -436,6 +437,7 @@ final readonly class Analyser
             constantName: $ruleViolation->constantName,
             propertyName: $ruleViolation->propertyName,
             functionName: $ruleViolation->functionName,
+            numericLiteral: $ruleViolation->numericLiteral,
         );
     }
 
