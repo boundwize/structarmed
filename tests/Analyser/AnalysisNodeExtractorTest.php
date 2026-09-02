@@ -74,6 +74,22 @@ PHP);
         $this->assertTrue($extractionResult->fileAnalyses[$file]->hasSideEffects);
     }
 
+    public function testExtractRecordsNumericLiteralsInFileAnalysis(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $file = $dir . '/Foo.php';
+
+        file_put_contents($file, "<?php\n\nreturn 10000 + 10_000 + 1e10;\n");
+
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
+        $extractionResult       = (new AnalysisNodeExtractor($namespaceLayerResolver))->extract([$file]);
+
+        $this->assertSame(
+            [[3, '10000', 10000], [3, '10_000', 10000], [3, '1e10', 10000000000.0]],
+            $extractionResult->fileAnalyses[$file]->numericLiterals,
+        );
+    }
+
     public function testExtractSkipsFilesWithParseErrors(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');

@@ -42,6 +42,8 @@ use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Param;
+use PhpParser\Node\Scalar\Float_;
+use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Case_;
@@ -79,6 +81,7 @@ use function assert;
 use function count;
 use function end;
 use function in_array;
+use function is_finite;
 use function is_int;
 use function is_string;
 use function preg_match;
@@ -195,7 +198,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * function-likes, and everything collectNodeAnalysis() records. The
      * parser only ever instantiates these exact classes, so a single ::class
      * hash lookup lets the large majority of nodes (identifiers, arguments,
-     * scalars, assignments, ...) return before any instanceof check.
+     * most scalars, assignments, ...) return before any instanceof check.
      */
     private const ENTER_NODES = self::COMPLEXITY_BRANCH_NODES
         + self::LANGUAGE_CONSTRUCT_NODES
@@ -213,6 +216,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             Closure::class        => true,
             ArrowFunction::class  => true,
             String_::class        => true,
+            Int_::class           => true,
+            Float_::class         => true,
             FullyQualified::class => true,
             ConstFetch::class     => true,
             Variable::class       => true,
@@ -284,6 +289,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * @var list<array{int, string}>
      */
     private array $nonCanonicalKeywordConstants = [];
+
+    /**
+     * Numeric literals of the current file, as [line, spelling as written,
+     * evaluated value]. Reset per file so the extractor can read them once
+     * traversal finishes.
+     *
+     * @var list<array{int, string, int|float}>
+     */
+    private array $numericLiterals = [];
 
     private readonly ConstExprEvaluator $constExprEvaluator;
 
@@ -384,6 +398,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFileReferences             = [];
         $this->currentFileInstantiations         = [];
         $this->nonCanonicalKeywordConstants      = [];
+        $this->numericLiterals                   = [];
         $this->currentNamespaceUses              = [];
         $this->fileClassLikes                    = [];
         $this->fileFunctions                     = [];
@@ -442,6 +457,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     public function getNonCanonicalKeywordConstants(): array
     {
         return $this->nonCanonicalKeywordConstants;
+    }
+
+    /**
+     * Numeric literals of the file traversed last, as [line, spelling as
+     * written, evaluated value].
+     *
+     * @return list<array{int, string, int|float}>
+     */
+    public function getNumericLiterals(): array
+    {
+        return $this->numericLiterals;
     }
 
     /**
@@ -917,6 +943,21 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     private function collectNodeAnalysis(Node $node): void
     {
+        if ($node instanceof Int_ || $node instanceof Float_) {
+            $rawValue = $node->getAttribute('rawValue');
+
+            // Parser-created scalar nodes always carry rawValue. Programmatic
+            // nodes may not, and non-finite floats cannot be cache-serialized.
+            if (
+                is_string($rawValue)
+                && ($node instanceof Int_ || is_finite($node->value))
+            ) {
+                $this->numericLiterals[] = [$node->getStartLine(), $rawValue, $node->value];
+            }
+
+            return;
+        }
+
         // A class-name-shaped string literal may feed `new $class`,
         // `$obj instanceof $class`, class_exists(), container ids, and so on.
         // Whether it appears inside a class-like or in procedural code, treat

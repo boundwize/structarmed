@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Rule\Fixer\PhpParser;
 
 use PhpParser\Error;
 use PhpParser\Node;
+use PhpParser\Node\Scalar\Float_;
 use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\GroupUse;
 use PhpParser\Node\Stmt\Namespace_;
@@ -21,6 +22,7 @@ use PhpParser\PrettyPrinter\Standard;
 use function file_get_contents;
 use function file_put_contents;
 use function is_file;
+use function is_string;
 use function unlink;
 
 final readonly class PhpParserFixerProcessor
@@ -56,7 +58,24 @@ final readonly class PhpParserFixerProcessor
             return unlink($file);
         }
 
-        $fixedCode = (new Standard())->printFormatPreserving($statements, $originalStatements, $parser->getTokens());
+        $prettyPrinter = new class extends Standard {
+            // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps -- PHP-Parser extension hook.
+            protected function pScalar_Float(Float_ $node): string
+            {
+                $rawValue = $node->getAttribute('rawValue');
+
+                if ($node->getAttribute('shouldPrintRawValue') === true && is_string($rawValue)) {
+                    return $rawValue;
+                }
+
+                return parent::pScalar_Float($node);
+            }
+        };
+        $fixedCode     = $prettyPrinter->printFormatPreserving(
+            $statements,
+            $originalStatements,
+            $parser->getTokens(),
+        );
 
         return $fixedCode !== $code && file_put_contents($file, $fixedCode) !== false;
     }

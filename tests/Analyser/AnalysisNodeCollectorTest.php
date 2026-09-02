@@ -86,6 +86,34 @@ PHP);
         $this->assertSame([], $analysisNodeCollector->getNonCanonicalKeywordConstants());
     }
 
+    public function testCollectsNumericLiteralSpellingsAndValues(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+10000;
+10_000;
+0xFFFFFF;
+1e10;
+10000.5;
+PHP);
+
+        $this->assertSame(
+            [
+                [3, '10000', 10000],
+                [4, '10_000', 10000],
+                [5, '0xFFFFFF', 16777215],
+                [6, '1e10', 10000000000.0],
+                [7, '10000.5', 10000.5],
+            ],
+            $analysisNodeCollector->getNumericLiterals(),
+        );
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Bar.php');
+
+        $this->assertSame([], $analysisNodeCollector->getNumericLiterals());
+    }
+
     private function collect(string $code): ClassNode
     {
         $nodes = $this->collectNodes($code);

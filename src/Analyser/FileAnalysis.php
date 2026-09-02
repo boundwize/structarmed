@@ -12,6 +12,9 @@ final readonly class FileAnalysis
      *                                                               as [line, spelling as written]; a
      *                                                               leading `\` marks a fully
      *                                                               qualified form such as `\TRUE`.
+     * @param list<array{int, string, int|float}> $numericLiterals Numeric literals as
+     *                                                               [line, spelling as written,
+     *                                                               evaluated value].
      */
     public function __construct(
         public string $file,
@@ -23,6 +26,7 @@ final readonly class FileAnalysis
         public bool $hasSideEffects,
         public int $sideEffectLine,
         public array $nonCanonicalKeywordConstants = [],
+        public array $numericLiterals = [],
     ) {
     }
 }
