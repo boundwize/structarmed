@@ -61,8 +61,11 @@ final class AnalysisResultCache
 
     /**
      * Format version of the analysis-node payload files. Bump it whenever
-     * their shape or naming changes: it is recorded in the metadata marker,
-     * so a cache written by an older format is cleared on its next use.
+     * their shape or naming changes, including a constructor signature change
+     * of any class in ALLOWED_PAYLOAD_CLASSES: unserialize() leaves a property
+     * a stale payload lacks uninitialised, which fails later when a rule reads
+     * it instead of as a cache miss. The version is recorded in the metadata
+     * marker, so a cache written by an older format is cleared on its next use.
      */
     public const FORMAT_VERSION = 3;
 
@@ -343,9 +346,10 @@ final class AnalysisResultCache
     }
 
     /**
-     * Nested nodes live in readonly properties of these top-level nodes, so
-     * checking the top-level lists is enough to reject a payload that
-     * unserialize() could not fully restore.
+     * Nested nodes live in readonly properties of these top-level nodes and
+     * every nested class is in ALLOWED_PAYLOAD_CLASSES, so an incomplete-class
+     * stub can only appear inside a node when the file was hand-edited. That
+     * is out of scope; checking the top-level lists is enough.
      *
      * @template T of object
      * @param class-string<T> $class
@@ -378,7 +382,8 @@ final class AnalysisResultCache
         try {
             // A truncated or garbled file makes unserialize() warn and return
             // false; a wrong-typed property on a node throws. Either way it is
-            // a cache miss, never an error shown to the user.
+            // a cache miss, never an error shown to the user. The catch also
+            // covers an error handler that turns the warning into an exception.
             $payload = @unserialize(
                 (string) file_get_contents($path),
                 ['allowed_classes' => self::ALLOWED_PAYLOAD_CLASSES]
