@@ -42,7 +42,7 @@ final class Foo
 {
     public function bar(): bool
     {
-        return False ?? \tRuE ?? true ?? \null ?? FOO ?? \BAR;
+        return False ?? \tRuE ?? true ?? \null ?? FOO ?? \BAR ?? M_PI ?? \E_ALL;
     }
 }
 PHP);
