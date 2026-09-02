@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\CodeQualityPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 
@@ -52,8 +53,11 @@ return Architecture::define()
             __DIR__ . '/tests/Analyser/Parallel/ParallelAnalysisNodeExtractorTest.php',
             __DIR__ . '/tests/Analyser/Parallel/MockFunctions.php',
         ],
+        CodeQualityPreset::LARGE_NUMERIC_LITERALS_MUST_USE_SEPARATOR => [
+            __DIR__ . '/tests',
+        ],
     ])
-    ->withPresets(Preset::PSR1(), Preset::PSR12(), Preset::PSR4(), Preset::YAGNI())
+    ->withPresets(Preset::PSR1(), Preset::PSR12(), Preset::PSR4(), Preset::YAGNI(), Preset::CODEQUALITY())
     ->rule(
         'source.must_be_final',
         new MustBeFinalRule(layer: 'Source')
