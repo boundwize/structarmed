@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Cache;
 
 use App\Foo;
+use ArrayObject;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
@@ -22,15 +23,13 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Composer\InstalledVersions;
 use Iterator;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 
 use function array_column;
-use function array_filter;
-use function array_values;
-use function basename;
 use function bin2hex;
 use function file_exists;
 use function file_get_contents;
@@ -39,17 +38,20 @@ use function glob;
 use function hash;
 use function hash_file;
 use function is_dir;
-use function json_decode;
 use function json_encode;
 use function mkdir;
 use function preg_match;
 use function random_bytes;
 use function rmdir;
+use function serialize;
 use function str_replace;
 use function str_starts_with;
+use function strlen;
+use function substr;
 use function sys_get_temp_dir;
 use function touch;
 use function unlink;
+use function unserialize;
 
 use const JSON_THROW_ON_ERROR;
 
@@ -709,10 +711,6 @@ final class AnalysisResultCacheTest extends TestCase
 
             $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
-            $this->assertStringNotContainsString(
-                "\n",
-                (string) file_get_contents($this->firstJsonFile($cacheDirectory))
-            );
             $this->assertEquals($classNodes, $loaded);
         } finally {
             if (file_exists($sourceFile)) {
@@ -832,24 +830,6 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertEquals($functionNodes, $loaded['functionNodes']);
             $this->assertEquals($anonymousFunctionNodes, $loaded['anonymousFunctionNodes']);
 
-            // Compact payload: no per-node file, and empty lists are omitted.
-            $payload = json_decode((string) file_get_contents($this->firstJsonFile($cacheDirectory)), true);
-
-            $this->assertIsArray($payload);
-            $this->assertIsArray($payload['functionNodes']);
-            $this->assertIsArray($payload['anonymousFunctionNodes']);
-
-            $storedFunction = $payload['functionNodes'][0];
-            $storedClosure  = $payload['anonymousFunctionNodes'][0];
-
-            $this->assertIsArray($storedFunction);
-            $this->assertIsArray($storedClosure);
-            $this->assertArrayNotHasKey('file', $storedFunction);
-            $this->assertArrayNotHasKey('file', $storedClosure);
-            $this->assertArrayNotHasKey('superglobals', $storedClosure);
-            $this->assertArrayNotHasKey('layers', $storedClosure);
-            $this->assertSame(['App\\helper'], $storedClosure['functionCalls']);
-
             // Function-likes also survive the file-analysis load path.
             $analysisResultCache->storeAnalysisNodes(
                 $sourceFile,
@@ -889,11 +869,12 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', []);
 
-            $payload = json_decode((string) file_get_contents($this->firstJsonFile($cacheDirectory)), true);
+            $payload = unserialize((string) file_get_contents($this->firstNodeFile($cacheDirectory)));
 
             $this->assertIsArray($payload);
             $this->assertArrayNotHasKey('functionNodes', $payload);
             $this->assertArrayNotHasKey('anonymousFunctionNodes', $payload);
+            $this->assertArrayNotHasKey('fileAnalysis', $payload);
 
             $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config');
 
@@ -909,91 +890,7 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    /**
-     * @param array<string, mixed> $override
-     */
-    #[DataProvider('corruptedFunctionLikePayloadProvider')]
-    public function testLoadClassNodesRejectsCorruptedFunctionLikePayload(array $override): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
-
-        file_put_contents($sourceFile, '<?php class Foo {}');
-
-        try {
-            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', []);
-
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-            $payload   = json_decode((string) file_get_contents($cacheFile), true);
-
-            $this->assertIsArray($payload);
-            file_put_contents($cacheFile, json_encode($override + $payload, JSON_THROW_ON_ERROR));
-
-            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
-        } finally {
-            if (file_exists($sourceFile)) {
-                unlink($sourceFile);
-            }
-
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    /** @return Iterator<string, array{0: array<string, mixed>}> */
-    public static function corruptedFunctionLikePayloadProvider(): Iterator
-    {
-        $validFunction = [
-            'functionName'         => 'App\\format',
-            'file'                 => '/src/helpers.php',
-            'line'                 => 1,
-            'layer'                => null,
-            'hasReturnType'        => true,
-            'paramCount'           => 0,
-            'cyclomaticComplexity' => 1,
-            'lineCount'            => 0,
-            'dependencies'         => [],
-            'functionCalls'        => [],
-            'superglobals'         => [],
-            'languageConstructs'   => [],
-            'layers'               => [],
-        ];
-        $validClosure  = [
-            'isArrowFunction'       => false,
-            'isStatic'              => false,
-            'enclosingClassName'    => null,
-            'enclosingFunctionName' => null,
-            'usesThis'              => false,
-        ] + $validFunction;
-
-        yield 'function nodes not an array' => [['functionNodes' => 'invalid']];
-        yield 'function node entry not an array' => [['functionNodes' => ['invalid']]];
-        yield 'function node without name' => [['functionNodes' => [['functionName' => 1] + $validFunction]]];
-        yield 'function node with invalid line' => [['functionNodes' => [['line' => '1'] + $validFunction]]];
-        yield 'function node with invalid layer' => [['functionNodes' => [['layer' => 1] + $validFunction]]];
-        yield 'function node with invalid dependencies' => [
-            ['functionNodes' => [['dependencies' => [1]] + $validFunction]],
-        ];
-        yield 'anonymous function nodes not an array' => [['anonymousFunctionNodes' => 'invalid']];
-        yield 'anonymous function node entry not an array' => [['anonymousFunctionNodes' => ['invalid']]];
-        yield 'anonymous function node with invalid arrow flag' => [
-            ['anonymousFunctionNodes' => [['isArrowFunction' => 'yes'] + $validClosure]],
-        ];
-        yield 'anonymous function node with invalid enclosing class' => [
-            ['anonymousFunctionNodes' => [['enclosingClassName' => 1] + $validClosure]],
-        ];
-        yield 'anonymous function node with invalid usesThis flag' => [
-            ['anonymousFunctionNodes' => [['usesThis' => 'no'] + $validClosure]],
-        ];
-        yield 'anonymous function node with invalid enclosing function' => [
-            ['anonymousFunctionNodes' => [['enclosingFunctionName' => 1] + $validClosure]],
-        ];
-        yield 'anonymous function node with invalid body' => [
-            ['anonymousFunctionNodes' => [['lineCount' => '0'] + $validClosure]],
-        ];
-    }
-
-    public function testClassNodesLoadOldCachePayloadWithoutAnonymousClassNodes(): void
+    public function testPayloadWithoutOptionalListsLoadsThemAsEmpty(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -1003,14 +900,10 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
-
-            // Simulate a payload written before anonymous class nodes existed.
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-            $payload   = json_decode((string) file_get_contents($cacheFile), true);
-            $this->assertIsArray($payload);
-            unset($payload['anonymousClassNodes']);
-            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
+            $this->writeNodePayload($cacheDirectory, $sourceFile, 'config', [
+                'metadata'   => $this->nodeMetadata($sourceFile, 'config'),
+                'classNodes' => $classNodes,
+            ]);
 
             $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config');
 
@@ -1029,101 +922,135 @@ final class AnalysisResultCacheTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{mixed}>
+     * @param array<string, mixed> $override
      */
-    public static function corruptedAnonymousClassNodesProvider(): Iterator
+    #[DataProvider('malformedNodeListProvider')]
+    public function testLoadAnalysisNodesMissesWhenANodeListIsMalformed(array $override): void
     {
-        yield 'not an array' => ['invalid'];
-        yield 'entry not an array' => [['invalid']];
-        yield 'entry with invalid field types' => [[['file' => 1, 'line' => 'x', 'extends' => null]]];
-        yield 'entry with invalid implements' => [
-            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'implements' => ['App\Contract', 1]]],
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $this->writeNodePayload($cacheDirectory, $sourceFile, 'config', $override + [
+                'metadata'     => $this->nodeMetadata($sourceFile, 'config'),
+                'classNodes'   => [$this->makeClassNode($sourceFile)],
+                'fileAnalysis' => new FileAnalysis($sourceFile, false, true, null, true, true, false, 1),
+            ]);
+
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /** @return Iterator<string, array{0: array<string, mixed>}> */
+    public static function malformedNodeListProvider(): Iterator
+    {
+        yield 'class nodes not an array' => [['classNodes' => 'bad']];
+        yield 'class node entry not a node' => [['classNodes' => ['bad']]];
+        yield 'class node entry of an unlisted class' => [['classNodes' => [new ArrayObject()]]];
+        yield 'anonymous class nodes not an array' => [['anonymousClassNodes' => 'bad']];
+        yield 'anonymous class node entry of another node kind' => [
+            ['anonymousClassNodes' => [new FileAnalysis('/Foo.php', false, true, null, true, true, false, 1)]],
         ];
-        yield 'entry with invalid traits' => [
-            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'traits' => 'invalid']],
+        yield 'file references not an array' => [['fileReferences' => 'bad']];
+        yield 'file instantiations not an array' => [['fileInstantiations' => 'bad']];
+        yield 'function nodes not an array' => [['functionNodes' => 'bad']];
+        yield 'function node entry of another node kind' => [
+            ['functionNodes' => [new AnonymousClassNode(file: '/Foo.php', line: 1, extends: null)]],
+        ];
+        yield 'anonymous function nodes not an array' => [['anonymousFunctionNodes' => 'bad']];
+        yield 'anonymous function node entry not a node' => [['anonymousFunctionNodes' => [['line' => 1]]]];
+    }
+
+    /**
+     * @param callable(string): string $corrupt
+     */
+    #[DataProvider('unreadablePayloadProvider')]
+    public function testLoadAnalysisNodesMissesWhenPayloadIsUnreadable(callable $corrupt): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeAnalysisNodes(
+                $sourceFile,
+                'config',
+                [$this->makeClassNode($sourceFile)],
+                new FileAnalysis($sourceFile, false, true, null, true, true, false, 1),
+            );
+
+            $cacheFile = $this->firstNodeFile($cacheDirectory);
+            file_put_contents($cacheFile, $corrupt((string) file_get_contents($cacheFile)));
+
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /** @return Iterator<string, array{0: callable(string): string}> */
+    public static function unreadablePayloadProvider(): Iterator
+    {
+        yield 'empty file' => [static fn (string $payload): string => ''];
+        yield 'garbage' => [static fn (string $payload): string => 'not a serialized payload'];
+        yield 'truncated' => [static fn (string $payload): string => substr($payload, 0, (int) (strlen($payload) / 2))];
+        yield 'not an array' => [static fn (string $payload): string => serialize('payload')];
+        yield 'wrong-typed node property' => [
+            // ClassNode::$line is a typed int; unserialize() throws a TypeError for the string.
+            static fn (string $payload): string => str_replace('s:4:"line";i:1;', 's:4:"line";s:1:"1";', $payload),
         ];
     }
 
-    public function testLoadClassNodesRejectsCorruptedFileReferencesPayload(): void
+    /**
+     * @param callable(ClassNode): void $mutate
+     */
+    #[DataProvider('postAnalysisStateProvider')]
+    public function testStoringClassNodeWithPostAnalysisStateThrows(callable $mutate): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
         $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $classNode           = $this->makeClassNode($sourceFile);
 
         file_put_contents($sourceFile, '<?php class Foo {}');
+        $mutate($classNode);
 
         try {
-            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $this->expectException(LogicException::class);
+            $this->expectExceptionMessage('ClassNode [App\\Foo] carries post-analysis state and cannot be cached.');
 
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-            $payload   = json_decode((string) file_get_contents($cacheFile), true);
-            $this->assertIsArray($payload);
-            $payload['fileReferences'] = ['App\Contract', 1];
-            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
-
-            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$classNode]);
         } finally {
-            if (file_exists($sourceFile)) {
-                unlink($sourceFile);
-            }
-
+            $this->assertSame([], glob($cacheDirectory . '/*.bin') ?: []);
+            unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
         }
     }
 
-    public function testLoadClassNodesRejectsCorruptedFileInstantiationsPayload(): void
+    /** @return Iterator<string, array{0: callable(ClassNode): void}> */
+    public static function postAnalysisStateProvider(): Iterator
     {
-        $cacheDirectory      = $this->createTempDirectory();
-        $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
-
-        file_put_contents($sourceFile, '<?php class Foo {}');
-
-        try {
-            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
-
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-            $payload   = json_decode((string) file_get_contents($cacheFile), true);
-            $this->assertIsArray($payload);
-            $payload['fileInstantiations'] = ['App\Base', 1];
-            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
-
-            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
-        } finally {
-            if (file_exists($sourceFile)) {
-                unlink($sourceFile);
-            }
-
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    #[DataProvider('corruptedAnonymousClassNodesProvider')]
-    public function testLoadClassNodesRejectsCorruptedAnonymousClassNodesPayload(mixed $corrupted): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
-
-        file_put_contents($sourceFile, '<?php class Foo {}');
-
-        try {
-            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
-
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-            $payload   = json_decode((string) file_get_contents($cacheFile), true);
-            $this->assertIsArray($payload);
-            $payload['anonymousClassNodes'] = $corrupted;
-            file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
-
-            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
-        } finally {
-            if (file_exists($sourceFile)) {
-                unlink($sourceFile);
-            }
-
-            $this->removeTempDirectory($cacheDirectory);
-        }
+        yield 'parent classes' => [
+            static fn (ClassNode $classNode) => $classNode->setRecursiveParents(['App\\Base'], []),
+        ];
+        yield 'parent interfaces' => [
+            static fn (ClassNode $classNode) => $classNode->setRecursiveParents([], ['Stringable']),
+        ];
+        yield 'extended' => [static fn (ClassNode $classNode) => $classNode->setExtended(true)];
+        yield 'implemented' => [static fn (ClassNode $classNode) => $classNode->setImplemented(true)];
+        yield 'referenced' => [static fn (ClassNode $classNode) => $classNode->setReferenced(true)];
+        yield 'instantiated' => [static fn (ClassNode $classNode) => $classNode->setInstantiated(true)];
     }
 
     public function testStoresClassNodesWithInvalidUtf8Text(): void
@@ -1151,8 +1078,7 @@ final class AnalysisResultCacheTest extends TestCase
             $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
             $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
-            $this->assertIsArray($loaded);
-            $this->assertStringContainsString("\xEF\xBF\xBD", $loaded[0]->className);
+            $this->assertEquals($classNodes, $loaded);
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -1269,61 +1195,6 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertIsArray($loaded);
             $this->assertSame(['App\BaseMiddleware'], $loaded[0]->interfaceExtends);
             $this->assertEquals($classNodes, $loaded);
-        } finally {
-            if (file_exists($sourceFile)) {
-                unlink($sourceFile);
-            }
-
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    public function testClassNodesLoadOldCachePayloadWithoutInterfaceExtends(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
-
-        file_put_contents($sourceFile, '<?php class Foo {}');
-
-        try {
-            $this->writeCachePayload($cacheDirectory, [
-                'metadata' => [
-                    'namespace' => 'config',
-                    'file'      => $sourceFile,
-                    'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
-                ],
-                'nodes'    => [
-                    [
-                        'className'          => Foo::class,
-                        'file'               => $sourceFile,
-                        'line'               => 1,
-                        'layer'              => 'Source',
-                        'extends'            => null,
-                        'isAbstract'         => false,
-                        'isFinal'            => true,
-                        'isInterface'        => false,
-                        'isTrait'            => false,
-                        'isEnum'             => false,
-                        'isReadonly'         => false,
-                        'dependencies'       => [],
-                        'implements'         => [],
-                        'traits'             => [],
-                        'methods'            => [],
-                        'constants'          => [],
-                        'properties'         => [],
-                        'functionCalls'      => [],
-                        'superglobals'       => [],
-                        'languageConstructs' => [],
-                        'layers'             => [],
-                    ],
-                ],
-            ], 'analysis-nodes-' . hash('xxh128', "config\0" . $sourceFile) . '.json');
-
-            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
-
-            $this->assertIsArray($loaded);
-            $this->assertSame([], $loaded[0]->interfaceExtends);
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -1574,68 +1445,7 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    /**
-     * @return iterable<string, array{array<mixed, mixed>}>
-     */
-    public static function malformedFileAnalysisProvider(): iterable
-    {
-        $valid = [
-            'file'                         => __FILE__,
-            'hasUtf8Bom'                   => false,
-            'hasValidUtf8'                 => true,
-            'invalidPhpTagLine'            => null,
-            'hasValidAst'                  => true,
-            'declaresSymbols'              => true,
-            'hasSideEffects'               => false,
-            'sideEffectLine'               => 1,
-            'nonCanonicalKeywordConstants' => [],
-        ];
-
-        yield 'numeric keys' => [[0 => 'bad']];
-        yield 'invalid file' => [[...$valid, 'file' => 1]];
-        yield 'invalid BOM flag' => [[...$valid, 'hasUtf8Bom' => 'bad']];
-        yield 'invalid UTF-8 flag' => [[...$valid, 'hasValidUtf8' => 'bad']];
-        yield 'missing invalid tag line' => [
-            [
-                'file'            => __FILE__,
-                'hasUtf8Bom'      => false,
-                'hasValidUtf8'    => true,
-                'hasValidAst'     => true,
-                'declaresSymbols' => true,
-                'hasSideEffects'  => false,
-                'sideEffectLine'  => 1,
-            ],
-        ];
-        yield 'invalid tag line type' => [[...$valid, 'invalidPhpTagLine' => 'bad']];
-        yield 'invalid AST flag' => [[...$valid, 'hasValidAst' => 'bad']];
-        yield 'invalid declaration flag' => [[...$valid, 'declaresSymbols' => 'bad']];
-        yield 'invalid side-effects flag' => [[...$valid, 'hasSideEffects' => 'bad']];
-        yield 'invalid side-effect line' => [[...$valid, 'sideEffectLine' => 'bad']];
-        yield 'missing keyword constants' => [
-            [
-                'file'              => __FILE__,
-                'hasUtf8Bom'        => false,
-                'hasValidUtf8'      => true,
-                'invalidPhpTagLine' => null,
-                'hasValidAst'       => true,
-                'declaresSymbols'   => true,
-                'hasSideEffects'    => false,
-                'sideEffectLine'    => 1,
-            ],
-        ];
-        yield 'invalid keyword constants type' => [[...$valid, 'nonCanonicalKeywordConstants' => 'bad']];
-        yield 'keyword constants not a list' => [[...$valid, 'nonCanonicalKeywordConstants' => ['a' => [1, 'TRUE']]]];
-        yield 'keyword constant not a pair' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1]]]];
-        yield 'keyword constant with extra entry' => [
-            [...$valid, 'nonCanonicalKeywordConstants' => [[1, 'TRUE', 'extra']]],
-        ];
-        yield 'keyword constant with invalid line' => [[...$valid, 'nonCanonicalKeywordConstants' => [['1', 'TRUE']]]];
-        yield 'keyword constant with invalid spelling' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1, 1]]]];
-    }
-
-    /** @param array<mixed, mixed> $fileAnalysis */
-    #[DataProvider('malformedFileAnalysisProvider')]
-    public function testClassNodesWithFileAnalysisMissesMalformedFacts(array $fileAnalysis): void
+    public function testClassNodesWithFileAnalysisMissesWhenFactsAreNotAFileAnalysis(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -1644,20 +1454,14 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeAnalysisNodes(
-                $sourceFile,
-                'config',
-                [$this->makeClassNode($sourceFile)],
-                new FileAnalysis($sourceFile, false, true, null, true, true, false, 1),
-            );
-
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-            $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
-            $this->assertIsArray($payload);
-            $payload['fileAnalysis'] = $fileAnalysis;
-            $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
+            $this->writeNodePayload($cacheDirectory, $sourceFile, 'config', [
+                'metadata'     => $this->nodeMetadata($sourceFile, 'config'),
+                'classNodes'   => [$this->makeClassNode($sourceFile)],
+                'fileAnalysis' => ['file' => $sourceFile, 'hasValidAst' => true],
+            ]);
 
             $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1673,18 +1477,11 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeAnalysisNodes(
-                $sourceFile,
-                'config',
-                [$this->makeClassNode($sourceFile)],
-                new FileAnalysis($sourceFile, false, true, null, true, true, false, 1),
-            );
-
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-            $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
-            $this->assertIsArray($payload);
-            $payload['nodes'] = 'invalid';
-            $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
+            $this->writeNodePayload($cacheDirectory, $sourceFile, 'config', [
+                'metadata'     => $this->nodeMetadata($sourceFile, 'config'),
+                'classNodes'   => 'invalid',
+                'fileAnalysis' => new FileAnalysis($sourceFile, false, true, null, true, true, false, 1),
+            ]);
 
             $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
         } finally {
@@ -1758,795 +1555,6 @@ final class AnalysisResultCacheTest extends TestCase
                 $classNodes,
                 $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null
             );
-        } finally {
-            unlink($sourceFile);
-            $this->removeTempDirectory($cacheDirectory);
-        }
-    }
-
-    /**
-     * @return iterable<string, array{array<string, mixed>}>
-     */
-    public static function malformedClassNodePayloadProvider(): iterable
-    {
-        yield 'nodes is not an array' => [['nodes' => 'bad']];
-        yield 'node is not an array' => [['nodes' => ['bad']]];
-        yield 'node has numeric keys' => [['nodes' => [['bad']]]];
-        yield 'node has invalid scalar types' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => 10,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'methods'       => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'node has missing isEnum field' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'node has missing isTrait field' => [
-            [
-                'nodes' => [
-                    [
-                        'className'   => Foo::class,
-                        'file'        => __FILE__,
-                        'line'        => 1,
-                        'layer'       => null,
-                        'extends'     => null,
-                        'isAbstract'  => false,
-                        'isFinal'     => true,
-                        'isInterface' => false,
-                        'isEnum'      => false,
-                        'isReadonly'  => false,
-                        // 'isTrait' intentionally absent — simulates an old cache entry
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'node has invalid string array key' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => ['bad' => 'App\Bar'],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'methods'       => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'node has invalid interfaceExtends field' => [
-            [
-                'nodes' => [
-                    [
-                        'className'          => Foo::class,
-                        'file'               => __FILE__,
-                        'line'               => 1,
-                        'layer'              => null,
-                        'extends'            => null,
-                        'isAbstract'         => false,
-                        'isFinal'            => true,
-                        'isInterface'        => false,
-                        'isTrait'            => false,
-                        'isEnum'             => false,
-                        'isReadonly'         => false,
-                        'dependencies'       => [],
-                        'implements'         => [],
-                        'interfaceExtends'   => [10],
-                        'traits'             => [],
-                        'constants'          => [],
-                        'properties'         => [],
-                        'methods'            => [],
-                        'functionCalls'      => [],
-                        'superglobals'       => [],
-                        'languageConstructs' => [],
-                        'layers'             => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'node has non-array string array field' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => 'bad',
-                        'implements'    => [],
-                        'traits'        => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'methods'       => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'node has non-string list item' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [10],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'methods'       => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'method is not an array' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => ['bad'],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'method has numeric keys' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [['bad']],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'method has invalid types' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [
-                            [
-                                'name'                  => 'run',
-                                'visibility'            => 'public',
-                                'hasReturnType'         => true,
-                                'isStatic'              => false,
-                                'paramCount'            => 0,
-                                'cyclomaticComplexity'  => 1,
-                                'lineCount'             => 1,
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                                'isMagic'               => false,
-                            ],
-                        ],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'method has missing hasExplicitVisibility' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [
-                            [
-                                'name'                 => 'run',
-                                'visibility'           => 'public',
-                                'hasReturnType'        => true,
-                                'isStatic'             => false,
-                                'paramCount'           => 0,
-                                'cyclomaticComplexity' => 1,
-                                'lineCount'            => 1,
-                                'line'                 => 1,
-                                'isMagic'              => false,
-                            ],
-                        ],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'constants is not an array' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => 'bad',
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'constant is not an array' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => ['bad'],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'constant has numeric keys' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [['bad']],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'constant has invalid types' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [
-                            [
-                                'name'                  => 'VERSION',
-                                'visibility'            => 'public',
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                            ],
-                        ],
-                        'properties'    => [],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'properties is not an array' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => 'bad',
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'property is not an array' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => ['bad'],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'property has numeric keys' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [['bad']],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'property has invalid types' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => false,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [
-                            [
-                                'name'                  => 'name',
-                                'visibility'            => 'private',
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                            ],
-                        ],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'enum cases is not an array' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => true,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'enumCases'     => 'bad',
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'enum case is not an array' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => true,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'enumCases'     => ['bad'],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'enum case has non-string keys' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => true,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'enumCases'     => [['Hearts', 4]],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'enum case has invalid types' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => true,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'enumCases'     => [['name' => 'Hearts', 'line' => 'bad']],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'enum case value has invalid type' => [
-            [
-                'nodes' => [
-                    [
-                        'className'     => Foo::class,
-                        'file'          => __FILE__,
-                        'line'          => 1,
-                        'layer'         => null,
-                        'extends'       => null,
-                        'isAbstract'    => false,
-                        'isFinal'       => true,
-                        'isInterface'   => false,
-                        'isTrait'       => false,
-                        'isEnum'        => true,
-                        'isReadonly'    => false,
-                        'dependencies'  => [],
-                        'implements'    => [],
-                        'traits'        => [],
-                        'methods'       => [],
-                        'constants'     => [],
-                        'properties'    => [],
-                        'enumCases'     => [['name' => 'Hearts', 'line' => 4, 'value' => ['bad']]],
-                        'functionCalls' => [],
-                        'superglobals'  => [],
-                        'layers'        => [],
-                    ],
-                ],
-            ],
-        ];
-        yield 'enum backing type has invalid type' => [
-            [
-                'nodes' => [
-                    [
-                        'className'       => Foo::class,
-                        'file'            => __FILE__,
-                        'line'            => 1,
-                        'layer'           => null,
-                        'extends'         => null,
-                        'isAbstract'      => false,
-                        'isFinal'         => true,
-                        'isInterface'     => false,
-                        'isTrait'         => false,
-                        'isEnum'          => true,
-                        'isReadonly'      => false,
-                        'dependencies'    => [],
-                        'implements'      => [],
-                        'traits'          => [],
-                        'methods'         => [],
-                        'constants'       => [],
-                        'properties'      => [],
-                        'enumCases'       => [],
-                        'enumBackingType' => 1,
-                        'functionCalls'   => [],
-                        'superglobals'    => [],
-                        'layers'          => [],
-                    ],
-                ],
-            ],
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $payloadOverride
-     */
-    #[DataProvider('malformedClassNodePayloadProvider')]
-    public function testClassNodesMissWhenPayloadIsMalformed(array $payloadOverride): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $sourceFile          = $cacheDirectory . '/Foo.php';
-        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
-
-        file_put_contents($sourceFile, '<?php class Foo {}');
-
-        try {
-            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
-            $cacheFile = $this->firstJsonFile($cacheDirectory);
-
-            $this->writeCachePayload($cacheDirectory, [
-                'metadata' => [
-                    'namespace' => 'config',
-                    'file'      => $sourceFile,
-                    'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
-                ],
-                ...$payloadOverride,
-            ], $cacheFile);
-
-            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -2810,12 +1818,9 @@ final class AnalysisResultCacheTest extends TestCase
         );
     }
 
-    private function firstJsonFile(string $cacheDirectory): string
+    private function firstNodeFile(string $cacheDirectory): string
     {
-        $files = array_values(array_filter(
-            glob($cacheDirectory . '/*.json') ?: [],
-            static fn (string $file): bool => basename($file) !== '_metadata.json'
-        ));
+        $files = glob($cacheDirectory . '/analysis-nodes-*.bin') ?: [];
         $this->assertNotSame([], $files);
 
         return $files[0];
@@ -2823,7 +1828,7 @@ final class AnalysisResultCacheTest extends TestCase
 
     private function removeTempDirectory(string $path): void
     {
-        foreach (glob($path . '/*.json') ?: [] as $file) {
+        foreach ([...glob($path . '/*.json') ?: [], ...glob($path . '/*.bin') ?: []] as $file) {
             unlink($file);
         }
 
@@ -2847,5 +1852,28 @@ final class AnalysisResultCacheTest extends TestCase
         $path       = $isAbsolute ? $filename : $cacheDirectory . '/' . $filename;
 
         file_put_contents($path, json_encode($payload, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @return array{namespace: string, file: string, hash: string}
+     */
+    private function nodeMetadata(string $file, string $namespace): array
+    {
+        return [
+            'namespace' => $namespace,
+            'file'      => $file,
+            'hash'      => hash('xxh128', (string) file_get_contents($file)),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function writeNodePayload(string $cacheDirectory, string $file, string $namespace, array $payload): void
+    {
+        file_put_contents(
+            $cacheDirectory . '/analysis-nodes-' . hash('xxh128', $namespace . "\0" . $file) . '.bin',
+            serialize($payload)
+        );
     }
 }

@@ -1791,7 +1791,7 @@ PHP;
             unlink($basePath . '/nested/composer.json');
         }
 
-        foreach (glob($basePath . '/var/cache/structarmed/*.json') ?: [] as $cacheFile) {
+        foreach (glob($basePath . '/var/cache/structarmed/*') ?: [] as $cacheFile) {
             unlink($cacheFile);
         }
 
