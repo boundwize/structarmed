@@ -168,6 +168,29 @@ PHP);
         $this->assertSame('Keyword constant [TRUE] must use lowercase [true]', $violations[0]->message);
     }
 
+    public function testSkipsRelativeKeywordLikeConstant(): void
+    {
+        $basePath = $this->makeProject(<<<'PHP'
+<?php
+
+namespace Foo;
+
+namespace\TRUE;
+namespace\False;
+namespace\NULL;
+PHP);
+        // Outside a namespace the relative form resolves to the keyword, but the
+        // spelling is still out of scope, so it is not reported either.
+        file_put_contents($basePath . '/src/Bar.php', "<?php\n\nnamespace\\TRUE;\n");
+
+        $mustUseLowercaseKeywordConstantRule = new MustUseLowercaseKeywordConstantRule(['src/']);
+
+        $this->assertSame(
+            [],
+            $mustUseLowercaseKeywordConstantRule->evaluateProjectAll($basePath, Architecture::define())
+        );
+    }
+
     public function testLeavesRelativeKeywordLikeConstantAloneWhenFixingTheSameLine(): void
     {
         // namespace\TRUE names the case-sensitive constant Foo\TRUE, not the keyword.
