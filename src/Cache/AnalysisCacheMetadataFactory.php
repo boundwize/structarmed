@@ -7,9 +7,11 @@ namespace Boundwize\StructArmed\Cache;
 use Boundwize\StructArmed\Version;
 use Composer\InstalledVersions;
 
-use function array_map;
 use function file_exists;
 use function hash;
+use function hash_final;
+use function hash_init;
+use function hash_update;
 use function json_encode;
 use function rtrim;
 use function sort;
@@ -36,7 +38,7 @@ final readonly class AnalysisCacheMetadataFactory
         sort($files);
 
         return [
-            'version'                      => 4,
+            'version'                      => 5,
             'basePath'                     => $basePath,
             'configPath'                   => $configPath,
             'configHash'                   => $this->fileHash($configPath),
@@ -81,10 +83,13 @@ final readonly class AnalysisCacheMetadataFactory
      */
     private function filesHash(array $files): string
     {
-        return hash('xxh128', json_encode(array_map(fn(string $file): array => [
-            'file' => $file,
-            'hash' => $this->fileHashProvider->hash($file),
-        ], $files), JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+        $hashContext = hash_init('xxh128');
+
+        foreach ($files as $file) {
+            hash_update($hashContext, $file . "\0" . $this->fileHashProvider->hash($file) . "\0");
+        }
+
+        return hash_final($hashContext);
     }
 
     private function composerHash(string $basePath): string
