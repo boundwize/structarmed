@@ -16,8 +16,6 @@ use PhpParser\NodeVisitor;
 
 use function abs;
 use function implode;
-use function is_float;
-use function is_int;
 use function preg_match;
 use function sprintf;
 use function str_contains;
@@ -110,11 +108,7 @@ final readonly class LargeNumericLiteralMustUseSeparatorRule extends AbstractPhp
             $fileAnalysisProvider->releaseAst($file);
 
             foreach ($fileAnalysis->numericLiterals as [$line, $literal, $value]) {
-                if (
-                    (! is_int($value) && ! is_float($value))
-                    || abs($value) < $this->minimum
-                    || str_contains($literal, '_')
-                ) {
+                if (abs($value) < $this->minimum || str_contains($literal, '_')) {
                     continue;
                 }
 
