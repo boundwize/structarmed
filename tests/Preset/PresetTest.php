@@ -97,7 +97,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
     }
 
-    public function testPsr12PresetAppliesPsr1RulesAndAddsVisibilityRules(): void
+    public function testPsr12PresetAppliesPsr1RulesAndAddsPsr12Rules(): void
     {
         $architecture = Architecture::define();
 
@@ -118,6 +118,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
+        $this->assertArrayHasKey(Psr12Preset::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS, $rules);
         $this->assertArrayHasKey(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);
@@ -138,6 +139,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
+        $this->assertArrayHasKey(Psr12Preset::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS, $rules);
         $this->assertArrayHasKey(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);
@@ -318,7 +320,7 @@ final class PresetTest extends TestCase
 
         $rules = $architecture->getRules();
 
-        $this->assertCount(15, $rules);
+        $this->assertCount(16, $rules);
 
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_UTF8, $rules);
@@ -332,6 +334,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
+        $this->assertArrayHasKey(Psr12Preset::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS, $rules);
         $this->assertArrayHasKey(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);

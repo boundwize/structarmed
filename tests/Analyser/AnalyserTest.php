@@ -2181,13 +2181,13 @@ final class AnalyserTest extends TestCase
             'composer.json'        => '{"autoload":{"psr-4":{"Psr4\\\\":"psr4/",'
                 . '"Psr1\\\\":"psr1/","Psr12\\\\":"psr12/"}}}',
             'psr4/Invalid.php'     => '<?php namespace Wrong; final class Psr4Invalid {'
-                . ' function missingVisibility() {} }',
+                . ' public const ENABLED = TRUE; function missingVisibility() {} }',
             'psr4/InvalidTag.php'  => '<? echo "psr4";',
             'psr1/Invalid.php'     => '<?php namespace Wrong; final class Psr1Invalid {'
-                . ' function missingVisibility() {} }',
+                . ' public const ENABLED = TRUE; function missingVisibility() {} }',
             'psr1/InvalidTag.php'  => '<? echo "psr1";',
             'psr12/Invalid.php'    => '<?php namespace Wrong; final class Psr12Invalid {'
-                . ' function missingVisibility() {} }',
+                . ' public const ENABLED = TRUE; function missingVisibility() {} }',
             'psr12/InvalidTag.php' => '<? echo "psr12";',
         ]);
 
@@ -2238,6 +2238,15 @@ final class AnalyserTest extends TestCase
             $psr12Violations = $result->forRule(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY);
             $this->assertCount(1, $psr12Violations);
             $this->assertStringEndsWith('/psr12/Invalid.php', $this->normalisePath($psr12Violations[0]->file));
+
+            $keywordConstantViolations = $result->forRule(
+                Psr12Preset::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS
+            );
+            $this->assertCount(1, $keywordConstantViolations);
+            $this->assertStringEndsWith(
+                '/psr12/Invalid.php',
+                $this->normalisePath($keywordConstantViolations[0]->file)
+            );
         }
     }
 
