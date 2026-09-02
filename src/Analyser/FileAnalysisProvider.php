@@ -131,7 +131,13 @@ final class FileAnalysisProvider
         return $normalisedAnalyses;
     }
 
-    public function analyse(string $file): FileAnalysis
+    /**
+     * @param list<array{int, string}> $nonCanonicalKeywordConstants Keyword constant spellings the
+     *                                                               analysis-node traversal recorded
+     *                                                               for the file; the provider never
+     *                                                               walks the AST for them itself.
+     */
+    public function analyse(string $file, array $nonCanonicalKeywordConstants = []): FileAnalysis
     {
         $file = Path::normalise($file, canonicalise: true);
 
@@ -157,6 +163,7 @@ final class FileAnalysisProvider
             declaresSymbols: $fileState['declaresSymbols'],
             hasSideEffects: $fileState['hasSideEffects'],
             sideEffectLine: $fileState['sideEffectLine'],
+            nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
         );
 
         $this->analyses[$file] = $fileAnalysis;

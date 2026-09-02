@@ -19,10 +19,12 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
 use function array_fill_keys;
+use function array_is_list;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
 use function array_values;
+use function count;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
@@ -63,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 1;
+    public const FORMAT_VERSION = 2;
 
     private readonly string $cacheDirectory;
 
@@ -1229,14 +1231,15 @@ final class AnalysisResultCache
     private function fileAnalysisToArray(FileAnalysis $fileAnalysis): array
     {
         return [
-            'file'              => $fileAnalysis->file,
-            'hasUtf8Bom'        => $fileAnalysis->hasUtf8Bom,
-            'hasValidUtf8'      => $fileAnalysis->hasValidUtf8,
-            'invalidPhpTagLine' => $fileAnalysis->invalidPhpTagLine,
-            'hasValidAst'       => $fileAnalysis->hasValidAst,
-            'declaresSymbols'   => $fileAnalysis->declaresSymbols,
-            'hasSideEffects'    => $fileAnalysis->hasSideEffects,
-            'sideEffectLine'    => $fileAnalysis->sideEffectLine,
+            'file'                         => $fileAnalysis->file,
+            'hasUtf8Bom'                   => $fileAnalysis->hasUtf8Bom,
+            'hasValidUtf8'                 => $fileAnalysis->hasValidUtf8,
+            'invalidPhpTagLine'            => $fileAnalysis->invalidPhpTagLine,
+            'hasValidAst'                  => $fileAnalysis->hasValidAst,
+            'declaresSymbols'              => $fileAnalysis->declaresSymbols,
+            'hasSideEffects'               => $fileAnalysis->hasSideEffects,
+            'sideEffectLine'               => $fileAnalysis->sideEffectLine,
+            'nonCanonicalKeywordConstants' => $fileAnalysis->nonCanonicalKeywordConstants,
         ];
     }
 
@@ -1253,6 +1256,7 @@ final class AnalysisResultCache
             || ! is_bool($analysis['declaresSymbols'] ?? null)
             || ! is_bool($analysis['hasSideEffects'] ?? null)
             || ! is_int($analysis['sideEffectLine'] ?? null)
+            || ! $this->isKeywordConstantList($analysis['nonCanonicalKeywordConstants'] ?? null)
         ) {
             return null;
         }
@@ -1266,7 +1270,31 @@ final class AnalysisResultCache
             declaresSymbols: $analysis['declaresSymbols'],
             hasSideEffects: $analysis['hasSideEffects'],
             sideEffectLine: $analysis['sideEffectLine'],
+            nonCanonicalKeywordConstants: $analysis['nonCanonicalKeywordConstants'],
         );
+    }
+
+    /**
+     * @phpstan-assert-if-true list<array{int, string}> $value
+     */
+    private function isKeywordConstantList(mixed $value): bool
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return false;
+        }
+
+        foreach ($value as $keywordConstant) {
+            if (
+                ! is_array($keywordConstant)
+                || count($keywordConstant) !== 2
+                || ! is_int($keywordConstant[0] ?? null)
+                || ! is_string($keywordConstant[1] ?? null)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

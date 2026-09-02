@@ -21,6 +21,7 @@ use PhpParser\Node\Expr\BinaryOp\LogicalAnd;
 use PhpParser\Node\Expr\BinaryOp\LogicalOr;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\Closure;
+use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\Empty_;
 use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\Exit_;
@@ -84,6 +85,7 @@ use function preg_match;
 use function spl_object_id;
 use function str_starts_with;
 use function strcasecmp;
+use function strlen;
 use function strpos;
 use function strtolower;
 use function substr;
@@ -212,6 +214,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             ArrowFunction::class  => true,
             String_::class        => true,
             FullyQualified::class => true,
+            ConstFetch::class     => true,
             Variable::class       => true,
             FuncCall::class       => true,
             Exit_::class          => true,
@@ -271,6 +274,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /** @var array<string, true> */
     private array $currentFileInstantiations = [];
+
+    /**
+     * `true`, `false`, and `null` fetches of the current file whose spelling is
+     * not the canonical lowercase, as [line, spelling as written]; a leading
+     * `\` marks a fully qualified form. Reset per file instead of in
+     * afterTraverse() so the extractor can read them once traversal finishes.
+     *
+     * @var list<array{int, string}>
+     */
+    private array $nonCanonicalKeywordConstants = [];
 
     private readonly ConstExprEvaluator $constExprEvaluator;
 
@@ -370,6 +383,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFile                       = $file;
         $this->currentFileReferences             = [];
         $this->currentFileInstantiations         = [];
+        $this->nonCanonicalKeywordConstants      = [];
         $this->currentNamespaceUses              = [];
         $this->fileClassLikes                    = [];
         $this->fileFunctions                     = [];
@@ -417,6 +431,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     public function getFileReferences(): array
     {
         return $this->fileReferences;
+    }
+
+    /**
+     * Keyword constants of the file traversed last that are not spelled in
+     * lowercase, see MustUseLowercaseKeywordConstantRule.
+     *
+     * @return list<array{int, string}>
+     */
+    public function getNonCanonicalKeywordConstants(): array
+    {
+        return $this->nonCanonicalKeywordConstants;
     }
 
     /**
@@ -932,6 +957,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
+        if ($node instanceof ConstFetch) {
+            $this->collectKeywordConstant($node->name);
+
+            return;
+        }
+
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
             return;
         }
@@ -1013,6 +1044,35 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         if ($languageConstruct !== null) {
             $this->addLanguageConstruct($languageConstruct);
         }
+    }
+
+    /**
+     * Records a `true`, `false`, or `null` fetch whose spelling is not the
+     * canonical lowercase. The NameResolver has already replaced an unqualified
+     * name outside a namespace with a FullyQualified clone, so whether the `\`
+     * was written is read from the source span instead: it is one character
+     * longer than the name. Other spellings, such as `namespace\TRUE`, are
+     * out of scope.
+     */
+    private function collectKeywordConstant(Name $name): void
+    {
+        $spelling = $name->toString();
+        $keyword  = strtolower($spelling);
+
+        if (! isset(self::KEYWORD_CONSTANTS[$keyword]) || $spelling === $keyword) {
+            return;
+        }
+
+        $spanLength = $name->getEndFilePos() - $name->getStartFilePos() + 1;
+        $nameLength = strlen($spelling);
+
+        if ($spanLength === $nameLength + 1) {
+            $spelling = '\\' . $spelling;
+        } elseif ($spanLength !== $nameLength) {
+            return;
+        }
+
+        $this->nonCanonicalKeywordConstants[] = [$name->getStartLine(), $spelling];
     }
 
     private function collectInstantiation(New_ $new): void

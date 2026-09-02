@@ -57,6 +57,23 @@ PHP);
         $this->assertSame('App\\Domain\\Foo', $extractionResult->classNodes[0]->className);
     }
 
+    public function testExtractRecordsKeywordConstantSpellingsInFileAnalysis(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $file = $dir . '/Foo.php';
+
+        file_put_contents($file, "<?php\n\nreturn TRUE ? \\NULL : false;\n");
+
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
+        $extractionResult       = (new AnalysisNodeExtractor($namespaceLayerResolver))->extract([$file]);
+
+        $this->assertSame(
+            [[3, 'TRUE'], [3, '\\NULL']],
+            $extractionResult->fileAnalyses[$file]->nonCanonicalKeywordConstants
+        );
+        $this->assertTrue($extractionResult->fileAnalyses[$file]->hasSideEffects);
+    }
+
     public function testExtractSkipsFilesWithParseErrors(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');

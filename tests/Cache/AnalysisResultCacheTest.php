@@ -1536,6 +1536,7 @@ final class AnalysisResultCacheTest extends TestCase
             declaresSymbols: true,
             hasSideEffects: false,
             sideEffectLine: 1,
+            nonCanonicalKeywordConstants: [[3, 'TRUE'], [5, '\\NULL']],
         );
 
         file_put_contents($sourceFile, '<?php class Foo {}');
@@ -1579,14 +1580,15 @@ final class AnalysisResultCacheTest extends TestCase
     public static function malformedFileAnalysisProvider(): iterable
     {
         $valid = [
-            'file'              => __FILE__,
-            'hasUtf8Bom'        => false,
-            'hasValidUtf8'      => true,
-            'invalidPhpTagLine' => null,
-            'hasValidAst'       => true,
-            'declaresSymbols'   => true,
-            'hasSideEffects'    => false,
-            'sideEffectLine'    => 1,
+            'file'                         => __FILE__,
+            'hasUtf8Bom'                   => false,
+            'hasValidUtf8'                 => true,
+            'invalidPhpTagLine'            => null,
+            'hasValidAst'                  => true,
+            'declaresSymbols'              => true,
+            'hasSideEffects'               => false,
+            'sideEffectLine'               => 1,
+            'nonCanonicalKeywordConstants' => [],
         ];
 
         yield 'numeric keys' => [[0 => 'bad']];
@@ -1609,6 +1611,26 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'invalid declaration flag' => [[...$valid, 'declaresSymbols' => 'bad']];
         yield 'invalid side-effects flag' => [[...$valid, 'hasSideEffects' => 'bad']];
         yield 'invalid side-effect line' => [[...$valid, 'sideEffectLine' => 'bad']];
+        yield 'missing keyword constants' => [
+            [
+                'file'              => __FILE__,
+                'hasUtf8Bom'        => false,
+                'hasValidUtf8'      => true,
+                'invalidPhpTagLine' => null,
+                'hasValidAst'       => true,
+                'declaresSymbols'   => true,
+                'hasSideEffects'    => false,
+                'sideEffectLine'    => 1,
+            ],
+        ];
+        yield 'invalid keyword constants type' => [[...$valid, 'nonCanonicalKeywordConstants' => 'bad']];
+        yield 'keyword constants not a list' => [[...$valid, 'nonCanonicalKeywordConstants' => ['a' => [1, 'TRUE']]]];
+        yield 'keyword constant not a pair' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1]]]];
+        yield 'keyword constant with extra entry' => [
+            [...$valid, 'nonCanonicalKeywordConstants' => [[1, 'TRUE', 'extra']]],
+        ];
+        yield 'keyword constant with invalid line' => [[...$valid, 'nonCanonicalKeywordConstants' => [['1', 'TRUE']]]];
+        yield 'keyword constant with invalid spelling' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1, 1]]]];
     }
 
     /** @param array<mixed, mixed> $fileAnalysis */

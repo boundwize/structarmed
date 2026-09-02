@@ -29,6 +29,63 @@ final class AnalysisNodeCollectorTest extends TestCase
 {
     private const BASE_PATH = '/structarmed-test-project';
 
+    public function testCollectsNonCanonicalKeywordConstantSpellings(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+if (TRUE) {
+    return \NULL;
+}
+
+final class Foo
+{
+    public function bar(): bool
+    {
+        return False ?? \tRuE ?? true ?? \null ?? FOO ?? \BAR;
+    }
+}
+PHP);
+
+        $this->assertSame(
+            [[3, 'TRUE'], [4, '\\NULL'], [11, 'False'], [11, '\\tRuE']],
+            $analysisNodeCollector->getNonCanonicalKeywordConstants()
+        );
+    }
+
+    public function testDistinguishesUnqualifiedFromFullyQualifiedKeywordConstantInsideNamespace(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+namespace App;
+
+$a = NULL;
+$b = \NULL;
+$c = namespace\NULL;
+PHP);
+
+        $this->assertSame([[5, 'NULL'], [6, '\\NULL']], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+    }
+
+    public function testIgnoresRelativeKeywordConstantSpellingOutsideNamespace(): void
+    {
+        $analysisNodeCollector = $this->makeCollector('<?php $a = namespace\FALSE;');
+
+        $this->assertSame([], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+    }
+
+    public function testResetsKeywordConstantSpellingsPerFile(): void
+    {
+        $analysisNodeCollector = $this->makeCollector('<?php $a = TRUE;');
+
+        $this->assertSame([[1, 'TRUE']], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Bar.php');
+
+        $this->assertSame([], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+    }
+
     private function collect(string $code): ClassNode
     {
         $nodes = $this->collectNodes($code);
