@@ -38,6 +38,9 @@ use function file_put_contents;
 use function glob;
 use function hash;
 use function hash_file;
+use function hash_final;
+use function hash_init;
+use function hash_update;
 use function is_dir;
 use function json_decode;
 use function json_encode;
@@ -2609,9 +2612,14 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertSame($directory, $metadata['basePath']);
             $this->assertSame($config, $metadata['configPath']);
             $this->assertSame(['src'], $metadata['scanPaths']);
+            $this->assertSame(5, $metadata['version']);
             $this->assertIsString($metadata['configHash']);
             $this->assertIsString($metadata['composerGeneratedVersionHash']);
-            $this->assertIsString($metadata['filesHash']);
+
+            $filesHashContext = hash_init('xxh128');
+            hash_update($filesHashContext, $source . "\0" . hash_file('xxh128', $source) . "\0");
+
+            $this->assertSame(hash_final($filesHashContext), $metadata['filesHash']);
             $this->assertSame(
                 (new AnalysisCacheMetadataFactory(new FileHashProvider()))->key($metadata),
                 (new AnalysisCacheMetadataFactory(new FileHashProvider()))->key($metadata)
