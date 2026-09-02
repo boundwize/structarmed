@@ -958,8 +958,14 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'anonymous class node entry of another node kind' => [
             ['anonymousClassNodes' => [new FileAnalysis('/Foo.php', false, true, null, true, true, false, 1)]],
         ];
+        yield 'class nodes not a list' => [
+            ['classNodes' => [Foo::class => new AnonymousClassNode('/Foo.php', 1, null)]],
+        ];
         yield 'file references not an array' => [['fileReferences' => 'bad']];
+        yield 'file references entry not a string' => [['fileReferences' => [123]]];
+        yield 'file references not a list' => [['fileReferences' => ['App\\Bar' => 'App\\Bar']]];
         yield 'file instantiations not an array' => [['fileInstantiations' => 'bad']];
+        yield 'file instantiations entry not a string' => [['fileInstantiations' => [new ArrayObject()]]];
         yield 'function nodes not an array' => [['functionNodes' => 'bad']];
         yield 'function node entry of another node kind' => [
             ['functionNodes' => [new AnonymousClassNode(file: '/Foo.php', line: 1, extends: null)]],

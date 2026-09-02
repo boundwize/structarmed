@@ -21,6 +21,7 @@ use LogicException;
 use Throwable;
 
 use function array_fill_keys;
+use function array_is_list;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
@@ -297,24 +298,21 @@ final class AnalysisResultCache
     {
         $classNodes             = $payload['classNodes'] ?? [];
         $anonymousClassNodes    = $payload['anonymousClassNodes'] ?? [];
+        $fileReferences         = $payload['fileReferences'] ?? [];
+        $fileInstantiations     = $payload['fileInstantiations'] ?? [];
         $functionNodes          = $payload['functionNodes'] ?? [];
         $anonymousFunctionNodes = $payload['anonymousFunctionNodes'] ?? [];
 
         if (
             ! $this->isListOf($classNodes, ClassNode::class)
             || ! $this->isListOf($anonymousClassNodes, AnonymousClassNode::class)
-            || ! is_array($payload['fileReferences'] ?? [])
-            || ! is_array($payload['fileInstantiations'] ?? [])
+            || ! $this->isStringList($fileReferences)
+            || ! $this->isStringList($fileInstantiations)
             || ! $this->isListOf($functionNodes, FunctionNode::class)
             || ! $this->isListOf($anonymousFunctionNodes, AnonymousFunctionNode::class)
         ) {
             return null;
         }
-
-        /** @var list<string> $fileReferences */
-        $fileReferences = $payload['fileReferences'] ?? [];
-        /** @var list<string> $fileInstantiations */
-        $fileInstantiations = $payload['fileInstantiations'] ?? [];
 
         return [
             'classNodes'             => $classNodes,
@@ -324,6 +322,24 @@ final class AnalysisResultCache
             'functionNodes'          => $functionNodes,
             'anonymousFunctionNodes' => $anonymousFunctionNodes,
         ];
+    }
+
+    /**
+     * @phpstan-assert-if-true list<string> $value
+     */
+    private function isStringList(mixed $value): bool
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return false;
+        }
+
+        foreach ($value as $item) {
+            if (! is_string($item)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -337,7 +353,7 @@ final class AnalysisResultCache
      */
     private function isListOf(mixed $value, string $class): bool
     {
-        if (! is_array($value)) {
+        if (! is_array($value) || ! array_is_list($value)) {
             return false;
         }
 
