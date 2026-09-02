@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use PhpParser\NodeTraverser;
@@ -18,11 +19,14 @@ final readonly class AnalysisNodeExtractor
     private FileAnalysisProvider $fileAnalysisProvider;
 
     /**
+     * @param LayerResolverInterface   $layerResolver       Resolves no layers by default, which is enough
+     *                                                      for rules that only need the file facts and
+     *                                                      run outside the analyser.
      * @param AnalysisResultCache|null $analysisResultCache When given, every extracted file's nodes
      *                                                      are stored under $analysisNodeCacheNamespace.
      */
     public function __construct(
-        private LayerResolverInterface $layerResolver,
+        private LayerResolverInterface $layerResolver = new ChainLayerResolver(),
         ?FileAnalysisProvider $fileAnalysisProvider = null,
         private ?AnalysisResultCache $analysisResultCache = null,
         private string $analysisNodeCacheNamespace = '',
@@ -42,18 +46,21 @@ final readonly class AnalysisNodeExtractor
 
         foreach ($files as $file) {
             try {
-                $ast = $this->fileAnalysisProvider->ast($file, $withFileAnalysis);
+                $ast                          = $this->fileAnalysisProvider->ast($file, $withFileAnalysis);
+                $nonCanonicalKeywordConstants = [];
 
+                if ($ast !== null && $ast !== []) {
+                    $analysisNodeCollector->setCurrentFile($file);
+                    $nodeTraverser->traverse($ast);
+
+                    $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();
+                }
+
+                // Analysed after the traversal so the facts only the collector
+                // records reach the file analysis without a second AST walk.
                 if ($withFileAnalysis) {
-                    $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse($file);
+                    $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse($file, $nonCanonicalKeywordConstants);
                 }
-
-                if ($ast === null || $ast === []) {
-                    continue;
-                }
-
-                $analysisNodeCollector->setCurrentFile($file);
-                $nodeTraverser->traverse($ast);
             } finally {
                 if ($withFileAnalysis) {
                     $this->fileAnalysisProvider->releaseAst($file);

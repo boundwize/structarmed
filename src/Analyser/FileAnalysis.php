@@ -6,6 +6,13 @@ namespace Boundwize\StructArmed\Analyser;
 
 final readonly class FileAnalysis
 {
+    /**
+     * @param list<array{int, string}> $nonCanonicalKeywordConstants `true`, `false`, and `null`
+     *                                                               fetches not spelled in lowercase,
+     *                                                               as [line, spelling as written]; a
+     *                                                               leading `\` marks a fully
+     *                                                               qualified form such as `\TRUE`.
+     */
     public function __construct(
         public string $file,
         public bool $hasUtf8Bom,
@@ -15,6 +22,7 @@ final readonly class FileAnalysis
         public bool $declaresSymbols,
         public bool $hasSideEffects,
         public int $sideEffectLine,
+        public array $nonCanonicalKeywordConstants = [],
     ) {
     }
 }
