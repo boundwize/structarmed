@@ -1057,7 +1057,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function collectKeywordConstant(Name $name): void
     {
         $spelling = $name->toString();
-        $length   = strlen($spelling);
+
+        if (isset(self::KEYWORD_CONSTANTS[$spelling])) {
+            return;
+        }
+
+        $length = strlen($spelling);
 
         if ($length !== 4 && $length !== 5) {
             return;
@@ -1065,16 +1070,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $keyword = strtolower($spelling);
 
-        if (! isset(self::KEYWORD_CONSTANTS[$keyword]) || $spelling === $keyword) {
+        if (! isset(self::KEYWORD_CONSTANTS[$keyword])) {
             return;
         }
 
         $spanLength = $name->getEndFilePos() - $name->getStartFilePos() + 1;
-        $nameLength = strlen($spelling);
 
-        if ($spanLength === $nameLength + 1) {
+        if ($spanLength === $length + 1) {
             $spelling = '\\' . $spelling;
-        } elseif ($spanLength !== $nameLength) {
+        } elseif ($spanLength !== $length) {
             return;
         }
 
