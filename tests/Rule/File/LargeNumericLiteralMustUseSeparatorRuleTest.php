@@ -13,6 +13,9 @@ use Boundwize\StructArmed\Rule\Fixer\PhpParser\Scalar\AddNumericLiteralSeparator
 use Boundwize\StructArmed\Rule\Rules\File\LargeNumericLiteralMustUseSeparatorRule;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use Boundwize\StructArmed\Util\Path;
+use PhpParser\Node;
+use PhpParser\Node\Scalar\Float_;
+use PhpParser\NodeVisitorAbstract;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -81,6 +84,10 @@ PHP, file_get_contents($basePath . '/src/Foo.php'));
         );
 
         $this->assertCount(2, $violations);
+        $this->assertEquals(
+            $violations[0],
+            $largeNumericLiteralMustUseSeparatorRule->evaluateProject($basePath, Architecture::define()),
+        );
         $this->assertTrue($largeNumericLiteralMustUseSeparatorRule->fix($violations[1]));
         $this->assertSame(
             "<?php\n\n\$values = [10000, 123_456_789];\n",
@@ -91,6 +98,20 @@ PHP, file_get_contents($basePath . '/src/Foo.php'));
             "<?php\n\n\$values = [10_000, 123_456_789];\n",
             file_get_contents($basePath . '/src/Foo.php'),
         );
+    }
+
+    public function testPrintsReplacedFloatsWithoutARawValueSpelling(): void
+    {
+        $basePath = $this->makeProject("<?php\n\n\$value = 1.5;\n");
+        $visitor  = new class extends NodeVisitorAbstract {
+            public function leaveNode(Node $node): ?Node
+            {
+                return $node instanceof Float_ ? new Float_(2.5) : null;
+            }
+        };
+
+        $this->assertTrue((new PhpParserFixerProcessor())->process($basePath . '/src/Foo.php', $visitor));
+        $this->assertSame("<?php\n\n\$value = 2.5;\n", file_get_contents($basePath . '/src/Foo.php'));
     }
 
     public function testAnalyserPreservesFixInformationInSequentialAndParallelRuns(): void

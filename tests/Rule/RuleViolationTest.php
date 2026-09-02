@@ -135,6 +135,19 @@ final class RuleViolationTest extends TestCase
         $this->assertSame('status', $ruleViolation->toArray()['property']);
     }
 
+    public function testViolationSerializesNumericLiteralWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:        'Broken rule',
+            file:           '/src/File.php',
+            line:           7,
+            className:      '',
+            numericLiteral: '10000',
+        );
+
+        $this->assertSame('10000', $ruleViolation->toArray()['numericLiteral']);
+    }
+
     public function testCollectionFiltersAndSerializesViolations(): void
     {
         $collection    = new RuleViolationCollection();
