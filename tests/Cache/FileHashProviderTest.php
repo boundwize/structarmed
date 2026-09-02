@@ -55,4 +55,29 @@ final class FileHashProviderTest extends TestCase
 
         $this->assertSame(hash_file('xxh128', $file), $fileHashProvider->hash($file));
     }
+
+    public function testForFilesCopiesOnlyRequestedMemoisedHashes(): void
+    {
+        $retainedFile  = $this->makeTemporaryFile('structarmed-file-hash');
+        $unrelatedFile = $this->makeTemporaryFile('structarmed-file-hash');
+        $missingFile   = $this->makeTemporaryFile('structarmed-file-hash');
+
+        file_put_contents($retainedFile, '<?php echo "retained original";');
+        file_put_contents($unrelatedFile, '<?php echo "unrelated original";');
+        file_put_contents($missingFile, '<?php echo "missing original";');
+
+        $fileHashProvider = new FileHashProvider();
+        $retainedHash     = $fileHashProvider->hash($retainedFile);
+        $fileHashProvider->hash($unrelatedFile);
+
+        $providerForFiles = $fileHashProvider->forFiles([$retainedFile, $missingFile]);
+
+        file_put_contents($retainedFile, '<?php echo "retained changed";');
+        file_put_contents($unrelatedFile, '<?php echo "unrelated changed";');
+        file_put_contents($missingFile, '<?php echo "missing changed";');
+
+        $this->assertSame($retainedHash, $providerForFiles->hash($retainedFile));
+        $this->assertSame(hash_file('xxh128', $unrelatedFile), $providerForFiles->hash($unrelatedFile));
+        $this->assertSame(hash_file('xxh128', $missingFile), $providerForFiles->hash($missingFile));
+    }
 }

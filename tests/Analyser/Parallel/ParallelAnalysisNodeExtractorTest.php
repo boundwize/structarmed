@@ -6,6 +6,8 @@ namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use Iterator;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -158,6 +160,45 @@ PHP);
 
         $this->assertCount(1, $extractionResult->classNodes);
         $this->assertSame('App\\Domain\\Baz', $extractionResult->classNodes[0]->className);
+    }
+
+    public function testWorkersStoreValidAnalysisNodeCacheEntriesWithScopedFileHashes(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-parallel-cache');
+        $fooFile  = $dir . '/Foo.php';
+        $barFile  = $dir . '/Bar.php';
+
+        file_put_contents($fooFile, '<?php namespace App; final class Foo {}');
+        file_put_contents($barFile, '<?php namespace App; final class Bar {}');
+
+        $fileHashProvider = new FileHashProvider();
+        $fileHashProvider->hash($fooFile);
+        $fileHashProvider->hash($barFile);
+
+        $analysisResultCache = new AnalysisResultCache($dir, $fileHashProvider, $cacheDir);
+
+        (new ParallelAnalysisNodeExtractor(
+            basePath: $dir,
+            layers: [],
+            layerPatterns: [],
+            workerCount: 2,
+            cacheDirectory: $cacheDir,
+            analysisResultCache: $analysisResultCache,
+            analysisNodeCacheNamespace: 'config',
+        ))->extract([$fooFile, $barFile]);
+
+        $freshCache = new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir);
+
+        $this->assertIsArray($freshCache->loadAnalysisNodes($fooFile, 'config'));
+        $this->assertIsArray($freshCache->loadAnalysisNodes($barFile, 'config'));
+
+        file_put_contents($fooFile, '<?php namespace App; final class Foo { public function changed(): void {} }');
+
+        $changedFileCache = new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir);
+
+        $this->assertNull($changedFileCache->loadAnalysisNodes($fooFile, 'config'));
+        $this->assertIsArray($changedFileCache->loadAnalysisNodes($barFile, 'config'));
     }
 
     public function testExtractWithLayerPatternsUsesChainResolver(): void
