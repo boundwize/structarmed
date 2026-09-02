@@ -113,4 +113,8 @@ Use [Custom Rules And Presets](../custom-rules-and-presets/) when you want to ad
 ->withPreset(Preset::PSR4(
     sourcePaths: ['src/', 'tests/'], // default: read composer.json PSR-4 paths
 ))
+
+->withPreset(Preset::CODEQUALITY(
+    sourcePaths: ['src/', 'tests/'], // default: read composer.json PSR-4 paths
+))
 ```

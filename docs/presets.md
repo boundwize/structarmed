@@ -27,6 +27,7 @@ StructArmed ships with presets for common PHP standards and architecture styles.
 | `Preset::DDD()` | Layer isolation, entity/VO/repository/event/service conventions, including keeping Doctrine ORM repository inheritance out of the Domain layer |
 | `Preset::MVC()` | Layer isolation, thin controllers, model/view/service rules, return types for helper functions |
 | `Preset::YAGNI()` | Speculative-abstraction cleanup: interfaces must be implemented by a class or extended by another interface, abstract classes must be extended, traits must be used, and extended classes that are never instantiated must be abstract — a dependency reference (type hint, `instanceof`, `::class`, static call, a class-name string, ...) also counts as usage within the scanned paths, while only instantiation (`new X`, `new self`/`static`/`parent`, or a constant class expression such as `new (X::class)`) keeps an extended class concrete. All rules support `--fix`, removing the unused declaration or adding the `abstract` modifier |
+| `Preset::CODEQUALITY()` | General readability conventions independent of any architecture style: closures and arrow functions that do not read `$this` must be declared `static`, and plain decimal numeric literals of `10_000` or more must group their digits with `_` separators (`1000500` becomes `1_000_500`). Both rules support `--fix`. Tune the literal threshold with `replaceRule(CodeQualityPreset::LARGE_NUMERIC_LITERALS_MUST_USE_SEPARATOR, new LargeNumericLiteralMustUseSeparatorRule(minimum: 1_000))` |
 
 ## Initialize Presets
 
@@ -39,6 +40,7 @@ vendor/bin/structarmed init --preset=psr15
 vendor/bin/structarmed init --preset=mvc
 vendor/bin/structarmed init --preset=ddd
 vendor/bin/structarmed init --preset=yagni
+vendor/bin/structarmed init --preset=codequality
 vendor/bin/structarmed init --preset=all
 ```
 
@@ -55,6 +57,7 @@ return Architecture::define()
         Preset::MVC(),
         Preset::DDD(),
         Preset::YAGNI(),
+        Preset::CODEQUALITY(),
     );
 ```
 

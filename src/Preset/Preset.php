@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Preset;
 
+use Boundwize\StructArmed\Preset\Presets\CodeQualityPreset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\PerPreset;
@@ -25,6 +26,7 @@ use Boundwize\StructArmed\Preset\Presets\YagniPreset;
  *   ->withPreset(Preset::PER())
  *   ->withPreset(Preset::PSR15())
  *   ->withPreset(Preset::YAGNI())
+ *   ->withPreset(Preset::CODEQUALITY())
  *   ->withPresets(Preset::DDD(), Preset::MVC())
  */
 final class Preset
@@ -107,6 +109,17 @@ final class Preset
         ?array $sourcePaths = null,
     ): YagniPreset {
         return new YagniPreset(
+            sourcePaths: $sourcePaths,
+        );
+    }
+
+    /**
+     * @param list<string>|null $sourcePaths
+     */
+    public static function CODEQUALITY(
+        ?array $sourcePaths = null,
+    ): CodeQualityPreset {
+        return new CodeQualityPreset(
             sourcePaths: $sourcePaths,
         );
     }

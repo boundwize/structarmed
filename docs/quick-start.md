@@ -48,6 +48,9 @@ vendor/bin/structarmed init --preset=ddd
 # Remove speculative abstractions: unimplemented interfaces, unextended abstract classes, unused traits
 vendor/bin/structarmed init --preset=yagni
 
+# Static closures and digit separators in large numeric literals
+vendor/bin/structarmed init --preset=codequality
+
 # Enable every preset at once
 vendor/bin/structarmed init --preset=all
 ```
