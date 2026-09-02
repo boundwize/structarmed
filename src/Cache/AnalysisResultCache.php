@@ -76,7 +76,7 @@ final class AnalysisResultCache
 
     public function __construct(
         string $basePath,
-        private readonly FileHashProvider $fileHashProvider,
+        private FileHashProvider $fileHashProvider,
         ?string $cacheDirectory = null,
         private readonly string $configHash = '',
         private readonly string $composerGeneratedVersionHash = '',
@@ -163,6 +163,17 @@ final class AnalysisResultCache
     public function getCacheDirectory(): string
     {
         return $this->cacheDirectory;
+    }
+
+    /**
+     * @param list<string> $files
+     */
+    public function forFiles(array $files): self
+    {
+        $cache                   = clone $this;
+        $cache->fileHashProvider = $this->fileHashProvider->forFiles($files);
+
+        return $cache;
     }
 
     /**

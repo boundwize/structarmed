@@ -69,6 +69,42 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testForFilesUsesOnlyRequestedMemoisedHashes(): void
+    {
+        $directory     = $this->createTempDirectory();
+        $cacheDir      = $this->createTempDirectory();
+        $retainedFile  = $directory . '/Retained.php';
+        $unrelatedFile = $directory . '/Unrelated.php';
+
+        file_put_contents($retainedFile, '<?php class Retained {}');
+        file_put_contents($unrelatedFile, '<?php class Unrelated {}');
+
+        $fileHashProvider = new FileHashProvider();
+        $fileHashProvider->hash($retainedFile);
+        $fileHashProvider->hash($unrelatedFile);
+
+        $cacheForFile = (new AnalysisResultCache($directory, $fileHashProvider, $cacheDir))
+            ->forFiles([$retainedFile]);
+
+        file_put_contents($retainedFile, '<?php final class Retained {}');
+        file_put_contents($unrelatedFile, '<?php final class Unrelated {}');
+
+        try {
+            $cacheForFile->storeAnalysisNodes($retainedFile, 'config', []);
+            $cacheForFile->storeAnalysisNodes($unrelatedFile, 'config', []);
+
+            $analysisResultCache = new AnalysisResultCache($directory, new FileHashProvider(), $cacheDir);
+
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($retainedFile, 'config'));
+            $this->assertIsArray($analysisResultCache->loadAnalysisNodes($unrelatedFile, 'config'));
+        } finally {
+            unlink($retainedFile);
+            unlink($unrelatedFile);
+            $this->removeTempDirectory($directory);
+            $this->removeTempDirectory($cacheDir);
+        }
+    }
+
     public function testStoresAndLoadsViolationCollection(): void
     {
         $cacheDirectory          = $this->createTempDirectory();

@@ -104,7 +104,7 @@ final readonly class ParallelAnalysisNodeExtractor
                 'files'            => $chunk,
                 'emitProgress'     => $emitProgress,
                 'withFileAnalysis' => $withFileAnalysis,
-                'cache'            => $this->analysisResultCache,
+                'cache'            => $this->analysisResultCache?->forFiles($chunk),
                 'cacheNamespace'   => $this->analysisNodeCacheNamespace,
             ]));
 
