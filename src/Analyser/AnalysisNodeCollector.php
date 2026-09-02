@@ -309,6 +309,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var array<string, true> */
     private array $fileFunctions = [];
 
+    /** @var array<int, string> */
+    private array $resolvedFunctionNames = [];
+
     /** @var array<int, ClassLikeAnalysis> */
     private array $classLikeAnalysis = [];
 
@@ -387,6 +390,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentNamespaceUses              = [];
         $this->fileClassLikes                    = [];
         $this->fileFunctions                     = [];
+        $this->resolvedFunctionNames             = [];
         $this->classLikeAnalysis                 = [];
         $this->activeClassLikeAnalyses           = [];
         $this->activeMethodComplexities          = [];
@@ -1509,6 +1513,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     private function resolveFunctionName(Name $name): string
+    {
+        $id = spl_object_id($name);
+
+        return $this->resolvedFunctionNames[$id]
+            ??= $this->doResolveFunctionName($name);
+    }
+
+    private function doResolveFunctionName(Name $name): string
     {
         $functionName = $name->toString();
 
