@@ -239,6 +239,10 @@ final readonly class AnalyseCommand
                     $violationCountBeforePass - $ruleViolationCollection->count()
                 );
                 $elapsed     = microtime(true) - $start;
+
+                if ($ruleViolationCollection->isEmpty()) {
+                    break;
+                }
             }
         }
 
