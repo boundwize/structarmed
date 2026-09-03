@@ -63,7 +63,7 @@ use const T_OPEN_TAG;
 
 final class FileAnalysisProvider
 {
-    private readonly Parser $parser;
+    private ?Parser $parser = null;
 
     /** @var array<string, array<Node\Stmt>|null> */
     private array $asts = [];
@@ -107,7 +107,6 @@ final class FileAnalysisProvider
     {
         $this->analyses   = self::normaliseAnalyses($this->analyses);
         $this->scopeFiles = array_keys($this->analyses);
-        $this->parser     = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     /** @return list<string> The files represented by the analyses supplied at construction. */
@@ -183,7 +182,7 @@ final class FileAnalysisProvider
     {
         if (! $retainForAnalysis) {
             try {
-                return $this->parser->parse((string) file_get_contents($file));
+                return $this->parser()->parse((string) file_get_contents($file));
             } catch (Error) {
                 return null;
             }
@@ -213,16 +212,17 @@ final class FileAnalysisProvider
         $code    = $this->contents($file);
         $ast     = null;
         $isValid = true;
+        $parser  = $this->parser();
 
         try {
-            $ast = $this->parser->parse($code);
+            $ast = $parser->parse($code);
         } catch (Error) {
             $isValid = false;
         }
 
         $this->asts[$file]               = $ast;
         $this->validAsts[$file]          = $isValid;
-        $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineForCode($code);
+        $this->invalidPhpTagLines[$file] = $this->invalidPhpTagLineForCode($code, $parser);
 
         return $ast;
     }
@@ -273,7 +273,7 @@ final class FileAnalysisProvider
      * A file that opens with a well-formed `<?php` tag and contains no other `<?`
      * cannot hold an invalid tag, which skips the token walk for the common case.
      */
-    private function invalidPhpTagLineForCode(string $code): ?int
+    private function invalidPhpTagLineForCode(string $code, Parser $parser): ?int
     {
         if (
             str_starts_with($code, '<?php')
@@ -283,7 +283,7 @@ final class FileAnalysisProvider
             return null;
         }
 
-        foreach ($this->parser->getTokens() as $token) {
+        foreach ($parser->getTokens() as $token) {
             $id = $token->id;
 
             if ($id !== T_OPEN_TAG && $id !== T_INLINE_HTML) {
@@ -320,6 +320,11 @@ final class FileAnalysisProvider
     private function contents(string $file): string
     {
         return $this->contents[$file] ??= (string) file_get_contents($file);
+    }
+
+    private function parser(): Parser
+    {
+        return $this->parser ??= (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     /**
