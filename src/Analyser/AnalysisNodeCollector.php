@@ -325,6 +325,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var ClassLike[] */
     private array $fileClassLikes = [];
 
+    /**
+     * The named scopes declaring each anonymous class left in the current
+     * file — innermost class-like name, innermost function name — keyed by
+     * the class node's object id and read once its node is built.
+     *
+     * @var array<int, array{string|null, string|null}>
+     */
+    private array $anonymousClassEnclosingNames = [];
+
     /** @var array<string, true> */
     private array $fileFunctions = [];
 
@@ -408,6 +417,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->numericLiterals                   = [];
         $this->currentNamespaceUses              = [];
         $this->fileClassLikes                    = [];
+        $this->anonymousClassEnclosingNames      = [];
         $this->fileFunctions                     = [];
         $this->classLikeAnalysis                 = [];
         $this->activeClassLikeAnalyses           = [];
@@ -444,9 +454,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
-     * References to class-likes made outside any named class-like scope, per
-     * file — procedural functions, top-level statements, and top-level
-     * anonymous class bodies.
+     * References to class-likes made outside any class-like scope, per file —
+     * procedural functions and top-level statements.
      *
      * @return array<string, list<string>>
      */
@@ -597,10 +606,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $this->activeClassLikeScopes[]             = $this->createClassLikeScope($node, $classLikeName);
                 $this->activeClassLikeNames[]              = $classLikeName;
                 $this->functionLikeDepthAtClassLikeEntry[] = count($this->activeFunctionLikeAnalyses);
-
-                if ($classLikeName !== null) {
-                    $this->startClassLikeAnalysis($node);
-                }
+                $this->startClassLikeAnalysis($node);
 
                 return null;
             }
@@ -699,30 +705,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         // Anonymous classes never become ClassNodes, but the class they
         // extend, the interfaces they implement, and the traits they use
-        // are still used within the scanned paths.
+        // are still used within the scanned paths, and their members and
+        // body facts are collected like a named class's.
         if ($node instanceof Class_ && $node->isAnonymous()) {
             // Its own (nameless) entry is already popped, so the innermost
             // active names are the named scopes declaring it; they also
             // resolve its layer, as they do for an anonymous function.
-            $enclosingClassName    = $this->innermostActiveClassLikeName();
-            $enclosingFunctionName = $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames);
-            [$layer, $layers]      = $this->resolveLayerData($enclosingClassName ?? $enclosingFunctionName ?? '');
-
-            $this->anonymousClassNodes[] = new AnonymousClassNode(
-                file:                  $this->currentFile,
-                line:                  $node->getStartLine(),
-                extends:               $node->extends instanceof Name ? $node->extends->toString() : null,
-                implements:            $this->collectImplements($node),
-                traits:                $this->collectTraits($node),
-                layer:                 $layer,
-                enclosingClassName:    $enclosingClassName,
-                enclosingFunctionName: $enclosingFunctionName,
-                hasEmptyParentheses:   AnonymousClassParentheses::emptyTokenRange($this->currentTokens, $node)
-                                           !== null,
-                layers:                $layers,
-            );
-
-            return null;
+            $this->anonymousClassEnclosingNames[spl_object_id($node)] = [
+                $this->innermostActiveClassLikeName(),
+                $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
+            ];
         }
 
         $this->fileClassLikes[] = $node;
@@ -735,7 +727,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     public function afterTraverse(array $nodes): null
     {
         foreach ($this->fileClassLikes as $fileClassLike) {
-            $this->collectClassLike($fileClassLike);
+            if ($fileClassLike instanceof Class_ && $fileClassLike->isAnonymous()) {
+                $this->collectAnonymousClass($fileClassLike);
+            } else {
+                $this->collectClassLike($fileClassLike);
+            }
         }
 
         foreach ($this->fileFunctionLikeAnalyses as $fileFunctionLikeAnalysis) {
@@ -753,6 +749,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         $this->fileClassLikes                    = [];
+        $this->anonymousClassEnclosingNames      = [];
         $this->classLikeAnalysis                 = [];
         $this->activeClassLikeAnalyses           = [];
         $this->activeClassLikeScopes             = [];
@@ -766,12 +763,19 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         return null;
     }
 
+    /**
+     * A named class-like seeds its dependencies with the namespace imports.
+     * An anonymous class does not: like a function-like's, its file's imports
+     * belong to the file (and the named class-like declaring it), not to it.
+     */
     private function startClassLikeAnalysis(ClassLike $classLike): void
     {
         $classLikeId       = spl_object_id($classLike);
         $classLikeAnalysis = new ClassLikeAnalysis($classLike instanceof Interface_);
 
-        $classLikeAnalysis->dependencies = $this->currentNamespaceUses;
+        if ($classLike->name instanceof Identifier) {
+            $classLikeAnalysis->dependencies = $this->currentNamespaceUses;
+        }
 
         $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
         $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
@@ -779,15 +783,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * The analysis of the class-like declaring the member being entered: the
-     * innermost active class-like. An anonymous class (null name) starts no
-     * analysis, so its members are not collected.
+     * innermost active class-like, named or anonymous.
      */
     private function declaringClassLikeAnalysis(): ?ClassLikeAnalysis
     {
-        if (end($this->activeClassLikeNames) === null) {
-            return null;
-        }
-
         $analysis = end($this->activeClassLikeAnalyses);
 
         return $analysis instanceof ClassLikeAnalysis ? $analysis : null;
@@ -1022,10 +1021,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($this->activeClassLikeAnalyses === []) {
-                // Outside any named class-like scope — procedural functions,
-                // top-level statements, top-level anonymous class bodies — a
-                // class-like reference still keeps the referenced class-like
-                // alive.
+                // Outside any class-like scope — procedural functions and
+                // top-level statements — a class-like reference still keeps
+                // the referenced class-like alive.
                 $this->currentFileReferences[$name] = true;
             }
 
@@ -1444,6 +1442,37 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         );
     }
 
+    private function collectAnonymousClass(Class_ $class): void
+    {
+        $classLikeId                                  = spl_object_id($class);
+        $analysis                                     = $this->collectClassLikeAnalysis($classLikeId);
+        [$enclosingClassName, $enclosingFunctionName] = $this->anonymousClassEnclosingNames[$classLikeId];
+        [$layer, $layers]                             = $this->resolveLayerData(
+            $enclosingClassName ?? $enclosingFunctionName ?? ''
+        );
+
+        $this->anonymousClassNodes[] = new AnonymousClassNode(
+            file:                  $this->currentFile,
+            line:                  $class->getStartLine(),
+            extends:               $class->extends instanceof Name ? $class->extends->toString() : null,
+            implements:            $this->collectImplements($class),
+            traits:                $analysis['traits'],
+            layer:                 $layer,
+            enclosingClassName:    $enclosingClassName,
+            enclosingFunctionName: $enclosingFunctionName,
+            hasEmptyParentheses:   AnonymousClassParentheses::emptyTokenRange($this->currentTokens, $class) !== null,
+            layers:                $layers,
+            isReadonly:            $class->isReadonly(),
+            dependencies:          $analysis['dependencies'],
+            methods:               $analysis['methods'],
+            constants:             $analysis['constants'],
+            properties:            $analysis['properties'],
+            functionCalls:         $analysis['functionCalls'],
+            superglobals:          $analysis['superglobals'],
+            languageConstructs:    $analysis['languageConstructs'],
+        );
+    }
+
     private function collectFunctionLike(FunctionLikeAnalysis $functionLikeAnalysis): void
     {
         $functionLike  = $functionLikeAnalysis->functionLike;
@@ -1635,29 +1664,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         return $parents;
-    }
-
-    /**
-     * Traits used by an anonymous class; named class-likes collect theirs in
-     * collectMembers().
-     *
-     * @return string[]
-     */
-    private function collectTraits(Class_ $class): array
-    {
-        $traits = [];
-
-        foreach ($class->stmts as $stmt) {
-            if (! $stmt instanceof TraitUse) {
-                continue;
-            }
-
-            foreach ($stmt->traits as $trait) {
-                $traits[] = $trait->toString();
-            }
-        }
-
-        return $traits;
     }
 
     private function resolveVisibilityName(ClassMethod|ClassConst|Property|Param $node): string

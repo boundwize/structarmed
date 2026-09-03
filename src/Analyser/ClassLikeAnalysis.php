@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Analyser;
 use PhpParser\Node\Name;
 
 /**
- * Facts collected while traversing a named class-like: body-level references
+ * Facts collected while traversing a class-like: body-level references
  * plus its members, each recorded as the traverser passes the declaring node.
  *
  * @internal

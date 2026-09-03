@@ -13,6 +13,7 @@ use function substr;
 
 final class ClassNode
 {
+    use MemberQueryTrait;
     use NodeQueryTrait;
     use RecursiveParentsTrait;
 
@@ -173,16 +174,5 @@ final class ClassNode
         return $this->matchesAnyClassLike($interface, $this->implements)
             || $this->matchesAnyClassLike($interface, $this->interfaceExtends)
             || $this->matchesAnyClassLike($interface, $this->parentInterfaces);
-    }
-
-    public function constructorParamCount(): int
-    {
-        foreach ($this->methods as $method) {
-            if ($method->isConstructor()) {
-                return $method->paramCount;
-            }
-        }
-
-        return 0;
     }
 }

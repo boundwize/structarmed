@@ -66,7 +66,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 6;
+    public const FORMAT_VERSION = 7;
 
     private readonly string $cacheDirectory;
 
@@ -419,7 +419,7 @@ final class AnalysisResultCache
      * @param list<ClassNode>          $classNodes
      * @param list<AnonymousClassNode> $anonymousClassNodes
      * @param list<string>             $fileReferences Class-like references made outside any
-     *                                                 named class-like scope in this file
+     *                                                 class-like scope in this file
      * @param list<string>             $fileInstantiations Class-like instantiations in this file
      * @param list<FunctionNode>          $functionNodes
      * @param list<AnonymousFunctionNode> $anonymousFunctionNodes
@@ -567,18 +567,37 @@ final class AnalysisResultCache
      */
     private function anonymousClassNodeToArray(AnonymousClassNode $anonymousClassNode): array
     {
-        return [
+        $node = [
             'file'                  => $anonymousClassNode->file,
             'line'                  => $anonymousClassNode->line,
             'extends'               => $anonymousClassNode->extends,
-            'implements'            => $anonymousClassNode->implements,
-            'traits'                => $anonymousClassNode->traits,
             'layer'                 => $anonymousClassNode->layer,
             'enclosingClassName'    => $anonymousClassNode->enclosingClassName,
             'enclosingFunctionName' => $anonymousClassNode->enclosingFunctionName,
             'hasEmptyParentheses'   => $anonymousClassNode->hasEmptyParentheses,
-            'layers'                => $anonymousClassNode->layers,
+            'isReadonly'            => $anonymousClassNode->isReadonly,
         ];
+
+        $lists = [
+            'implements'         => array_values($anonymousClassNode->implements),
+            'traits'             => array_values($anonymousClassNode->traits),
+            'layers'             => $anonymousClassNode->layers,
+            'dependencies'       => $anonymousClassNode->dependencies,
+            'methods'            => array_map($this->methodNodeToArray(...), $anonymousClassNode->methods),
+            'constants'          => array_map($this->constantNodeToArray(...), $anonymousClassNode->constants),
+            'properties'         => array_map($this->propertyNodeToArray(...), $anonymousClassNode->properties),
+            'functionCalls'      => array_values($anonymousClassNode->functionCalls),
+            'superglobals'       => array_values($anonymousClassNode->superglobals),
+            'languageConstructs' => array_values($anonymousClassNode->languageConstructs),
+        ];
+
+        foreach ($lists as $key => $list) {
+            if ($list !== []) {
+                $node[$key] = $list;
+            }
+        }
+
+        return $node;
     }
 
     /**
@@ -610,6 +629,11 @@ final class AnalysisResultCache
             $enclosingFunctionName = $rawNode['enclosingFunctionName'] ?? null;
             $hasEmptyParentheses   = $rawNode['hasEmptyParentheses'] ?? false;
             $layers                = $rawNode['layers'] ?? [];
+            $isReadonly            = $rawNode['isReadonly'] ?? false;
+            $dependencies          = $rawNode['dependencies'] ?? [];
+            $functionCalls         = $rawNode['functionCalls'] ?? [];
+            $superglobals          = $rawNode['superglobals'] ?? [];
+            $languageConstructs    = $rawNode['languageConstructs'] ?? [];
 
             if (
                 ! is_string($file)
@@ -619,6 +643,7 @@ final class AnalysisResultCache
                 || ($enclosingClassName !== null && ! is_string($enclosingClassName))
                 || ($enclosingFunctionName !== null && ! is_string($enclosingFunctionName))
                 || ! is_bool($hasEmptyParentheses)
+                || ! is_bool($isReadonly)
             ) {
                 return null;
             }
@@ -627,7 +652,19 @@ final class AnalysisResultCache
                 ! $this->isStringArray($implements)
                 || ! $this->isStringArray($traits)
                 || ! $this->isStringArray($layers)
+                || ! $this->isStringArray($dependencies)
+                || ! $this->isStringArray($functionCalls)
+                || ! $this->isStringArray($superglobals)
+                || ! $this->isStringArray($languageConstructs)
             ) {
+                return null;
+            }
+
+            $methods    = $this->memberNodesFromArray($rawNode['methods'] ?? [], $this->methodNodeFromArray(...));
+            $constants  = $this->memberNodesFromArray($rawNode['constants'] ?? [], $this->constantNodeFromArray(...));
+            $properties = $this->memberNodesFromArray($rawNode['properties'] ?? [], $this->propertyNodeFromArray(...));
+
+            if ($methods === null || $constants === null || $properties === null) {
                 return null;
             }
 
@@ -642,6 +679,14 @@ final class AnalysisResultCache
                 enclosingFunctionName: $enclosingFunctionName,
                 hasEmptyParentheses:   $hasEmptyParentheses,
                 layers:                array_values($layers),
+                isReadonly:            $isReadonly,
+                dependencies:          array_values($dependencies),
+                methods:               $methods,
+                constants:             $constants,
+                properties:            $properties,
+                functionCalls:         array_values($functionCalls),
+                superglobals:          array_values($superglobals),
+                languageConstructs:    array_values($languageConstructs),
             );
         }
 
@@ -988,10 +1033,6 @@ final class AnalysisResultCache
         $parentClasses      = $node['parentClasses'] ?? [];
         $parentInterfaces   = $node['parentInterfaces'] ?? [];
         $traits             = $node['traits'] ?? [];
-        $rawMethods         = $node['methods'] ?? [];
-        $rawConstants       = $node['constants'] ?? [];
-        $rawProperties      = $node['properties'] ?? [];
-        $rawEnumCases       = $node['enumCases'] ?? [];
         $enumBackingType    = $node['enumBackingType'] ?? null;
         $functionCalls      = $node['functionCalls'] ?? [];
         $superglobals       = $node['superglobals'] ?? [];
@@ -1015,9 +1056,6 @@ final class AnalysisResultCache
             || ! $this->isStringArray($parentClasses)
             || ! $this->isStringArray($parentInterfaces)
             || ! $this->isStringArray($traits)
-            || ! is_array($rawMethods)
-            || ! is_array($rawConstants)
-            || ! is_array($rawProperties)
             || ! $this->isStringArray($functionCalls)
             || ! $this->isStringArray($superglobals)
             || ! $this->isStringArray($languageConstructs)
@@ -1026,72 +1064,19 @@ final class AnalysisResultCache
             return null;
         }
 
-        $methods = [];
+        $methods    = $this->memberNodesFromArray($node['methods'] ?? [], $this->methodNodeFromArray(...));
+        $constants  = $this->memberNodesFromArray($node['constants'] ?? [], $this->constantNodeFromArray(...));
+        $properties = $this->memberNodesFromArray($node['properties'] ?? [], $this->propertyNodeFromArray(...));
+        $enumCases  = $this->memberNodesFromArray($node['enumCases'] ?? [], $this->enumCaseNodeFromArray(...));
 
-        foreach ($rawMethods as $rawMethod) {
-            if (! is_array($rawMethod)) {
-                return null;
-            }
-
-            $methodNode = $this->methodNodeFromArray($rawMethod);
-
-            if (! $methodNode instanceof MethodNode) {
-                return null;
-            }
-
-            $methods[] = $methodNode;
-        }
-
-        $constants = [];
-
-        foreach ($rawConstants as $rawConstant) {
-            if (! is_array($rawConstant)) {
-                return null;
-            }
-
-            $constantNode = $this->constantNodeFromArray($rawConstant);
-
-            if (! $constantNode instanceof ConstantNode) {
-                return null;
-            }
-
-            $constants[] = $constantNode;
-        }
-
-        $properties = [];
-
-        foreach ($rawProperties as $rawProperty) {
-            if (! is_array($rawProperty)) {
-                return null;
-            }
-
-            $propertyNode = $this->propertyNodeFromArray($rawProperty);
-
-            if (! $propertyNode instanceof PropertyNode) {
-                return null;
-            }
-
-            $properties[] = $propertyNode;
-        }
-
-        if (! is_array($rawEnumCases) || ($enumBackingType !== null && ! is_string($enumBackingType))) {
+        if (
+            $methods === null
+            || $constants === null
+            || $properties === null
+            || $enumCases === null
+            || ($enumBackingType !== null && ! is_string($enumBackingType))
+        ) {
             return null;
-        }
-
-        $enumCases = [];
-
-        foreach ($rawEnumCases as $rawEnumCase) {
-            if (! is_array($rawEnumCase)) {
-                return null;
-            }
-
-            $enumCaseNode = $this->enumCaseNodeFromArray($rawEnumCase);
-
-            if (! $enumCaseNode instanceof EnumCaseNode) {
-                return null;
-            }
-
-            $enumCases[] = $enumCaseNode;
         }
 
         return new ClassNode(
@@ -1122,6 +1107,36 @@ final class AnalysisResultCache
             enumCases:          $enumCases,
             enumBackingType:    $enumBackingType,
         );
+    }
+
+    /**
+     * @template TMember of MethodNode|ConstantNode|PropertyNode|EnumCaseNode
+     * @param callable(array<mixed, mixed>): (TMember|null) $memberFromArray
+     * @return list<TMember>|null
+     */
+    private function memberNodesFromArray(mixed $rawMembers, callable $memberFromArray): ?array
+    {
+        if (! is_array($rawMembers)) {
+            return null;
+        }
+
+        $members = [];
+
+        foreach ($rawMembers as $rawMember) {
+            if (! is_array($rawMember)) {
+                return null;
+            }
+
+            $member = $memberFromArray($rawMember);
+
+            if ($member === null) {
+                return null;
+            }
+
+            $members[] = $member;
+        }
+
+        return $members;
     }
 
     /**

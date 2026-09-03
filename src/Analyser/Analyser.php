@@ -762,6 +762,38 @@ final readonly class Analyser
     }
 
     /**
+     * A node's own inheritance-clause names (and the imports that exist for
+     * them) are structural relations, not value references. Excluding them
+     * keeps "referenced" meaningful for the unresolved dynamic instantiation
+     * check: a class extended by a child is not thereby a possible
+     * `new $class` target. The usage-aware deletion rules are unaffected —
+     * each combines this flag with its structural extended/implemented/trait
+     * marking.
+     *
+     * @param list<string>        $dependencies
+     * @param array<string|null>  $clauseNames  The node's own name, if any, and its extends, implements, and traits
+     * @param array<string, true> $used
+     */
+    private function markDependenciesUsed(array $dependencies, array $clauseNames, array &$used): void
+    {
+        $excludedKeys = [];
+
+        foreach ($clauseNames as $clauseName) {
+            if ($clauseName !== null) {
+                $excludedKeys[strtolower($clauseName)] = true;
+            }
+        }
+
+        foreach ($dependencies as $dependency) {
+            $dependencyKey = strtolower($dependency);
+
+            if (! isset($excludedKeys[$dependencyKey])) {
+                $used[$dependencyKey] = true;
+            }
+        }
+    }
+
+    /**
      * Collect and apply class-like usage flags with one collection pass and one
      * application pass over the class nodes. Extended classes use the recursive
      * parent chain resolved by {@see withRecursiveParents()}; instantiated
@@ -796,36 +828,22 @@ final readonly class Analyser
                 $used[strtolower($trait)] = true;
             }
 
-            // A node's own inheritance-clause names (and the imports that
-            // exist for them) are structural relations, not value references.
-            // Excluding them keeps "referenced" meaningful for the unresolved
-            // dynamic instantiation check below: a class extended by a child
-            // is not thereby a possible `new $class` target. The usage-aware
-            // deletion rules are unaffected — each combines this flag with its
-            // structural extended/implemented/trait marking.
-            $excludedKeys = [strtolower($classNode->className) => true];
-
-            if ($classNode->extends !== null) {
-                $excludedKeys[strtolower($classNode->extends)] = true;
-            }
-
-            foreach ([$classNode->implements, $classNode->interfaceExtends, $classNode->traits] as $clauseNames) {
-                foreach ($clauseNames as $clauseName) {
-                    $excludedKeys[strtolower($clauseName)] = true;
-                }
-            }
-
-            foreach ($classNode->dependencies as $dependency) {
-                $dependencyKey = strtolower($dependency);
-
-                if (! isset($excludedKeys[$dependencyKey])) {
-                    $used[$dependencyKey] = true;
-                }
-            }
+            $this->markDependenciesUsed(
+                $classNode->dependencies,
+                [
+                    $classNode->className,
+                    $classNode->extends,
+                    ...$classNode->implements,
+                    ...$classNode->interfaceExtends,
+                    ...$classNode->traits,
+                ],
+                $used,
+            );
         }
 
         // Anonymous classes have no ClassNode of their own, so their inheritance
-        // and trait-use relationships are tracked separately.
+        // and trait-use relationships, and their body references, are tracked
+        // separately.
         foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
             if ($markExtended && $anonymousClassNode->extends !== null) {
                 $extended[strtolower($anonymousClassNode->extends)] = true;
@@ -840,11 +858,17 @@ final readonly class Analyser
             foreach ($anonymousClassNode->traits as $trait) {
                 $used[strtolower($trait)] = true;
             }
+
+            $this->markDependenciesUsed(
+                $anonymousClassNode->dependencies,
+                [$anonymousClassNode->extends, ...$anonymousClassNode->implements, ...$anonymousClassNode->traits],
+                $used,
+            );
         }
 
-        // References made outside any named class-like scope — procedural
-        // functions, top-level statements, top-level anonymous class bodies —
-        // have no ClassNode either, so they are tracked per file.
+        // References made outside any class-like scope — procedural functions
+        // and top-level statements — have no ClassNode either, so they are
+        // tracked per file.
         foreach ($extractionResult->fileReferences as $references) {
             foreach ($references as $reference) {
                 $used[strtolower($reference)] = true;

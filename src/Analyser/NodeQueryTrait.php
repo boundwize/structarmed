@@ -10,14 +10,15 @@ use function str_starts_with;
 use function strcasecmp;
 
 /**
- * Query helpers shared by {@see ClassNode}, {@see FunctionNode}, and
- * {@see AnonymousFunctionNode}. All three nodes carry the same body-level
- * facts — layers, dependencies, function calls, superglobals, language
- * constructs — so rules can ask the same questions of a function body that
- * they ask of a class-like.
+ * Query helpers shared by {@see ClassNode}, {@see AnonymousClassNode},
+ * {@see FunctionNode}, and {@see AnonymousFunctionNode}. All four nodes carry
+ * the same body-level facts — layers, dependencies, function calls,
+ * superglobals, language constructs — so rules can ask the same questions of
+ * a function body that they ask of a class-like.
  *
  * @internal
  *
+ * @property list<string> $layers All layer names this node belongs to; assigned once in each node's constructor
  * @property-read list<string> $dependencies       Fully-qualified class, function, or constant dependencies
  * @property-read string[]     $functionCalls      Functions called within this node
  * @property-read string[]     $superglobals       Superglobals accessed ($_GET, $_POST, etc.)
@@ -25,7 +26,10 @@ use function strcasecmp;
  */
 trait NodeQueryTrait
 {
-    use LayerQueryTrait;
+    public function isInLayer(string $layer): bool
+    {
+        return in_array($layer, $this->layers, true);
+    }
 
     public function dependsOn(string $class): bool
     {
