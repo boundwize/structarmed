@@ -2031,7 +2031,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'method has numeric keys' => [
+        yield 'method is not a tuple' => [
             [
                 'nodes' => [
                     [
@@ -2077,20 +2077,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'dependencies'  => [],
                         'implements'    => [],
                         'traits'        => [],
-                        'methods'       => [
-                            [
-                                'name'                  => 'run',
-                                'visibility'            => 'public',
-                                'hasReturnType'         => true,
-                                'isStatic'              => false,
-                                'paramCount'            => 0,
-                                'cyclomaticComplexity'  => 1,
-                                'lineCount'             => 1,
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                                'isMagic'               => false,
-                            ],
-                        ],
+                        'methods'       => [['run', 'public', true, false, 0, 1, 1, true, 'bad', false]],
                         'constants'     => [],
                         'properties'    => [],
                         'functionCalls' => [],
@@ -2100,7 +2087,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'method has missing hasExplicitVisibility' => [
+        yield 'method tuple is too short' => [
             [
                 'nodes' => [
                     [
@@ -2118,19 +2105,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'dependencies'  => [],
                         'implements'    => [],
                         'traits'        => [],
-                        'methods'       => [
-                            [
-                                'name'                 => 'run',
-                                'visibility'           => 'public',
-                                'hasReturnType'        => true,
-                                'isStatic'             => false,
-                                'paramCount'           => 0,
-                                'cyclomaticComplexity' => 1,
-                                'lineCount'            => 1,
-                                'line'                 => 1,
-                                'isMagic'              => false,
-                            ],
-                        ],
+                        'methods'       => [['run', 'public', true, false, 0, 1, 1, 1, false]],
                         'constants'     => [],
                         'properties'    => [],
                         'functionCalls' => [],
@@ -2196,7 +2171,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'constant has numeric keys' => [
+        yield 'constant is not a tuple' => [
             [
                 'nodes' => [
                     [
@@ -2243,14 +2218,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'implements'    => [],
                         'traits'        => [],
                         'methods'       => [],
-                        'constants'     => [
-                            [
-                                'name'                  => 'VERSION',
-                                'visibility'            => 'public',
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                            ],
-                        ],
+                        'constants'     => [['VERSION', 'public', true, 'bad']],
                         'properties'    => [],
                         'functionCalls' => [],
                         'superglobals'  => [],
@@ -2315,7 +2283,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'property has numeric keys' => [
+        yield 'property is not a tuple' => [
             [
                 'nodes' => [
                     [
@@ -2363,14 +2331,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'traits'        => [],
                         'methods'       => [],
                         'constants'     => [],
-                        'properties'    => [
-                            [
-                                'name'                  => 'name',
-                                'visibility'            => 'private',
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                            ],
-                        ],
+                        'properties'    => [['name', 'private', true, 'bad']],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
@@ -2436,7 +2397,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'enum case has non-string keys' => [
+        yield 'enum case is not a tuple' => [
             [
                 'nodes' => [
                     [
@@ -2486,7 +2447,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'methods'       => [],
                         'constants'     => [],
                         'properties'    => [],
-                        'enumCases'     => [['name' => 'Hearts', 'line' => 'bad']],
+                        'enumCases'     => [['Hearts', 'bad', null]],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
@@ -2515,7 +2476,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'methods'       => [],
                         'constants'     => [],
                         'properties'    => [],
-                        'enumCases'     => [['name' => 'Hearts', 'line' => 4, 'value' => ['bad']]],
+                        'enumCases'     => [['Hearts', 4, ['bad']]],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
