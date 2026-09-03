@@ -355,11 +355,11 @@ final readonly class AnalyseCommand
                 $violationsByFile[$ruleViolation->file][] = $ruleViolation;
             }
 
-            foreach ($violationsByFile as $fileViolations) {
-                $batchSize      = count($fileViolations);
-                $firstViolation = array_shift($fileViolations);
+            foreach ($violationsByFile as $violations) {
+                $batchSize      = count($violations);
+                $firstViolation = array_shift($violations);
 
-                if ($rule->fix($firstViolation, ...$fileViolations)) {
+                if ($rule->fix($firstViolation, ...$violations)) {
                     $fixedCount += $batchSize;
                 }
             }

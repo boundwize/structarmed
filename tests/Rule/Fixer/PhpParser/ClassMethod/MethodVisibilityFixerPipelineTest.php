@@ -65,9 +65,9 @@ class Order
 PHP);
 
         try {
-            $processor = new PhpParserFixerProcessor();
+            $phpParserFixerProcessor = new PhpParserFixerProcessor();
 
-            $this->assertTrue($processor->process($file, [
+            $this->assertTrue($phpParserFixerProcessor->process($file, [
                 new AddPublicMethodVisibilityVisitor('App\\Order', 'create'),
                 new AddPublicMethodVisibilityVisitor('App\\Order', 'save'),
             ]));
