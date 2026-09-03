@@ -16,16 +16,16 @@ use PhpParser\Node\Name;
  */
 final class FunctionLikeAnalysis
 {
-    /** @var list<string> */
+    /** @var array<string, true> */
     public array $dependencies = [];
 
     /** @var list<Name> */
     public array $functionCallNames = [];
 
-    /** @var string[] */
+    /** @var array<string, true> */
     public array $superglobals = [];
 
-    /** @var string[] */
+    /** @var array<string, true> */
     public array $languageConstructs = [];
 
     public int $cyclomaticComplexity = 1;

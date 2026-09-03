@@ -314,7 +314,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     private string $currentFile = '';
 
-    /** @var list<string> */
+    /** @var array<string, true> */
     private array $currentNamespaceUses = [];
 
     /** @var ClassLike[] */
@@ -527,6 +527,23 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
+        // This ordering is about the instanceof tests in this method, not the
+        // traversal: the traverser still enters a statement before the
+        // expressions inside it. Variable is the most frequent node class, so
+        // testing it first spares every variable the Stmt and FunctionLike
+        // checks and the collectNodeAnalysis() call. Only `$this` and
+        // superglobals are recorded; outside a class-like or function-like
+        // scope both handlers record nothing, so no scope check is needed.
+        if ($node instanceof Variable) {
+            if ($node->name === 'this') {
+                $this->markThisUsage();
+            } elseif (is_string($node->name) && isset(self::SUPERGLOBALS[$node->name])) {
+                $this->addSuperglobal('$' . $node->name);
+            }
+
+            return null;
+        }
+
         // The scope-tracking node types are all statements, so the far more
         // frequent expression/name/identifier nodes skip their checks with a
         // single instanceof.
@@ -539,7 +556,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             if ($node instanceof Use_) {
                 foreach ($node->uses as $use) {
-                    $this->currentNamespaceUses[] = $use->name->toString();
+                    $this->currentNamespaceUses[$use->name->toString()] = true;
                 }
 
                 return null;
@@ -549,7 +566,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $prefix = $node->prefix->toString();
 
                 foreach ($node->uses as $use) {
-                    $this->currentNamespaceUses[] = $prefix . '\\' . $use->name->toString();
+                    $this->currentNamespaceUses[$prefix . '\\' . $use->name->toString()] = true;
                 }
 
                 return null;
@@ -592,7 +609,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
                 return null;
             }
-        } elseif ($node instanceof Closure || $node instanceof ArrowFunction) {
+        } elseif ($node instanceof FunctionLike) {
             $this->startFunctionLikeAnalysis($node);
 
             return null;
@@ -931,10 +948,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $parent = $this->activeFunctionLikeAnalyses[$activeCount - 2];
 
-        array_push($parent->dependencies, ...$functionLikeAnalysis->dependencies);
         array_push($parent->functionCallNames, ...$functionLikeAnalysis->functionCallNames);
-        array_push($parent->superglobals, ...$functionLikeAnalysis->superglobals);
-        array_push($parent->languageConstructs, ...$functionLikeAnalysis->languageConstructs);
+
+        $parent->dependencies       += $functionLikeAnalysis->dependencies;
+        $parent->superglobals       += $functionLikeAnalysis->superglobals;
+        $parent->languageConstructs += $functionLikeAnalysis->languageConstructs;
 
         if ($functionLikeAnalysis->cyclomaticComplexity > 1) {
             $parent->cyclomaticComplexity += $functionLikeAnalysis->cyclomaticComplexity - 1;
@@ -1024,20 +1042,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             if ($activeFunctionLikeCount > 0) {
                 $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->cyclomaticComplexity++;
-            }
-
-            return;
-        }
-
-        if ($node instanceof Variable) {
-            if (! is_string($node->name)) {
-                return;
-            }
-
-            if ($node->name === 'this') {
-                $this->markThisUsage();
-            } elseif (isset(self::SUPERGLOBALS[$node->name])) {
-                $this->addSuperglobal('$' . $node->name);
             }
 
             return;
@@ -1315,13 +1319,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function addDependency(string $dependency): void
     {
         foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
-            $activeClassLikeAnalysis->dependencies[] = $dependency;
+            $activeClassLikeAnalysis->dependencies[$dependency] = true;
         }
 
         $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
 
         if ($activeFunctionLikeCount > 0) {
-            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->dependencies[] = $dependency;
+            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->dependencies[$dependency] = true;
         }
     }
 
@@ -1341,13 +1345,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function addSuperglobal(string $superglobal): void
     {
         foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
-            $activeClassLikeAnalysis->superglobals[] = $superglobal;
+            $activeClassLikeAnalysis->superglobals[$superglobal] = true;
         }
 
         $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
 
         if ($activeFunctionLikeCount > 0) {
-            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->superglobals[] = $superglobal;
+            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->superglobals[$superglobal] = true;
         }
     }
 
@@ -1370,13 +1374,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function addLanguageConstruct(string $languageConstruct): void
     {
         foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
-            $activeClassLikeAnalysis->languageConstructs[] = $languageConstruct;
+            $activeClassLikeAnalysis->languageConstructs[$languageConstruct] = true;
         }
 
         $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
 
         if ($activeFunctionLikeCount > 0) {
-            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->languageConstructs[] = $languageConstruct;
+            $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]
+                ->languageConstructs[$languageConstruct] = true;
         }
     }
 
@@ -1430,10 +1435,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $functionCalls[] = $this->resolveFunctionName($functionCallName);
         }
 
-        $dependencies       = array_values(array_unique($functionLikeAnalysis->dependencies));
+        $dependencies       = array_keys($functionLikeAnalysis->dependencies);
         $functionCalls      = array_values(array_unique($functionCalls));
-        $superglobals       = array_values(array_unique($functionLikeAnalysis->superglobals));
-        $languageConstructs = array_values(array_unique($functionLikeAnalysis->languageConstructs));
+        $superglobals       = array_keys($functionLikeAnalysis->superglobals);
+        $languageConstructs = array_keys($functionLikeAnalysis->languageConstructs);
         $hasReturnType      = $functionLike->getReturnType() instanceof Node;
         $paramCount         = count($functionLike->getParams());
         $lineCount          = $this->calculateLineCount($functionLike);
@@ -1547,10 +1552,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         return [
-            'dependencies'       => array_values(array_unique($analysis->dependencies)),
+            'dependencies'       => array_keys($analysis->dependencies),
             'functionCalls'      => array_values(array_unique($functionCalls)),
-            'superglobals'       => array_values(array_unique($analysis->superglobals)),
-            'languageConstructs' => array_values(array_unique($analysis->languageConstructs)),
+            'superglobals'       => array_keys($analysis->superglobals),
+            'languageConstructs' => array_keys($analysis->languageConstructs),
             'traits'             => $analysis->traits,
             'constants'          => $analysis->constants,
             'properties'         => $analysis->properties,
