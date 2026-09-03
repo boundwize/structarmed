@@ -8,13 +8,13 @@ use function array_filter;
 use function preg_match;
 use function str_ends_with;
 use function str_starts_with;
-use function strcasecmp;
 use function strrpos;
 use function substr;
 
 final class ClassNode
 {
     use NodeQueryTrait;
+    use RecursiveParentsTrait;
 
     /** @var list<string> */
     public readonly array $layers;
@@ -94,16 +94,6 @@ final class ClassNode
     }
 
     /**
-     * @param list<string> $parentClasses
-     * @param list<string> $parentInterfaces
-     */
-    public function setRecursiveParents(array $parentClasses, array $parentInterfaces): void
-    {
-        $this->parentClasses    = $parentClasses;
-        $this->parentInterfaces = $parentInterfaces;
-    }
-
-    /**
      * Whether another scanned class extends this class. Computed by the analyser
      * for rules implementing ExtendedClassAwareRuleInterface; false otherwise.
      */
@@ -176,38 +166,13 @@ final class ClassNode
 
     /**
      * Implemented directly, extended directly (for interfaces), or via any parent class or interface.
+     * Overrides the trait method to also look at `$interfaceExtends`, which only a named interface has.
      */
     public function implementsInterface(string $interface): bool
     {
         return $this->matchesAnyClassLike($interface, $this->implements)
             || $this->matchesAnyClassLike($interface, $this->interfaceExtends)
             || $this->matchesAnyClassLike($interface, $this->parentInterfaces);
-    }
-
-    public function extendsClass(string $class): bool
-    {
-        if ($this->extends !== null && strcasecmp($this->extends, $class) === 0) {
-            return true;
-        }
-
-        return $this->matchesAnyClassLike($class, $this->parentClasses);
-    }
-
-    /**
-     * Class-like names are case-insensitive in PHP. This matching is kept
-     * separate from dependencies, which may also contain constants.
-     *
-     * @param string[] $classLikes
-     */
-    private function matchesAnyClassLike(string $needle, array $classLikes): bool
-    {
-        foreach ($classLikes as $classLike) {
-            if (strcasecmp($classLike, $needle) === 0) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     public function constructorParamCount(): int

@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Analyser\FunctionNode;
@@ -24,6 +25,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
 use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
@@ -55,6 +57,7 @@ use function mkdir;
 use function realpath;
 use function rename;
 use function sort;
+use function sprintf;
 use function str_replace;
 use function symlink;
 use function unlink;
@@ -350,6 +353,71 @@ final class AnalyserTest extends TestCase
                 $this->assertTrue($violation->fixable);
                 $this->assertStringNotContainsString('/Skipped/', $this->normalisePath($violation->file));
             }
+        }
+    }
+
+    public function testAnonymousClassNodesResolveRecursiveParents(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Contract.php'    => '<?php namespace App; interface Contract {}',
+            'src/RootHandler.php' => '<?php namespace App; abstract class RootHandler implements Contract {}',
+            'src/BaseHandler.php' => '<?php namespace App; abstract class BaseHandler extends RootHandler {}',
+            'src/Factory.php'     => <<<'PHP'
+                <?php
+                namespace App;
+                final class Factory {
+                    public function make(): object { return new class extends BaseHandler {}; }
+                    public function plain(): object { return new class {}; }
+                }
+
+                PHP,
+        ]);
+
+        $rule = new class implements AnonymousClassRuleInterface {
+            public function appliesTo(AnonymousClassNode $anonymousClassNode): bool
+            {
+                return true;
+            }
+
+            public function evaluate(AnonymousClassNode $anonymousClassNode): ?RuleViolation
+            {
+                if (
+                    $anonymousClassNode->extendsClass('App\\RootHandler')
+                    && $anonymousClassNode->implementsInterface('App\\Contract')
+                ) {
+                    return null;
+                }
+
+                return new RuleViolation(
+                    message:   sprintf(
+                        'Anonymous class in [%s] must implement [App\\Contract]',
+                        $anonymousClassNode->enclosingScopeName()
+                    ),
+                    file:      $anonymousClassNode->file,
+                    line:      $anonymousClassNode->line,
+                    className: $anonymousClassNode->enclosingScopeName(),
+                    layer:     $anonymousClassNode->layer,
+                );
+            }
+        };
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('anonymous_classes.contract', $rule);
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $violations = (new Analyser($basePath))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule('anonymous_classes.contract');
+
+            // Only the anonymous class with no parent chain is flagged: the one
+            // extending BaseHandler reaches RootHandler and Contract transitively.
+            $this->assertCount(1, $violations);
+            $this->assertSame(5, $violations[0]->line);
+            $this->assertSame(
+                'Anonymous class in [App\\Factory] must implement [App\\Contract]',
+                $violations[0]->message
+            );
         }
     }
 

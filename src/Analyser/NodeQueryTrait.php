@@ -18,7 +18,6 @@ use function strcasecmp;
  *
  * @internal
  *
- * @property list<string> $layers All layer names this node belongs to; assigned once in each node's constructor
  * @property-read list<string> $dependencies       Fully-qualified class, function, or constant dependencies
  * @property-read string[]     $functionCalls      Functions called within this node
  * @property-read string[]     $superglobals       Superglobals accessed ($_GET, $_POST, etc.)
@@ -26,10 +25,7 @@ use function strcasecmp;
  */
 trait NodeQueryTrait
 {
-    public function isInLayer(string $layer): bool
-    {
-        return in_array($layer, $this->layers, true);
-    }
+    use LayerQueryTrait;
 
     public function dependsOn(string $class): bool
     {

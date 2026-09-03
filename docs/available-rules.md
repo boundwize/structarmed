@@ -102,7 +102,27 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`Psr4DirectoryExistsRule`, `Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `MustUseLowercaseKeywordConstantRule`, `LargeNumericLiteralMustUseSeparatorRule`, `ExtendedClassMustBeAbstractOrInstantiatedRule`, `MustBeFinalRule`, `MustBeUsedInterfaceRule`, `MustBeUsedAbstractClassRule`, `MustBeUsedTraitRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically remove PSR-4 mappings for missing directories, normalize invalid PHP opening tags, remove UTF-8 byte order marks, lowercase `TRUE`/`FALSE`/`NULL` keyword constants, add `_` separators to large numeric literals, add the `final` or `abstract` class modifier, remove unused interfaces, abstract classes, and traits (deleting their file when only `declare`/`namespace`/`use` boilerplate remains), and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+## Fixable Rules
+
+The following rules implement `Boundwize\StructArmed\Rule\FixableInterface` and can apply their changes when you run `vendor/bin/structarmed analyse --fix`.
+
+| Rule | Automatic fix |
+|---|---|
+| `Psr4DirectoryExistsRule` | Removes PSR-4 mappings for missing directories. |
+| `Psr1PhpTagsRule` | Normalizes invalid PHP opening tags. |
+| `Psr1Utf8WithoutBomRule` | Removes the UTF-8 byte order mark. |
+| `MustUseLowercaseKeywordConstantRule` | Lowercases `TRUE`, `FALSE`, and `NULL` keyword constants. |
+| `LargeNumericLiteralMustUseSeparatorRule` | Adds `_` separators to large numeric literals. |
+| `AnonymousClassMayNotHaveEmptyParenthesesRule` | Removes empty parentheses from anonymous classes that pass no constructor arguments. |
+| `ExtendedClassMustBeAbstractOrInstantiatedRule` | Adds the `abstract` modifier to an extended class that is not instantiated. |
+| `MustBeFinalRule` | Adds the `final` modifier. |
+| `MustBeUsedInterfaceRule` | Removes an unused interface, deleting its file when only boilerplate remains. |
+| `MustBeUsedAbstractClassRule` | Removes an unused abstract class, deleting its file when only boilerplate remains. |
+| `MustBeUsedTraitRule` | Removes an unused trait, deleting its file when only boilerplate remains. |
+| `MustDeclareConstantVisibilityRule` | Adds a missing constant visibility modifier. |
+| `MustDeclareMethodVisibilityRule` | Adds a missing method visibility modifier. |
+| `MustDeclarePropertyVisibilityRule` | Adds a missing property visibility modifier. |
+{: .rule-table }
 
 ## Function Rules
 
