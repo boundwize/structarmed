@@ -771,11 +771,21 @@ final class AnalysisResultCacheTest extends TestCase
         $classNodes          = [$this->makeClassNode($sourceFile)];
         $anonymousClassNodes = [
             new AnonymousClassNode(
-                file:       $sourceFile,
-                line:       7,
-                extends:    'App\BaseHandler',
-                implements: ['App\Contract'],
-                traits:     ['App\Helper'],
+                file:                  $sourceFile,
+                line:                  7,
+                extends:               'App\BaseHandler',
+                implements:            ['App\Contract'],
+                traits:                ['App\Helper'],
+                layer:                 'Source',
+                enclosingClassName:    'App\HandlerFactory',
+                hasEmptyParentheses:   true,
+                layers:                ['Source', 'Shared'],
+            ),
+            new AnonymousClassNode(
+                file:                  $sourceFile,
+                line:                  12,
+                extends:               null,
+                enclosingFunctionName: 'App\make',
             ),
         ];
 

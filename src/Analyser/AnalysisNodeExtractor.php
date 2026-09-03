@@ -51,7 +51,7 @@ final readonly class AnalysisNodeExtractor
                 $numericLiterals              = [];
 
                 if ($ast !== null && $ast !== []) {
-                    $analysisNodeCollector->setCurrentFile($file);
+                    $analysisNodeCollector->setCurrentFile($file, $this->fileAnalysisProvider->tokens());
                     $nodeTraverser->traverse($ast);
 
                     $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();

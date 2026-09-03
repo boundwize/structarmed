@@ -147,7 +147,7 @@ final readonly class Baseline
 
     private function prettyPrintArray(Array_ $array): string
     {
-        return (new class () extends Standard {
+        return (new class extends Standard {
             // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
             protected function pExpr_Array(Array_ $node): string
             {

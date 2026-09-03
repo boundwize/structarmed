@@ -27,6 +27,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
+use Boundwize\StructArmed\Rule\Rules\Class_\AnonymousClassMayNotHaveEmptyParenthesesRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
@@ -286,6 +287,87 @@ final class AnalyserTest extends TestCase
         $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
             ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $coldViolations);
+        $this->assertEquals($coldViolations, $warmViolations);
+    }
+
+    /** @return array<string, string> */
+    private function anonymousClassRuleProjectFiles(): array
+    {
+        return [
+            'src/Handler.php'       => <<<'PHP'
+                <?php
+                namespace App;
+                final class Handler {
+                    public function make(): object { return new class () {}; }
+                    public function plain(): object { return new class {}; }
+                }
+
+                PHP,
+            'src/helpers.php'       => <<<'PHP'
+                <?php
+                namespace App;
+                function make(): object { return new class ( ) {}; }
+
+                PHP,
+            'src/Skipped/Loose.php' => <<<'PHP'
+                <?php
+                $loose = new class () {};
+
+                PHP,
+        ];
+    }
+
+    public function testAnonymousClassRulesAreEvaluatedAgainstAnonymousClasses(): void
+    {
+        $basePath = $this->makeTempProject($this->anonymousClassRuleProjectFiles());
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('anonymous_classes.no_parentheses', new AnonymousClassMayNotHaveEmptyParenthesesRule('Source'))
+            ->skip(['anonymous_classes.no_parentheses' => ['src/Skipped/']]);
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $violations = (new Analyser($basePath))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule('anonymous_classes.no_parentheses');
+
+            $messages = array_map(
+                static fn(RuleViolation $ruleViolation): string => $ruleViolation->message,
+                $violations
+            );
+            sort($messages);
+
+            $this->assertSame([
+                'Anonymous class in [App\\Handler] may not have empty parentheses after `class`',
+                'Anonymous class in [App\\make] may not have empty parentheses after `class`',
+            ], $messages);
+
+            foreach ($violations as $violation) {
+                $this->assertSame('anonymous_classes.no_parentheses', $violation->ruleKey);
+                $this->assertSame('Source', $violation->layer);
+                $this->assertTrue($violation->fixable);
+                $this->assertStringNotContainsString('/Skipped/', $this->normalisePath($violation->file));
+            }
+        }
+    }
+
+    public function testAnonymousClassRuleViolationsSurviveTheAnalysisNodeCache(): void
+    {
+        $basePath            = $this->makeTempProject($this->anonymousClassRuleProjectFiles());
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('anonymous_classes.no_parentheses', new AnonymousClassMayNotHaveEmptyParenthesesRule('Source'));
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('anonymous_classes.no_parentheses');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('anonymous_classes.no_parentheses');
 
         $this->assertCount(3, $coldViolations);
         $this->assertEquals($coldViolations, $warmViolations);

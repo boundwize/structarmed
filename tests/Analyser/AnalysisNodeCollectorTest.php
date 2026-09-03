@@ -141,7 +141,7 @@ PHP);
         $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
         $ast                    = $parser->parse($code);
 
-        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
+        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php', $parser->getTokens());
 
         $nodeTraverser = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $nodeTraverser->traverse($ast ?? []);
@@ -652,6 +652,62 @@ PHP);
         $this->assertCount(1, $anonymousClassNodes);
         $this->assertSame('App\BaseHandler', $anonymousClassNodes[0]->extends);
         $this->assertSame('/fake/path/Foo.php', $anonymousClassNodes[0]->file);
+    }
+
+    public function testCollectsAnonymousClassEnclosingScopesAndEmptyParentheses(): void
+    {
+        $anonymousClassNodes = $this->collectAnonymousClassNodes(<<<'PHP'
+            <?php
+            namespace App;
+            class HandlerFactory {
+                public function make(): object { return new class () {}; }
+            }
+            function make(): object { return new #[Attr] readonly class ( ) implements \Stringable {
+                public function __toString(): string { return ""; }
+            }; }
+            $handler = new class(1) {};
+            return new class {};
+            PHP);
+
+        $this->assertCount(4, $anonymousClassNodes);
+
+        $this->assertSame('App\HandlerFactory', $anonymousClassNodes[0]->enclosingClassName);
+        $this->assertNull($anonymousClassNodes[0]->enclosingFunctionName);
+        $this->assertSame('App\HandlerFactory', $anonymousClassNodes[0]->enclosingScopeName());
+        $this->assertTrue($anonymousClassNodes[0]->hasEmptyParentheses);
+
+        $this->assertNull($anonymousClassNodes[1]->enclosingClassName);
+        $this->assertSame('App\make', $anonymousClassNodes[1]->enclosingFunctionName);
+        $this->assertSame('App\make', $anonymousClassNodes[1]->enclosingScopeName());
+        $this->assertTrue($anonymousClassNodes[1]->hasEmptyParentheses);
+        $this->assertSame(['Stringable'], $anonymousClassNodes[1]->implements);
+
+        $this->assertSame(AnonymousClassNode::FILE_SCOPE, $anonymousClassNodes[2]->enclosingScopeName());
+        $this->assertFalse($anonymousClassNodes[2]->hasEmptyParentheses);
+
+        $this->assertSame(AnonymousClassNode::FILE_SCOPE, $anonymousClassNodes[3]->enclosingScopeName());
+        $this->assertFalse($anonymousClassNodes[3]->hasEmptyParentheses);
+
+        // The fake file is outside every configured layer path.
+        $this->assertNull($anonymousClassNodes[0]->layer);
+        $this->assertSame([], $anonymousClassNodes[0]->layers);
+        $this->assertFalse($anonymousClassNodes[0]->isInLayer('Domain'));
+    }
+
+    public function testAnonymousClassParenthesesAreUnknownWithoutTokens(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
+        (new NodeTraverser(new NameResolver(), $analysisNodeCollector))
+            ->traverse($parser->parse('<?php $foo = new class () {};') ?? []);
+
+        $anonymousClassNodes = $analysisNodeCollector->getAnonymousClassNodes();
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $this->assertFalse($anonymousClassNodes[0]->hasEmptyParentheses);
     }
 
     public function testCollectsTopLevelAnonymousClassNodeInFileWithoutNamedClasses(): void

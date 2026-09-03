@@ -45,6 +45,7 @@ use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
+use PhpParser\Token;
 
 use function array_key_exists;
 use function array_keys;
@@ -200,6 +201,18 @@ final class FileAnalysisProvider
         }
 
         return $this->parse($file);
+    }
+
+    /**
+     * The token stream of the file {@see ast()} parsed last, for the facts an
+     * AST does not carry. PHP-Parser keeps it until its next parse, so it is
+     * read right after ast(); the provider itself retains no token arrays.
+     *
+     * @return array<Token>
+     */
+    public function tokens(): array
+    {
+        return $this->parser->getTokens();
     }
 
     /**
