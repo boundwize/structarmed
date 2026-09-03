@@ -121,10 +121,11 @@ final class AnonymousClassMayNotHaveEmptyParenthesesRuleTest extends TestCase
                     };
                     $b = new class {};
                     $c = new readonly class(1) {};
-                    $d = new #[Attr] class ( ) {};
+                    $d = new #[Attr(Foo::class)] class ( ) {};
                     $e = new class(){};
                     $f = [new class () {}, new class {}, new class ( ) {}];
                     $g = function () { return new class () {}; };
+                    $h = new class /* comment */ () {};
 
                     return $a;
                 }
@@ -141,7 +142,7 @@ final class AnonymousClassMayNotHaveEmptyParenthesesRuleTest extends TestCase
             ->forRule('source.anonymous_classes');
 
         $this->assertSame(
-            [11, 25, 26, 27, 27, 28],
+            [11, 25, 26, 27, 27, 28, 29],
             array_map(static fn (RuleViolation $ruleViolation): int => $ruleViolation->line, $violations)
         );
         $this->assertTrue($violations[0]->fixable);
@@ -180,10 +181,11 @@ final class AnonymousClassMayNotHaveEmptyParenthesesRuleTest extends TestCase
                     };
                     $b = new class {};
                     $c = new readonly class(1) {};
-                    $d = new #[Attr] class {};
+                    $d = new #[Attr(Foo::class)] class {};
                     $e = new class {};
                     $f = [new class {}, new class {}, new class {}];
                     $g = function () { return new class {}; };
+                    $h = new class /* comment */ {};
 
                     return $a;
                 }

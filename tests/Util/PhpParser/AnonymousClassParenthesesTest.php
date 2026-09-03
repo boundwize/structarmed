@@ -53,8 +53,14 @@ final class AnonymousClassParenthesesTest extends TestCase
         yield 'newline inside parentheses' => ["<?php new class (\n) {};", " (\n)"];
         yield 'constructor argument' => ['<?php new class(1) {};', null];
         yield 'attribute and modifier before keyword' => ['<?php new #[Attr] readonly class () extends B {};', ' ()'];
+        yield 'attribute argument with class constant' => ['<?php new #[Attr(Foo::class)] class () {};', ' ()'];
+        yield 'attribute groups with class constants' => [
+            '<?php new #[Attr(Foo::class), Other(Bar::class)] #[Third(Baz::class)] final class() {};',
+            '()',
+        ];
         yield 'comment inside parentheses' => ['<?php new class (/* none */) {};', null];
-        yield 'comment before parentheses' => ['<?php new class /* c */ () {};', null];
+        yield 'comment before parentheses' => ['<?php new class /* c */ () {};', ' ()'];
+        yield 'doc comment before parentheses' => ["<?php new class /** c */\n() {};", "\n()"];
         yield 'named class' => ['<?php class Foo {}', null];
     }
 
