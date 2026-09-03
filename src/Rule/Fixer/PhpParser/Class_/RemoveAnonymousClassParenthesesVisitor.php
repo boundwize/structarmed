@@ -51,26 +51,17 @@ final class RemoveAnonymousClassParenthesesVisitor extends NodeVisitorAbstract i
             return null;
         }
 
+        // A range always holds the `(` and `)` tokens with their text, so
+        // blanking it is always a change; an already-fixed class yields no range.
         [$first, $last] = $range;
-        $hasChanged     = false;
 
         for ($index = $first; $index <= $last; $index++) {
-            if ($this->tokens[$index]->text === '') {
-                continue;
-            }
-
             $this->tokens[$index]->text = '';
-            $hasChanged                 = true;
         }
 
         // `new class(){}` keeps a space between the keyword and what follows.
         if (! isset($this->tokens[$last + 1]) || $this->tokens[$last + 1]->id !== T_WHITESPACE) {
             $this->tokens[$last]->text = ' ';
-            $hasChanged                = true;
-        }
-
-        if (! $hasChanged) {
-            return null;
         }
 
         return $node;
