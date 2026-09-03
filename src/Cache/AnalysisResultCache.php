@@ -1100,6 +1100,9 @@ final class AnalysisResultCache
     /**
      * Members are stored as positional tuples: a class has many of them,
      * and their field names would otherwise be repeated for every one.
+     * Changing a tuple's order or length is a format change: bump
+     * FORMAT_VERSION, or a same-length reorder would load silently with
+     * the wrong values.
      *
      * @return array{string, string, bool, bool, int, int, int, bool, int, bool}
      */
