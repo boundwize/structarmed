@@ -13,6 +13,7 @@ use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
 use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
@@ -86,6 +87,7 @@ final readonly class Analyser
         $classNodeRules             = [];
         $functionNodeRules          = [];
         $anonymousFunctionNodeRules = [];
+        $anonymousClassNodeRules    = [];
         $layerAwareRules            = [];
         $hasExtendedClassAwareRule  = false;
         $hasUsedInterfaceAwareRule  = false;
@@ -111,6 +113,11 @@ final readonly class Analyser
             if ($rule instanceof AnonymousFunctionRuleInterface) {
                 $nodeRules[$key]                  = $rule;
                 $anonymousFunctionNodeRules[$key] = $rule;
+            }
+
+            if ($rule instanceof AnonymousClassRuleInterface) {
+                $nodeRules[$key]               = $rule;
+                $anonymousClassNodeRules[$key] = $rule;
             }
 
             if ($rule instanceof LayerAwareRuleInterface) {
@@ -256,15 +263,16 @@ final readonly class Analyser
             $layerAwareRule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
         }
 
-        // Function-likes are not part of the class hierarchy, so they take no
-        // part in the declarative ruleset below; a rule only sees the node
-        // kind whose interface it implements, so each node collection is
-        // paired with the rules grouped for its kind above.
+        // Function-likes and anonymous classes are not part of the class
+        // hierarchy, so they take no part in the declarative ruleset below; a
+        // rule only sees the node kind whose interface it implements, so each
+        // node collection is paired with the rules grouped for its kind above.
         $this->evaluateNodeRules(
             [
                 [$classNodes, $classNodeRules],
                 [$extractionResult->functionNodes, $functionNodeRules],
                 [$extractionResult->anonymousFunctionNodes, $anonymousFunctionNodeRules],
+                [$extractionResult->anonymousClassNodes, $anonymousClassNodeRules],
             ],
             $globalSkipPathMatcher,
             $ruleSkipMatchers,
@@ -368,15 +376,16 @@ final readonly class Analyser
 
     /**
      * Evaluates each node collection against the rules grouped for its node
-     * kind, in a single evaluation implementation: all three rule interfaces
+     * kind, in a single evaluation implementation: all four rule interfaces
      * share the appliesTo()/evaluate() method names, and a rule only receives
      * the node kind whose interface it implements.
      *
-     * @param list<array{0: list<ClassNode|FunctionNode|AnonymousFunctionNode>, 1: array<string, object>}> $nodeGroups
+     * @param list<array{0: list<object>, 1: array<string, object>}> $nodeGroups
      * @param array<string, SkipPathMatcher> $ruleSkipMatchers
      * @phpstan-param list<array{
-     *     0: list<ClassNode>|list<FunctionNode>|list<AnonymousFunctionNode>,
-     *     1: array<string, RuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface>
+     *     0: list<ClassNode>|list<FunctionNode>|list<AnonymousFunctionNode>|list<AnonymousClassNode>,
+     *     1: array<string, RuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface
+     *         |AnonymousClassRuleInterface>
      * }> $nodeGroups
      */
     private function evaluateNodeRules(
@@ -548,7 +557,7 @@ final readonly class Analyser
     }
 
     /**
-     * @param array<string, RuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface> $nodeRules
+     * @param array<string, object> $nodeRules Node rules of every kind, by key
      * @param array<string, list<string>>  $ruleSkipPaths
      * @return array<string, SkipPathMatcher>
      */

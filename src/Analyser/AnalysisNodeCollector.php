@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
+use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
@@ -71,6 +72,7 @@ use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
+use PhpParser\Token;
 
 use function array_keys;
 use function array_pop;
@@ -314,6 +316,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     private string $currentFile = '';
 
+    /** @var array<Token> */
+    private array $currentTokens = [];
+
     /** @var array<string, true> */
     private array $currentNamespaceUses = [];
 
@@ -392,9 +397,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         });
     }
 
-    public function setCurrentFile(string $file): void
+    /** @param array<Token> $tokens The file's token stream, for the facts its AST does not carry */
+    public function setCurrentFile(string $file, array $tokens = []): void
     {
         $this->currentFile                       = $file;
+        $this->currentTokens                     = $tokens;
         $this->currentFileReferences             = [];
         $this->currentFileInstantiations         = [];
         $this->nonCanonicalKeywordConstants      = [];
@@ -690,19 +697,30 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         array_pop($this->activeClassLikeNames);
         array_pop($this->functionLikeDepthAtClassLikeEntry);
 
-        if (! $node->name instanceof Identifier) {
-            // Anonymous classes never become ClassNodes, but the class they
-            // extend, the interfaces they implement, and the traits they use
-            // are still used within the scanned paths.
-            if ($node instanceof Class_) {
-                $this->anonymousClassNodes[] = new AnonymousClassNode(
-                    file:       $this->currentFile,
-                    line:       $node->getStartLine(),
-                    extends:    $node->extends instanceof Name ? $node->extends->toString() : null,
-                    implements: $this->collectImplements($node),
-                    traits:     $this->collectTraits($node),
-                );
-            }
+        // Anonymous classes never become ClassNodes, but the class they
+        // extend, the interfaces they implement, and the traits they use
+        // are still used within the scanned paths.
+        if ($node instanceof Class_ && $node->isAnonymous()) {
+            // Its own (nameless) entry is already popped, so the innermost
+            // active names are the named scopes declaring it; they also
+            // resolve its layer, as they do for an anonymous function.
+            $enclosingClassName    = $this->innermostActiveClassLikeName();
+            $enclosingFunctionName = $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames);
+            [$layer, $layers]      = $this->resolveLayerData($enclosingClassName ?? $enclosingFunctionName ?? '');
+
+            $this->anonymousClassNodes[] = new AnonymousClassNode(
+                file:                  $this->currentFile,
+                line:                  $node->getStartLine(),
+                extends:               $node->extends instanceof Name ? $node->extends->toString() : null,
+                implements:            $this->collectImplements($node),
+                traits:                $this->collectTraits($node),
+                layer:                 $layer,
+                enclosingClassName:    $enclosingClassName,
+                enclosingFunctionName: $enclosingFunctionName,
+                hasEmptyParentheses:   AnonymousClassParentheses::emptyTokenRange($this->currentTokens, $node)
+                                           !== null,
+                layers:                $layers,
+            );
 
             return null;
         }

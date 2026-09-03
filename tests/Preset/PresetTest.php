@@ -190,6 +190,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(PerPreset::ENUM_CASES_MUST_BE_PASCAL_CASE, $rules);
         $this->assertArrayHasKey(PerPreset::ENUM_METHODS_MAY_NOT_BE_PROTECTED, $rules);
         $this->assertArrayHasKey(PerPreset::ENUM_CONSTANTS_MAY_NOT_BE_PROTECTED, $rules);
+        $this->assertArrayHasKey(PerPreset::ANONYMOUS_CLASSES_MAY_NOT_HAVE_EMPTY_PARENTHESES, $rules);
     }
 
     public function testPerPresetUsesComposerSourcePathsByDefault(): void

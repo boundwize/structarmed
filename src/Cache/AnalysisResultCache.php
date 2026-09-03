@@ -66,7 +66,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 5;
+    public const FORMAT_VERSION = 6;
 
     private readonly string $cacheDirectory;
 
@@ -568,11 +568,16 @@ final class AnalysisResultCache
     private function anonymousClassNodeToArray(AnonymousClassNode $anonymousClassNode): array
     {
         return [
-            'file'       => $anonymousClassNode->file,
-            'line'       => $anonymousClassNode->line,
-            'extends'    => $anonymousClassNode->extends,
-            'implements' => $anonymousClassNode->implements,
-            'traits'     => $anonymousClassNode->traits,
+            'file'                  => $anonymousClassNode->file,
+            'line'                  => $anonymousClassNode->line,
+            'extends'               => $anonymousClassNode->extends,
+            'implements'            => $anonymousClassNode->implements,
+            'traits'                => $anonymousClassNode->traits,
+            'layer'                 => $anonymousClassNode->layer,
+            'enclosingClassName'    => $anonymousClassNode->enclosingClassName,
+            'enclosingFunctionName' => $anonymousClassNode->enclosingFunctionName,
+            'hasEmptyParentheses'   => $anonymousClassNode->hasEmptyParentheses,
+            'layers'                => $anonymousClassNode->layers,
         ];
     }
 
@@ -595,26 +600,48 @@ final class AnalysisResultCache
                 return null;
             }
 
-            $file       = $rawNode['file'] ?? null;
-            $line       = $rawNode['line'] ?? null;
-            $extends    = $rawNode['extends'] ?? null;
-            $implements = $rawNode['implements'] ?? [];
-            $traits     = $rawNode['traits'] ?? [];
+            $file                  = $rawNode['file'] ?? null;
+            $line                  = $rawNode['line'] ?? null;
+            $extends               = $rawNode['extends'] ?? null;
+            $implements            = $rawNode['implements'] ?? [];
+            $traits                = $rawNode['traits'] ?? [];
+            $layer                 = $rawNode['layer'] ?? null;
+            $enclosingClassName    = $rawNode['enclosingClassName'] ?? null;
+            $enclosingFunctionName = $rawNode['enclosingFunctionName'] ?? null;
+            $hasEmptyParentheses   = $rawNode['hasEmptyParentheses'] ?? false;
+            $layers                = $rawNode['layers'] ?? [];
 
-            if (! is_string($file) || ! is_int($line) || ($extends !== null && ! is_string($extends))) {
+            if (
+                ! is_string($file)
+                || ! is_int($line)
+                || ($extends !== null && ! is_string($extends))
+                || ($layer !== null && ! is_string($layer))
+                || ($enclosingClassName !== null && ! is_string($enclosingClassName))
+                || ($enclosingFunctionName !== null && ! is_string($enclosingFunctionName))
+                || ! is_bool($hasEmptyParentheses)
+            ) {
                 return null;
             }
 
-            if (! $this->isStringArray($implements) || ! $this->isStringArray($traits)) {
+            if (
+                ! $this->isStringArray($implements)
+                || ! $this->isStringArray($traits)
+                || ! $this->isStringArray($layers)
+            ) {
                 return null;
             }
 
             $anonymousClassNodes[] = new AnonymousClassNode(
-                file:       $file,
-                line:       $line,
-                extends:    $extends,
-                implements: $implements,
-                traits:     $traits,
+                file:                  $file,
+                line:                  $line,
+                extends:               $extends,
+                implements:            $implements,
+                traits:                $traits,
+                layer:                 $layer,
+                enclosingClassName:    $enclosingClassName,
+                enclosingFunctionName: $enclosingFunctionName,
+                hasEmptyParentheses:   $hasEmptyParentheses,
+                layers:                array_values($layers),
             );
         }
 

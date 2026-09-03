@@ -190,7 +190,9 @@ Both carry the body-level facts a `ClassNode` has — `$dependencies`, `$functio
 
 A closure declared inside a class or a named function is counted on both nodes: the enclosing `ClassNode` (or `FunctionNode`) keeps seeing everything the closure does, exactly as it sees its own method bodies, and the `AnonymousFunctionNode` reports the closure body on its own.
 
-Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface` and/or `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`. Both share the `appliesTo()` / `evaluate()` method names with `RuleInterface`, each typed against its own node kind. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes are not part of the declarative `ruleset()` layer-dependency check.
+Anonymous classes (`new class ... {}`) are collected the same way, as `Boundwize\StructArmed\Analyser\AnonymousClassNode`: identified by `$file` and `$line` plus `$enclosingClassName` / `$enclosingFunctionName` (with `enclosingScopeName()` and `AnonymousClassNode::FILE_SCOPE`), and carrying `$extends`, `$implements`, `$traits`, `$layer` / `$layers` with `isInLayer()`, and `$hasEmptyParentheses` — whether the declaration spells `new class () {}` although it passes no constructor argument. An anonymous class never becomes a `ClassNode`; the named class-like or function declaring it keeps seeing its body, exactly as it sees a closure's.
+
+Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface`, `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`, and/or `Boundwize\StructArmed\Rule\AnonymousClassRuleInterface`. All share the `appliesTo()` / `evaluate()` method names with `RuleInterface`, each typed against its own node kind. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes and anonymous classes are not part of the declarative `ruleset()` layer-dependency check.
 
 ```php
 <?php
@@ -279,7 +281,7 @@ final readonly class ClosuresMustNotAccessSuperglobalsRule implements AnonymousF
 
 One rule class can also implement several of these interfaces at once; PHP then requires the shared methods to widen the parameter to a union type (for example `appliesTo(FunctionNode|AnonymousFunctionNode $node): bool`) and the rule branches on the node type inside.
 
-`RuleViolation::$className` is required, so a function rule passes the function name there (and, optionally, in the dedicated `functionName` field, which the JSON report emits as `"function"`); an anonymous-function rule passes `enclosingScopeName()`, which is the enclosing class-like or named function, or `AnonymousFunctionNode::FILE_SCOPE` (`'file scope'`) for a closure in top-level procedural code.
+`RuleViolation::$className` is required, so a function rule passes the function name there (and, optionally, in the dedicated `functionName` field, which the JSON report emits as `"function"`); an anonymous-function or anonymous-class rule passes `enclosingScopeName()`, which is the enclosing class-like or named function, or `FILE_SCOPE` (`'file scope'`) for one in top-level procedural code.
 
 ## Making A Custom Rule Fixable
 
@@ -395,6 +397,6 @@ return Architecture::define()
 
 Use `rule()` when one project needs one extra check.
 
-Use a custom `RuleInterface` class when the check itself is new behavior; add `FunctionRuleInterface` / `AnonymousFunctionRuleInterface` when it must also cover named functions and closures.
+Use a custom `RuleInterface` class when the check itself is new behavior; add `FunctionRuleInterface` / `AnonymousFunctionRuleInterface` / `AnonymousClassRuleInterface` when it must also cover named functions, closures, or anonymous classes.
 
 Use a custom `PresetInterface` class when several layers and rules should be applied together or reused across repositories.

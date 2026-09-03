@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed;
 
 use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\PresetInterface;
+use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
 use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
@@ -51,8 +52,8 @@ final class Architecture
     private array $layers = [];
 
     /**
-     * @var array<string, RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface>
-     *      key → rule
+     * @var array<string, RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface
+     *      |AnonymousClassRuleInterface> key → rule
      */
     private array $rules = [];
 
@@ -357,7 +358,8 @@ final class Architecture
      */
     public function rule(
         string $key,
-        RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface $rule,
+        RuleInterface|ProjectRuleInterface|FunctionRuleInterface
+        |AnonymousFunctionRuleInterface|AnonymousClassRuleInterface $rule,
     ): self {
         $this->rules[$key] = $rule;
         $this->resolvePendingRuleSkip($key);
@@ -374,7 +376,8 @@ final class Architecture
      */
     public function replaceRule(
         string $key,
-        RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface $rule,
+        RuleInterface|ProjectRuleInterface|FunctionRuleInterface
+        |AnonymousFunctionRuleInterface|AnonymousClassRuleInterface $rule,
     ): self {
         if (! isset($this->rules[$key])) {
             throw new RuleNotFoundException(sprintf(
@@ -435,7 +438,8 @@ final class Architecture
     }
 
     /**
-     * @return array<string, RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface>
+     * @return array<string, RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface
+     *     |AnonymousClassRuleInterface>
      */
     public function getRules(): array
     {

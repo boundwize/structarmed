@@ -52,11 +52,18 @@ final readonly class PhpParserFixerProcessor
             return false;
         }
 
+        $tokens     = $parser->getTokens();
         $statements = (new NodeTraverser(new CloningVisitor()))->traverse($originalStatements);
         $statements = (new NodeTraverser(new NameResolver(options: ['replaceNodes' => false])))
             ->traverse($statements);
 
         foreach ($nodeVisitors as $nodeVisitor) {
+            // A token edit lands in the output through the same tokens the
+            // format-preserving printer copies unchanged code from.
+            if ($nodeVisitor instanceof TokenAwareVisitorInterface) {
+                $nodeVisitor->setTokens($tokens);
+            }
+
             $statements = (new NodeTraverser($nodeVisitor))->traverse($statements);
         }
 
@@ -79,11 +86,7 @@ final readonly class PhpParserFixerProcessor
                 return parent::pScalar_Float($node);
             }
         };
-        $fixedCode     = $prettyPrinter->printFormatPreserving(
-            $statements,
-            $originalStatements,
-            $parser->getTokens(),
-        );
+        $fixedCode     = $prettyPrinter->printFormatPreserving($statements, $originalStatements, $tokens);
 
         return $fixedCode !== $code && file_put_contents($file, $fixedCode) !== false;
     }
