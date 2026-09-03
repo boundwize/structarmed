@@ -139,18 +139,9 @@ final class ClassNode
      * `new self`/`new static`/`new parent` resolving to it. Instantiation is
      * the one usage that requires a class to stay concrete. Computed by the
      * analyser when a usage-aware rule is active; false otherwise.
-     *
-     * Only a concrete named class can be an instantiation target — `new` on
-     * an abstract class, interface, trait, or enum is fatal — so marking any
-     * other class-like as instantiated is ignored. (Anonymous classes never
-     * become ClassNodes in the first place.)
      */
     public function setInstantiated(bool $isInstantiated): void
     {
-        if ($isInstantiated && (! $this->isClass() || $this->isAbstract)) {
-            return;
-        }
-
         $this->isInstantiated = $isInstantiated;
     }
 
