@@ -527,6 +527,20 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
+        // Variables are the most frequent node class in a typical tree, so they
+        // dispatch before the statement and function-like checks below. Only
+        // `$this` and superglobals are recorded; both handlers are no-ops
+        // outside any class-like or function-like scope.
+        if ($node instanceof Variable) {
+            if ($node->name === 'this') {
+                $this->markThisUsage();
+            } elseif (is_string($node->name) && isset(self::SUPERGLOBALS[$node->name])) {
+                $this->addSuperglobal('$' . $node->name);
+            }
+
+            return null;
+        }
+
         // The scope-tracking node types are all statements, so the far more
         // frequent expression/name/identifier nodes skip their checks with a
         // single instanceof.
@@ -592,7 +606,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
                 return null;
             }
-        } elseif ($node instanceof Closure || $node instanceof ArrowFunction) {
+        } elseif ($node instanceof FunctionLike) {
             $this->startFunctionLikeAnalysis($node);
 
             return null;
@@ -1025,20 +1039,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             if ($activeFunctionLikeCount > 0) {
                 $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->cyclomaticComplexity++;
-            }
-
-            return;
-        }
-
-        if ($node instanceof Variable) {
-            if (! is_string($node->name)) {
-                return;
-            }
-
-            if ($node->name === 'this') {
-                $this->markThisUsage();
-            } elseif (isset(self::SUPERGLOBALS[$node->name])) {
-                $this->addSuperglobal('$' . $node->name);
             }
 
             return;
