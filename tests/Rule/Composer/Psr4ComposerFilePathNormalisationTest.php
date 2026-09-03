@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Composer;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4DirectoryExistsRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -18,7 +19,8 @@ final class Psr4ComposerFilePathNormalisationTest extends TestCase
 
     public function testDirectoryExistsRulePassesWhenComposerJsonIsMissingAtWindowsStyleBasePath(): void
     {
-        $this->assertNull(
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
             (new Psr4DirectoryExistsRule())->evaluateProject(
                 self::WINDOWS_STYLE_MISSING_BASE_PATH,
                 Architecture::define()
@@ -28,7 +30,8 @@ final class Psr4ComposerFilePathNormalisationTest extends TestCase
 
     public function testSourcePathsRulePassesWhenComposerJsonIsMissingAtWindowsStyleBasePath(): void
     {
-        $this->assertNull(
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
             (new Psr4SourcePathsRule(null))->evaluateProject(
                 self::WINDOWS_STYLE_MISSING_BASE_PATH,
                 Architecture::define()

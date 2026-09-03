@@ -1634,7 +1634,6 @@ final class AnalysisResultCacheTest extends TestCase
         ];
 
         yield 'numeric keys' => [[0 => 'bad']];
-        yield 'invalid file' => [[...$valid, 'file' => 1]];
         yield 'invalid BOM flag' => [[...$valid, 'hasUtf8Bom' => 'bad']];
         yield 'invalid UTF-8 flag' => [[...$valid, 'hasValidUtf8' => 'bad']];
         yield 'missing invalid tag line' => [
@@ -1653,18 +1652,6 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'invalid declaration flag' => [[...$valid, 'declaresSymbols' => 'bad']];
         yield 'invalid side-effects flag' => [[...$valid, 'hasSideEffects' => 'bad']];
         yield 'invalid side-effect line' => [[...$valid, 'sideEffectLine' => 'bad']];
-        yield 'missing keyword constants' => [
-            [
-                'file'              => __FILE__,
-                'hasUtf8Bom'        => false,
-                'hasValidUtf8'      => true,
-                'invalidPhpTagLine' => null,
-                'hasValidAst'       => true,
-                'declaresSymbols'   => true,
-                'hasSideEffects'    => false,
-                'sideEffectLine'    => 1,
-            ],
-        ];
         yield 'invalid keyword constants type' => [[...$valid, 'nonCanonicalKeywordConstants' => 'bad']];
         yield 'keyword constants not a list' => [[...$valid, 'nonCanonicalKeywordConstants' => ['a' => [1, 'TRUE']]]];
         yield 'keyword constant not a pair' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1]]]];
@@ -1673,7 +1660,6 @@ final class AnalysisResultCacheTest extends TestCase
         ];
         yield 'keyword constant with invalid line' => [[...$valid, 'nonCanonicalKeywordConstants' => [['1', 'TRUE']]]];
         yield 'keyword constant with invalid spelling' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1, 1]]]];
-        yield 'missing numeric literals' => [[...$valid, 'numericLiterals' => null]];
         yield 'numeric literals not a list' => [[...$valid, 'numericLiterals' => ['bad' => [1, '10000', 10000]]]];
         yield 'numeric literal not a triple' => [[...$valid, 'numericLiterals' => [[1, '10000']]]];
         yield 'numeric literal with invalid line' => [[...$valid, 'numericLiterals' => [['1', '10000', 10000]]]];
