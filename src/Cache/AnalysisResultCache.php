@@ -419,7 +419,7 @@ final class AnalysisResultCache
      * @param list<ClassNode>          $classNodes
      * @param list<AnonymousClassNode> $anonymousClassNodes
      * @param list<string>             $fileReferences Class-like references made outside any
-     *                                                 named class-like scope in this file
+     *                                                 class-like scope in this file
      * @param list<string>             $fileInstantiations Class-like instantiations in this file
      * @param list<FunctionNode>          $functionNodes
      * @param list<AnonymousFunctionNode> $anonymousFunctionNodes

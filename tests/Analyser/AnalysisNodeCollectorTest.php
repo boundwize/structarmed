@@ -799,6 +799,34 @@ PHP);
         $this->assertSame([], $analysisNodeCollector->getFileReferences());
     }
 
+    public function testNestedAnonymousClassesKeepTheirOwnMembersAndShareBodyDependencies(): void
+    {
+        $anonymousClassNodes = $this->collectAnonymousClassNodes(<<<'PHP'
+            <?php
+            namespace App;
+            return new class {
+                public function outer(): object
+                {
+                    return new class {
+                        public function inner(): Clock { return new Clock(); }
+                    };
+                }
+            };
+            PHP);
+
+        $this->assertCount(2, $anonymousClassNodes);
+        [$inner, $outer] = $anonymousClassNodes;
+
+        $this->assertSame(['inner'], array_column($inner->methods, 'name'));
+        $this->assertSame(['outer'], array_column($outer->methods, 'name'));
+        $this->assertNull($outer->enclosingClassName);
+        $this->assertNull($inner->enclosingClassName);
+
+        // The inner body is counted on both, like a closure's on its enclosing scopes.
+        $this->assertSame(['App\Clock'], $inner->dependencies);
+        $this->assertSame(['App\Clock'], $outer->dependencies);
+    }
+
     public function testCollectsAnonymousClassNodeWithoutExtends(): void
     {
         $anonymousClassNodes = $this->collectAnonymousClassNodes('<?php
