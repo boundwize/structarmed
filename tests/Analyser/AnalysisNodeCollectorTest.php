@@ -720,6 +720,85 @@ PHP);
         $this->assertSame('App\BaseHandler', $anonymousClassNodes[0]->extends);
     }
 
+    public function testCollectsAnonymousClassMembersAndBodyFactsLikeANamedClass(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+            use App\Support\Unused;
+            use App\Support\Clock;
+            class HandlerFactory {
+                public function make(): object {
+                    return new readonly class (new Clock()) implements \Stringable {
+                        use Helper;
+                        public const LIMIT = 1;
+                        private int $count = 0;
+                        public function __construct(private Clock $clock) {}
+                        public function __toString(): string {
+                            if (isset($_GET['debug'])) { exit(1); }
+                            return strtoupper(Other::class);
+                        }
+                    };
+                }
+            }
+            PHP);
+
+        $anonymousClassNodes = $analysisNodeCollector->getAnonymousClassNodes();
+        $classNodes          = $analysisNodeCollector->getClassNodes();
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $anonymousClassNode = $anonymousClassNodes[0];
+
+        $this->assertTrue($anonymousClassNode->isReadonly);
+        $this->assertSame(['App\Helper'], $anonymousClassNode->traits);
+        $this->assertSame(['LIMIT'], array_column($anonymousClassNode->constants, 'name'));
+        $this->assertSame(['count', 'clock'], array_column($anonymousClassNode->properties, 'name'));
+        $this->assertSame(['__construct', '__toString'], array_column($anonymousClassNode->methods, 'name'));
+        $this->assertSame(1, $anonymousClassNode->constructorParamCount());
+        $this->assertSame(['strtoupper'], $anonymousClassNode->functionCalls);
+        $this->assertSame(['$_GET'], $anonymousClassNode->superglobals);
+        $this->assertSame(['isset', 'exit'], $anonymousClassNode->languageConstructs);
+        $this->assertTrue($anonymousClassNode->dependsOn('Stringable'));
+        $this->assertTrue($anonymousClassNode->dependsOn('App\Helper'));
+        $this->assertTrue($anonymousClassNode->dependsOn('App\Support\Clock'));
+        $this->assertTrue($anonymousClassNode->dependsOn('App\Other'));
+        // The file's imports belong to the file, not to the anonymous class.
+        $this->assertFalse($anonymousClassNode->dependsOn('App\Support\Unused'));
+
+        // The enclosing class keeps seeing the anonymous class body, as it
+        // sees a closure's, but the members belong to the anonymous class.
+        $this->assertCount(1, $classNodes);
+        $this->assertSame(['make'], array_column($classNodes[0]->methods, 'name'));
+        $this->assertSame([], $classNodes[0]->constants);
+        $this->assertSame([], $classNodes[0]->properties);
+        $this->assertSame([], $classNodes[0]->traits);
+        $this->assertTrue($classNodes[0]->dependsOn('App\Other'));
+        $this->assertTrue($classNodes[0]->dependsOn('App\Support\Unused'));
+        $this->assertSame(['strtoupper'], $classNodes[0]->functionCalls);
+        $this->assertSame(['$_GET'], $classNodes[0]->superglobals);
+        $this->assertSame(['isset', 'exit'], $classNodes[0]->languageConstructs);
+    }
+
+    public function testTopLevelAnonymousClassBodyReferencesAreItsOwnDependencies(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+            return new class extends BaseHandler {
+                public function handle(): string { return helper(Other::class); }
+            };
+            function helper(string $class): string { return $class; }
+            PHP);
+
+        $anonymousClassNodes = $analysisNodeCollector->getAnonymousClassNodes();
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $this->assertSame(['App\BaseHandler', 'App\Other'], $anonymousClassNodes[0]->dependencies);
+        // Resolved once the whole file is traversed, like a named class's.
+        $this->assertSame(['App\helper'], $anonymousClassNodes[0]->functionCalls);
+        $this->assertSame([], $analysisNodeCollector->getFileReferences());
+    }
+
     public function testCollectsAnonymousClassNodeWithoutExtends(): void
     {
         $anonymousClassNodes = $this->collectAnonymousClassNodes('<?php

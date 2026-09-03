@@ -780,6 +780,14 @@ final class AnalysisResultCacheTest extends TestCase
                 enclosingClassName:    'App\HandlerFactory',
                 hasEmptyParentheses:   true,
                 layers:                ['Source', 'Shared'],
+                isReadonly:            true,
+                dependencies:          ['App\BaseHandler', 'App\Contract'],
+                methods:               [new MethodNode('__construct', 'public', false, false, 1, 1, 3, true, 8)],
+                constants:             [new ConstantNode('LIMIT', 'public', true, 9)],
+                properties:            [new PropertyNode('clock', 'private', true, 8)],
+                functionCalls:         ['strtoupper'],
+                superglobals:          ['$_GET'],
+                languageConstructs:    ['exit'],
             ),
             new AnonymousClassNode(
                 file:                  $sourceFile,
@@ -1091,6 +1099,18 @@ final class AnalysisResultCacheTest extends TestCase
         ];
         yield 'entry with invalid traits' => [
             [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'traits' => 'invalid']],
+        ];
+        yield 'entry with invalid isReadonly' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'isReadonly' => 'yes']],
+        ];
+        yield 'entry with invalid dependencies' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'dependencies' => [1]]],
+        ];
+        yield 'entry with invalid methods' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'methods' => ['invalid']]],
+        ];
+        yield 'entry with invalid method tuple' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'methods' => [['x']]]],
         ];
     }
 

@@ -20,10 +20,18 @@ use function array_filter;
  * Its parent chain is resolved by the analyser like a named class's, so
  * {@see extendsClass()} and {@see implementsInterface()} see transitive
  * parents too.
+ *
+ * Its members and body-level facts are collected like a named class's. The
+ * body-level facts of an anonymous class declared inside a class-like or
+ * named function are also counted on that enclosing node, exactly as the
+ * body of a closure is: a rule that only inspects the enclosing node keeps
+ * seeing everything the anonymous class does. Its members belong to the
+ * anonymous class alone.
  */
 final class AnonymousClassNode
 {
-    use LayerQueryTrait;
+    use MemberQueryTrait;
+    use NodeQueryTrait;
     use RecursiveParentsTrait;
 
     /**
@@ -36,15 +44,22 @@ final class AnonymousClassNode
     public readonly array $layers;
 
     /**
-     * @param string[]     $implements            Interface names this anonymous class implements
-     * @param string[]     $traits                Trait names this anonymous class uses
-     * @param string|null  $enclosingClassName    Innermost named class-like this anonymous class is declared in
-     * @param string|null  $enclosingFunctionName Innermost named function this anonymous class is declared in
-     * @param bool         $hasEmptyParentheses   Whether `()` follows `class` although no constructor argument
-     *                                            is passed: `new class () {}` rather than `new class {}`
-     * @param list<string> $layers                Layer names this anonymous class belongs to; defaults to [$layer]
-     * @param list<string> $parentClasses         Direct and transitive parent class names
-     * @param list<string> $parentInterfaces      Direct and transitive implemented interface names
+     * @param string[]       $implements            Interface names this anonymous class implements
+     * @param string[]       $traits                Trait names this anonymous class uses
+     * @param string|null    $enclosingClassName    Innermost named class-like this anonymous class is declared in
+     * @param string|null    $enclosingFunctionName Innermost named function this anonymous class is declared in
+     * @param bool           $hasEmptyParentheses   Whether `()` follows `class` although no constructor argument
+     *                                              is passed: `new class () {}` rather than `new class {}`
+     * @param list<string>   $layers                Layer names this anonymous class belongs to; defaults to [$layer]
+     * @param list<string>   $parentClasses         Direct and transitive parent class names
+     * @param list<string>   $parentInterfaces      Direct and transitive implemented interface names
+     * @param list<string>   $dependencies          Fully-qualified class, function, or constant dependencies
+     * @param MethodNode[]   $methods               Methods of this anonymous class
+     * @param ConstantNode[] $constants             Constants of this anonymous class
+     * @param PropertyNode[] $properties            Properties of this anonymous class
+     * @param string[]       $functionCalls         Functions called within this anonymous class
+     * @param string[]       $superglobals          Superglobals accessed ($_GET, $_POST, etc.)
+     * @param string[]       $languageConstructs    Language constructs used (exit, die, etc.)
      */
     public function __construct(
         public readonly string $file,
@@ -59,6 +74,14 @@ final class AnonymousClassNode
         array $layers = [],
         public array $parentClasses = [],
         public array $parentInterfaces = [],
+        public readonly bool $isReadonly = false,
+        public readonly array $dependencies = [],
+        public readonly array $methods = [],
+        public readonly array $constants = [],
+        public readonly array $properties = [],
+        public readonly array $functionCalls = [],
+        public readonly array $superglobals = [],
+        public readonly array $languageConstructs = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
