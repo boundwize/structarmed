@@ -527,10 +527,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
-        // Variables are the most frequent node class in a typical tree, so they
-        // dispatch before the statement and function-like checks below. Only
-        // `$this` and superglobals are recorded; both handlers are no-ops
-        // outside any class-like or function-like scope.
+        // This ordering is about the instanceof tests in this method, not the
+        // traversal: the traverser still enters a statement before the
+        // expressions inside it. Variable is the most frequent node class, so
+        // testing it first spares every variable the Stmt and FunctionLike
+        // checks and the collectNodeAnalysis() call. Only `$this` and
+        // superglobals are recorded; outside a class-like or function-like
+        // scope both handlers record nothing, so no scope check is needed.
         if ($node instanceof Variable) {
             if ($node->name === 'this') {
                 $this->markThisUsage();
