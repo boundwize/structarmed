@@ -8,6 +8,7 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Token;
 
 use function end;
+use function in_array;
 
 use const T_CLASS;
 use const T_COMMENT;
@@ -88,9 +89,7 @@ final class AnonymousClassParentheses
     {
         while (
             isset($tokens[$index])
-            && ($tokens[$index]->id === T_WHITESPACE
-                || $tokens[$index]->id === T_COMMENT
-                || $tokens[$index]->id === T_DOC_COMMENT)
+            && (in_array($tokens[$index]->id, [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true))
         ) {
             $index++;
         }

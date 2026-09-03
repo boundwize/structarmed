@@ -697,32 +697,30 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         array_pop($this->activeClassLikeNames);
         array_pop($this->functionLikeDepthAtClassLikeEntry);
 
-        if (! $node->name instanceof Identifier) {
-            // Anonymous classes never become ClassNodes, but the class they
-            // extend, the interfaces they implement, and the traits they use
-            // are still used within the scanned paths.
-            if ($node instanceof Class_) {
-                // Its own (nameless) entry is already popped, so the innermost
-                // active names are the named scopes declaring it; they also
-                // resolve its layer, as they do for an anonymous function.
-                $enclosingClassName    = $this->innermostActiveClassLikeName();
-                $enclosingFunctionName = $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames);
-                [$layer, $layers]      = $this->resolveLayerData($enclosingClassName ?? $enclosingFunctionName ?? '');
+        // Anonymous classes never become ClassNodes, but the class they
+        // extend, the interfaces they implement, and the traits they use
+        // are still used within the scanned paths.
+        if ($node instanceof Class_ && $node->isAnonymous()) {
+            // Its own (nameless) entry is already popped, so the innermost
+            // active names are the named scopes declaring it; they also
+            // resolve its layer, as they do for an anonymous function.
+            $enclosingClassName    = $this->innermostActiveClassLikeName();
+            $enclosingFunctionName = $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames);
+            [$layer, $layers]      = $this->resolveLayerData($enclosingClassName ?? $enclosingFunctionName ?? '');
 
-                $this->anonymousClassNodes[] = new AnonymousClassNode(
-                    file:                  $this->currentFile,
-                    line:                  $node->getStartLine(),
-                    extends:               $node->extends instanceof Name ? $node->extends->toString() : null,
-                    implements:            $this->collectImplements($node),
-                    traits:                $this->collectTraits($node),
-                    layer:                 $layer,
-                    enclosingClassName:    $enclosingClassName,
-                    enclosingFunctionName: $enclosingFunctionName,
-                    hasEmptyParentheses:   AnonymousClassParentheses::emptyTokenRange($this->currentTokens, $node)
-                                               !== null,
-                    layers:                $layers,
-                );
-            }
+            $this->anonymousClassNodes[] = new AnonymousClassNode(
+                file:                  $this->currentFile,
+                line:                  $node->getStartLine(),
+                extends:               $node->extends instanceof Name ? $node->extends->toString() : null,
+                implements:            $this->collectImplements($node),
+                traits:                $this->collectTraits($node),
+                layer:                 $layer,
+                enclosingClassName:    $enclosingClassName,
+                enclosingFunctionName: $enclosingFunctionName,
+                hasEmptyParentheses:   AnonymousClassParentheses::emptyTokenRange($this->currentTokens, $node)
+                                           !== null,
+                layers:                $layers,
+            );
 
             return null;
         }

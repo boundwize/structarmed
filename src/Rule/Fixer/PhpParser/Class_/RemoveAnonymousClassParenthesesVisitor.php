@@ -7,7 +7,6 @@ namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\TokenAwareVisitorInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use PhpParser\Node;
-use PhpParser\Node\Identifier;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
@@ -41,7 +40,7 @@ final class RemoveAnonymousClassParenthesesVisitor extends NodeVisitorAbstract i
 
     public function enterNode(Node $node): ?Node
     {
-        if (! $node instanceof Class_ || $node->name instanceof Identifier || $node->getStartLine() !== $this->line) {
+        if (! $node instanceof Class_ || ! $node->isAnonymous() || $node->getStartLine() !== $this->line) {
             return null;
         }
 
