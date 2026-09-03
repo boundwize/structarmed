@@ -40,7 +40,7 @@ final class LargeNumericLiteralMustUseSeparatorRuleTest extends TestCase
 <?php
 
 // Preserve this comment.
-$value = 10000;
+$value = 1000000;
 $other = 123456789;
 $float = 1000500.001;
 PHP);
@@ -62,7 +62,7 @@ PHP);
 <?php
 
 // Preserve this comment.
-$value = 10_000;
+$value = 1_000_000;
 $other = 123_456_789;
 $float = 1_000_500.001;
 PHP, file_get_contents($basePath . '/src/Foo.php'));
@@ -74,7 +74,7 @@ PHP, file_get_contents($basePath . '/src/Foo.php'));
 
     public function testFixTargetsTheLiteralSpellingOnItsLine(): void
     {
-        $basePath                                = $this->makeProject("<?php\n\n\$values = [10000, 123456789];\n");
+        $basePath                                = $this->makeProject("<?php\n\n\$values = [1000000, 123456789];\n");
         $largeNumericLiteralMustUseSeparatorRule = new LargeNumericLiteralMustUseSeparatorRule(
             sourcePaths: ['src/'],
         );
@@ -90,12 +90,12 @@ PHP, file_get_contents($basePath . '/src/Foo.php'));
         );
         $this->assertTrue($largeNumericLiteralMustUseSeparatorRule->fix($violations[1]));
         $this->assertSame(
-            "<?php\n\n\$values = [10000, 123_456_789];\n",
+            "<?php\n\n\$values = [1000000, 123_456_789];\n",
             file_get_contents($basePath . '/src/Foo.php'),
         );
         $this->assertTrue($largeNumericLiteralMustUseSeparatorRule->fix($violations[0]));
         $this->assertSame(
-            "<?php\n\n\$values = [10_000, 123_456_789];\n",
+            "<?php\n\n\$values = [1_000_000, 123_456_789];\n",
             file_get_contents($basePath . '/src/Foo.php'),
         );
     }

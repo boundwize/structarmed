@@ -36,7 +36,7 @@ final readonly class LargeNumericLiteralMustUseSeparatorRule extends AbstractPhp
      * @param list<string>|null $sourcePaths
      */
     public function __construct(
-        private int $minimum = 10_000,
+        private int $minimum = 1_000_000,
         ?array $sourcePaths = null,
         ?PhpFileFinder $phpFileFinder = null,
     ) {

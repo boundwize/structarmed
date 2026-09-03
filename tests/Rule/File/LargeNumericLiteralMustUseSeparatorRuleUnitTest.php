@@ -33,16 +33,16 @@ final class LargeNumericLiteralMustUseSeparatorRuleUnitTest extends TestCase
             sourcePaths: ['src/'],
         );
         $violations                              = $this->evaluate(
-            [[3, '10000', 10000], [4, '100000', 100000], [5, '1000000', 1000000]],
+            [[3, '1000000', 1000000], [4, '10000000', 10000000], [5, '100000000', 100000000]],
             largeNumericLiteralMustUseSeparatorRule: $largeNumericLiteralMustUseSeparatorRule,
         );
 
         $this->assertInstanceOf(FixableInterface::class, $largeNumericLiteralMustUseSeparatorRule);
         $this->assertSame(
             [
-                'Numeric literal [10000] must use separator formatting [10_000]',
-                'Numeric literal [100000] must use separator formatting [100_000]',
                 'Numeric literal [1000000] must use separator formatting [1_000_000]',
+                'Numeric literal [10000000] must use separator formatting [10_000_000]',
+                'Numeric literal [100000000] must use separator formatting [100_000_000]',
             ],
             array_map(static fn (RuleViolation $ruleViolation): string => $ruleViolation->message, $violations),
         );
@@ -51,7 +51,7 @@ final class LargeNumericLiteralMustUseSeparatorRuleUnitTest extends TestCase
             array_map(static fn (RuleViolation $ruleViolation): int => $ruleViolation->line, $violations),
         );
         $this->assertSame(
-            ['10000', '100000', '1000000'],
+            ['1000000', '10000000', '100000000'],
             array_map(
                 static fn (RuleViolation $ruleViolation): ?string => $ruleViolation->numericLiteral,
                 $violations,
@@ -62,26 +62,26 @@ final class LargeNumericLiteralMustUseSeparatorRuleUnitTest extends TestCase
     public function testIgnoresBelowThresholdAndAlreadySeparatedIntegers(): void
     {
         $this->assertSame([], $this->evaluate([
-            [3, '9999', 9999],
-            [4, '10_000', 10000],
-            [5, '1_000_000', 1000000],
-            [6, '9999.99', 9999.99],
-            [7, '10_000.0', 10000.0],
+            [3, '999999', 999999],
+            [4, '1_000_000', 1000000],
+            [5, '10_000_000', 10000000],
+            [6, '999999.99', 999999.99],
+            [7, '1_000_000.0', 1000000.0],
         ]));
     }
 
     public function testReportsPlainDecimalFloatsAndPreservesTheirFractionalParts(): void
     {
         $violations = $this->evaluate([
-            [3, '10000.0', 10000.0],
-            [4, '1000000.0', 1000000.0],
+            [3, '1000000.0', 1000000.0],
+            [4, '10000000.0', 10000000.0],
             [5, '1000500.001', 1000500.001],
         ]);
 
         $this->assertSame(
             [
-                'Numeric literal [10000.0] must use separator formatting [10_000.0]',
                 'Numeric literal [1000000.0] must use separator formatting [1_000_000.0]',
+                'Numeric literal [10000000.0] must use separator formatting [10_000_000.0]',
                 'Numeric literal [1000500.001] must use separator formatting [1_000_500.001]',
             ],
             array_map(static fn (RuleViolation $ruleViolation): string => $ruleViolation->message, $violations),
@@ -124,10 +124,10 @@ final class LargeNumericLiteralMustUseSeparatorRuleUnitTest extends TestCase
 
     public function testUsesTheLiteralMagnitudeCollectedInsideAUnaryMinus(): void
     {
-        $violations = $this->evaluate([[3, '100000', 100000]]);
+        $violations = $this->evaluate([[3, '1000000', 1000000]]);
 
         $this->assertCount(1, $violations);
-        $this->assertSame('100000', $violations[0]->numericLiteral);
+        $this->assertSame('1000000', $violations[0]->numericLiteral);
     }
 
     public function testVisitorWithoutLiteralPayloadDoesNothing(): void
