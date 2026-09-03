@@ -66,7 +66,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 4;
+    public const FORMAT_VERSION = 5;
 
     private readonly string $cacheDirectory;
 
@@ -1098,59 +1098,62 @@ final class AnalysisResultCache
     }
 
     /**
-     * @return array<string, mixed>
+     * Members are stored as positional tuples: a class has many of them,
+     * and their field names would otherwise be repeated for every one.
+     *
+     * @return array{string, string, bool, bool, int, int, int, bool, int, bool}
      */
     private function methodNodeToArray(MethodNode $methodNode): array
     {
         return [
-            'name'                  => $methodNode->name,
-            'visibility'            => $methodNode->visibility,
-            'hasReturnType'         => $methodNode->hasReturnType,
-            'isStatic'              => $methodNode->isStatic,
-            'paramCount'            => $methodNode->paramCount,
-            'cyclomaticComplexity'  => $methodNode->cyclomaticComplexity,
-            'lineCount'             => $methodNode->lineCount,
-            'hasExplicitVisibility' => $methodNode->hasExplicitVisibility,
-            'line'                  => $methodNode->line,
-            'isMagic'               => $methodNode->isMagic,
+            $methodNode->name,
+            $methodNode->visibility,
+            $methodNode->hasReturnType,
+            $methodNode->isStatic,
+            $methodNode->paramCount,
+            $methodNode->cyclomaticComplexity,
+            $methodNode->lineCount,
+            $methodNode->hasExplicitVisibility,
+            $methodNode->line,
+            $methodNode->isMagic,
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{string, string, bool, int}
      */
     private function constantNodeToArray(ConstantNode $constantNode): array
     {
         return [
-            'name'                  => $constantNode->name,
-            'visibility'            => $constantNode->visibility,
-            'hasExplicitVisibility' => $constantNode->hasExplicitVisibility,
-            'line'                  => $constantNode->line,
+            $constantNode->name,
+            $constantNode->visibility,
+            $constantNode->hasExplicitVisibility,
+            $constantNode->line,
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{string, string, bool, int}
      */
     private function propertyNodeToArray(PropertyNode $propertyNode): array
     {
         return [
-            'name'                  => $propertyNode->name,
-            'visibility'            => $propertyNode->visibility,
-            'hasExplicitVisibility' => $propertyNode->hasExplicitVisibility,
-            'line'                  => $propertyNode->line,
+            $propertyNode->name,
+            $propertyNode->visibility,
+            $propertyNode->hasExplicitVisibility,
+            $propertyNode->line,
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{string, int, int|string|null}
      */
     private function enumCaseNodeToArray(EnumCaseNode $enumCaseNode): array
     {
         return [
-            'name'  => $enumCaseNode->name,
-            'line'  => $enumCaseNode->line,
-            'value' => $enumCaseNode->value,
+            $enumCaseNode->name,
+            $enumCaseNode->line,
+            $enumCaseNode->value,
         ];
     }
 
@@ -1159,32 +1162,49 @@ final class AnalysisResultCache
      */
     private function methodNodeFromArray(array $method): ?MethodNode
     {
+        if (count($method) !== 10 || ! array_is_list($method)) {
+            return null;
+        }
+
+        [
+            $name,
+            $visibility,
+            $hasReturnType,
+            $isStatic,
+            $paramCount,
+            $cyclomaticComplexity,
+            $lineCount,
+            $hasExplicitVisibility,
+            $line,
+            $isMagic,
+        ] = $method;
+
         if (
-            ! is_string($method['name'] ?? null)
-            || ! is_string($method['visibility'] ?? null)
-            || ! is_bool($method['hasReturnType'] ?? null)
-            || ! is_bool($method['isStatic'] ?? null)
-            || ! is_int($method['paramCount'] ?? null)
-            || ! is_int($method['cyclomaticComplexity'] ?? null)
-            || ! is_int($method['lineCount'] ?? null)
-            || ! is_bool($method['hasExplicitVisibility'] ?? null)
-            || ! is_int($method['line'] ?? null)
-            || ! is_bool($method['isMagic'] ?? null)
+            ! is_string($name)
+            || ! is_string($visibility)
+            || ! is_bool($hasReturnType)
+            || ! is_bool($isStatic)
+            || ! is_int($paramCount)
+            || ! is_int($cyclomaticComplexity)
+            || ! is_int($lineCount)
+            || ! is_bool($hasExplicitVisibility)
+            || ! is_int($line)
+            || ! is_bool($isMagic)
         ) {
             return null;
         }
 
         return new MethodNode(
-            name:                 $method['name'],
-            visibility:           $method['visibility'],
-            hasReturnType:        $method['hasReturnType'],
-            isStatic:             $method['isStatic'],
-            paramCount:           $method['paramCount'],
-            cyclomaticComplexity: $method['cyclomaticComplexity'],
-            lineCount:            $method['lineCount'],
-            hasExplicitVisibility: $method['hasExplicitVisibility'],
-            line:                 $method['line'],
-            isMagic:              $method['isMagic'],
+            name:                  $name,
+            visibility:            $visibility,
+            hasReturnType:         $hasReturnType,
+            isStatic:              $isStatic,
+            paramCount:            $paramCount,
+            cyclomaticComplexity:  $cyclomaticComplexity,
+            lineCount:             $lineCount,
+            hasExplicitVisibility: $hasExplicitVisibility,
+            line:                  $line,
+            isMagic:               $isMagic,
         );
     }
 
@@ -1193,20 +1213,21 @@ final class AnalysisResultCache
      */
     private function constantNodeFromArray(array $constant): ?ConstantNode
     {
-        if (
-            ! is_string($constant['name'] ?? null)
-            || ! is_string($constant['visibility'] ?? null)
-            || ! is_bool($constant['hasExplicitVisibility'] ?? null)
-            || ! is_int($constant['line'] ?? null)
-        ) {
+        if (count($constant) !== 4 || ! array_is_list($constant)) {
+            return null;
+        }
+
+        [$name, $visibility, $hasExplicitVisibility, $line] = $constant;
+
+        if (! is_string($name) || ! is_string($visibility) || ! is_bool($hasExplicitVisibility) || ! is_int($line)) {
             return null;
         }
 
         return new ConstantNode(
-            name:                 $constant['name'],
-            visibility:           $constant['visibility'],
-            hasExplicitVisibility: $constant['hasExplicitVisibility'],
-            line:                 $constant['line'],
+            name:                  $name,
+            visibility:            $visibility,
+            hasExplicitVisibility: $hasExplicitVisibility,
+            line:                  $line,
         );
     }
 
@@ -1215,20 +1236,21 @@ final class AnalysisResultCache
      */
     private function propertyNodeFromArray(array $property): ?PropertyNode
     {
-        if (
-            ! is_string($property['name'] ?? null)
-            || ! is_string($property['visibility'] ?? null)
-            || ! is_bool($property['hasExplicitVisibility'] ?? null)
-            || ! is_int($property['line'] ?? null)
-        ) {
+        if (count($property) !== 4 || ! array_is_list($property)) {
+            return null;
+        }
+
+        [$name, $visibility, $hasExplicitVisibility, $line] = $property;
+
+        if (! is_string($name) || ! is_string($visibility) || ! is_bool($hasExplicitVisibility) || ! is_int($line)) {
             return null;
         }
 
         return new PropertyNode(
-            name:                 $property['name'],
-            visibility:           $property['visibility'],
-            hasExplicitVisibility: $property['hasExplicitVisibility'],
-            line:                 $property['line'],
+            name:                  $name,
+            visibility:            $visibility,
+            hasExplicitVisibility: $hasExplicitVisibility,
+            line:                  $line,
         );
     }
 
@@ -1237,19 +1259,19 @@ final class AnalysisResultCache
      */
     private function enumCaseNodeFromArray(array $enumCase): ?EnumCaseNode
     {
-        $value = $enumCase['value'] ?? null;
+        if (count($enumCase) !== 3 || ! array_is_list($enumCase)) {
+            return null;
+        }
 
-        if (
-            ! is_string($enumCase['name'] ?? null)
-            || ! is_int($enumCase['line'] ?? null)
-            || ($value !== null && ! is_int($value) && ! is_string($value))
-        ) {
+        [$name, $line, $value] = $enumCase;
+
+        if (! is_string($name) || ! is_int($line) || ($value !== null && ! is_int($value) && ! is_string($value))) {
             return null;
         }
 
         return new EnumCaseNode(
-            name:  $enumCase['name'],
-            line:  $enumCase['line'],
+            name:  $name,
+            line:  $line,
             value: $value,
         );
     }
