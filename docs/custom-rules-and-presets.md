@@ -177,16 +177,17 @@ The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedI
 
 Trade-off: only usage within the scanned paths is known. A class-like used solely by a consumer outside the scan — a vendor package, an unscanned directory, runtime-fed dynamic construction — is reported as if unused. Widen the scan, or use `skipRule()` and skip paths where such consumers exist.
 
-## Analysing Functions And Closures
+## Analysing Functions, Closures, And Anonymous Classes
 
-Named functions, closures, and arrow functions are collected alongside classes:
+Named functions, closures, arrow functions, and anonymous classes are collected alongside named classes:
 
 | Node | Represents | Identified by |
 | --- | --- | --- |
 | `Boundwize\StructArmed\Analyser\FunctionNode` | A named function declaration (`function foo() {}`), global or namespaced | `$functionName` (fully qualified) |
 | `Boundwize\StructArmed\Analyser\AnonymousFunctionNode` | A closure (`function () {}`) or arrow function (`fn () => ...`) | `$file` and `$line`, plus `$enclosingClassName` / `$enclosingFunctionName` |
+| `Boundwize\StructArmed\Analyser\AnonymousClassNode` | An anonymous class declaration (`new class ... {}`) | `$file` and `$line`, plus `$enclosingClassName` / `$enclosingFunctionName` |
 
-Both carry the body-level facts a `ClassNode` has — `$dependencies`, `$functionCalls`, `$superglobals`, `$languageConstructs`, `$layer` / `$layers` — plus `$paramCount`, `$hasReturnType`, `$cyclomaticComplexity`, and `$lineCount`. The same query helpers are available: `isInLayer()`, `dependsOn()`, `dependsOnNamespace()`, `callsFunction()`, `usesLanguageConstruct()`, and `accessesSuperglobals()`. A `FunctionNode` also has `shortName()`, `nameStartsWith()`, `nameEndsWith()`, and `nameMatches()`; an `AnonymousFunctionNode` has `$isArrowFunction`, `$isStatic`, `getType()`, and `enclosingScopeName()`.
+`FunctionNode` and `AnonymousFunctionNode` both carry the body-level facts a `ClassNode` has — `$dependencies`, `$functionCalls`, `$superglobals`, `$languageConstructs`, `$layer` / `$layers` — plus `$paramCount`, `$hasReturnType`, `$cyclomaticComplexity`, and `$lineCount`. The same query helpers are available: `isInLayer()`, `dependsOn()`, `dependsOnNamespace()`, `callsFunction()`, `usesLanguageConstruct()`, and `accessesSuperglobals()`. A `FunctionNode` also has `shortName()`, `nameStartsWith()`, `nameEndsWith()`, and `nameMatches()`; an `AnonymousFunctionNode` has `$isArrowFunction`, `$isStatic`, `getType()`, and `enclosingScopeName()`.
 
 A closure declared inside a class or a named function is counted on both nodes: the enclosing `ClassNode` (or `FunctionNode`) keeps seeing everything the closure does, exactly as it sees its own method bodies, and the `AnonymousFunctionNode` reports the closure body on its own.
 
@@ -279,7 +280,57 @@ final readonly class ClosuresMustNotAccessSuperglobalsRule implements AnonymousF
 }
 ```
 
-One rule class can also implement several of these interfaces at once; PHP then requires the shared methods to widen the parameter to a union type (for example `appliesTo(FunctionNode|AnonymousFunctionNode $node): bool`) and the rule branches on the node type inside.
+An anonymous-class rule receives an `AnonymousClassNode` for every anonymous class in the scanned paths. For example, this rule requires anonymous classes in one layer to implement a project-specific marker interface:
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function in_array;
+use function sprintf;
+
+final readonly class AnonymousClassesMustImplementRule implements AnonymousClassRuleInterface
+{
+    public function __construct(
+        private string $layer,
+        private string $interface,
+    ) {
+    }
+
+    public function appliesTo(AnonymousClassNode $anonymousClassNode): bool
+    {
+        return $anonymousClassNode->isInLayer($this->layer);
+    }
+
+    public function evaluate(AnonymousClassNode $anonymousClassNode): ?RuleViolation
+    {
+        if (in_array($this->interface, $anonymousClassNode->implements, true)) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:   sprintf(
+                'Anonymous class in [%s] must implement [%s]',
+                $anonymousClassNode->enclosingScopeName(),
+                $this->interface,
+            ),
+            file:      $anonymousClassNode->file,
+            line:      $anonymousClassNode->line,
+            className: $anonymousClassNode->enclosingScopeName(),
+            layer:     $anonymousClassNode->layer,
+        );
+    }
+}
+```
+
+Register it through `Architecture::rule()` like any other custom rule. The analyser invokes it only for anonymous classes because it implements `AnonymousClassRuleInterface`.
+
+One rule class can also implement several of these interfaces at once; PHP then requires the shared methods to widen the parameter to a union type (for example `appliesTo(FunctionNode|AnonymousFunctionNode|AnonymousClassNode $node): bool`) and the rule branches on the node type inside.
 
 `RuleViolation::$className` is required, so a function rule passes the function name there (and, optionally, in the dedicated `functionName` field, which the JSON report emits as `"function"`); an anonymous-function or anonymous-class rule passes `enclosingScopeName()`, which is the enclosing class-like or named function, or `FILE_SCOPE` (`'file scope'`) for one in top-level procedural code.
 
