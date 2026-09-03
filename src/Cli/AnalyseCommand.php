@@ -335,13 +335,13 @@ final readonly class AnalyseCommand
         foreach ($architecture->getRules() as $ruleKey => $rule) {
             $ruleViolations = $ruleViolationCollection->forRule($ruleKey);
 
-            if ($ruleViolations === []) {
+            if (! $rule instanceof FixableInterface || $ruleViolations === []) {
                 continue;
             }
 
             if (! $rule instanceof AbstractPhpParserFixableRule) {
                 foreach ($ruleViolations as $ruleViolation) {
-                    if ($rule instanceof FixableInterface && $rule->fix($ruleViolation)) {
+                    if ($rule->fix($ruleViolation)) {
                         $fixedCount++;
                     }
                 }
