@@ -18,6 +18,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
@@ -339,7 +340,10 @@ final readonly class AnalyseCommand
                 continue;
             }
 
-            if (! $rule instanceof AbstractPhpParserFixableRule) {
+            if (
+                ! $rule instanceof AbstractPhpParserFixableRule
+                && ! $rule instanceof AbstractJsonRecastFixableRule
+            ) {
                 foreach ($ruleViolations as $ruleViolation) {
                     if ($rule->fix($ruleViolation)) {
                         $fixedCount++;

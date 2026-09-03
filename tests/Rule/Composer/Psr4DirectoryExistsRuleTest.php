@@ -223,6 +223,41 @@ JSON, ['src', 'tests']);
     }
 }
 JSON, file_get_contents($basePath . '/composer.json'));
+
+        $batchBasePath  = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Missing\\": "missing/"
+        }
+    }
+}
+JSON);
+        $batchViolation = $psr4DirectoryExistsRule->evaluateProject($batchBasePath, Architecture::define());
+
+        $this->assertInstanceOf(RuleViolation::class, $batchViolation);
+        $this->assertTrue($psr4DirectoryExistsRule->fix($batchViolation, $batchViolation));
+        $this->assertSame("{\n}", file_get_contents($batchBasePath . '/composer.json'));
+
+        $firstBasePath  = $this->makeTempProject('{}');
+        $secondBasePath = $this->makeTempProject('{}');
+
+        $this->assertFalse($psr4DirectoryExistsRule->fix(
+            new RuleViolation(
+                message:   'First violation',
+                file:      $firstBasePath . '/composer.json',
+                line:      1,
+                className: '',
+            ),
+            new RuleViolation(
+                message:   'Second violation',
+                file:      $secondBasePath . '/composer.json',
+                line:      1,
+                className: '',
+            ),
+        ));
+        $this->assertSame('{}', file_get_contents($firstBasePath . '/composer.json'));
+        $this->assertSame('{}', file_get_contents($secondBasePath . '/composer.json'));
     }
 
     public function testFixRemovesPsr4BlockWhenEveryMappingDirectoryIsMissing(): void
