@@ -10,13 +10,27 @@ use PhpParser\NodeVisitor;
 
 abstract readonly class AbstractPhpParserFixableRule implements FixableInterface
 {
-    final public function fix(RuleViolation $ruleViolation): bool
+    /**
+     * Additional violations let the CLI fix one rule's violations for a file
+     * in a single read, parse, and write cycle.
+     */
+    final public function fix(RuleViolation $ruleViolation, RuleViolation ...$additionalViolations): bool
     {
-        $nodeVisitor = $this->createFixerVisitor($ruleViolation);
+        $ruleViolations = [$ruleViolation, ...$additionalViolations];
+        $file           = $ruleViolation->file;
+        $nodeVisitors   = [];
+
+        foreach ($ruleViolations as $ruleViolation) {
+            if ($ruleViolation->file !== $file) {
+                return false;
+            }
+
+            $nodeVisitors[] = $this->createFixerVisitor($ruleViolation);
+        }
 
         return $this->fixerProcessor()->process(
-            $ruleViolation->file,
-            $nodeVisitor,
+            $file,
+            $nodeVisitors,
             $this->shouldRemoveFileWhenEmpty(),
         );
     }

@@ -18,10 +18,12 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
 use RuntimeException;
 
+use function array_shift;
 use function count;
 use function explode;
 use function in_array;
@@ -328,14 +330,38 @@ final readonly class AnalyseCommand
 
     private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int
     {
-        $rules      = $architecture->getRules();
         $fixedCount = 0;
 
-        foreach ($ruleViolationCollection as $ruleViolation) {
-            $rule = $rules[$ruleViolation->ruleKey] ?? null;
+        foreach ($architecture->getRules() as $ruleKey => $rule) {
+            $ruleViolations = $ruleViolationCollection->forRule($ruleKey);
 
-            if ($rule instanceof FixableInterface && $rule->fix($ruleViolation)) {
-                $fixedCount++;
+            if ($ruleViolations === []) {
+                continue;
+            }
+
+            if (! $rule instanceof AbstractPhpParserFixableRule) {
+                foreach ($ruleViolations as $ruleViolation) {
+                    if ($rule instanceof FixableInterface && $rule->fix($ruleViolation)) {
+                        $fixedCount++;
+                    }
+                }
+
+                continue;
+            }
+
+            $violationsByFile = [];
+
+            foreach ($ruleViolations as $ruleViolation) {
+                $violationsByFile[$ruleViolation->file][] = $ruleViolation;
+            }
+
+            foreach ($violationsByFile as $fileViolations) {
+                $batchSize      = count($fileViolations);
+                $firstViolation = array_shift($fileViolations);
+
+                if ($rule->fix($firstViolation, ...$fileViolations)) {
+                    $fixedCount += $batchSize;
+                }
             }
         }
 

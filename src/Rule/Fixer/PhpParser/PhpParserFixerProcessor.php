@@ -27,10 +27,15 @@ use function unlink;
 
 final readonly class PhpParserFixerProcessor
 {
-    public function process(string $file, NodeVisitor $nodeVisitor, bool $removeFileWhenEmpty = false): bool
+    /** @param NodeVisitor|non-empty-list<NodeVisitor> $nodeVisitors */
+    public function process(string $file, NodeVisitor|array $nodeVisitors, bool $removeFileWhenEmpty = false): bool
     {
         if (! is_file($file)) {
             return false;
+        }
+
+        if ($nodeVisitors instanceof NodeVisitor) {
+            $nodeVisitors = [$nodeVisitors];
         }
 
         $code = (string) file_get_contents($file);
@@ -47,10 +52,13 @@ final readonly class PhpParserFixerProcessor
             return false;
         }
 
-        $nameResolver = new NameResolver(options: ['replaceNodes' => false]);
-        $statements   = (new NodeTraverser($nameResolver, $nodeVisitor))
-            ->traverse((new NodeTraverser(new CloningVisitor()))
-            ->traverse($originalStatements));
+        $statements = (new NodeTraverser(new CloningVisitor()))->traverse($originalStatements);
+        $statements = (new NodeTraverser(new NameResolver(options: ['replaceNodes' => false])))
+            ->traverse($statements);
+
+        foreach ($nodeVisitors as $nodeVisitor) {
+            $statements = (new NodeTraverser($nodeVisitor))->traverse($statements);
+        }
 
         // A fix that removes the last declaration leaves only boilerplate
         // (declare/namespace/use); the whole file is dead weight at that point.
