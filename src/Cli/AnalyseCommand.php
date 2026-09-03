@@ -187,7 +187,7 @@ final readonly class AnalyseCommand
             return $this->reportError($runtimeException);
         }
 
-        if (isset($options['fix'])) {
+        if (isset($options['fix']) && ! $ruleViolationCollection->isEmpty()) {
             // Removal fixers can cascade: deleting an unused child abstraction
             // may leave its parent unused, so fix and re-analyse until a pass
             // fixes nothing. The pass cap only guards against a fixer that
@@ -239,6 +239,10 @@ final readonly class AnalyseCommand
                     $violationCountBeforePass - $ruleViolationCollection->count()
                 );
                 $elapsed     = microtime(true) - $start;
+
+                if ($ruleViolationCollection->isEmpty()) {
+                    break;
+                }
             }
         }
 
