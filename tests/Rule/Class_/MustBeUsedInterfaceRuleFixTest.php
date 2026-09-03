@@ -58,9 +58,9 @@ final class MustBeUsedInterfaceRuleFixTest extends TestCase
             "<?php\n\nnamespace App;\n\ninterface FirstUnused\n{\n}\n\ninterface SecondUnused\n{\n}\n"
         );
 
-        $rule = new MustBeUsedInterfaceRule(layer: 'Domain');
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
 
-        $this->assertTrue($rule->fix(
+        $this->assertTrue($mustBeUsedInterfaceRule->fix(
             new RuleViolation(
                 message:   'Interface [App\\FirstUnused] must be used',
                 file:      $file,
@@ -79,13 +79,44 @@ final class MustBeUsedInterfaceRuleFixTest extends TestCase
         $this->assertFileDoesNotExist($file);
 
         // A later fixer batch stops at the processor's is_file() guard.
-        $this->assertFalse($rule->fix(new RuleViolation(
+        $this->assertFalse($mustBeUsedInterfaceRule->fix(new RuleViolation(
             message:   'Interface [App\\FirstUnused] must be used',
             file:      $file,
             line:      5,
             className: 'App\\FirstUnused',
             layer:     'Domain',
         )));
+    }
+
+    public function testBatchFixRejectsViolationsFromDifferentFiles(): void
+    {
+        $temporaryDirectory = $this->makeTemporaryDirectory('structarmed-yagni-interface');
+        $firstFile          = $temporaryDirectory . '/FirstUnused.php';
+        $secondFile         = $temporaryDirectory . '/SecondUnused.php';
+
+        file_put_contents($firstFile, "<?php\n\ninterface FirstUnused\n{\n}\n");
+        file_put_contents($secondFile, "<?php\n\ninterface SecondUnused\n{\n}\n");
+
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+
+        $this->assertFalse($mustBeUsedInterfaceRule->fix(
+            new RuleViolation(
+                message:   'Interface [FirstUnused] must be used',
+                file:      $firstFile,
+                line:      3,
+                className: 'FirstUnused',
+                layer:     'Domain',
+            ),
+            new RuleViolation(
+                message:   'Interface [SecondUnused] must be used',
+                file:      $secondFile,
+                line:      3,
+                className: 'SecondUnused',
+                layer:     'Domain',
+            ),
+        ));
+        $this->assertFileExists($firstFile);
+        $this->assertFileExists($secondFile);
     }
 
     public function testFixKeepsFileWhenDeclareBlockContainsExecutableCode(): void
