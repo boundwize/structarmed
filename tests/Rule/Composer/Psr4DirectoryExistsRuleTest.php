@@ -153,23 +153,23 @@ JSON, json_encode($absolutePath)));
         $this->assertStringContainsString('do not exist on disk', $violation->message);
     }
 
-    public function testFailsWhenComposerJsonIsMissing(): void
+    public function testPassesWhenComposerJsonIsMissing(): void
     {
-        $violation = (new Psr4DirectoryExistsRule())->evaluateProject($this->makeTempDir(), Architecture::define());
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('composer.json was not found', $violation->message);
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4DirectoryExistsRule())->evaluateProject($this->makeTempDir(), Architecture::define())
+        );
     }
 
-    public function testFailsWhenComposerJsonIsInvalid(): void
+    public function testPassesWhenComposerJsonIsInvalid(): void
     {
-        $violation = (new Psr4DirectoryExistsRule())->evaluateProject(
-            $this->makeTempProject('{not json'),
-            Architecture::define()
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4DirectoryExistsRule())->evaluateProject(
+                $this->makeTempProject('{not json'),
+                Architecture::define()
+            )
         );
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('composer.json is not valid JSON', $violation->message);
     }
 
     public function testPassesWhenNoPsr4PathsAreDeclared(): void

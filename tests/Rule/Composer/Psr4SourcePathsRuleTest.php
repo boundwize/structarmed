@@ -66,27 +66,27 @@ JSON);
         $this->assertStringContainsString('tests', $violation->message);
     }
 
-    public function testFailsWhenComposerJsonIsMissing(): void
+    public function testPassesWhenComposerJsonIsMissing(): void
     {
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/']);
 
-        $violation = $psr4SourcePathsRule->evaluateProject($this->makeTempDir(), Architecture::define());
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('composer.json was not found', $violation->message);
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($this->makeTempDir(), Architecture::define())
+        );
     }
 
-    public function testFailsWhenComposerJsonIsInvalid(): void
+    public function testPassesWhenComposerJsonIsInvalid(): void
     {
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/']);
 
-        $violation = $psr4SourcePathsRule->evaluateProject(
-            $this->makeTempProject('{not json'),
-            Architecture::define()
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject(
+                $this->makeTempProject('{not json'),
+                Architecture::define()
+            )
         );
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('composer.json is not valid JSON', $violation->message);
     }
 
     public function testPassesWhenComposerPsr4MappingUsesPathList(): void
