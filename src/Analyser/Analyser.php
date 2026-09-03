@@ -424,30 +424,26 @@ final readonly class Analyser
                         $violations = [$violation];
                     }
 
+                    $isFixable = $rule instanceof FixableInterface;
                     foreach ($violations as $violation) {
-                        $ruleViolationCollection->add($this->withRuleKey($violation, $key, $rule));
+                        $ruleViolationCollection->add(new RuleViolation(
+                            message:      $violation->message,
+                            file:         $violation->file,
+                            line:         $violation->line,
+                            className:    $violation->className,
+                            layer:        $violation->layer,
+                            ruleKey:      $key,
+                            fixable:      $isFixable,
+                            methodName:   $violation->methodName,
+                            constantName: $violation->constantName,
+                            propertyName: $violation->propertyName,
+                            functionName: $violation->functionName,
+                            numericLiteral: $violation->numericLiteral,
+                        ));
                     }
                 }
             }
         }
-    }
-
-    private function withRuleKey(RuleViolation $ruleViolation, string $key, object $rule): RuleViolation
-    {
-        return new RuleViolation(
-            message:      $ruleViolation->message,
-            file:         $ruleViolation->file,
-            line:         $ruleViolation->line,
-            className:    $ruleViolation->className,
-            layer:        $ruleViolation->layer,
-            ruleKey:      $key,
-            fixable:      $rule instanceof FixableInterface,
-            methodName:   $ruleViolation->methodName,
-            constantName: $ruleViolation->constantName,
-            propertyName: $ruleViolation->propertyName,
-            functionName: $ruleViolation->functionName,
-            numericLiteral: $ruleViolation->numericLiteral,
-        );
     }
 
     /**
