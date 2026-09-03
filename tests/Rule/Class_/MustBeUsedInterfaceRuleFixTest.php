@@ -48,6 +48,46 @@ final class MustBeUsedInterfaceRuleFixTest extends TestCase
         $this->assertFileDoesNotExist($file);
     }
 
+    public function testBatchFixRunsEveryVisitorBeforeDeletingFile(): void
+    {
+        $temporaryDirectory = $this->makeTemporaryDirectory('structarmed-yagni-interface');
+        $file               = $temporaryDirectory . '/UnusedInterfaces.php';
+
+        file_put_contents(
+            $file,
+            "<?php\n\nnamespace App;\n\ninterface FirstUnused\n{\n}\n\ninterface SecondUnused\n{\n}\n"
+        );
+
+        $rule = new MustBeUsedInterfaceRule(layer: 'Domain');
+
+        $this->assertTrue($rule->fix(
+            new RuleViolation(
+                message:   'Interface [App\\FirstUnused] must be used',
+                file:      $file,
+                line:      5,
+                className: 'App\\FirstUnused',
+                layer:     'Domain',
+            ),
+            new RuleViolation(
+                message:   'Interface [App\\SecondUnused] must be used',
+                file:      $file,
+                line:      9,
+                className: 'App\\SecondUnused',
+                layer:     'Domain',
+            ),
+        ));
+        $this->assertFileDoesNotExist($file);
+
+        // A later fixer batch stops at the processor's is_file() guard.
+        $this->assertFalse($rule->fix(new RuleViolation(
+            message:   'Interface [App\\FirstUnused] must be used',
+            file:      $file,
+            line:      5,
+            className: 'App\\FirstUnused',
+            layer:     'Domain',
+        )));
+    }
+
     public function testFixKeepsFileWhenDeclareBlockContainsExecutableCode(): void
     {
         $temporaryDirectory = $this->makeTemporaryDirectory('structarmed-yagni-interface');
