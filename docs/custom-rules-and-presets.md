@@ -191,7 +191,7 @@ Named functions, closures, arrow functions, and anonymous classes are collected 
 
 A closure declared inside a class or a named function is counted on both nodes: the enclosing `ClassNode` (or `FunctionNode`) keeps seeing everything the closure does, exactly as it sees its own method bodies, and the `AnonymousFunctionNode` reports the closure body on its own.
 
-Anonymous classes (`new class ... {}`) are collected the same way, as `Boundwize\StructArmed\Analyser\AnonymousClassNode`: identified by `$file` and `$line` plus `$enclosingClassName` / `$enclosingFunctionName` (with `enclosingScopeName()` and `AnonymousClassNode::FILE_SCOPE`), and carrying `$extends`, `$implements`, `$traits`, `$layer` / `$layers` with `isInLayer()`, and `$hasEmptyParentheses` — whether the declaration spells `new class () {}` although it passes no constructor argument. An anonymous class never becomes a `ClassNode`; the named class-like or function declaring it keeps seeing its body, exactly as it sees a closure's.
+Anonymous classes (`new class ... {}`) are collected the same way, as `Boundwize\StructArmed\Analyser\AnonymousClassNode`: identified by `$file` and `$line` plus `$enclosingClassName` / `$enclosingFunctionName` (with `enclosingScopeName()` and `AnonymousClassNode::FILE_SCOPE`), and carrying `$extends`, `$implements`, `$traits`, `$layer` / `$layers` with `isInLayer()`, and `$hasEmptyParentheses` — whether the declaration spells `new class () {}` although it passes no constructor argument. Its parent chain is resolved like a named class's: `$parentClasses` and `$parentInterfaces` hold the direct and transitive parents found in the scanned paths, and `extendsClass()` / `implementsInterface()` answer case-insensitively through that chain, exactly as on a `ClassNode`. An anonymous class never becomes a `ClassNode`; the named class-like or function declaring it keeps seeing its body, exactly as it sees a closure's.
 
 Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface`, `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`, and/or `Boundwize\StructArmed\Rule\AnonymousClassRuleInterface`. All share the `appliesTo()` / `evaluate()` method names with `RuleInterface`, each typed against its own node kind. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes and anonymous classes are not part of the declarative `ruleset()` layer-dependency check.
 
@@ -280,7 +280,7 @@ final readonly class ClosuresMustNotAccessSuperglobalsRule implements AnonymousF
 }
 ```
 
-An anonymous-class rule receives an `AnonymousClassNode` for every anonymous class in the scanned paths. For example, this rule requires anonymous classes in one layer to implement a project-specific marker interface:
+An anonymous-class rule receives an `AnonymousClassNode` for every anonymous class in the scanned paths. For example, this rule requires anonymous classes in one layer to implement a project-specific marker interface, directly or through the class they extend (`implementsInterface()` walks the resolved parent chain, so `new class extends BaseHandler {}` passes when `BaseHandler` implements the interface):
 
 ```php
 <?php
@@ -291,7 +291,6 @@ use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
-use function in_array;
 use function sprintf;
 
 final readonly class AnonymousClassesMustImplementRule implements AnonymousClassRuleInterface
@@ -309,7 +308,7 @@ final readonly class AnonymousClassesMustImplementRule implements AnonymousClass
 
     public function evaluate(AnonymousClassNode $anonymousClassNode): ?RuleViolation
     {
-        if (in_array($this->interface, $anonymousClassNode->implements, true)) {
+        if ($anonymousClassNode->implementsInterface($this->interface)) {
             return null;
         }
 

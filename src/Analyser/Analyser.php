@@ -180,7 +180,7 @@ final readonly class Analyser
             $withFileAnalysis,
         );
         $classNodes       = $extractionResult->classNodes;
-        $classNodes       = $this->withRecursiveParents($classNodes);
+        $classNodes       = $this->withRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
 
         if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
             $this->markClassLikeUsage(
@@ -1051,10 +1051,11 @@ final readonly class Analyser
     }
 
     /**
-     * @param list<ClassNode> $classNodes
+     * @param list<ClassNode>          $classNodes
+     * @param list<AnonymousClassNode> $anonymousClassNodes
      * @return list<ClassNode>
      */
-    private function withRecursiveParents(array $classNodes): array
+    private function withRecursiveParents(array $classNodes, array $anonymousClassNodes): array
     {
         $parentClassMap     = [];
         $parentInterfaceMap = [];
@@ -1093,13 +1094,32 @@ final readonly class Analyser
             $classNode->setRecursiveParents($result['classes'], $result['interfaces']);
         }
 
+        // An anonymous class is never a parent, so it is absent from the maps and
+        // starts the DFS from its own `extends`/`implements` clauses instead.
+        foreach ($anonymousClassNodes as $anonymousClassNode) {
+            if ($anonymousClassNode->extends === null && $anonymousClassNode->implements === []) {
+                continue;
+            }
+
+            $cycleDetected = false;
+            $result        = $this->collectRecursiveParents(
+                $anonymousClassNode->extends !== null ? [$anonymousClassNode->extends] : [],
+                $anonymousClassNode->implements,
+                $parentClassMap,
+                $parentInterfaceMap,
+                $parentsCache,
+                [],
+                $cycleDetected
+            );
+
+            $anonymousClassNode->setRecursiveParents($result['classes'], $result['interfaces']);
+        }
+
         return $classNodes;
     }
 
     /**
-     * Single DFS that collects both ancestor classes and transitively implemented/extended
-     * interfaces in one pass, avoiding the double traversal of the parent-class chain that
-     * the previous two-method approach required.
+     * Cached, name-keyed entry point to the parent-chain DFS for a scanned class-like.
      *
      * @param array<string, list<string>>                                        $parentClassMap
      * @param array<string, list<string>>                                        $parentInterfaceMap
@@ -1119,11 +1139,54 @@ final readonly class Analyser
             return $cache[$classNameKey];
         }
 
+        $hasCycle = false;
+        $result   = $this->collectRecursiveParents(
+            $parentClassMap[$classNameKey] ?? [],
+            $parentInterfaceMap[$classNameKey] ?? [],
+            $parentClassMap,
+            $parentInterfaceMap,
+            $cache,
+            $seen,
+            $hasCycle
+        );
+
+        if (! $hasCycle) {
+            $cache[$classNameKey] = $result;
+        }
+
+        $cycleDetected = $cycleDetected || $hasCycle;
+
+        return $result;
+    }
+
+    /**
+     * Single DFS that collects both ancestor classes and transitively implemented/extended
+     * interfaces in one pass, avoiding the double traversal of the parent-class chain that
+     * the previous two-method approach required. Seeded with a node's direct parents so an
+     * anonymous class, which has no name to look up in the maps, resolves its chain the
+     * same way a named class does.
+     *
+     * @param string[]                                                           $parentClasses
+     * @param string[]                                                           $parentInterfaces
+     * @param array<string, list<string>>                                        $parentClassMap
+     * @param array<string, list<string>>                                        $parentInterfaceMap
+     * @param array<string, array{classes: list<string>, interfaces: list<string>}> $cache
+     * @param array<string, true>                                                $seen
+     * @return array{classes: list<string>, interfaces: list<string>}
+     */
+    private function collectRecursiveParents(
+        array $parentClasses,
+        array $parentInterfaces,
+        array $parentClassMap,
+        array $parentInterfaceMap,
+        array &$cache,
+        array $seen,
+        bool &$hasCycle
+    ): array {
         $classesSet    = [];
         $interfacesSet = [];
-        $hasCycle      = false;
 
-        foreach ($parentClassMap[$classNameKey] ?? [] as $parentClass) {
+        foreach ($parentClasses as $parentClass) {
             $parentClassKey = strtolower($parentClass);
 
             if (isset($seen[$parentClassKey])) {
@@ -1153,7 +1216,7 @@ final readonly class Analyser
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        foreach ($parentInterfaceMap[$classNameKey] ?? [] as $parentInterface) {
+        foreach ($parentInterfaces as $parentInterface) {
             $parentInterfaceKey = strtolower($parentInterface);
 
             if (isset($seen[$parentInterfaceKey])) {
@@ -1179,18 +1242,10 @@ final readonly class Analyser
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        $result = [
+        return [
             'classes'    => array_keys($classesSet),
             'interfaces' => array_keys($interfacesSet),
         ];
-
-        if (! $hasCycle) {
-            $cache[$classNameKey] = $result;
-        }
-
-        $cycleDetected = $cycleDetected || $hasCycle;
-
-        return $result;
     }
 
     /**

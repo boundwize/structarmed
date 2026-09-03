@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
-use function in_array;
 
 /**
  * An anonymous class declaration (`new class ... {}`). Anonymous classes never
@@ -17,9 +16,16 @@ use function in_array;
  * The class it extends, the interfaces it implements, and the traits it uses
  * are still used within the scanned paths, which usage-aware rules must take
  * into account: MustBeFinalRule must skip a class extended by an anonymous class.
+ *
+ * Its parent chain is resolved by the analyser like a named class's, so
+ * {@see extendsClass()} and {@see implementsInterface()} see transitive
+ * parents too.
  */
-final readonly class AnonymousClassNode
+final class AnonymousClassNode
 {
+    use LayerQueryTrait;
+    use RecursiveParentsTrait;
+
     /**
      * Scope label reported by {@see enclosingScopeName()} for an anonymous
      * class declared outside any class-like or named function.
@@ -27,7 +33,7 @@ final readonly class AnonymousClassNode
     public const FILE_SCOPE = 'file scope';
 
     /** @var list<string> */
-    public array $layers;
+    public readonly array $layers;
 
     /**
      * @param string[]     $implements            Interface names this anonymous class implements
@@ -37,25 +43,24 @@ final readonly class AnonymousClassNode
      * @param bool         $hasEmptyParentheses   Whether `()` follows `class` although no constructor argument
      *                                            is passed: `new class () {}` rather than `new class {}`
      * @param list<string> $layers                Layer names this anonymous class belongs to; defaults to [$layer]
+     * @param list<string> $parentClasses         Direct and transitive parent class names
+     * @param list<string> $parentInterfaces      Direct and transitive implemented interface names
      */
     public function __construct(
-        public string $file,
-        public int $line,
-        public ?string $extends,
-        public array $implements = [],
-        public array $traits = [],
-        public ?string $layer = null,
-        public ?string $enclosingClassName = null,
-        public ?string $enclosingFunctionName = null,
-        public bool $hasEmptyParentheses = false,
+        public readonly string $file,
+        public readonly int $line,
+        public readonly ?string $extends,
+        public readonly array $implements = [],
+        public readonly array $traits = [],
+        public readonly ?string $layer = null,
+        public readonly ?string $enclosingClassName = null,
+        public readonly ?string $enclosingFunctionName = null,
+        public readonly bool $hasEmptyParentheses = false,
         array $layers = [],
+        public array $parentClasses = [],
+        public array $parentInterfaces = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
-    }
-
-    public function isInLayer(string $layer): bool
-    {
-        return in_array($layer, $this->layers, true);
     }
 
     /**
