@@ -60,7 +60,7 @@ final readonly class PhpParserFixerProcessor
         foreach ($nodeVisitors as $nodeVisitor) {
             // A token edit lands in the output through the same tokens the
             // format-preserving printer copies unchanged code from.
-            if ($nodeVisitor instanceof TokenAwareVisitorInterface) {
+            if ($nodeVisitor instanceof AbstractTokenAwareVisitor) {
                 $nodeVisitor->setTokens($tokens);
             }
 

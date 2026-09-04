@@ -393,32 +393,26 @@ Keep fixers deterministic and narrowly scoped. A failed or skipped fix should re
 
 Some facts a rule reports exist only in the source text, not in any PHP-Parser node. The empty `()` of `new class () {}` is one: both `new class {}` and `new class () {}` parse to the same node with an empty argument list. A visitor that only edits nodes cannot remove those parentheses, and re-printing the whole class to drop them would reformat its body.
 
-Implement `Boundwize\StructArmed\Rule\Fixer\PhpParser\TokenAwareVisitorInterface` on the fixer visitor for such cases. It extends `PhpParser\NodeVisitor` with one method:
+Extend `Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractTokenAwareVisitor` for such cases. It is a `PhpParser\NodeVisitorAbstract` that holds the tokens the file was parsed into in a protected `$tokens` property:
 
 ```php
+/** @var array<PhpParser\Token> */
+protected array $tokens = [];
+
 /** @param array<PhpParser\Token> $tokens */
 public function setTokens(array $tokens): void;
 ```
 
-`PhpParserFixerProcessor` calls `setTokens()` with the tokens the file was parsed into before traversing with that visitor. The tokens are the same objects the format-preserving printer copies unchanged code from, so editing a `Token` object's `text` changes the printed file without any node being re-printed.
+`PhpParserFixerProcessor` calls `setTokens()` before traversing with that visitor. The tokens are the same objects the format-preserving printer copies unchanged code from, so editing a `Token` object's `text` changes the printed file without any node being re-printed.
 
 ```diff
-+ use Boundwize\StructArmed\Rule\Fixer\PhpParser\TokenAwareVisitorInterface;
++ use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractTokenAwareVisitor;
   use PhpParser\Node;
-  use PhpParser\NodeVisitorAbstract;
-+ use PhpParser\Token;
+- use PhpParser\NodeVisitorAbstract;
 
 - final class RemoveSomethingVisitor extends NodeVisitorAbstract
-+ final class RemoveSomethingVisitor extends NodeVisitorAbstract implements TokenAwareVisitorInterface
++ final class RemoveSomethingVisitor extends AbstractTokenAwareVisitor
   {
-+     /** @var array<Token> */
-+     private array $tokens = [];
-+
-+     public function setTokens(array $tokens): void
-+     {
-+         $this->tokens = $tokens;
-+     }
-+
       public function enterNode(Node $node): ?Node
       {
           // ... locate the target node ...
@@ -505,4 +499,4 @@ Use a custom `RuleInterface` class when the check itself is new behavior; add `F
 
 Use a custom `PresetInterface` class when several layers and rules should be applied together or reused across repositories.
 
-Use `AbstractPhpParserFixableRule` with a `PhpParser\NodeVisitor` when a rule can rewrite the offending file; add `TokenAwareVisitorInterface` to that visitor when the fix targets punctuation or whitespace PHP-Parser records in no node.
+Use `AbstractPhpParserFixableRule` with a `PhpParser\NodeVisitor` when a rule can rewrite the offending file; extend `AbstractTokenAwareVisitor` for that visitor when the fix targets punctuation or whitespace PHP-Parser records in no node.

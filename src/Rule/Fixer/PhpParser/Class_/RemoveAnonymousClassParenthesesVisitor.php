@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_;
 
-use Boundwize\StructArmed\Rule\Fixer\PhpParser\TokenAwareVisitorInterface;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractTokenAwareVisitor;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\Class_;
-use PhpParser\NodeVisitorAbstract;
-use PhpParser\Token;
 
 use const T_WHITESPACE;
 
@@ -23,19 +21,11 @@ use const T_WHITESPACE;
  * rule's own condition here — instead of trusting the line alone — means
  * every class this visitor changes is one the rule flags.
  */
-final class RemoveAnonymousClassParenthesesVisitor extends NodeVisitorAbstract implements TokenAwareVisitorInterface
+final class RemoveAnonymousClassParenthesesVisitor extends AbstractTokenAwareVisitor
 {
-    /** @var array<Token> */
-    private array $tokens = [];
-
     public function __construct(
         private readonly int $line,
     ) {
-    }
-
-    public function setTokens(array $tokens): void
-    {
-        $this->tokens = $tokens;
     }
 
     public function enterNode(Node $node): ?Node

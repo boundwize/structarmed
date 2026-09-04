@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser;
 
-use PhpParser\NodeVisitor;
+use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
 /**
@@ -14,8 +14,14 @@ use PhpParser\Token;
  * printer assembles every unchanged node from these tokens, so an edited
  * token text reaches the fixed file without any node being re-printed.
  */
-interface TokenAwareVisitorInterface extends NodeVisitor
+abstract class AbstractTokenAwareVisitor extends NodeVisitorAbstract
 {
-    /** @param array<Token> $tokens The mutable tokens the file being fixed was parsed into */
-    public function setTokens(array $tokens): void;
+    /** @var array<Token> The mutable tokens the file being fixed was parsed into */
+    protected array $tokens = [];
+
+    /** @param array<Token> $tokens */
+    public function setTokens(array $tokens): void
+    {
+        $this->tokens = $tokens;
+    }
 }
