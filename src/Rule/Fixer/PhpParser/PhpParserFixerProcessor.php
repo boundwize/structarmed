@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Rule\Fixer\PhpParser;
 
 use PhpParser\Error;
 use PhpParser\Node;
+use PhpParser\Node\Scalar\Float_;
 use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\GroupUse;
 use PhpParser\Node\Stmt\Namespace_;
@@ -21,14 +22,20 @@ use PhpParser\PrettyPrinter\Standard;
 use function file_get_contents;
 use function file_put_contents;
 use function is_file;
+use function is_string;
 use function unlink;
 
 final readonly class PhpParserFixerProcessor
 {
-    public function process(string $file, NodeVisitor $nodeVisitor, bool $removeFileWhenEmpty = false): bool
+    /** @param NodeVisitor|non-empty-list<NodeVisitor> $nodeVisitors */
+    public function process(string $file, NodeVisitor|array $nodeVisitors, bool $removeFileWhenEmpty = false): bool
     {
         if (! is_file($file)) {
             return false;
+        }
+
+        if ($nodeVisitors instanceof NodeVisitor) {
+            $nodeVisitors = [$nodeVisitors];
         }
 
         $code = (string) file_get_contents($file);
@@ -45,10 +52,20 @@ final readonly class PhpParserFixerProcessor
             return false;
         }
 
-        $nameResolver = new NameResolver(options: ['replaceNodes' => false]);
-        $statements   = (new NodeTraverser($nameResolver, $nodeVisitor))
-            ->traverse((new NodeTraverser(new CloningVisitor()))
-            ->traverse($originalStatements));
+        $tokens     = $parser->getTokens();
+        $statements = (new NodeTraverser(new CloningVisitor()))->traverse($originalStatements);
+        $statements = (new NodeTraverser(new NameResolver(options: ['replaceNodes' => false])))
+            ->traverse($statements);
+
+        foreach ($nodeVisitors as $nodeVisitor) {
+            // A token edit lands in the output through the same tokens the
+            // format-preserving printer copies unchanged code from.
+            if ($nodeVisitor instanceof AbstractTokenAwareVisitor) {
+                $nodeVisitor->setTokens($tokens);
+            }
+
+            $statements = (new NodeTraverser($nodeVisitor))->traverse($statements);
+        }
 
         // A fix that removes the last declaration leaves only boilerplate
         // (declare/namespace/use); the whole file is dead weight at that point.
@@ -56,7 +73,20 @@ final readonly class PhpParserFixerProcessor
             return unlink($file);
         }
 
-        $fixedCode = (new Standard())->printFormatPreserving($statements, $originalStatements, $parser->getTokens());
+        $prettyPrinter = new class extends Standard {
+            // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps -- PHP-Parser extension hook.
+            protected function pScalar_Float(Float_ $node): string
+            {
+                $rawValue = $node->getAttribute('rawValue');
+
+                if ($node->getAttribute('shouldPrintRawValue') === true && is_string($rawValue)) {
+                    return $rawValue;
+                }
+
+                return parent::pScalar_Float($node);
+            }
+        };
+        $fixedCode     = $prettyPrinter->printFormatPreserving($statements, $originalStatements, $tokens);
 
         return $fixedCode !== $code && file_put_contents($file, $fixedCode) !== false;
     }

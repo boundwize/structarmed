@@ -69,6 +69,28 @@ final class RuleViolationTest extends TestCase
         ], $ruleViolation->toArray());
     }
 
+    public function testViolationSerializesFunctionNameWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:      'Broken rule',
+            file:         '/src/helpers.php',
+            line:         7,
+            className:    'App\\Support\\format',
+            ruleKey:      'first.rule',
+            functionName: 'App\\Support\\format',
+        );
+
+        $this->assertSame([
+            'rule'     => 'first.rule',
+            'message'  => 'Broken rule',
+            'file'     => '/src/helpers.php',
+            'line'     => 7,
+            'class'    => 'App\\Support\\format',
+            'layer'    => null,
+            'function' => 'App\\Support\\format',
+        ], $ruleViolation->toArray());
+    }
+
     public function testNonFixableViolationDoesNotSerializeFixableFlag(): void
     {
         $this->assertArrayNotHasKey('fixable', $this->violation('first.rule', 'Domain')->toArray());
@@ -111,6 +133,19 @@ final class RuleViolationTest extends TestCase
         );
 
         $this->assertSame('status', $ruleViolation->toArray()['property']);
+    }
+
+    public function testViolationSerializesNumericLiteralWhenPresent(): void
+    {
+        $ruleViolation = new RuleViolation(
+            message:        'Broken rule',
+            file:           '/src/File.php',
+            line:           7,
+            className:      '',
+            numericLiteral: '10000',
+        );
+
+        $this->assertSame('10000', $ruleViolation->toArray()['numericLiteral']);
     }
 
     public function testCollectionFiltersAndSerializesViolations(): void

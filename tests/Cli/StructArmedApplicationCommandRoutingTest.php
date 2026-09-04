@@ -35,7 +35,7 @@ final class StructArmedApplicationCommandRoutingTest extends TestCase
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('structarmed --version', $output);
         $this->assertStringContainsString(
-            'structarmed init [--preset=ddd|mvc|psr1|psr12|psr15|psr4|yagni|all]',
+            'structarmed init [--preset=ddd|mvc|psr4|psr1|psr12|per|psr15|yagni|codequality|all]',
             $output
         );
         $this->assertStringContainsString('structarmed analyse|analyze', $output);

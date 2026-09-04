@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Layer;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
+use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Util\Path;
@@ -15,12 +15,9 @@ use function sprintf;
 use function str_contains;
 use function str_starts_with;
 
-final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerAwareRuleInterface
+final class MayNotDependOnRule extends AbstractLayerAwareRule implements MultipleRuleViolationInterface
 {
     private readonly string $normalisedToPath;
-
-    /** @var array<string, ClassNode> */
-    private array $classNodeMap = [];
 
     public function __construct(
         private readonly string $from,
@@ -28,12 +25,6 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
         ?string $toPath = null,
     ) {
         $this->normalisedToPath = Path::normalise($toPath ?? $to);
-    }
-
-    /** @param array<string, ClassNode> $classNodeMap */
-    public function injectClassNodeMap(array $classNodeMap): void
-    {
-        $this->classNodeMap = $classNodeMap;
     }
 
     public function appliesTo(ClassNode $classNode): bool
@@ -82,7 +73,7 @@ final class MayNotDependOnRule implements MultipleRuleViolationInterface, LayerA
     private function isInForbiddenLayer(string $dependency): bool
     {
         // Priority 1: Use the scanned dependency node if available
-        $dependencyNode = $this->classNodeMap[$dependency] ?? null;
+        $dependencyNode = $this->getDependencyNode($dependency);
 
         if ($dependencyNode instanceof ClassNode && $dependencyNode->layers !== []) {
             return in_array($this->to, $dependencyNode->layers, true);

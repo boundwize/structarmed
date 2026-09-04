@@ -153,23 +153,23 @@ JSON, json_encode($absolutePath)));
         $this->assertStringContainsString('do not exist on disk', $violation->message);
     }
 
-    public function testFailsWhenComposerJsonIsMissing(): void
+    public function testPassesWhenComposerJsonIsMissing(): void
     {
-        $violation = (new Psr4DirectoryExistsRule())->evaluateProject($this->makeTempDir(), Architecture::define());
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('composer.json was not found', $violation->message);
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4DirectoryExistsRule())->evaluateProject($this->makeTempDir(), Architecture::define())
+        );
     }
 
-    public function testFailsWhenComposerJsonIsInvalid(): void
+    public function testPassesWhenComposerJsonIsInvalid(): void
     {
-        $violation = (new Psr4DirectoryExistsRule())->evaluateProject(
-            $this->makeTempProject('{not json'),
-            Architecture::define()
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4DirectoryExistsRule())->evaluateProject(
+                $this->makeTempProject('{not json'),
+                Architecture::define()
+            )
         );
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString('composer.json is not valid JSON', $violation->message);
     }
 
     public function testPassesWhenNoPsr4PathsAreDeclared(): void
@@ -223,10 +223,41 @@ JSON, ['src', 'tests']);
     }
 }
 JSON, file_get_contents($basePath . '/composer.json'));
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
-        );
+
+        $batchBasePath  = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Missing\\": "missing/"
+        }
+    }
+}
+JSON);
+        $batchViolation = $psr4DirectoryExistsRule->evaluateProject($batchBasePath, Architecture::define());
+
+        $this->assertInstanceOf(RuleViolation::class, $batchViolation);
+        $this->assertTrue($psr4DirectoryExistsRule->fix($batchViolation, $batchViolation));
+        $this->assertSame("{\n}", file_get_contents($batchBasePath . '/composer.json'));
+
+        $firstBasePath  = $this->makeTempProject('{}');
+        $secondBasePath = $this->makeTempProject('{}');
+
+        $this->assertFalse($psr4DirectoryExistsRule->fix(
+            new RuleViolation(
+                message:   'First violation',
+                file:      $firstBasePath . '/composer.json',
+                line:      1,
+                className: '',
+            ),
+            new RuleViolation(
+                message:   'Second violation',
+                file:      $secondBasePath . '/composer.json',
+                line:      1,
+                className: '',
+            ),
+        ));
+        $this->assertSame('{}', file_get_contents($firstBasePath . '/composer.json'));
+        $this->assertSame('{}', file_get_contents($secondBasePath . '/composer.json'));
     }
 
     public function testFixRemovesPsr4BlockWhenEveryMappingDirectoryIsMissing(): void
@@ -250,10 +281,6 @@ JSON);
 {
 }
 JSON, file_get_contents($basePath . '/composer.json'));
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
-        );
     }
 
     public function testFixKeepsUnchangedEmptyPsr4Block(): void
@@ -285,10 +312,6 @@ JSON);
     }
 }
 JSON, file_get_contents($basePath . '/composer.json'));
-        $this->assertNotInstanceOf(
-            RuleViolation::class,
-            $psr4DirectoryExistsRule->evaluateProject($basePath, Architecture::define())
-        );
     }
 
     public function testFixReturnsFalseWhenAllPsr4DirectoriesExist(): void

@@ -4,14 +4,23 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser;
 
+use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
-use Boundwize\StructArmed\Analyser\ClassCollector;
 use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use PhpParser\Modifiers;
+use PhpParser\Node\Const_;
+use PhpParser\Node\Name;
+use PhpParser\Node\PropertyItem;
+use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\EnumCase;
+use PhpParser\Node\Stmt\Property;
+use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
@@ -22,12 +31,97 @@ use PHPUnit\Framework\TestCase;
 use function array_column;
 
 #[CoversClass(AnonymousClassNode::class)]
-#[CoversClass(ClassCollector::class)]
+#[CoversClass(AnalysisNodeCollector::class)]
 #[CoversClass(ClassLikeAnalysis::class)]
 #[CoversClass(EnumCaseNode::class)]
-final class ClassCollectorTest extends TestCase
+final class AnalysisNodeCollectorTest extends TestCase
 {
     private const BASE_PATH = '/structarmed-test-project';
+
+    public function testCollectsNonCanonicalKeywordConstantSpellings(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+if (TRUE) {
+    return \NULL;
+}
+
+final class Foo
+{
+    public function bar(): bool
+    {
+        return False ?? \tRuE ?? true ?? \null ?? FOO ?? \BAR ?? M_PI ?? \E_ALL;
+    }
+}
+PHP);
+
+        $this->assertSame(
+            [[3, 'TRUE'], [4, '\\NULL'], [11, 'False'], [11, '\\tRuE']],
+            $analysisNodeCollector->getNonCanonicalKeywordConstants()
+        );
+    }
+
+    public function testDistinguishesUnqualifiedFromFullyQualifiedKeywordConstantInsideNamespace(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+namespace App;
+
+$a = NULL;
+$b = \NULL;
+$c = namespace\NULL;
+PHP);
+
+        $this->assertSame([[5, 'NULL'], [6, '\\NULL']], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+    }
+
+    public function testIgnoresRelativeKeywordConstantSpellingOutsideNamespace(): void
+    {
+        $analysisNodeCollector = $this->makeCollector('<?php $a = namespace\FALSE;');
+
+        $this->assertSame([], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+    }
+
+    public function testResetsKeywordConstantSpellingsPerFile(): void
+    {
+        $analysisNodeCollector = $this->makeCollector('<?php $a = TRUE;');
+
+        $this->assertSame([[1, 'TRUE']], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Bar.php');
+
+        $this->assertSame([], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+    }
+
+    public function testCollectsNumericLiteralSpellingsAndValues(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+10000;
+10_000;
+0xFFFFFF;
+1e10;
+10000.5;
+PHP);
+
+        $this->assertSame(
+            [
+                [3, '10000', 10000],
+                [4, '10_000', 10000],
+                [5, '0xFFFFFF', 16777215],
+                [6, '1e10', 10000000000.0],
+                [7, '10000.5', 10000.5],
+            ],
+            $analysisNodeCollector->getNumericLiterals(),
+        );
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Bar.php');
+
+        $this->assertSame([], $analysisNodeCollector->getNumericLiterals());
+    }
 
     private function collect(string $code): ClassNode
     {
@@ -40,7 +134,7 @@ final class ClassCollectorTest extends TestCase
     /** @return ClassNode[] */
     private function collectNodes(string $code): array
     {
-        return $this->makeCollector($code)->getNodes();
+        return $this->makeCollector($code)->getClassNodes();
     }
 
     /** @return list<AnonymousClassNode> */
@@ -49,19 +143,19 @@ final class ClassCollectorTest extends TestCase
         return $this->makeCollector($code)->getAnonymousClassNodes();
     }
 
-    private function makeCollector(string $code): ClassCollector
+    private function makeCollector(string $code): AnalysisNodeCollector
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
-        $classCollector         = new ClassCollector($namespaceLayerResolver);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
         $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
         $ast                    = $parser->parse($code);
 
-        $classCollector->setCurrentFile('/fake/path/Foo.php');
+        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php', $parser->getTokens());
 
-        $nodeTraverser = new NodeTraverser(new NameResolver(), $classCollector);
+        $nodeTraverser = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $nodeTraverser->traverse($ast ?? []);
 
-        return $classCollector;
+        return $analysisNodeCollector;
     }
 
     public function testCollectsFileReferencesFromProceduralCode(): void
@@ -70,11 +164,11 @@ final class ClassCollectorTest extends TestCase
             . 'function handle(Contract $contract): void {}' . "\n"
             . 'function check(object $value): bool { return $value instanceof Contract; }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Contract']],
-            $classCollector->getFileReferences()
+            $analysisNodeCollector->getFileReferences()
         );
     }
 
@@ -84,11 +178,11 @@ final class ClassCollectorTest extends TestCase
             . 'final class Checker { public function check(object $value): bool'
             . ' { return $value instanceof Contract; } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // References inside a named class-like land on its ClassNode
         // dependencies, not in the file-level references.
-        $this->assertSame([], $classCollector->getFileReferences());
+        $this->assertSame([], $analysisNodeCollector->getFileReferences());
     }
 
     public function testCollectsClassNameShapedStringValuesAsFileReferences(): void
@@ -97,11 +191,11 @@ final class ClassCollectorTest extends TestCase
             . 'final class Checker { public function check(object $obj): bool {'
             . ' $contract = \'App\\Contract\'; return $obj instanceof $contract; } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Contract']],
-            $classCollector->getFileReferences()
+            $analysisNodeCollector->getFileReferences()
         );
     }
 
@@ -110,13 +204,13 @@ final class ClassCollectorTest extends TestCase
         $code = '<?php namespace App;' . "\n"
             . 'interface_exists(\'\\App\\Contract\');';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // '\App\Contract' is a valid fully-qualified spelling; the stored
         // name drops the leading separator so it matches ClassNode::$className.
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Contract']],
-            $classCollector->getFileReferences()
+            $analysisNodeCollector->getFileReferences()
         );
     }
 
@@ -125,11 +219,11 @@ final class ClassCollectorTest extends TestCase
         $code = '<?php namespace App;' . "\n"
             . 'final class Factory { public function make(): object { return new (\'\\App\\Service\')(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Service']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -139,13 +233,13 @@ final class ClassCollectorTest extends TestCase
             . 'final class Factory { public function make(): object { return new (\'App\\Service\' . 1)(); } }' . "\n"
             . 'final class Other { public function make(): object { return new (1 + 1)(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // 'App\Service1' is a class-shaped string; `1 + 1` is not a constant
         // class expression the collector evaluates at all.
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Service1']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -155,9 +249,9 @@ final class ClassCollectorTest extends TestCase
             . 'final class Greeter { public function greet(): string {'
             . ' $mode = true ? \'foo-bar\' : \'hello world\'; return $mode . \'123abc\' . \'\'; } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
-        $this->assertSame([], $classCollector->getFileReferences());
+        $this->assertSame([], $analysisNodeCollector->getFileReferences());
     }
 
     public function testCollectsInstantiations(): void
@@ -165,13 +259,13 @@ final class ClassCollectorTest extends TestCase
         $code = '<?php namespace App;' . "\n"
             . 'final class Factory { public function make(): object { return new Service(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Service']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
-        $this->assertSame([], $classCollector->getFileReferences());
+        $this->assertSame([], $analysisNodeCollector->getFileReferences());
     }
 
     public function testResolvesSelfStaticAndParentInstantiations(): void
@@ -183,7 +277,7 @@ final class ClassCollectorTest extends TestCase
             . '    public function three(): BaseRepository { return new parent(); }' . "\n"
             . '}';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // `static` is late-bound, so it is recorded as a marker the analyser
         // resolves to Repository and its descendants.
@@ -191,24 +285,27 @@ final class ClassCollectorTest extends TestCase
             [
                 '/fake/path/Foo.php' => [
                     'App\Repository',
-                    ClassCollector::deferredInstantiationMarker('static', 'App\Repository'),
+                    AnalysisNodeCollector::deferredInstantiationMarker('static', 'App\Repository'),
                     'App\BaseRepository',
                 ],
             ],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
     public function testDeferredInstantiationMarkerRoundTrips(): void
     {
         foreach (['self', 'static', 'parent'] as $keyword) {
-            $marker = ClassCollector::deferredInstantiationMarker($keyword, 'App\\Factory');
+            $marker = AnalysisNodeCollector::deferredInstantiationMarker($keyword, 'App\\Factory');
 
-            $this->assertSame([$keyword, 'App\\Factory'], ClassCollector::parseDeferredInstantiationMarker($marker));
+            $this->assertSame(
+                [$keyword, 'App\\Factory'],
+                AnalysisNodeCollector::parseDeferredInstantiationMarker($marker)
+            );
         }
 
-        $this->assertNull(ClassCollector::parseDeferredInstantiationMarker('App\\Factory'));
-        $this->assertNull(ClassCollector::parseDeferredInstantiationMarker('other@App\\Factory'));
+        $this->assertNull(AnalysisNodeCollector::parseDeferredInstantiationMarker('App\\Factory'));
+        $this->assertNull(AnalysisNodeCollector::parseDeferredInstantiationMarker('other@App\\Factory'));
     }
 
     public function testDoesNotRecordStringWithMarkerSeparatorAsInstantiation(): void
@@ -216,11 +313,11 @@ final class ClassCollectorTest extends TestCase
         $code = '<?php namespace App;' . "\n"
             . 'class Host { public function make(): object { return new (\'other@App\\Host\')(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // `@` never occurs in a class name, and only self/static/parent form
         // a marker: anything else records nothing.
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
     }
 
     public function testRecordsTraitSelfStaticAndParentInstantiationsAsMarkers(): void
@@ -235,7 +332,7 @@ final class ClassCollectorTest extends TestCase
             . '    public static function staticViaClassConstant(): object { return new (static::class)(); }' . "\n"
             . '}';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // A trait is never instantiated itself: each marker is resolved by the
         // analyser against every class using the trait. `new (X::class)()`
@@ -243,12 +340,12 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame(
             [
                 '/fake/path/Foo.php' => [
-                    ClassCollector::deferredInstantiationMarker('parent', 'App\Factory'),
-                    ClassCollector::deferredInstantiationMarker('self', 'App\Factory'),
-                    ClassCollector::deferredInstantiationMarker('static', 'App\Factory'),
+                    AnalysisNodeCollector::deferredInstantiationMarker('parent', 'App\Factory'),
+                    AnalysisNodeCollector::deferredInstantiationMarker('self', 'App\Factory'),
+                    AnalysisNodeCollector::deferredInstantiationMarker('static', 'App\Factory'),
                 ],
             ],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -261,7 +358,7 @@ final class ClassCollectorTest extends TestCase
             . '    public static function createParent(): object { return new parent(); }' . "\n"
             . '}';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // `self` and `parent` are lexically bound; `static` is late-bound, so
         // its marker lets the analyser include the descendants of Model.
@@ -269,11 +366,11 @@ final class ClassCollectorTest extends TestCase
             [
                 '/fake/path/Foo.php' => [
                     'App\Model',
-                    ClassCollector::deferredInstantiationMarker('static', 'App\Model'),
+                    AnalysisNodeCollector::deferredInstantiationMarker('static', 'App\Model'),
                     'App\Base',
                 ],
             ],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -297,7 +394,7 @@ final class ClassCollectorTest extends TestCase
             . '    public function own(): object { return new parent(); }' . "\n"
             . '}';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // `parent` belongs to the innermost class-like: the anonymous class,
         // not the enclosing trait or class. An anonymous class without a
@@ -306,11 +403,11 @@ final class ClassCollectorTest extends TestCase
             [
                 '/fake/path/Foo.php' => [
                     'App\Base',
-                    ClassCollector::deferredInstantiationMarker('parent', 'App\Factory'),
+                    AnalysisNodeCollector::deferredInstantiationMarker('parent', 'App\Factory'),
                     'App\Other',
                 ],
             ],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -325,11 +422,11 @@ final class ClassCollectorTest extends TestCase
             . '}' . "\n"
             . 'class Host extends Base { use Factory; public function __construct() { parent::__construct(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // Only `new` instantiates: static calls, constants, ::class, and
         // static properties on parent never mark it (or a trait marker).
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
     }
 
     public function testResolvesConstantClassExpressionInstantiations(): void
@@ -341,11 +438,11 @@ final class ClassCollectorTest extends TestCase
             . '    public function fromConcat(): object { return new (\'App\\\\\' . \'Joined\')(); }' . "\n"
             . '}';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Base', 'App\StringBase', 'App\Joined']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -354,11 +451,11 @@ final class ClassCollectorTest extends TestCase
         $code = '<?php namespace App;' . "\n"
             . 'class Registry { public function fresh(): object { return new (self::class)(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Registry']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -371,9 +468,9 @@ final class ClassCollectorTest extends TestCase
             . 'final class Holder { public function __construct(private string $class) {}'
             . ' public function make(): object { return new ($this->class)(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
     }
 
     public function testResolvesChainedReflectionConstruction(): void
@@ -382,13 +479,13 @@ final class ClassCollectorTest extends TestCase
             . 'final class Booter { public function boot(): object {'
             . ' return (new \ReflectionClass(Base::class))->newInstance(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // ReflectionClass itself is instantiated, and so is the class it
         // reflects.
         $this->assertSame(
             ['/fake/path/Foo.php' => ['ReflectionClass', 'App\Base']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -398,11 +495,11 @@ final class ClassCollectorTest extends TestCase
             . 'final class Booter { public function boot(): ?object {'
             . ' return (new \\ReflectionClass(\'App\\Child\'))?->newInstanceWithoutConstructor(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['ReflectionClass', 'App\Child']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -414,11 +511,11 @@ final class ClassCollectorTest extends TestCase
             . 'final class Booter { public function boot(\\ReflectionClass $r, string $name): object {'
             . ' $other = new \\ReflectionClass($name); return $r->newInstance() ?? $other->newInstance(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['ReflectionClass']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -432,11 +529,11 @@ final class ClassCollectorTest extends TestCase
             . ' $a = (new Container())->newInstance(); $b = (new ($x::class))->newInstance();'
             . ' $c = (new \\ReflectionClass())->newInstance(); return $a ?? $b ?? $c; } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Container', 'ReflectionClass']],
-            $classCollector->getFileInstantiations()
+            $analysisNodeCollector->getFileInstantiations()
         );
     }
 
@@ -446,9 +543,9 @@ final class ClassCollectorTest extends TestCase
             . 'final class Caller { public function run(object $service): mixed {'
             . ' return $service->handle(); } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
     }
 
     public function testIgnoresUnresolvableClassNameExpressions(): void
@@ -460,9 +557,9 @@ final class ClassCollectorTest extends TestCase
             . ' $a = new (\'App\\\\\' . $suffix)(); $b = new ($obj::class)();'
             . ' $c = new (\'not a class name!\')(); return $a ?? $b ?? $c; } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
     }
 
     public function testDoesNotCollectAnonymousInstantiations(): void
@@ -470,20 +567,20 @@ final class ClassCollectorTest extends TestCase
         $code = '<?php namespace App;' . "\n"
             . 'final class Maker { public function make(): object { return new class {}; } }';
 
-        $classCollector = $this->makeCollector($code);
+        $analysisNodeCollector = $this->makeCollector($code);
 
         // Anonymous classes are tracked as AnonymousClassNodes, and their
         // known declaration does not make any named class instantiable.
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
     }
 
     public function testIgnoresRelativeInstantiationOutsideClassScope(): void
     {
         // `new self` outside a class parses but cannot be resolved to a name;
         // PHP itself rejects it at runtime.
-        $classCollector = $this->makeCollector('<?php namespace App; new self();');
+        $analysisNodeCollector = $this->makeCollector('<?php namespace App; new self();');
 
-        $this->assertSame([], $classCollector->getFileInstantiations());
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
     }
 
     public function testCollectsFinalClass(): void
@@ -566,6 +663,62 @@ final class ClassCollectorTest extends TestCase
         $this->assertSame('/fake/path/Foo.php', $anonymousClassNodes[0]->file);
     }
 
+    public function testCollectsAnonymousClassEnclosingScopesAndEmptyParentheses(): void
+    {
+        $anonymousClassNodes = $this->collectAnonymousClassNodes(<<<'PHP'
+            <?php
+            namespace App;
+            class HandlerFactory {
+                public function make(): object { return new class () {}; }
+            }
+            function make(): object { return new #[Attr] readonly class ( ) implements \Stringable {
+                public function __toString(): string { return ""; }
+            }; }
+            $handler = new class(1) {};
+            return new class {};
+            PHP);
+
+        $this->assertCount(4, $anonymousClassNodes);
+
+        $this->assertSame('App\HandlerFactory', $anonymousClassNodes[0]->enclosingClassName);
+        $this->assertNull($anonymousClassNodes[0]->enclosingFunctionName);
+        $this->assertSame('App\HandlerFactory', $anonymousClassNodes[0]->enclosingScopeName());
+        $this->assertTrue($anonymousClassNodes[0]->hasEmptyParentheses);
+
+        $this->assertNull($anonymousClassNodes[1]->enclosingClassName);
+        $this->assertSame('App\make', $anonymousClassNodes[1]->enclosingFunctionName);
+        $this->assertSame('App\make', $anonymousClassNodes[1]->enclosingScopeName());
+        $this->assertTrue($anonymousClassNodes[1]->hasEmptyParentheses);
+        $this->assertSame(['Stringable'], $anonymousClassNodes[1]->implements);
+
+        $this->assertSame(AnonymousClassNode::FILE_SCOPE, $anonymousClassNodes[2]->enclosingScopeName());
+        $this->assertFalse($anonymousClassNodes[2]->hasEmptyParentheses);
+
+        $this->assertSame(AnonymousClassNode::FILE_SCOPE, $anonymousClassNodes[3]->enclosingScopeName());
+        $this->assertFalse($anonymousClassNodes[3]->hasEmptyParentheses);
+
+        // The fake file is outside every configured layer path.
+        $this->assertNull($anonymousClassNodes[0]->layer);
+        $this->assertSame([], $anonymousClassNodes[0]->layers);
+        $this->assertFalse($anonymousClassNodes[0]->isInLayer('Domain'));
+    }
+
+    public function testAnonymousClassParenthesesAreUnknownWithoutTokens(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
+        (new NodeTraverser(new NameResolver(), $analysisNodeCollector))
+            ->traverse($parser->parse('<?php $foo = new class () {};') ?? []);
+
+        $anonymousClassNodes = $analysisNodeCollector->getAnonymousClassNodes();
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $this->assertFalse($anonymousClassNodes[0]->hasEmptyParentheses);
+    }
+
     public function testCollectsTopLevelAnonymousClassNodeInFileWithoutNamedClasses(): void
     {
         $anonymousClassNodes = $this->collectAnonymousClassNodes('<?php
@@ -574,6 +727,113 @@ final class ClassCollectorTest extends TestCase
 
         $this->assertCount(1, $anonymousClassNodes);
         $this->assertSame('App\BaseHandler', $anonymousClassNodes[0]->extends);
+    }
+
+    public function testCollectsAnonymousClassMembersAndBodyFactsLikeANamedClass(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+            use App\Support\Unused;
+            use App\Support\Clock;
+            class HandlerFactory {
+                public function make(): object {
+                    return new readonly class (new Clock()) implements \Stringable {
+                        use Helper;
+                        public const LIMIT = 1;
+                        private int $count = 0;
+                        public function __construct(private Clock $clock) {}
+                        public function __toString(): string {
+                            if (isset($_GET['debug'])) { exit(1); }
+                            return strtoupper(Other::class);
+                        }
+                    };
+                }
+            }
+            PHP);
+
+        $anonymousClassNodes = $analysisNodeCollector->getAnonymousClassNodes();
+        $classNodes          = $analysisNodeCollector->getClassNodes();
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $anonymousClassNode = $anonymousClassNodes[0];
+
+        $this->assertTrue($anonymousClassNode->isReadonly);
+        $this->assertSame(['App\Helper'], $anonymousClassNode->traits);
+        $this->assertSame(['LIMIT'], array_column($anonymousClassNode->constants, 'name'));
+        $this->assertSame(['count', 'clock'], array_column($anonymousClassNode->properties, 'name'));
+        $this->assertSame(['__construct', '__toString'], array_column($anonymousClassNode->methods, 'name'));
+        $this->assertSame(1, $anonymousClassNode->constructorParamCount());
+        $this->assertSame(['strtoupper'], $anonymousClassNode->functionCalls);
+        $this->assertSame(['$_GET'], $anonymousClassNode->superglobals);
+        $this->assertSame(['isset', 'exit'], $anonymousClassNode->languageConstructs);
+        $this->assertTrue($anonymousClassNode->dependsOn('Stringable'));
+        $this->assertTrue($anonymousClassNode->dependsOn('App\Helper'));
+        $this->assertTrue($anonymousClassNode->dependsOn('App\Support\Clock'));
+        $this->assertTrue($anonymousClassNode->dependsOn('App\Other'));
+        // The file's imports belong to the file, not to the anonymous class.
+        $this->assertFalse($anonymousClassNode->dependsOn('App\Support\Unused'));
+
+        // The enclosing class keeps seeing the anonymous class body, as it
+        // sees a closure's, but the members belong to the anonymous class.
+        $this->assertCount(1, $classNodes);
+        $this->assertSame(['make'], array_column($classNodes[0]->methods, 'name'));
+        $this->assertSame([], $classNodes[0]->constants);
+        $this->assertSame([], $classNodes[0]->properties);
+        $this->assertSame([], $classNodes[0]->traits);
+        $this->assertTrue($classNodes[0]->dependsOn('App\Other'));
+        $this->assertTrue($classNodes[0]->dependsOn('App\Support\Unused'));
+        $this->assertSame(['strtoupper'], $classNodes[0]->functionCalls);
+        $this->assertSame(['$_GET'], $classNodes[0]->superglobals);
+        $this->assertSame(['isset', 'exit'], $classNodes[0]->languageConstructs);
+    }
+
+    public function testTopLevelAnonymousClassBodyReferencesAreItsOwnDependencies(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+            return new class extends BaseHandler {
+                public function handle(): string { return helper(Other::class); }
+            };
+            function helper(string $class): string { return $class; }
+            PHP);
+
+        $anonymousClassNodes = $analysisNodeCollector->getAnonymousClassNodes();
+
+        $this->assertCount(1, $anonymousClassNodes);
+        $this->assertSame(['App\BaseHandler', 'App\Other'], $anonymousClassNodes[0]->dependencies);
+        // Resolved once the whole file is traversed, like a named class's.
+        $this->assertSame(['App\helper'], $anonymousClassNodes[0]->functionCalls);
+        $this->assertSame([], $analysisNodeCollector->getFileReferences());
+    }
+
+    public function testNestedAnonymousClassesKeepTheirOwnMembersAndShareBodyDependencies(): void
+    {
+        $anonymousClassNodes = $this->collectAnonymousClassNodes(<<<'PHP'
+            <?php
+            namespace App;
+            return new class {
+                public function outer(): object
+                {
+                    return new class {
+                        public function inner(): Clock { return new Clock(); }
+                    };
+                }
+            };
+            PHP);
+
+        $this->assertCount(2, $anonymousClassNodes);
+        [$inner, $outer] = $anonymousClassNodes;
+
+        $this->assertSame(['inner'], array_column($inner->methods, 'name'));
+        $this->assertSame(['outer'], array_column($outer->methods, 'name'));
+        $this->assertNull($outer->enclosingClassName);
+        $this->assertNull($inner->enclosingClassName);
+
+        // The inner body is counted on both, like a closure's on its enclosing scopes.
+        $this->assertSame(['App\Clock'], $inner->dependencies);
+        $this->assertSame(['App\Clock'], $outer->dependencies);
     }
 
     public function testCollectsAnonymousClassNodeWithoutExtends(): void
@@ -681,31 +941,26 @@ final class ClassCollectorTest extends TestCase
         $this->assertFalse($classNode->methods[1]->isMagic);
     }
 
-    public function testFiltersClassMethodsOncePerClassLike(): void
+    /**
+     * Node dispatch is keyed by exact node class, as the parser never
+     * subclasses its nodes, so a hand-built Class_ (not a subclass of it) is
+     * traversed like a parsed one.
+     */
+    public function testCollectsEachClassMethodOnce(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
-        $classCollector         = new ClassCollector($namespaceLayerResolver);
-        $classLike              = new class ('Foo', [
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $class                  = new Class_('Foo', [
             'stmts' => [new ClassMethod('__construct'), new ClassMethod('bar')],
-        ]) extends Class_ {
-            public int $getMethodsCallCount = 0;
+        ]);
 
-            public function getMethods(): array
-            {
-                ++$this->getMethodsCallCount;
+        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
 
-                return parent::getMethods();
-            }
-        };
+        (new NodeTraverser(new NameResolver(), $analysisNodeCollector))->traverse([$class]);
 
-        $classCollector->setCurrentFile('/fake/path/Foo.php');
-
-        (new NodeTraverser(new NameResolver(), $classCollector))->traverse([$classLike]);
-
-        $this->assertSame(1, $classLike->getMethodsCallCount);
         $this->assertSame(
             ['__construct', 'bar'],
-            array_column($classCollector->getNodes()[0]->methods, 'name'),
+            array_column($analysisNodeCollector->getClassNodes()[0]->methods, 'name'),
         );
     }
 
@@ -766,6 +1021,46 @@ final class ClassCollectorTest extends TestCase
         $this->assertTrue($classNode->enumCases[0]->hasResolvedValue());
         $this->assertSame(['Wild'], array_column($classNode->constants, 'name'));
         $this->assertSame(['label'], array_column($classNode->methods, 'name'));
+    }
+
+    public function testResolvesImportedClassNameInEnumCaseValue(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            namespace App;
+
+            use Vendor\Foo as AliasedFoo;
+
+            enum Type: string
+            {
+                case Foo = AliasedFoo::class;
+                case Own = self::class;
+            }
+            PHP);
+
+        $this->assertSame(['Vendor\Foo', 'App\Type'], array_column($classNode->enumCases, 'value'));
+    }
+
+    public function testIgnoresEnumCaseDeclaredInAnonymousClass(): void
+    {
+        // php-parser accepts a case in a class body; only PHP's compiler
+        // rejects it, so the collector must not attribute it to any class.
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            enum Outer: int
+            {
+                case One = 1;
+
+                public function make(): object
+                {
+                    return new class {
+                        case Stray = 2;
+                    };
+                }
+            }
+            PHP);
+
+        $this->assertSame(['One'], array_column($classNode->enumCases, 'name'));
     }
 
     public function testCollectsIntBackedEnumCaseValues(): void
@@ -1790,14 +2085,32 @@ PHP;
     public function testIgnoresClassMethodNodesOutsideTrackedClassLike(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
-        $classCollector         = new ClassCollector($namespaceLayerResolver);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
         $classMethod            = new ClassMethod('orphan');
 
-        $classCollector->setCurrentFile('/fake/path/Foo.php');
+        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
 
-        $classCollector->enterNode($classMethod);
-        $classCollector->leaveNode($classMethod);
+        $analysisNodeCollector->enterNode($classMethod);
+        $analysisNodeCollector->leaveNode($classMethod);
 
-        $this->assertSame([], $classCollector->getNodes());
+        $this->assertSame([], $analysisNodeCollector->getClassNodes());
+    }
+
+    public function testIgnoresMemberNodesOutsideTrackedClassLike(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $enumCase               = new EnumCase('Orphan');
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
+
+        $analysisNodeCollector->enterNode(new Property(Modifiers::PUBLIC, [new PropertyItem('orphan')]));
+        $analysisNodeCollector->enterNode(new ClassConst([new Const_('ORPHAN', new Int_(1))]));
+        $analysisNodeCollector->enterNode(new TraitUse([new Name('OrphanTrait')]));
+        $analysisNodeCollector->enterNode($enumCase);
+        $analysisNodeCollector->leaveNode($enumCase);
+
+        $this->assertSame([], $analysisNodeCollector->getClassNodes());
+        $this->assertSame([], $analysisNodeCollector->getAnonymousClassNodes());
     }
 }

@@ -152,6 +152,11 @@ PHP);
             '    ->withPreset(Preset::MVC());',
         ];
 
+        yield 'per' => [
+            ['--preset=per'],
+            '    ->withPreset(Preset::PER());',
+        ];
+
         yield 'psr1' => [
             ['--preset=psr1'],
             '    ->withPreset(Preset::PSR1());',
@@ -177,16 +182,23 @@ PHP);
             '    ->withPreset(Preset::YAGNI());',
         ];
 
+        yield 'codequality' => [
+            ['--preset=codequality'],
+            '    ->withPreset(Preset::CODEQUALITY());',
+        ];
+
         yield 'all' => [
             ['--preset=all'],
             "    ->withPresets(\n"
+            . "        Preset::PSR4(),\n"
             . "        Preset::PSR1(),\n"
             . "        Preset::PSR12(),\n"
+            . "        Preset::PER(),\n"
             . "        Preset::PSR15(),\n"
-            . "        Preset::PSR4(),\n"
             . "        Preset::DDD(),\n"
             . "        Preset::MVC(),\n"
-            . "        Preset::YAGNI()\n"
+            . "        Preset::YAGNI(),\n"
+            . "        Preset::CODEQUALITY()\n"
             . "    );",
         ];
     }
@@ -570,6 +582,65 @@ PHP);
             $this->assertStringContainsString(
                 '    public function handle(): void',
                 (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandCountsEveryViolationResolvedByOneFix(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        // Two flagged closures start on the same line: fixing the first one
+        // makes both static, so the second has nothing left to fix, yet both
+        // violations are gone and must be counted.
+        file_put_contents($basePath . '/src/Handler.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace App;
+
+final class Handler
+{
+    public function handle(): array
+    {
+        return [fn () => 1, fn () => $this->value, function () { return 2; }];
+    }
+}
+PHP);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('2 violations have been fixed.', $this->withoutAnsi($output));
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertStringContainsString(
+                'return [static fn () => 1, fn () => $this->value, static function () { return 2; }];',
+                (string) file_get_contents($basePath . '/src/Handler.php')
             );
         } finally {
             $this->removeTempDirectory($basePath);
@@ -1479,7 +1550,7 @@ PHP);
         }
     }
 
-    public function testInternalWorkerRoutesDelegatestoClassNodeWorker(): void
+    public function testInternalWorkerRoutesDelegatestoAnalysisNodeWorker(): void
     {
         $inputFile  = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-input-');
         $outputFile = (string) tempnam(sys_get_temp_dir(), 'structarmed-worker-output-');

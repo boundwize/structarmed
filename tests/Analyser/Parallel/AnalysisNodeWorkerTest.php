@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
-use Boundwize\StructArmed\Analyser\Parallel\ClassNodeWorker;
+use Boundwize\StructArmed\Analyser\Parallel\AnalysisNodeWorker;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerFailedException;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerProgressHandler;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -18,10 +20,10 @@ use function fopen;
 use function serialize;
 use function unserialize;
 
-#[CoversClass(ClassNodeWorker::class)]
+#[CoversClass(AnalysisNodeWorker::class)]
 #[CoversClass(WorkerProgressHandler::class)]
 #[CoversClass(WorkerFailedException::class)]
-final class ClassNodeWorkerTest extends TestCase
+final class AnalysisNodeWorkerTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
 
@@ -50,7 +52,7 @@ PHP);
             'files'         => [$srcFile],
         ]));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 
@@ -63,6 +65,44 @@ PHP);
         $this->assertIsArray($result['nodes']);
     }
 
+    public function testRunStoresAnalysisNodesInSuppliedCache(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-worker-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-worker-cache');
+        $srcFile  = $dir . '/Foo.php';
+
+        file_put_contents($srcFile, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Foo
+{
+}
+PHP);
+
+        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
+        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
+
+        file_put_contents($inputFile, serialize([
+            'basePath'       => $dir,
+            'layers'         => ['Domain' => 'App\\Domain'],
+            'layerPatterns'  => [],
+            'files'          => [$srcFile],
+            'cache'          => new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
+            'cacheNamespace' => 'namespace',
+        ]));
+
+        $this->assertSame(0, AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream()));
+
+        $cached = (new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir))
+            ->loadAnalysisNodesWithFileAnalysis($srcFile, 'namespace');
+
+        $this->assertNotNull($cached);
+        $this->assertCount(1, $cached['classNodes']);
+        $this->assertSame('App\\Domain\\Foo', $cached['classNodes'][0]->className);
+    }
+
     public function testRunWithInvalidPayloadReturnsOneAndWritesError(): void
     {
         $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
@@ -70,7 +110,7 @@ PHP);
 
         file_put_contents($inputFile, serialize('not-an-array'));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(1, $exitCode);
 
@@ -114,7 +154,7 @@ PHP);
             'files'         => [$srcFile],
         ]));
 
-        $exitCode = ClassNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 

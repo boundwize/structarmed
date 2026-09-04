@@ -6,8 +6,10 @@ namespace Boundwize\StructArmed\Tests\Preset;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\CodeQualityPreset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
+use Boundwize\StructArmed\Preset\Presets\PerPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
@@ -15,15 +17,20 @@ use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerNameTrait;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
+use Boundwize\StructArmed\Rule\Rules\File\LargeNumericLiteralMustUseSeparatorRule;
+use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Preset::class)]
+#[CoversClass(CodeQualityPreset::class)]
 #[CoversClass(DddPreset::class)]
 #[CoversClass(MvcPreset::class)]
+#[CoversClass(PerPreset::class)]
 #[CoversClass(Psr1Preset::class)]
 #[CoversClass(Psr12Preset::class)]
 #[CoversClass(Psr15Preset::class)]
@@ -71,6 +78,46 @@ final class PresetTest extends TestCase
         $this->assertSame(['Source' => []], $architecture->getLayers());
     }
 
+    public function testCodeQualityPresetRegistersSourceLayerAndRules(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::CODEQUALITY(
+            sourcePaths: ['src/'],
+        )->apply($architecture);
+
+        $this->assertSame(['Source' => ['src/']], $architecture->getLayers());
+
+        $rules = $architecture->getRules();
+        $this->assertCount(2, $rules);
+        $this->assertInstanceOf(
+            MustBeStaticAnonymousFunctionRule::class,
+            $rules[CodeQualityPreset::ANONYMOUS_FUNCTIONS_MUST_BE_STATIC] ?? null
+        );
+        $this->assertInstanceOf(
+            LargeNumericLiteralMustUseSeparatorRule::class,
+            $rules[CodeQualityPreset::LARGE_NUMERIC_LITERALS_MUST_USE_SEPARATOR] ?? null
+        );
+    }
+
+    public function testCodeQualityPresetUsesComposerSourcePathsByDefault(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::CODEQUALITY()->apply($architecture);
+
+        // A null source path list defers to Composer-discovered PSR-4 paths.
+        $this->assertSame(['Source' => []], $architecture->getLayers());
+        $this->assertArrayHasKey(
+            CodeQualityPreset::ANONYMOUS_FUNCTIONS_MUST_BE_STATIC,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            CodeQualityPreset::LARGE_NUMERIC_LITERALS_MUST_USE_SEPARATOR,
+            $architecture->getRules()
+        );
+    }
+
     public function testPsr1PresetRegistersSourceLayerAndRules(): void
     {
         $architecture = Architecture::define();
@@ -94,7 +141,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
     }
 
-    public function testPsr12PresetAppliesPsr1RulesAndAddsVisibilityRules(): void
+    public function testPsr12PresetAppliesPsr1RulesAndAddsPsr12Rules(): void
     {
         $architecture = Architecture::define();
 
@@ -115,9 +162,56 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
+        $this->assertArrayHasKey(Psr12Preset::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS, $rules);
         $this->assertArrayHasKey(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);
+    }
+
+    public function testPerPresetAppliesPsr12RulesAndAddsEnumCaseRule(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PER(
+            sourcePaths: ['src/', 'tests/'],
+        )->apply($architecture);
+
+        $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
+
+        $rules = $architecture->getRules();
+        $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
+        $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
+        $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
+        $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
+        $this->assertArrayHasKey(Psr12Preset::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS, $rules);
+        $this->assertArrayHasKey(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY, $rules);
+        $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
+        $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);
+        $this->assertArrayHasKey(PerPreset::ENUM_CASES_MUST_BE_PASCAL_CASE, $rules);
+        $this->assertArrayHasKey(PerPreset::ENUM_METHODS_MAY_NOT_BE_PROTECTED, $rules);
+        $this->assertArrayHasKey(PerPreset::ENUM_CONSTANTS_MAY_NOT_BE_PROTECTED, $rules);
+        $this->assertArrayHasKey(PerPreset::ANONYMOUS_CLASSES_MAY_NOT_HAVE_EMPTY_PARENTHESES, $rules);
+    }
+
+    public function testPerPresetUsesComposerSourcePathsByDefault(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::PER()->apply($architecture);
+
+        $this->assertSame(['Source' => []], $architecture->getLayers());
+        $this->assertArrayHasKey(
+            PerPreset::ENUM_CASES_MUST_BE_PASCAL_CASE,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            PerPreset::ENUM_METHODS_MAY_NOT_BE_PROTECTED,
+            $architecture->getRules()
+        );
+        $this->assertArrayHasKey(
+            PerPreset::ENUM_CONSTANTS_MAY_NOT_BE_PROTECTED,
+            $architecture->getRules()
+        );
     }
 
     public function testPsr4PresetRegistersSourceLayerAndRules(): void
@@ -218,6 +312,10 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(DddPreset::VALUE_OBJECT_MUST_BE_FINAL, $rules);
         $this->assertArrayHasKey(DddPreset::EVENT_MUST_BE_FINAL, $rules);
         $this->assertArrayHasKey(DddPreset::DOMAIN_NO_JSON_SERIALIZABLE, $rules);
+        $this->assertInstanceOf(
+            MayNotExtendClassRule::class,
+            $rules[DddPreset::DOMAIN_MUST_NOT_EXTEND_DOCTRINE_ENTITY_REPOSITORY] ?? null
+        );
         $this->assertArrayHasKey('ddd.safety.domain_no_dd', $rules);
         $this->assertArrayHasKey('ddd.safety.application_no_exit', $rules);
     }
@@ -267,7 +365,7 @@ final class PresetTest extends TestCase
 
         $rules = $architecture->getRules();
 
-        $this->assertCount(15, $rules);
+        $this->assertCount(16, $rules);
 
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_TAGS, $rules);
         $this->assertArrayHasKey(Psr1Preset::FILES_MUST_USE_VALID_UTF8, $rules);
@@ -281,6 +379,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(Psr1Preset::CLASSES_MUST_BE_STUDLY_CAPS, $rules);
         $this->assertArrayHasKey(Psr1Preset::CLASS_CONSTANTS_MUST_BE_UPPER_CASE, $rules);
         $this->assertArrayHasKey(Psr1Preset::METHODS_MUST_BE_CAMEL_CASE, $rules);
+        $this->assertArrayHasKey(Psr12Preset::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS, $rules);
         $this->assertArrayHasKey(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::CONSTANTS_MUST_DECLARE_VISIBILITY, $rules);
         $this->assertArrayHasKey(Psr12Preset::PROPERTIES_MUST_DECLARE_VISIBILITY, $rules);
@@ -387,6 +486,11 @@ final class PresetTest extends TestCase
                 ],
                 'View'       => 'src/View/',
                 'Service'    => 'src/Service/',
+                'Helper'     => [
+                    'src/Helper/',
+                    'src/Helpers/',
+                    'app/Helpers/',
+                ],
             ],
             $architecture->getLayers()
         );
@@ -407,6 +511,10 @@ final class PresetTest extends TestCase
                 'pattern'        => '/(?:^|\\\\)Services?(?:\\\\|$)/',
                 'excludePattern' => '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/',
             ],
+            'Helper'     => [
+                'pattern'        => '/(?:^|\\\\)Helpers?(?:\\\\|$)/',
+                'excludePattern' => '/(?:^|\\\\)[^\\\\]*Tests?(?:\\\\|$)/',
+            ],
         ], $architecture->getLayerPatterns());
 
         $rules = $architecture->getRules();
@@ -416,6 +524,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(MvcPreset::MODEL_MUST_HAVE_RETURN_TYPES, $rules);
         $this->assertArrayHasKey(MvcPreset::VIEW_NO_SUPERGLOBALS, $rules);
         $this->assertArrayHasKey(MvcPreset::SERVICE_MUST_HAVE_RETURN_TYPES, $rules);
+        $this->assertArrayHasKey(MvcPreset::HELPER_MUST_HAVE_RETURN_TYPES, $rules);
         $this->assertArrayHasKey('mvc.safety.controller_no_dd', $rules);
         $this->assertArrayHasKey('mvc.safety.service_no_exit', $rules);
     }
@@ -438,6 +547,11 @@ final class PresetTest extends TestCase
                 ],
                 'View'       => 'src/View/',
                 'Service'    => 'src/Service/',
+                'Helper'     => [
+                    'src/Helper/',
+                    'src/Helpers/',
+                    'app/Helpers/',
+                ],
             ],
             $architecture->getLayers()
         );

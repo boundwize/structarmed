@@ -6,14 +6,18 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
-use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
+use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
@@ -21,7 +25,11 @@ use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
+use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
+use Boundwize\StructArmed\Rule\Rules\Class_\AnonymousClassMayNotHaveEmptyParenthesesRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
@@ -38,7 +46,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+use function array_filter;
 use function array_map;
+use function array_values;
 use function count;
 use function dirname;
 use function file_put_contents;
@@ -47,6 +57,7 @@ use function mkdir;
 use function realpath;
 use function rename;
 use function sort;
+use function sprintf;
 use function str_replace;
 use function symlink;
 use function unlink;
@@ -54,12 +65,396 @@ use function unlink;
 use const DIRECTORY_SEPARATOR;
 
 #[CoversClass(Analyser::class)]
-#[CoversClass(ParallelClassNodeExtractor::class)]
+#[CoversClass(ParallelAnalysisNodeExtractor::class)]
 #[CoversClass(PhpFileCollector::class)]
 #[CoversClass(SkipPathMatcher::class)]
 final class AnalyserTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
+
+    /**
+     * A rule flagging every named function and every anonymous function that
+     * accesses a superglobal, implementing both function-like interfaces.
+     */
+    private function makeNoSuperglobalsInFunctionsRule(): FunctionRuleInterface&AnonymousFunctionRuleInterface
+    {
+        return new class implements FunctionRuleInterface, AnonymousFunctionRuleInterface {
+            public function appliesTo(FunctionNode|AnonymousFunctionNode $node): bool
+            {
+                return $node->isInLayer('Source');
+            }
+
+            public function evaluate(FunctionNode|AnonymousFunctionNode $node): ?RuleViolation
+            {
+                if (! $node->accessesSuperglobals()) {
+                    return null;
+                }
+
+                if ($node instanceof FunctionNode) {
+                    return new RuleViolation(
+                        message:      'Function [' . $node->functionName . '] must not access superglobals',
+                        file:         $node->file,
+                        line:         $node->line,
+                        className:    $node->functionName,
+                        layer:        $node->layer,
+                        functionName: $node->functionName,
+                    );
+                }
+
+                return new RuleViolation(
+                    message:   $node->getType() . ' in ['
+                        . $node->enclosingScopeName()
+                        . '] must not access superglobals',
+                    file:      $node->file,
+                    line:      $node->line,
+                    className: $node->enclosingScopeName(),
+                    layer:     $node->layer,
+                );
+            }
+        };
+    }
+
+    /** @return array<string, string> */
+    private function functionRuleProjectFiles(): array
+    {
+        return [
+            'src/helpers.php'      => '<?php' . "\n"
+                . 'namespace App;' . "\n"
+                . 'function clean(): string { return "clean"; }' . "\n"
+                . 'function dirty(): string { return $_GET["x"]; }' . "\n"
+                . '$closure = function () { return $_POST["y"]; };' . "\n",
+            'src/Handler.php'      => '<?php' . "\n"
+                . 'namespace App;' . "\n"
+                . 'final class Handler {' . "\n"
+                . '    public function handle(): callable { return fn () => $_SERVER["z"]; }' . "\n"
+                . '}' . "\n",
+            'src/Skipped/skip.php' => '<?php' . "\n"
+                . 'namespace App\\Skipped;' . "\n"
+                . 'function skipped(): string { return $_GET["x"]; }' . "\n"
+                . '$skippedClosure = fn () => $_GET["x"];' . "\n",
+        ];
+    }
+
+    public function testFunctionRulesSkipNodesTheyDoNotApplyTo(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles() + [
+            'other/helpers.php' => '<?php' . "\n"
+                . 'namespace Other;' . "\n"
+                . 'function dirty(): string { return $_GET["x"]; }' . "\n"
+                . '$closure = fn () => $_POST["y"];' . "\n",
+        ]);
+
+        // The rule applies to the Source layer only; nodes in Other are seen
+        // by the analyser but the rule declines them.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->layer('Other', 'other/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skip(['functions.no_superglobals' => ['src/Skipped/']]);
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $violations);
+
+        foreach ($violations as $violation) {
+            $this->assertStringNotContainsString('/other/', $this->normalisePath($violation->file));
+        }
+    }
+
+    public function testFunctionRulesHonourGlobalSkipPathsForPreResolvedFiles(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles());
+
+        // A caller-supplied file list bypasses file discovery, so a globally
+        // skipped file can reach extraction; its nodes must still be skipped.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skipPaths(['src/Skipped/']);
+
+        $files      = [
+            $basePath . '/src/helpers.php',
+            $basePath . '/src/Handler.php',
+            $basePath . '/src/Skipped/skip.php',
+        ];
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential(), $files)
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $violations);
+
+        foreach ($violations as $violation) {
+            $this->assertStringNotContainsString('/Skipped/', $this->normalisePath($violation->file));
+        }
+    }
+
+    public function testFunctionRulesAreEvaluatedAgainstFunctionsAndAnonymousFunctions(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles());
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skip(['functions.no_superglobals' => ['src/Skipped/']]);
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $violations = (new Analyser($basePath))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule('functions.no_superglobals');
+
+            $messages = array_map(
+                static fn(RuleViolation $ruleViolation): string => $ruleViolation->message,
+                $violations
+            );
+            sort($messages);
+
+            $this->assertSame([
+                'Arrow function in [App\\Handler] must not access superglobals',
+                'Closure in [file scope] must not access superglobals',
+                'Function [App\\dirty] must not access superglobals',
+            ], $messages);
+
+            foreach ($violations as $violation) {
+                $this->assertSame('functions.no_superglobals', $violation->ruleKey);
+                $this->assertSame('Source', $violation->layer);
+                $this->assertFalse($violation->fixable);
+            }
+
+            $functionViolation = array_values(array_filter(
+                $violations,
+                static fn(RuleViolation $ruleViolation): bool => $ruleViolation->functionName !== null
+            ));
+
+            $this->assertCount(1, $functionViolation);
+            $this->assertSame('App\\dirty', $functionViolation[0]->functionName);
+            $this->assertSame(4, $functionViolation[0]->line);
+        }
+    }
+
+    public function testFunctionRulesHonourGlobalSkipPaths(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles());
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skipPaths(['src/helpers.php', 'src/Skipped/']);
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('/src/Handler.php', $this->normalisePath($violations[0]->file));
+    }
+
+    public function testFunctionRuleViolationsSurviveTheAnalysisNodeCache(): void
+    {
+        $basePath            = $this->makeTempProject($this->functionRuleProjectFiles());
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skip(['functions.no_superglobals' => ['src/Skipped/']]);
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $coldViolations);
+        $this->assertEquals($coldViolations, $warmViolations);
+    }
+
+    public function testFunctionRuleViolationsSurviveTheAnalysisNodeCacheWithFileAnalysis(): void
+    {
+        $basePath            = $this->makeTempProject($this->functionRuleProjectFiles());
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        // A file-analysis rule makes the warm run load nodes through the
+        // file-analysis cache path, which must also restore function-likes.
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']))
+            ->skip(['functions.no_superglobals' => ['src/Skipped/']]);
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('functions.no_superglobals');
+
+        $this->assertCount(3, $coldViolations);
+        $this->assertEquals($coldViolations, $warmViolations);
+    }
+
+    /** @return array<string, string> */
+    private function anonymousClassRuleProjectFiles(): array
+    {
+        return [
+            'src/Handler.php'       => <<<'PHP'
+                <?php
+                namespace App;
+                final class Handler {
+                    public function make(): object { return new class () {}; }
+                    public function plain(): object { return new class {}; }
+                }
+
+                PHP,
+            'src/helpers.php'       => <<<'PHP'
+                <?php
+                namespace App;
+                function make(): object { return new class ( ) {}; }
+
+                PHP,
+            'src/Skipped/Loose.php' => <<<'PHP'
+                <?php
+                $loose = new class () {};
+
+                PHP,
+        ];
+    }
+
+    public function testAnonymousClassRulesAreEvaluatedAgainstAnonymousClasses(): void
+    {
+        $basePath = $this->makeTempProject($this->anonymousClassRuleProjectFiles());
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('anonymous_classes.no_parentheses', new AnonymousClassMayNotHaveEmptyParenthesesRule('Source'))
+            ->skip(['anonymous_classes.no_parentheses' => ['src/Skipped/']]);
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $violations = (new Analyser($basePath))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule('anonymous_classes.no_parentheses');
+
+            $messages = array_map(
+                static fn(RuleViolation $ruleViolation): string => $ruleViolation->message,
+                $violations
+            );
+            sort($messages);
+
+            $this->assertSame([
+                'Anonymous class in [App\\Handler] may not have empty parentheses after `class`',
+                'Anonymous class in [App\\make] may not have empty parentheses after `class`',
+            ], $messages);
+
+            foreach ($violations as $violation) {
+                $this->assertSame('anonymous_classes.no_parentheses', $violation->ruleKey);
+                $this->assertSame('Source', $violation->layer);
+                $this->assertTrue($violation->fixable);
+                $this->assertStringNotContainsString('/Skipped/', $this->normalisePath($violation->file));
+            }
+        }
+    }
+
+    public function testAnonymousClassNodesResolveRecursiveParents(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Contract.php'    => '<?php namespace App; interface Contract {}',
+            'src/RootHandler.php' => '<?php namespace App; abstract class RootHandler implements Contract {}',
+            'src/BaseHandler.php' => '<?php namespace App; abstract class BaseHandler extends RootHandler {}',
+            'src/Factory.php'     => <<<'PHP'
+                <?php
+                namespace App;
+                final class Factory {
+                    public function make(): object { return new class extends BaseHandler {}; }
+                    public function plain(): object { return new class {}; }
+                }
+
+                PHP,
+        ]);
+
+        $rule = new class implements AnonymousClassRuleInterface {
+            public function appliesTo(AnonymousClassNode $anonymousClassNode): bool
+            {
+                return true;
+            }
+
+            public function evaluate(AnonymousClassNode $anonymousClassNode): ?RuleViolation
+            {
+                if (
+                    $anonymousClassNode->extendsClass('App\\RootHandler')
+                    && $anonymousClassNode->implementsInterface('App\\Contract')
+                ) {
+                    return null;
+                }
+
+                return new RuleViolation(
+                    message:   sprintf(
+                        'Anonymous class in [%s] must implement [App\\Contract]',
+                        $anonymousClassNode->enclosingScopeName()
+                    ),
+                    file:      $anonymousClassNode->file,
+                    line:      $anonymousClassNode->line,
+                    className: $anonymousClassNode->enclosingScopeName(),
+                    layer:     $anonymousClassNode->layer,
+                );
+            }
+        };
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('anonymous_classes.contract', $rule);
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $violations = (new Analyser($basePath))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule('anonymous_classes.contract');
+
+            // Only the anonymous class with no parent chain is flagged: the one
+            // extending BaseHandler reaches RootHandler and Contract transitively.
+            $this->assertCount(1, $violations);
+            $this->assertSame(5, $violations[0]->line);
+            $this->assertSame(
+                'Anonymous class in [App\\Factory] must implement [App\\Contract]',
+                $violations[0]->message
+            );
+        }
+    }
+
+    public function testAnonymousClassRuleViolationsSurviveTheAnalysisNodeCache(): void
+    {
+        $basePath            = $this->makeTempProject($this->anonymousClassRuleProjectFiles());
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('anonymous_classes.no_parentheses', new AnonymousClassMayNotHaveEmptyParenthesesRule('Source'));
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('anonymous_classes.no_parentheses');
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('anonymous_classes.no_parentheses');
+
+        $this->assertCount(3, $coldViolations);
+        $this->assertEquals($coldViolations, $warmViolations);
+    }
+
+    public function testSkippedFunctionRuleIsNotEvaluated(): void
+    {
+        $basePath = $this->makeTempProject($this->functionRuleProjectFiles());
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.no_superglobals', $this->makeNoSuperglobalsInFunctionsRule())
+            ->skipRule('functions.no_superglobals');
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
+    }
 
     public function testBuiltInPsr1RulesDoNotRediscoverFilesAfterExtraction(): void
     {
@@ -162,6 +557,48 @@ final class AnalyserTest extends TestCase
 
         // BadOrderEntity.php uses DateTime and is not final — should have violations
         $this->assertTrue($ruleViolationCollection->hasViolations());
+    }
+
+    public function testDddPresetRejectsDoctrineEntityRepositoryInheritanceOnlyInDomain(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Domain/Order/OrderStore.php'                       => <<<'PHP'
+                <?php
+
+                namespace App\Domain\Order;
+
+                use Doctrine\ORM\EntityRepository;
+
+                final class OrderStore extends EntityRepository
+                {
+                }
+                PHP,
+            'src/Infrastructure/Persistence/DoctrineOrderStore.php' => <<<'PHP'
+                <?php
+
+                namespace App\Infrastructure\Persistence;
+
+                use Doctrine\ORM\EntityRepository;
+
+                final class DoctrineOrderStore extends EntityRepository
+                {
+                }
+                PHP,
+        ]);
+
+        $violations = (new Analyser($basePath))
+            ->analyse(
+                Architecture::define()->withPreset(Preset::DDD()),
+                analyserOptions: AnalyserOptions::sequential(),
+            )
+            ->forRule(DddPreset::DOMAIN_MUST_NOT_EXTEND_DOCTRINE_ENTITY_REPOSITORY);
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\Domain\\Order\\OrderStore', $violations[0]->className);
+        $this->assertSame(
+            'Class [App\\Domain\\Order\\OrderStore] must not extend class [Doctrine\\ORM\\EntityRepository]',
+            $violations[0]->message
+        );
     }
 
     public function testAnalyserCollectsClassNodesWithSequentialRunner(): void
@@ -1894,13 +2331,13 @@ final class AnalyserTest extends TestCase
             'composer.json'        => '{"autoload":{"psr-4":{"Psr4\\\\":"psr4/",'
                 . '"Psr1\\\\":"psr1/","Psr12\\\\":"psr12/"}}}',
             'psr4/Invalid.php'     => '<?php namespace Wrong; final class Psr4Invalid {'
-                . ' function missingVisibility() {} }',
+                . ' public const ENABLED = TRUE; function missingVisibility() {} }',
             'psr4/InvalidTag.php'  => '<? echo "psr4";',
             'psr1/Invalid.php'     => '<?php namespace Wrong; final class Psr1Invalid {'
-                . ' function missingVisibility() {} }',
+                . ' public const ENABLED = TRUE; function missingVisibility() {} }',
             'psr1/InvalidTag.php'  => '<? echo "psr1";',
             'psr12/Invalid.php'    => '<?php namespace Wrong; final class Psr12Invalid {'
-                . ' function missingVisibility() {} }',
+                . ' public const ENABLED = TRUE; function missingVisibility() {} }',
             'psr12/InvalidTag.php' => '<? echo "psr12";',
         ]);
 
@@ -1951,6 +2388,15 @@ final class AnalyserTest extends TestCase
             $psr12Violations = $result->forRule(Psr12Preset::METHODS_MUST_DECLARE_VISIBILITY);
             $this->assertCount(1, $psr12Violations);
             $this->assertStringEndsWith('/psr12/Invalid.php', $this->normalisePath($psr12Violations[0]->file));
+
+            $keywordConstantViolations = $result->forRule(
+                Psr12Preset::FILES_MUST_USE_LOWERCASE_KEYWORD_CONSTANTS
+            );
+            $this->assertCount(1, $keywordConstantViolations);
+            $this->assertStringEndsWith(
+                '/psr12/Invalid.php',
+                $this->normalisePath($keywordConstantViolations[0]->file)
+            );
         }
     }
 
@@ -3393,6 +3839,42 @@ final class AnalyserTest extends TestCase
             . 'which belongs to layer [Database]',
             $violations[0]->message
         );
+    }
+
+    public function testAnalyserRulesetSkipsGloballySkippedFileFromPreResolvedList(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/Request.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->skip(['src/HTTP/'])
+            ->ruleset([
+                'HTTP' => [], // Database NOT allowed
+            ]);
+
+        // A pre-resolved file list bypasses filesForAnalysis(), so the ruleset
+        // loop itself must honour the global skip paths.
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            ['src/'],
+            files: [$basePath . '/src/HTTP/Request.php']
+        );
+
+        $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
     #[DataProvider('rulesetClassLikeKindProvider')]

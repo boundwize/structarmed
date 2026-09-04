@@ -62,7 +62,7 @@ final class StructArmedExtension implements Extension
         $analyser = new Analyser(
             $basePath,
             $analysisResultCache,
-            $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, $configHash)
+            $analysisCacheMetadataFactory->analysisNodeCacheNamespace($basePath, $configHash)
         );
 
         $files    = $analyser->filesForAnalysis($architecture);

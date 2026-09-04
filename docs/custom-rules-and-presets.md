@@ -177,6 +177,211 @@ The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedI
 
 Trade-off: only usage within the scanned paths is known. A class-like used solely by a consumer outside the scan — a vendor package, an unscanned directory, runtime-fed dynamic construction — is reported as if unused. Widen the scan, or use `skipRule()` and skip paths where such consumers exist.
 
+## Reading Other Classes' Layers In A Custom Rule
+
+A rule only receives the node it is evaluating. When a check depends on the layer of *another* class — the layer a dependency belongs to, for instance — extend `Boundwize\StructArmed\Rule\AbstractLayerAwareRule`. Before any class is evaluated, the analyser injects the map of every scanned class into its protected `$classNodeMap` property, keyed by fully qualified class name, and `getDependencyNode()` looks a class up in it:
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
+use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final class ControllerMayOnlyDependOnApplicationRule extends AbstractLayerAwareRule implements RuleInterface
+{
+    public function appliesTo(ClassNode $classNode): bool
+    {
+        return $classNode->isInLayer('Controller');
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        foreach ($classNode->dependencies as $dependency) {
+            $dependencyNode = $this->getDependencyNode($dependency);
+
+            if (! $dependencyNode instanceof ClassNode || $dependencyNode->isInLayer('Application')) {
+                continue;
+            }
+
+            return new RuleViolation(
+                message:   sprintf('Controller [%s] must not depend on [%s]', $classNode->className, $dependency),
+                file:      $classNode->file,
+                line:      $classNode->line,
+                className: $classNode->className,
+                layer:     $classNode->layer,
+            );
+        }
+
+        return null;
+    }
+}
+```
+
+The base class holds the property, its `injectClassNodeMap()` setter, and the `getDependencyNode()` lookup, so the rule adds nothing but the check itself. A dependency outside the scanned paths — a vendor class, a PHP built-in — has no entry in the map, so `getDependencyNode()` returns null for it; fall back to path or namespace matching for those, or skip them as above. The built-in `MayNotDependOnRule` follows this pattern: it reads the dependency's layers from the map first and falls back to the `toPath` prefix only when the dependency was not scanned.
+
+
+## Analysing Functions, Closures, And Anonymous Classes
+
+Named functions, closures, arrow functions, and anonymous classes are collected alongside named classes:
+
+| Node | Represents | Identified by |
+| --- | --- | --- |
+| `Boundwize\StructArmed\Analyser\FunctionNode` | A named function declaration (`function foo() {}`), global or namespaced | `$functionName` (fully qualified) |
+| `Boundwize\StructArmed\Analyser\AnonymousFunctionNode` | A closure (`function () {}`) or arrow function (`fn () => ...`) | `$file` and `$line`, plus `$enclosingClassName` / `$enclosingFunctionName` |
+| `Boundwize\StructArmed\Analyser\AnonymousClassNode` | An anonymous class declaration (`new class ... {}`) | `$file` and `$line`, plus `$enclosingClassName` / `$enclosingFunctionName` |
+
+`FunctionNode` and `AnonymousFunctionNode` both carry the body-level facts a `ClassNode` has — `$dependencies`, `$functionCalls`, `$superglobals`, `$languageConstructs`, `$layer` / `$layers` — plus `$paramCount`, `$hasReturnType`, `$cyclomaticComplexity`, and `$lineCount`. The same query helpers are available: `isInLayer()`, `dependsOn()`, `dependsOnNamespace()`, `callsFunction()`, `usesLanguageConstruct()`, and `accessesSuperglobals()`. A `FunctionNode` also has `shortName()`, `nameStartsWith()`, `nameEndsWith()`, and `nameMatches()`; an `AnonymousFunctionNode` has `$isArrowFunction`, `$isStatic`, `getType()`, and `enclosingScopeName()`.
+
+A closure declared inside a class or a named function is counted on both nodes: the enclosing `ClassNode` (or `FunctionNode`) keeps seeing everything the closure does, exactly as it sees its own method bodies, and the `AnonymousFunctionNode` reports the closure body on its own.
+
+Anonymous classes (`new class ... {}`) are collected the same way, as `Boundwize\StructArmed\Analyser\AnonymousClassNode`: identified by `$file` and `$line` plus `$enclosingClassName` / `$enclosingFunctionName` (with `enclosingScopeName()` and `AnonymousClassNode::FILE_SCOPE`), and carrying `$extends`, `$implements`, `$traits`, `$isReadonly`, `$layer` / `$layers`, and `$hasEmptyParentheses` — whether the declaration spells `new class () {}` although it passes no constructor argument. It carries the same body-level facts and query helpers as a `ClassNode` — `$dependencies`, `$functionCalls`, `$superglobals`, and `$languageConstructs`, with `isInLayer()`, `dependsOn()`, `dependsOnNamespace()`, `callsFunction()`, `usesLanguageConstruct()`, and `accessesSuperglobals()` — and its own members: `$methods`, `$constants`, `$properties`, and `constructorParamCount()`. Its parent chain is resolved like a named class's: `$parentClasses` and `$parentInterfaces` hold the direct and transitive parents found in the scanned paths, and `extendsClass()` / `implementsInterface()` answer case-insensitively through that chain, exactly as on a `ClassNode`. An anonymous class never becomes a `ClassNode`; the named class-like or function declaring it keeps seeing its body, exactly as it sees a closure's, while the members belong to the anonymous class alone.
+
+Rules opt in to these nodes by implementing `Boundwize\StructArmed\Rule\FunctionRuleInterface`, `Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface`, and/or `Boundwize\StructArmed\Rule\AnonymousClassRuleInterface`. All share the `appliesTo()` / `evaluate()` method names with `RuleInterface`, each typed against its own node kind. Global skip paths, rule-scoped `skip()` paths, and `skipRule()` apply the same way. Function-likes and anonymous classes are not part of the declarative `ruleset()` layer-dependency check.
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final readonly class FunctionsMustNotAccessSuperglobalsRule implements FunctionRuleInterface
+{
+    public function __construct(private string $layer)
+    {
+    }
+
+    public function appliesTo(FunctionNode $functionNode): bool
+    {
+        return $functionNode->isInLayer($this->layer);
+    }
+
+    public function evaluate(FunctionNode $functionNode): ?RuleViolation
+    {
+        if (! $functionNode->accessesSuperglobals()) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:      sprintf('Function [%s()] must not access superglobals', $functionNode->functionName),
+            file:         $functionNode->file,
+            line:         $functionNode->line,
+            className:    $functionNode->functionName,
+            layer:        $functionNode->layer,
+            functionName: $functionNode->functionName,
+        );
+    }
+}
+```
+
+An anonymous-function rule looks the same with `AnonymousFunctionNode` in the signatures:
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
+use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final readonly class ClosuresMustNotAccessSuperglobalsRule implements AnonymousFunctionRuleInterface
+{
+    public function __construct(private string $layer)
+    {
+    }
+
+    public function appliesTo(AnonymousFunctionNode $anonymousFunctionNode): bool
+    {
+        return $anonymousFunctionNode->isInLayer($this->layer);
+    }
+
+    public function evaluate(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
+    {
+        if (! $anonymousFunctionNode->accessesSuperglobals()) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:   sprintf(
+                '%s in [%s] must not access superglobals',
+                $anonymousFunctionNode->getType(),
+                $anonymousFunctionNode->enclosingScopeName()
+            ),
+            file:      $anonymousFunctionNode->file,
+            line:      $anonymousFunctionNode->line,
+            className: $anonymousFunctionNode->enclosingScopeName(),
+            layer:     $anonymousFunctionNode->layer,
+        );
+    }
+}
+```
+
+An anonymous-class rule receives an `AnonymousClassNode` for every anonymous class in the scanned paths. For example, this rule requires anonymous classes in one layer to implement a project-specific marker interface, directly or through the class they extend (`implementsInterface()` walks the resolved parent chain, so `new class extends BaseHandler {}` passes when `BaseHandler` implements the interface):
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final readonly class AnonymousClassesMustImplementRule implements AnonymousClassRuleInterface
+{
+    public function __construct(
+        private string $layer,
+        private string $interface,
+    ) {
+    }
+
+    public function appliesTo(AnonymousClassNode $anonymousClassNode): bool
+    {
+        return $anonymousClassNode->isInLayer($this->layer);
+    }
+
+    public function evaluate(AnonymousClassNode $anonymousClassNode): ?RuleViolation
+    {
+        if ($anonymousClassNode->implementsInterface($this->interface)) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:   sprintf(
+                'Anonymous class in [%s] must implement [%s]',
+                $anonymousClassNode->enclosingScopeName(),
+                $this->interface,
+            ),
+            file:      $anonymousClassNode->file,
+            line:      $anonymousClassNode->line,
+            className: $anonymousClassNode->enclosingScopeName(),
+            layer:     $anonymousClassNode->layer,
+        );
+    }
+}
+```
+
+Register it through `Architecture::rule()` like any other custom rule. The analyser invokes it only for anonymous classes because it implements `AnonymousClassRuleInterface`.
+
+One rule class can also implement several of these interfaces at once; PHP then requires the shared methods to widen the parameter to a union type (for example `appliesTo(FunctionNode|AnonymousFunctionNode|AnonymousClassNode $node): bool`) and the rule branches on the node type inside.
+
+`RuleViolation::$className` is required, so a function rule passes the function name there (and, optionally, in the dedicated `functionName` field, which the JSON report emits as `"function"`); an anonymous-function or anonymous-class rule passes `enclosingScopeName()`, which is the enclosing class-like or named function, or `FILE_SCOPE` (`'file scope'`) for one in top-level procedural code.
+
 ## Making A Custom Rule Fixable
 
 Use `Boundwize\StructArmed\Rule\FixableInterface` when a custom rule can safely rewrite the offending source file.
@@ -232,6 +437,54 @@ Built-in rules follow the same pattern: `MustBeFinalRule` returns `AddFinalClass
 - The console report marks those violations as fixable and shows a `--fix` hint.
 
 Keep fixers deterministic and narrowly scoped. A failed or skipped fix should return `false` so StructArmed can leave the violation in the report.
+
+## Fixing Syntax The AST Does Not Record
+
+Some facts a rule reports exist only in the source text, not in any PHP-Parser node. The empty `()` of `new class () {}` is one: both `new class {}` and `new class () {}` parse to the same node with an empty argument list. A visitor that only edits nodes cannot remove those parentheses, and re-printing the whole class to drop them would reformat its body.
+
+Extend `Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractTokenAwareVisitor` for such cases. It is a `PhpParser\NodeVisitorAbstract` that holds the tokens the file was parsed into in a protected `$tokens` property:
+
+```php
+/** @var array<PhpParser\Token> */
+protected array $tokens = [];
+
+/** @param array<PhpParser\Token> $tokens */
+public function setTokens(array $tokens): void;
+```
+
+`PhpParserFixerProcessor` calls `setTokens()` before traversing with that visitor. The tokens are the same objects the format-preserving printer copies unchanged code from, so editing a `Token` object's `text` changes the printed file without any node being re-printed.
+
+```diff
++ use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractTokenAwareVisitor;
+  use PhpParser\Node;
+- use PhpParser\NodeVisitorAbstract;
+
+- final class RemoveSomethingVisitor extends NodeVisitorAbstract
++ final class RemoveSomethingVisitor extends AbstractTokenAwareVisitor
+  {
+      public function enterNode(Node $node): ?Node
+      {
+          // ... locate the target node ...
+
++         for ($index = $node->getStartTokenPos(); $index <= $node->getEndTokenPos(); $index++) {
++             if ($this->tokens[$index]->text === '(' || $this->tokens[$index]->text === ')') {
++                 $this->tokens[$index]->text = '';
++             }
++         }
+
+          return $node;
+      }
+  }
+```
+
+Use `getStartTokenPos()` and `getEndTokenPos()` on the node to find the token range it spans, then walk that range and edit only the tokens the fix targets. Return the node from `enterNode()` unchanged; the fix lives in the tokens, not in the node.
+
+The built-in `AnonymousClassMayNotHaveEmptyParenthesesRule` follows this shape. It returns `Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\RemoveAnonymousClassParenthesesVisitor` from `createFixerVisitor()`, and that visitor uses `Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses::emptyTokenRange()` to locate the `()` tokens and blank them.
+
+- Edit token `text` in place; do not replace, add, or remove entries in the token array, since the printer matches tokens to nodes by index.
+- Keep the whitespace PHP needs. Blanking a token that separated two words may require leaving a single space in its place.
+- Leave a comment inside the edited range alone, or skip the fix when removing the tokens would delete it.
+- A rule may still combine a token edit with a node edit in the same visitor; the token edit reaches the output only for nodes the printer keeps unchanged.
 
 ## Custom Presets
 
@@ -291,6 +544,10 @@ return Architecture::define()
 
 Use `rule()` when one project needs one extra check.
 
-Use a custom `RuleInterface` class when the check itself is new behavior.
+Use a custom `RuleInterface` class when the check itself is new behavior; add `FunctionRuleInterface` / `AnonymousFunctionRuleInterface` / `AnonymousClassRuleInterface` when it must also cover named functions, closures, or anonymous classes.
+
+Extend `AbstractLayerAwareRule` when a rule must know the layer of a class other than the one under evaluation, such as the layer a dependency lives in.
 
 Use a custom `PresetInterface` class when several layers and rules should be applied together or reused across repositories.
+
+Use `AbstractPhpParserFixableRule` with a `PhpParser\NodeVisitor` when a rule can rewrite the offending file; extend `AbstractTokenAwareVisitor` for that visitor when the fix targets punctuation or whitespace PHP-Parser records in no node.

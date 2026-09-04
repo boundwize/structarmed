@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
+use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\CachePathFactory;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
@@ -42,7 +45,10 @@ use function usleep;
 
 use const PHP_BINARY;
 
-final readonly class ParallelClassNodeExtractor
+/**
+ * @internal
+ */
+final readonly class ParallelAnalysisNodeExtractor
 {
     /**
      * @param array<string, string|list<string>> $layers
@@ -58,6 +64,8 @@ final readonly class ParallelClassNodeExtractor
         private array $layerPatterns,
         private int $workerCount,
         private ?string $cacheDirectory = null,
+        private ?AnalysisResultCache $analysisResultCache = null,
+        private string $analysisNodeCacheNamespace = '',
     ) {
     }
 
@@ -96,6 +104,8 @@ final readonly class ParallelClassNodeExtractor
                 'files'            => $chunk,
                 'emitProgress'     => $emitProgress,
                 'withFileAnalysis' => $withFileAnalysis,
+                'cache'            => $this->analysisResultCache?->forFiles($chunk),
+                'cacheNamespace'   => $this->analysisNodeCacheNamespace,
             ]));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
@@ -134,12 +144,14 @@ final readonly class ParallelClassNodeExtractor
             ];
         }
 
-        $nodes               = [];
-        $fileAnalyses        = [];
-        $anonymousClassNodes = [];
-        $fileReferences      = [];
-        $fileInstantiations  = [];
-        $failure             = null;
+        $nodes                  = [];
+        $fileAnalyses           = [];
+        $anonymousClassNodes    = [];
+        $fileReferences         = [];
+        $fileInstantiations     = [];
+        $functionNodes          = [];
+        $anonymousFunctionNodes = [];
+        $failure                = null;
 
         while ($pending !== []) {
             $anyActivity = false;
@@ -327,6 +339,38 @@ final readonly class ParallelClassNodeExtractor
 
                         $fileInstantiations[$file] = $validInstantiations;
                     }
+
+                    $workerFunctionNodes = $result['functionNodes'] ?? [];
+
+                    if (! is_array($workerFunctionNodes)) {
+                        throw new RuntimeException('Parallel analysis worker returned invalid function nodes.');
+                    }
+
+                    foreach ($workerFunctionNodes as $workerFunctionNode) {
+                        if (! $workerFunctionNode instanceof FunctionNode) {
+                            throw new RuntimeException('Parallel analysis worker returned invalid function nodes.');
+                        }
+
+                        $functionNodes[] = $workerFunctionNode;
+                    }
+
+                    $workerAnonymousFunctionNodes = $result['anonymousFunctionNodes'] ?? [];
+
+                    if (! is_array($workerAnonymousFunctionNodes)) {
+                        throw new RuntimeException(
+                            'Parallel analysis worker returned invalid anonymous function nodes.'
+                        );
+                    }
+
+                    foreach ($workerAnonymousFunctionNodes as $workerAnonymousFunctionNode) {
+                        if (! $workerAnonymousFunctionNode instanceof AnonymousFunctionNode) {
+                            throw new RuntimeException(
+                                'Parallel analysis worker returned invalid anonymous function nodes.'
+                            );
+                        }
+
+                        $anonymousFunctionNodes[] = $workerAnonymousFunctionNode;
+                    }
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
                 } finally {
@@ -350,7 +394,15 @@ final readonly class ParallelClassNodeExtractor
             throw new RuntimeException($failure);
         }
 
-        return new ExtractionResult($nodes, $fileAnalyses, $anonymousClassNodes, $fileReferences, $fileInstantiations);
+        return new ExtractionResult(
+            $nodes,
+            $fileAnalyses,
+            $anonymousClassNodes,
+            $fileReferences,
+            $fileInstantiations,
+            $functionNodes,
+            $anonymousFunctionNodes,
+        );
     }
 
     /**

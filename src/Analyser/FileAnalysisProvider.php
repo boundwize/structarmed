@@ -45,6 +45,7 @@ use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Parser;
 use PhpParser\ParserFactory;
+use PhpParser\Token;
 
 use function array_key_exists;
 use function array_keys;
@@ -131,8 +132,19 @@ final class FileAnalysisProvider
         return $normalisedAnalyses;
     }
 
-    public function analyse(string $file): FileAnalysis
-    {
+    /**
+     * @param list<array{int, string}> $nonCanonicalKeywordConstants Keyword constant spellings the
+     *                                                               analysis-node traversal recorded
+     *                                                               for the file; the provider never
+     *                                                               walks the AST for them itself.
+     * @param list<array{int, string, int|float}> $numericLiterals Numeric literals recorded by the
+     *                                                               same analysis-node traversal.
+     */
+    public function analyse(
+        string $file,
+        array $nonCanonicalKeywordConstants = [],
+        array $numericLiterals = [],
+    ): FileAnalysis {
         $file = Path::normalise($file, canonicalise: true);
 
         if (isset($this->analyses[$file])) {
@@ -157,6 +169,8 @@ final class FileAnalysisProvider
             declaresSymbols: $fileState['declaresSymbols'],
             hasSideEffects: $fileState['hasSideEffects'],
             sideEffectLine: $fileState['sideEffectLine'],
+            nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
+            numericLiterals: $numericLiterals,
         );
 
         $this->analyses[$file] = $fileAnalysis;
@@ -187,6 +201,18 @@ final class FileAnalysisProvider
         }
 
         return $this->parse($file);
+    }
+
+    /**
+     * The token stream of the file {@see ast()} parsed last, for the facts an
+     * AST does not carry. PHP-Parser keeps it until its next parse, so it is
+     * read right after ast(); the provider itself retains no token arrays.
+     *
+     * @return array<Token>
+     */
+    public function tokens(): array
+    {
+        return $this->parser->getTokens();
     }
 
     /**

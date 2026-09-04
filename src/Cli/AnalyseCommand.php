@@ -18,15 +18,19 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
 use RuntimeException;
 
+use function array_shift;
 use function count;
 use function explode;
 use function in_array;
 use function is_dir;
 use function is_file;
+use function max;
 use function microtime;
 use function sprintf;
 use function str_starts_with;
@@ -136,8 +140,11 @@ final readonly class AnalyseCommand
             $configHash,
             $composerGeneratedVersionHash
         );
-        $classNodeCacheNamespace      = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, $configHash);
-        $analyser                     = new Analyser($basePath, $analysisResultCache, $classNodeCacheNamespace);
+        $analysisNodeCacheNamespace   = $analysisCacheMetadataFactory->analysisNodeCacheNamespace(
+            $basePath,
+            $configHash
+        );
+        $analyser                     = new Analyser($basePath, $analysisResultCache, $analysisNodeCacheNamespace);
 
         if (isset($options['clear-cache']) || $analysisResultCache->shouldInvalidate()) {
             $analysisResultCache->clear();
@@ -180,7 +187,7 @@ final readonly class AnalyseCommand
             return $this->reportError($runtimeException);
         }
 
-        if (isset($options['fix'])) {
+        if (isset($options['fix']) && ! $ruleViolationCollection->isEmpty()) {
             // Removal fixers can cascade: deleting an unused child abstraction
             // may leave its parent unused, so fix and re-analyse until a pass
             // fixes nothing. The pass cap only guards against a fixer that
@@ -192,7 +199,7 @@ final readonly class AnalyseCommand
                     break;
                 }
 
-                $fixedCount += $passFixedCount;
+                $violationCountBeforePass = $ruleViolationCollection->count();
                 $analysisResultCache->clear();
 
                 $files                             = $analyser->filesForAnalysis($architecture, $scanPaths);
@@ -223,7 +230,19 @@ final readonly class AnalyseCommand
                     return $this->reportError($runtimeException);
                 }
 
-                $elapsed = microtime(true) - $start;
+                // One fix can resolve several violations at once (e.g. two
+                // closures starting on the same line), and the later ones
+                // then report nothing to fix. Count what the re-analysis shows
+                // resolved, never less than the fixes that reported success.
+                $fixedCount += max(
+                    $passFixedCount,
+                    $violationCountBeforePass - $ruleViolationCollection->count()
+                );
+                $elapsed     = microtime(true) - $start;
+
+                if ($ruleViolationCollection->isEmpty()) {
+                    break;
+                }
             }
         }
 
@@ -316,14 +335,41 @@ final readonly class AnalyseCommand
 
     private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int
     {
-        $rules      = $architecture->getRules();
         $fixedCount = 0;
 
-        foreach ($ruleViolationCollection as $ruleViolation) {
-            $rule = $rules[$ruleViolation->ruleKey] ?? null;
+        foreach ($architecture->getRules() as $ruleKey => $rule) {
+            $ruleViolations = $ruleViolationCollection->forRule($ruleKey);
 
-            if ($rule instanceof FixableInterface && $rule->fix($ruleViolation)) {
-                $fixedCount++;
+            if (! $rule instanceof FixableInterface || $ruleViolations === []) {
+                continue;
+            }
+
+            if (
+                ! $rule instanceof AbstractPhpParserFixableRule
+                && ! $rule instanceof AbstractJsonRecastFixableRule
+            ) {
+                foreach ($ruleViolations as $ruleViolation) {
+                    if ($rule->fix($ruleViolation)) {
+                        $fixedCount++;
+                    }
+                }
+
+                continue;
+            }
+
+            $violationsByFile = [];
+
+            foreach ($ruleViolations as $ruleViolation) {
+                $violationsByFile[$ruleViolation->file][] = $ruleViolation;
+            }
+
+            foreach ($violationsByFile as $violations) {
+                $batchSize      = count($violations);
+                $firstViolation = array_shift($violations);
+
+                if ($rule->fix($firstViolation, ...$violations)) {
+                    $fixedCount += $batchSize;
+                }
             }
         }
 

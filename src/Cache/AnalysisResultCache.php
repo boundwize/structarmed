@@ -5,19 +5,26 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cache;
 
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
+use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
+use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
+use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
+use function array_fill_keys;
+use function array_is_list;
 use function array_key_exists;
 use function array_keys;
 use function array_map;
 use function array_values;
+use function count;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
@@ -26,12 +33,14 @@ use function hash;
 use function is_array;
 use function is_bool;
 use function is_dir;
+use function is_float;
 use function is_int;
 use function is_string;
 use function json_decode;
 use function json_encode;
 use function mkdir;
 use function rmdir;
+use function rtrim;
 use function sprintf;
 use function unlink;
 
@@ -45,24 +54,38 @@ use const JSON_THROW_ON_ERROR;
 final class AnalysisResultCache
 {
     /**
-     * Marker file recording the config and structarmed version hashes the cache
-     * contents were built with. Never collides with payload files: those are
-     * named by hex hash keys or a "class-nodes-" prefix.
+     * Marker file recording the cache format version and the config and
+     * structarmed version hashes the cache contents were built with. Never
+     * collides with payload files: those are named by hex hash keys or an
+     * "analysis-nodes-" prefix.
      */
     private const METADATA_FILE = '_metadata.json';
 
+    /**
+     * Format version of the analysis-node payload files. Bump it whenever
+     * their shape or naming changes: it is recorded in the metadata marker,
+     * so a cache written by an older format is cleared on its next use.
+     */
+    public const FORMAT_VERSION = 7;
+
     private readonly string $cacheDirectory;
+
+    /** Hash of the project composer.json: its PSR-4 mappings decide layer assignments. */
+    private readonly string $composerHash;
 
     private bool $isCacheInitialised = false;
 
     public function __construct(
         string $basePath,
-        private readonly FileHashProvider $fileHashProvider,
+        private FileHashProvider $fileHashProvider,
         ?string $cacheDirectory = null,
         private readonly string $configHash = '',
         private readonly string $composerGeneratedVersionHash = '',
+        private readonly ComposerJsonProvider $composerJsonProvider = new ComposerJsonProvider(),
     ) {
         $this->cacheDirectory = CachePathFactory::getPath($cacheDirectory, $basePath);
+        $composerFile         = rtrim($basePath, '/') . '/composer.json';
+        $this->composerHash   = file_exists($composerFile) ? $fileHashProvider->hash($composerFile) : '';
     }
 
     /**
@@ -120,6 +143,7 @@ final class AnalysisResultCache
     {
         $this->isCacheInitialised = false;
         $this->fileHashProvider->clear();
+        $this->composerJsonProvider->clear();
 
         if (! is_dir($this->cacheDirectory)) {
             return;
@@ -143,9 +167,21 @@ final class AnalysisResultCache
     }
 
     /**
+     * @param list<string> $files
+     */
+    public function forFiles(array $files): self
+    {
+        $cache                   = clone $this;
+        $cache->fileHashProvider = $this->fileHashProvider->forFiles($files);
+
+        return $cache;
+    }
+
+    /**
      * Compares against the single metadata marker instead of scanning every
      * payload, so the check stays O(1) regardless of cache size. A populated
-     * cache without a marker predates this format and must be invalidated.
+     * cache without a marker, or with a marker from an older cache format
+     * version, must be invalidated.
      */
     public function shouldInvalidate(): bool
     {
@@ -155,8 +191,10 @@ final class AnalysisResultCache
 
         $payload = $this->readPath($this->cacheDirectory . '/' . self::METADATA_FILE);
 
-        return ($payload['configHash'] ?? null) !== $this->configHash
-            || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash;
+        return ($payload['version'] ?? null) !== self::FORMAT_VERSION
+            || ($payload['configHash'] ?? null) !== $this->configHash
+            || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash
+            || ($payload['composerHash'] ?? null) !== $this->composerHash;
     }
 
     private function ensureCacheInitialised(): void
@@ -173,8 +211,10 @@ final class AnalysisResultCache
 
         if (! file_exists($metadataFile)) {
             file_put_contents($metadataFile, json_encode([
+                'version'                      => self::FORMAT_VERSION,
                 'configHash'                   => $this->configHash,
                 'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash,
+                'composerHash'                 => $this->composerHash,
             ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
         }
 
@@ -186,18 +226,20 @@ final class AnalysisResultCache
      *     classNodes: list<ClassNode>,
      *     anonymousClassNodes: list<AnonymousClassNode>,
      *     fileReferences: list<string>,
-     *     fileInstantiations: list<string>
+     *     fileInstantiations: list<string>,
+     *     functionNodes: list<FunctionNode>,
+     *     anonymousFunctionNodes: list<AnonymousFunctionNode>
      * }|null
      */
-    public function loadClassNodes(string $file, string $namespace): ?array
+    public function loadAnalysisNodes(string $file, string $namespace): ?array
     {
-        $payload = $this->classNodePayload($file, $namespace);
+        $payload = $this->analysisNodePayload($file, $namespace);
 
         if ($payload === null) {
             return null;
         }
 
-        return $this->classNodeResultFromPayload($payload);
+        return $this->analysisNodeResultFromPayload($payload, $file);
     }
 
     /**
@@ -206,26 +248,28 @@ final class AnalysisResultCache
      *     anonymousClassNodes: list<AnonymousClassNode>,
      *     fileReferences: list<string>,
      *     fileInstantiations: list<string>,
+     *     functionNodes: list<FunctionNode>,
+     *     anonymousFunctionNodes: list<AnonymousFunctionNode>,
      *     fileAnalysis: FileAnalysis
      * }|null
      */
-    public function loadClassNodesWithFileAnalysis(string $file, string $namespace): ?array
+    public function loadAnalysisNodesWithFileAnalysis(string $file, string $namespace): ?array
     {
-        $payload = $this->classNodePayload($file, $namespace);
+        $payload = $this->analysisNodePayload($file, $namespace);
 
         if ($payload === null) {
             return null;
         }
 
         $fileAnalysis = is_array($payload['fileAnalysis'] ?? null)
-            ? $this->fileAnalysisFromArray($payload['fileAnalysis'])
+            ? $this->fileAnalysisFromArray($payload['fileAnalysis'], $file)
             : null;
 
         if (! $fileAnalysis instanceof FileAnalysis) {
             return null;
         }
 
-        $result = $this->classNodeResultFromPayload($payload);
+        $result = $this->analysisNodeResultFromPayload($payload, $file);
 
         if ($result === null) {
             return null;
@@ -242,37 +286,45 @@ final class AnalysisResultCache
      *     classNodes: list<ClassNode>,
      *     anonymousClassNodes: list<AnonymousClassNode>,
      *     fileReferences: list<string>,
-     *     fileInstantiations: list<string>
+     *     fileInstantiations: list<string>,
+     *     functionNodes: list<FunctionNode>,
+     *     anonymousFunctionNodes: list<AnonymousFunctionNode>
      * }|null
      */
-    private function classNodeResultFromPayload(array $payload): ?array
+    private function analysisNodeResultFromPayload(array $payload, string $file): ?array
     {
-        $classNodes          = $this->classNodesFromPayload($payload);
-        $anonymousClassNodes = $this->anonymousClassNodesFromPayload($payload);
-        $fileReferences      = $this->fileReferencesFromPayload($payload);
-        $fileInstantiations  = $this->fileInstantiationsFromPayload($payload);
+        $classNodes             = $this->classNodesFromPayload($payload, $file);
+        $anonymousClassNodes    = $this->anonymousClassNodesFromPayload($payload);
+        $fileReferences         = $this->fileReferencesFromPayload($payload);
+        $fileInstantiations     = $this->fileInstantiationsFromPayload($payload);
+        $functionNodes          = $this->functionNodesFromPayload($payload, $file);
+        $anonymousFunctionNodes = $this->anonymousFunctionNodesFromPayload($payload, $file);
 
         if (
             $classNodes === null
             || $anonymousClassNodes === null
             || $fileReferences === null
             || $fileInstantiations === null
+            || $functionNodes === null
+            || $anonymousFunctionNodes === null
         ) {
             return null;
         }
 
         return [
-            'classNodes'          => $classNodes,
-            'anonymousClassNodes' => $anonymousClassNodes,
-            'fileReferences'      => $fileReferences,
-            'fileInstantiations'  => $fileInstantiations,
+            'classNodes'             => $classNodes,
+            'anonymousClassNodes'    => $anonymousClassNodes,
+            'fileReferences'         => $fileReferences,
+            'fileInstantiations'     => $fileInstantiations,
+            'functionNodes'          => $functionNodes,
+            'anonymousFunctionNodes' => $anonymousFunctionNodes,
         ];
     }
 
     /** @return array<string, mixed>|null */
-    private function classNodePayload(string $file, string $namespace): ?array
+    private function analysisNodePayload(string $file, string $namespace): ?array
     {
-        $payload = $this->read($this->classNodesKey($file, $namespace));
+        $payload = $this->read($this->analysisNodesKey($file, $namespace));
 
         if ($payload === null || ($payload['metadata'] ?? null) !== $this->fileMetadata($file, $namespace)) {
             return null;
@@ -285,7 +337,7 @@ final class AnalysisResultCache
      * @param array<string, mixed> $payload
      * @return list<ClassNode>|null
      */
-    private function classNodesFromPayload(array $payload): ?array
+    private function classNodesFromPayload(array $payload, string $file): ?array
     {
         if (! is_array($payload['nodes'] ?? null)) {
             return null;
@@ -298,7 +350,7 @@ final class AnalysisResultCache
                 return null;
             }
 
-            $classNode = $this->classNodeFromArray($node);
+            $classNode = $this->classNodeFromArray($node, $file);
 
             if (! $classNode instanceof ClassNode) {
                 return null;
@@ -311,13 +363,68 @@ final class AnalysisResultCache
     }
 
     /**
+     * Stores the parsed nodes of every file in $files from one extraction result,
+     * one payload per file (files without nodes get an empty payload too, so they
+     * are cache hits next run).
+     *
+     * @param list<string> $files
+     */
+    public function storeExtractionResult(array $files, string $namespace, ExtractionResult $extractionResult): void
+    {
+        $classNodesByFile             = array_fill_keys($files, []);
+        $anonymousClassNodesByFile    = $classNodesByFile;
+        $functionNodesByFile          = $classNodesByFile;
+        $anonymousFunctionNodesByFile = $classNodesByFile;
+
+        foreach ($extractionResult->classNodes as $classNode) {
+            if (isset($classNodesByFile[$classNode->file])) {
+                $classNodesByFile[$classNode->file][] = $classNode;
+            }
+        }
+
+        foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
+            if (isset($anonymousClassNodesByFile[$anonymousClassNode->file])) {
+                $anonymousClassNodesByFile[$anonymousClassNode->file][] = $anonymousClassNode;
+            }
+        }
+
+        foreach ($extractionResult->functionNodes as $functionNode) {
+            if (isset($functionNodesByFile[$functionNode->file])) {
+                $functionNodesByFile[$functionNode->file][] = $functionNode;
+            }
+        }
+
+        foreach ($extractionResult->anonymousFunctionNodes as $anonymousFunctionNode) {
+            if (isset($anonymousFunctionNodesByFile[$anonymousFunctionNode->file])) {
+                $anonymousFunctionNodesByFile[$anonymousFunctionNode->file][] = $anonymousFunctionNode;
+            }
+        }
+
+        foreach ($files as $file) {
+            $this->storeAnalysisNodes(
+                $file,
+                $namespace,
+                $classNodesByFile[$file],
+                $extractionResult->fileAnalyses[$file] ?? null,
+                $anonymousClassNodesByFile[$file],
+                $extractionResult->fileReferences[$file] ?? [],
+                $extractionResult->fileInstantiations[$file] ?? [],
+                $functionNodesByFile[$file],
+                $anonymousFunctionNodesByFile[$file],
+            );
+        }
+    }
+
+    /**
      * @param list<ClassNode>          $classNodes
      * @param list<AnonymousClassNode> $anonymousClassNodes
      * @param list<string>             $fileReferences Class-like references made outside any
-     *                                                 named class-like scope in this file
+     *                                                 class-like scope in this file
      * @param list<string>             $fileInstantiations Class-like instantiations in this file
+     * @param list<FunctionNode>          $functionNodes
+     * @param list<AnonymousFunctionNode> $anonymousFunctionNodes
      */
-    public function storeClassNodes(
+    public function storeAnalysisNodes(
         string $file,
         string $namespace,
         array $classNodes,
@@ -325,23 +432,37 @@ final class AnalysisResultCache
         array $anonymousClassNodes = [],
         array $fileReferences = [],
         array $fileInstantiations = [],
+        array $functionNodes = [],
+        array $anonymousFunctionNodes = [],
     ): void {
         $this->ensureCacheInitialised();
 
         $payload = [
-            'metadata'            => $this->fileMetadata($file, $namespace),
-            'nodes'               => array_map($this->classNodeToArray(...), $classNodes),
-            'anonymousClassNodes' => array_map($this->anonymousClassNodeToArray(...), $anonymousClassNodes),
-            'fileReferences'      => $fileReferences,
-            'fileInstantiations'  => $fileInstantiations,
+            'metadata' => $this->fileMetadata($file, $namespace),
+            'nodes'    => array_map($this->classNodeToArray(...), $classNodes),
         ];
+
+        // Most files have none of these; leave their keys out entirely.
+        $lists = [
+            'anonymousClassNodes'    => array_map($this->anonymousClassNodeToArray(...), $anonymousClassNodes),
+            'fileReferences'         => $fileReferences,
+            'fileInstantiations'     => $fileInstantiations,
+            'functionNodes'          => array_map($this->functionNodeToArray(...), $functionNodes),
+            'anonymousFunctionNodes' => array_map($this->anonymousFunctionNodeToArray(...), $anonymousFunctionNodes),
+        ];
+
+        foreach ($lists as $key => $list) {
+            if ($list !== []) {
+                $payload[$key] = $list;
+            }
+        }
 
         if ($fileAnalysis instanceof FileAnalysis) {
             $payload['fileAnalysis'] = $this->fileAnalysisToArray($fileAnalysis);
         }
 
         file_put_contents(
-            $this->path($this->classNodesKey($file, $namespace)),
+            $this->path($this->analysisNodesKey($file, $namespace)),
             json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)
         );
     }
@@ -373,16 +494,18 @@ final class AnalysisResultCache
      */
     private function ruleViolationFromArray(array $violation): ?RuleViolation
     {
-        $ruleKey   = $violation['rule'] ?? null;
-        $message   = $violation['message'] ?? null;
-        $file      = $violation['file'] ?? null;
-        $line      = $violation['line'] ?? null;
-        $className = $violation['class'] ?? null;
-        $layer     = $violation['layer'] ?? null;
-        $method    = $violation['method'] ?? null;
-        $constant  = $violation['constant'] ?? null;
-        $property  = $violation['property'] ?? null;
-        $fixable   = $violation['fixable'] ?? false;
+        $ruleKey        = $violation['rule'] ?? null;
+        $message        = $violation['message'] ?? null;
+        $file           = $violation['file'] ?? null;
+        $line           = $violation['line'] ?? null;
+        $className      = $violation['class'] ?? null;
+        $layer          = $violation['layer'] ?? null;
+        $method         = $violation['method'] ?? null;
+        $constant       = $violation['constant'] ?? null;
+        $property       = $violation['property'] ?? null;
+        $function       = $violation['function'] ?? null;
+        $numericLiteral = $violation['numericLiteral'] ?? null;
+        $fixable        = $violation['fixable'] ?? false;
 
         if (
             ! is_string($ruleKey)
@@ -394,6 +517,8 @@ final class AnalysisResultCache
             || ($method !== null && ! is_string($method))
             || ($constant !== null && ! is_string($constant))
             || ($property !== null && ! is_string($property))
+            || ($function !== null && ! is_string($function))
+            || ($numericLiteral !== null && ! is_string($numericLiteral))
             || ! is_bool($fixable)
         ) {
             return null;
@@ -410,6 +535,8 @@ final class AnalysisResultCache
             methodName: $method,
             constantName: $constant,
             propertyName: $property,
+            functionName: $function,
+            numericLiteral: $numericLiteral,
         );
     }
 
@@ -440,13 +567,37 @@ final class AnalysisResultCache
      */
     private function anonymousClassNodeToArray(AnonymousClassNode $anonymousClassNode): array
     {
-        return [
-            'file'       => $anonymousClassNode->file,
-            'line'       => $anonymousClassNode->line,
-            'extends'    => $anonymousClassNode->extends,
-            'implements' => $anonymousClassNode->implements,
-            'traits'     => $anonymousClassNode->traits,
+        $node = [
+            'file'                  => $anonymousClassNode->file,
+            'line'                  => $anonymousClassNode->line,
+            'extends'               => $anonymousClassNode->extends,
+            'layer'                 => $anonymousClassNode->layer,
+            'enclosingClassName'    => $anonymousClassNode->enclosingClassName,
+            'enclosingFunctionName' => $anonymousClassNode->enclosingFunctionName,
+            'hasEmptyParentheses'   => $anonymousClassNode->hasEmptyParentheses,
+            'isReadonly'            => $anonymousClassNode->isReadonly,
         ];
+
+        $lists = [
+            'implements'         => array_values($anonymousClassNode->implements),
+            'traits'             => array_values($anonymousClassNode->traits),
+            'layers'             => $anonymousClassNode->layers,
+            'dependencies'       => $anonymousClassNode->dependencies,
+            'methods'            => array_map($this->methodNodeToArray(...), $anonymousClassNode->methods),
+            'constants'          => array_map($this->constantNodeToArray(...), $anonymousClassNode->constants),
+            'properties'         => array_map($this->propertyNodeToArray(...), $anonymousClassNode->properties),
+            'functionCalls'      => array_values($anonymousClassNode->functionCalls),
+            'superglobals'       => array_values($anonymousClassNode->superglobals),
+            'languageConstructs' => array_values($anonymousClassNode->languageConstructs),
+        ];
+
+        foreach ($lists as $key => $list) {
+            if ($list !== []) {
+                $node[$key] = $list;
+            }
+        }
+
+        return $node;
     }
 
     /**
@@ -468,26 +619,74 @@ final class AnalysisResultCache
                 return null;
             }
 
-            $file       = $rawNode['file'] ?? null;
-            $line       = $rawNode['line'] ?? null;
-            $extends    = $rawNode['extends'] ?? null;
-            $implements = $rawNode['implements'] ?? [];
-            $traits     = $rawNode['traits'] ?? [];
+            $file                  = $rawNode['file'] ?? null;
+            $line                  = $rawNode['line'] ?? null;
+            $extends               = $rawNode['extends'] ?? null;
+            $implements            = $rawNode['implements'] ?? [];
+            $traits                = $rawNode['traits'] ?? [];
+            $layer                 = $rawNode['layer'] ?? null;
+            $enclosingClassName    = $rawNode['enclosingClassName'] ?? null;
+            $enclosingFunctionName = $rawNode['enclosingFunctionName'] ?? null;
+            $hasEmptyParentheses   = $rawNode['hasEmptyParentheses'] ?? false;
+            $layers                = $rawNode['layers'] ?? [];
+            $isReadonly            = $rawNode['isReadonly'] ?? false;
+            $dependencies          = $rawNode['dependencies'] ?? [];
+            $functionCalls         = $rawNode['functionCalls'] ?? [];
+            $superglobals          = $rawNode['superglobals'] ?? [];
+            $languageConstructs    = $rawNode['languageConstructs'] ?? [];
 
-            if (! is_string($file) || ! is_int($line) || ($extends !== null && ! is_string($extends))) {
+            if (
+                ! is_string($file)
+                || ! is_int($line)
+                || ($extends !== null && ! is_string($extends))
+                || ($layer !== null && ! is_string($layer))
+                || ($enclosingClassName !== null && ! is_string($enclosingClassName))
+                || ($enclosingFunctionName !== null && ! is_string($enclosingFunctionName))
+                || ! is_bool($hasEmptyParentheses)
+                || ! is_bool($isReadonly)
+            ) {
                 return null;
             }
 
-            if (! $this->isStringArray($implements) || ! $this->isStringArray($traits)) {
+            if (
+                ! $this->isStringArray($implements)
+                || ! $this->isStringArray($traits)
+                || ! $this->isStringArray($layers)
+                || ! $this->isStringArray($dependencies)
+                || ! $this->isStringArray($functionCalls)
+                || ! $this->isStringArray($superglobals)
+                || ! $this->isStringArray($languageConstructs)
+            ) {
+                return null;
+            }
+
+            $methods    = $this->memberNodesFromArray($rawNode['methods'] ?? [], $this->methodNodeFromArray(...));
+            $constants  = $this->memberNodesFromArray($rawNode['constants'] ?? [], $this->constantNodeFromArray(...));
+            $properties = $this->memberNodesFromArray($rawNode['properties'] ?? [], $this->propertyNodeFromArray(...));
+
+            if ($methods === null || $constants === null || $properties === null) {
                 return null;
             }
 
             $anonymousClassNodes[] = new AnonymousClassNode(
-                file:       $file,
-                line:       $line,
-                extends:    $extends,
-                implements: $implements,
-                traits:     $traits,
+                file:                  $file,
+                line:                  $line,
+                extends:               $extends,
+                implements:            $implements,
+                traits:                $traits,
+                layer:                 $layer,
+                enclosingClassName:    $enclosingClassName,
+                enclosingFunctionName: $enclosingFunctionName,
+                hasEmptyParentheses:   $hasEmptyParentheses,
+                layers:                array_values($layers),
+                isReadonly:            $isReadonly,
+                dependencies:          array_values($dependencies),
+                methods:               $methods,
+                constants:             $constants,
+                properties:            $properties,
+                functionCalls:         array_values($functionCalls),
+                superglobals:          array_values($superglobals),
+                languageConstructs:    array_values($languageConstructs),
             );
         }
 
@@ -497,20 +696,297 @@ final class AnalysisResultCache
     /**
      * @return array<string, mixed>
      */
-    private function classNodeToArray(ClassNode $classNode): array
+    private function functionNodeToArray(FunctionNode $functionNode): array
+    {
+        return ['functionName' => $functionNode->functionName] + $this->functionLikeBodyToArray(
+            $functionNode->line,
+            $functionNode->layer,
+            $functionNode->hasReturnType,
+            $functionNode->paramCount,
+            $functionNode->cyclomaticComplexity,
+            $functionNode->lineCount,
+            $functionNode->dependencies,
+            $functionNode->functionCalls,
+            $functionNode->superglobals,
+            $functionNode->languageConstructs,
+            $functionNode->layers,
+        );
+    }
+
+    /**
+     * The fields FunctionNode and AnonymousFunctionNode share. The file is
+     * not stored: the payload belongs to one file, known when loading. Empty
+     * lists — the common case for a closure — are left out and default on
+     * load, which keeps the many small function-like entries small.
+     *
+     * @param list<string> $dependencies
+     * @param string[]     $functionCalls
+     * @param string[]     $superglobals
+     * @param string[]     $languageConstructs
+     * @param list<string> $layers
+     * @return array<string, mixed>
+     */
+    private function functionLikeBodyToArray(
+        int $line,
+        ?string $layer,
+        bool $hasReturnType,
+        int $paramCount,
+        int $cyclomaticComplexity,
+        int $lineCount,
+        array $dependencies,
+        array $functionCalls,
+        array $superglobals,
+        array $languageConstructs,
+        array $layers,
+    ): array {
+        $body = [
+            'line'                 => $line,
+            'layer'                => $layer,
+            'hasReturnType'        => $hasReturnType,
+            'paramCount'           => $paramCount,
+            'cyclomaticComplexity' => $cyclomaticComplexity,
+            'lineCount'            => $lineCount,
+        ];
+
+        $lists = [
+            'dependencies'       => $dependencies,
+            'functionCalls'      => $functionCalls,
+            'superglobals'       => $superglobals,
+            'languageConstructs' => $languageConstructs,
+            'layers'             => $layers,
+        ];
+
+        foreach ($lists as $key => $list) {
+            if ($list !== []) {
+                $body[$key] = array_values($list);
+            }
+        }
+
+        return $body;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<FunctionNode>|null
+     */
+    private function functionNodesFromPayload(array $payload, string $file): ?array
+    {
+        $rawNodes = $payload['functionNodes'] ?? [];
+
+        if (! is_array($rawNodes)) {
+            return null;
+        }
+
+        $functionNodes = [];
+
+        foreach ($rawNodes as $rawNode) {
+            if (! is_array($rawNode)) {
+                return null;
+            }
+
+            $functionName = $rawNode['functionName'] ?? null;
+            $body         = $this->functionLikeBodyFromArray($rawNode, $file);
+
+            if (! is_string($functionName) || $body === null) {
+                return null;
+            }
+
+            $functionNodes[] = new FunctionNode(
+                functionName:         $functionName,
+                file:                 $body['file'],
+                line:                 $body['line'],
+                layer:                $body['layer'],
+                hasReturnType:        $body['hasReturnType'],
+                paramCount:           $body['paramCount'],
+                cyclomaticComplexity: $body['cyclomaticComplexity'],
+                lineCount:            $body['lineCount'],
+                dependencies:         $body['dependencies'],
+                functionCalls:        $body['functionCalls'],
+                superglobals:         $body['superglobals'],
+                languageConstructs:   $body['languageConstructs'],
+                layers:               $body['layers'],
+            );
+        }
+
+        return $functionNodes;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function anonymousFunctionNodeToArray(AnonymousFunctionNode $anonymousFunctionNode): array
     {
         return [
-            'className'          => $classNode->className,
-            'file'               => $classNode->file,
-            'line'               => $classNode->line,
-            'layer'              => $classNode->layer,
-            'extends'            => $classNode->extends,
-            'isAbstract'         => $classNode->isAbstract,
-            'isFinal'            => $classNode->isFinal,
-            'isInterface'        => $classNode->isInterface,
-            'isTrait'            => $classNode->isTrait,
-            'isEnum'             => $classNode->isEnum,
-            'isReadonly'         => $classNode->isReadonly,
+            'isArrowFunction'       => $anonymousFunctionNode->isArrowFunction,
+            'isStatic'              => $anonymousFunctionNode->isStatic,
+            'enclosingClassName'    => $anonymousFunctionNode->enclosingClassName,
+            'enclosingFunctionName' => $anonymousFunctionNode->enclosingFunctionName,
+            'usesThis'              => $anonymousFunctionNode->usesThis,
+        ] + $this->functionLikeBodyToArray(
+            $anonymousFunctionNode->line,
+            $anonymousFunctionNode->layer,
+            $anonymousFunctionNode->hasReturnType,
+            $anonymousFunctionNode->paramCount,
+            $anonymousFunctionNode->cyclomaticComplexity,
+            $anonymousFunctionNode->lineCount,
+            $anonymousFunctionNode->dependencies,
+            $anonymousFunctionNode->functionCalls,
+            $anonymousFunctionNode->superglobals,
+            $anonymousFunctionNode->languageConstructs,
+            $anonymousFunctionNode->layers,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<AnonymousFunctionNode>|null
+     */
+    private function anonymousFunctionNodesFromPayload(array $payload, string $file): ?array
+    {
+        $rawNodes = $payload['anonymousFunctionNodes'] ?? [];
+
+        if (! is_array($rawNodes)) {
+            return null;
+        }
+
+        $anonymousFunctionNodes = [];
+
+        foreach ($rawNodes as $rawNode) {
+            if (! is_array($rawNode)) {
+                return null;
+            }
+
+            $isArrowFunction       = $rawNode['isArrowFunction'] ?? null;
+            $isStatic              = $rawNode['isStatic'] ?? null;
+            $enclosingClassName    = $rawNode['enclosingClassName'] ?? null;
+            $enclosingFunctionName = $rawNode['enclosingFunctionName'] ?? null;
+            $usesThis              = $rawNode['usesThis'] ?? null;
+            $body                  = $this->functionLikeBodyFromArray($rawNode, $file);
+
+            if (
+                ! is_bool($isArrowFunction)
+                || ! is_bool($isStatic)
+                || ! is_bool($usesThis)
+                || ($enclosingClassName !== null && ! is_string($enclosingClassName))
+                || ($enclosingFunctionName !== null && ! is_string($enclosingFunctionName))
+                || $body === null
+            ) {
+                return null;
+            }
+
+            $anonymousFunctionNodes[] = new AnonymousFunctionNode(
+                file:                  $body['file'],
+                line:                  $body['line'],
+                layer:                 $body['layer'],
+                isArrowFunction:       $isArrowFunction,
+                isStatic:              $isStatic,
+                enclosingClassName:    $enclosingClassName,
+                enclosingFunctionName: $enclosingFunctionName,
+                usesThis:              $usesThis,
+                hasReturnType:         $body['hasReturnType'],
+                paramCount:            $body['paramCount'],
+                cyclomaticComplexity:  $body['cyclomaticComplexity'],
+                lineCount:             $body['lineCount'],
+                dependencies:          $body['dependencies'],
+                functionCalls:         $body['functionCalls'],
+                superglobals:          $body['superglobals'],
+                languageConstructs:    $body['languageConstructs'],
+                layers:                $body['layers'],
+            );
+        }
+
+        return $anonymousFunctionNodes;
+    }
+
+    /**
+     * The fields FunctionNode and AnonymousFunctionNode share, type-checked.
+     *
+     * @param array<mixed, mixed> $node
+     * @return array{
+     *     file: string,
+     *     line: int,
+     *     layer: string|null,
+     *     hasReturnType: bool,
+     *     paramCount: int,
+     *     cyclomaticComplexity: int,
+     *     lineCount: int,
+     *     dependencies: list<string>,
+     *     functionCalls: list<string>,
+     *     superglobals: list<string>,
+     *     languageConstructs: list<string>,
+     *     layers: list<string>
+     * }|null
+     */
+    private function functionLikeBodyFromArray(array $node, string $file): ?array
+    {
+        $line                 = $node['line'] ?? null;
+        $layer                = $node['layer'] ?? null;
+        $hasReturnType        = $node['hasReturnType'] ?? null;
+        $paramCount           = $node['paramCount'] ?? null;
+        $cyclomaticComplexity = $node['cyclomaticComplexity'] ?? null;
+        $lineCount            = $node['lineCount'] ?? null;
+        $dependencies         = $node['dependencies'] ?? [];
+        $functionCalls        = $node['functionCalls'] ?? [];
+        $superglobals         = $node['superglobals'] ?? [];
+        $languageConstructs   = $node['languageConstructs'] ?? [];
+        $layers               = $node['layers'] ?? [];
+
+        if (
+            ! is_int($line)
+            || ($layer !== null && ! is_string($layer))
+            || ! is_bool($hasReturnType)
+            || ! is_int($paramCount)
+            || ! is_int($cyclomaticComplexity)
+            || ! is_int($lineCount)
+            || ! $this->isStringArray($dependencies)
+            || ! $this->isStringArray($functionCalls)
+            || ! $this->isStringArray($superglobals)
+            || ! $this->isStringArray($languageConstructs)
+            || ! $this->isStringArray($layers)
+        ) {
+            return null;
+        }
+
+        return [
+            'file'                 => $file,
+            'line'                 => $line,
+            'layer'                => $layer,
+            'hasReturnType'        => $hasReturnType,
+            'paramCount'           => $paramCount,
+            'cyclomaticComplexity' => $cyclomaticComplexity,
+            'lineCount'            => $lineCount,
+            'dependencies'         => array_values($dependencies),
+            'functionCalls'        => array_values($functionCalls),
+            'superglobals'         => array_values($superglobals),
+            'languageConstructs'   => array_values($languageConstructs),
+            'layers'               => array_values($layers),
+        ];
+    }
+
+    /**
+     * The file is not stored: the payload belongs to one file, known when
+     * loading. Empty lists — most of a typical class's — are left out and
+     * default on load.
+     *
+     * @return array<string, mixed>
+     */
+    private function classNodeToArray(ClassNode $classNode): array
+    {
+        $node = [
+            'className'       => $classNode->className,
+            'line'            => $classNode->line,
+            'layer'           => $classNode->layer,
+            'extends'         => $classNode->extends,
+            'isAbstract'      => $classNode->isAbstract,
+            'isFinal'         => $classNode->isFinal,
+            'isInterface'     => $classNode->isInterface,
+            'isTrait'         => $classNode->isTrait,
+            'isEnum'          => $classNode->isEnum,
+            'isReadonly'      => $classNode->isReadonly,
+            'enumBackingType' => $classNode->enumBackingType,
+        ];
+
+        $lists = [
             'dependencies'       => $classNode->dependencies,
             'implements'         => array_values($classNode->implements),
             'interfaceExtends'   => array_values($classNode->interfaceExtends),
@@ -521,21 +997,27 @@ final class AnalysisResultCache
             'constants'          => array_map($this->constantNodeToArray(...), $classNode->constants),
             'properties'         => array_map($this->propertyNodeToArray(...), $classNode->properties),
             'enumCases'          => array_map($this->enumCaseNodeToArray(...), $classNode->enumCases),
-            'enumBackingType'    => $classNode->enumBackingType,
             'functionCalls'      => array_values($classNode->functionCalls),
             'superglobals'       => array_values($classNode->superglobals),
             'languageConstructs' => array_values($classNode->languageConstructs),
             'layers'             => $classNode->layers,
         ];
+
+        foreach ($lists as $key => $list) {
+            if ($list !== []) {
+                $node[$key] = $list;
+            }
+        }
+
+        return $node;
     }
 
     /**
      * @param array<mixed, mixed> $node
      */
-    private function classNodeFromArray(array $node): ?ClassNode
+    private function classNodeFromArray(array $node, string $file): ?ClassNode
     {
         $className          = $node['className'] ?? null;
-        $file               = $node['file'] ?? null;
         $line               = $node['line'] ?? null;
         $layer              = $node['layer'] ?? null;
         $extends            = $node['extends'] ?? null;
@@ -545,25 +1027,20 @@ final class AnalysisResultCache
         $isTrait            = $node['isTrait'] ?? null;
         $isEnum             = $node['isEnum'] ?? null;
         $isReadonly         = $node['isReadonly'] ?? null;
-        $dependencies       = $node['dependencies'] ?? null;
-        $implements         = $node['implements'] ?? null;
+        $dependencies       = $node['dependencies'] ?? [];
+        $implements         = $node['implements'] ?? [];
         $interfaceExtends   = $node['interfaceExtends'] ?? [];
         $parentClasses      = $node['parentClasses'] ?? [];
         $parentInterfaces   = $node['parentInterfaces'] ?? [];
         $traits             = $node['traits'] ?? [];
-        $rawMethods         = $node['methods'] ?? null;
-        $rawConstants       = $node['constants'] ?? null;
-        $rawProperties      = $node['properties'] ?? null;
-        $rawEnumCases       = $node['enumCases'] ?? [];
         $enumBackingType    = $node['enumBackingType'] ?? null;
-        $functionCalls      = $node['functionCalls'] ?? null;
-        $superglobals       = $node['superglobals'] ?? null;
+        $functionCalls      = $node['functionCalls'] ?? [];
+        $superglobals       = $node['superglobals'] ?? [];
         $languageConstructs = $node['languageConstructs'] ?? [];
         $layers             = $node['layers'] ?? [];
 
         if (
             ! is_string($className)
-            || ! is_string($file)
             || ! is_int($line)
             || $layer !== null && ! is_string($layer)
             || $extends !== null && ! is_string($extends)
@@ -579,9 +1056,6 @@ final class AnalysisResultCache
             || ! $this->isStringArray($parentClasses)
             || ! $this->isStringArray($parentInterfaces)
             || ! $this->isStringArray($traits)
-            || ! is_array($rawMethods)
-            || ! is_array($rawConstants)
-            || ! is_array($rawProperties)
             || ! $this->isStringArray($functionCalls)
             || ! $this->isStringArray($superglobals)
             || ! $this->isStringArray($languageConstructs)
@@ -590,72 +1064,19 @@ final class AnalysisResultCache
             return null;
         }
 
-        $methods = [];
+        $methods    = $this->memberNodesFromArray($node['methods'] ?? [], $this->methodNodeFromArray(...));
+        $constants  = $this->memberNodesFromArray($node['constants'] ?? [], $this->constantNodeFromArray(...));
+        $properties = $this->memberNodesFromArray($node['properties'] ?? [], $this->propertyNodeFromArray(...));
+        $enumCases  = $this->memberNodesFromArray($node['enumCases'] ?? [], $this->enumCaseNodeFromArray(...));
 
-        foreach ($rawMethods as $rawMethod) {
-            if (! is_array($rawMethod)) {
-                return null;
-            }
-
-            $methodNode = $this->methodNodeFromArray($rawMethod);
-
-            if (! $methodNode instanceof MethodNode) {
-                return null;
-            }
-
-            $methods[] = $methodNode;
-        }
-
-        $constants = [];
-
-        foreach ($rawConstants as $rawConstant) {
-            if (! is_array($rawConstant)) {
-                return null;
-            }
-
-            $constantNode = $this->constantNodeFromArray($rawConstant);
-
-            if (! $constantNode instanceof ConstantNode) {
-                return null;
-            }
-
-            $constants[] = $constantNode;
-        }
-
-        $properties = [];
-
-        foreach ($rawProperties as $rawProperty) {
-            if (! is_array($rawProperty)) {
-                return null;
-            }
-
-            $propertyNode = $this->propertyNodeFromArray($rawProperty);
-
-            if (! $propertyNode instanceof PropertyNode) {
-                return null;
-            }
-
-            $properties[] = $propertyNode;
-        }
-
-        if (! is_array($rawEnumCases) || ($enumBackingType !== null && ! is_string($enumBackingType))) {
+        if (
+            $methods === null
+            || $constants === null
+            || $properties === null
+            || $enumCases === null
+            || ($enumBackingType !== null && ! is_string($enumBackingType))
+        ) {
             return null;
-        }
-
-        $enumCases = [];
-
-        foreach ($rawEnumCases as $rawEnumCase) {
-            if (! is_array($rawEnumCase)) {
-                return null;
-            }
-
-            $enumCaseNode = $this->enumCaseNodeFromArray($rawEnumCase);
-
-            if (! $enumCaseNode instanceof EnumCaseNode) {
-                return null;
-            }
-
-            $enumCases[] = $enumCaseNode;
         }
 
         return new ClassNode(
@@ -689,59 +1110,95 @@ final class AnalysisResultCache
     }
 
     /**
-     * @return array<string, mixed>
+     * @template TMember of MethodNode|ConstantNode|PropertyNode|EnumCaseNode
+     * @param callable(array<mixed, mixed>): (TMember|null) $memberFromArray
+     * @return list<TMember>|null
+     */
+    private function memberNodesFromArray(mixed $rawMembers, callable $memberFromArray): ?array
+    {
+        if (! is_array($rawMembers)) {
+            return null;
+        }
+
+        $members = [];
+
+        foreach ($rawMembers as $rawMember) {
+            if (! is_array($rawMember)) {
+                return null;
+            }
+
+            $member = $memberFromArray($rawMember);
+
+            if ($member === null) {
+                return null;
+            }
+
+            $members[] = $member;
+        }
+
+        return $members;
+    }
+
+    /**
+     * Members are stored as positional tuples: a class has many of them,
+     * and their field names would otherwise be repeated for every one.
+     * Changing a tuple's order or length is a format change: bump
+     * FORMAT_VERSION, or a same-length reorder would load silently with
+     * the wrong values.
+     *
+     * @return array{string, string, bool, bool, int, int, int, bool, int, bool}
      */
     private function methodNodeToArray(MethodNode $methodNode): array
     {
         return [
-            'name'                  => $methodNode->name,
-            'visibility'            => $methodNode->visibility,
-            'hasReturnType'         => $methodNode->hasReturnType,
-            'isStatic'              => $methodNode->isStatic,
-            'paramCount'            => $methodNode->paramCount,
-            'cyclomaticComplexity'  => $methodNode->cyclomaticComplexity,
-            'lineCount'             => $methodNode->lineCount,
-            'hasExplicitVisibility' => $methodNode->hasExplicitVisibility,
-            'line'                  => $methodNode->line,
-            'isMagic'               => $methodNode->isMagic,
+            $methodNode->name,
+            $methodNode->visibility,
+            $methodNode->hasReturnType,
+            $methodNode->isStatic,
+            $methodNode->paramCount,
+            $methodNode->cyclomaticComplexity,
+            $methodNode->lineCount,
+            $methodNode->hasExplicitVisibility,
+            $methodNode->line,
+            $methodNode->isMagic,
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{string, string, bool, int}
      */
     private function constantNodeToArray(ConstantNode $constantNode): array
     {
         return [
-            'name'                  => $constantNode->name,
-            'visibility'            => $constantNode->visibility,
-            'hasExplicitVisibility' => $constantNode->hasExplicitVisibility,
-            'line'                  => $constantNode->line,
+            $constantNode->name,
+            $constantNode->visibility,
+            $constantNode->hasExplicitVisibility,
+            $constantNode->line,
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{string, string, bool, int}
      */
     private function propertyNodeToArray(PropertyNode $propertyNode): array
     {
         return [
-            'name'                  => $propertyNode->name,
-            'visibility'            => $propertyNode->visibility,
-            'hasExplicitVisibility' => $propertyNode->hasExplicitVisibility,
-            'line'                  => $propertyNode->line,
+            $propertyNode->name,
+            $propertyNode->visibility,
+            $propertyNode->hasExplicitVisibility,
+            $propertyNode->line,
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{string, int, int|string|null}
      */
     private function enumCaseNodeToArray(EnumCaseNode $enumCaseNode): array
     {
         return [
-            'name'  => $enumCaseNode->name,
-            'line'  => $enumCaseNode->line,
-            'value' => $enumCaseNode->value,
+            $enumCaseNode->name,
+            $enumCaseNode->line,
+            $enumCaseNode->value,
         ];
     }
 
@@ -750,32 +1207,49 @@ final class AnalysisResultCache
      */
     private function methodNodeFromArray(array $method): ?MethodNode
     {
+        if (count($method) !== 10 || ! array_is_list($method)) {
+            return null;
+        }
+
+        [
+            $name,
+            $visibility,
+            $hasReturnType,
+            $isStatic,
+            $paramCount,
+            $cyclomaticComplexity,
+            $lineCount,
+            $hasExplicitVisibility,
+            $line,
+            $isMagic,
+        ] = $method;
+
         if (
-            ! is_string($method['name'] ?? null)
-            || ! is_string($method['visibility'] ?? null)
-            || ! is_bool($method['hasReturnType'] ?? null)
-            || ! is_bool($method['isStatic'] ?? null)
-            || ! is_int($method['paramCount'] ?? null)
-            || ! is_int($method['cyclomaticComplexity'] ?? null)
-            || ! is_int($method['lineCount'] ?? null)
-            || ! is_bool($method['hasExplicitVisibility'] ?? null)
-            || ! is_int($method['line'] ?? null)
-            || ! is_bool($method['isMagic'] ?? null)
+            ! is_string($name)
+            || ! is_string($visibility)
+            || ! is_bool($hasReturnType)
+            || ! is_bool($isStatic)
+            || ! is_int($paramCount)
+            || ! is_int($cyclomaticComplexity)
+            || ! is_int($lineCount)
+            || ! is_bool($hasExplicitVisibility)
+            || ! is_int($line)
+            || ! is_bool($isMagic)
         ) {
             return null;
         }
 
         return new MethodNode(
-            name:                 $method['name'],
-            visibility:           $method['visibility'],
-            hasReturnType:        $method['hasReturnType'],
-            isStatic:             $method['isStatic'],
-            paramCount:           $method['paramCount'],
-            cyclomaticComplexity: $method['cyclomaticComplexity'],
-            lineCount:            $method['lineCount'],
-            hasExplicitVisibility: $method['hasExplicitVisibility'],
-            line:                 $method['line'],
-            isMagic:              $method['isMagic'],
+            name:                  $name,
+            visibility:            $visibility,
+            hasReturnType:         $hasReturnType,
+            isStatic:              $isStatic,
+            paramCount:            $paramCount,
+            cyclomaticComplexity:  $cyclomaticComplexity,
+            lineCount:             $lineCount,
+            hasExplicitVisibility: $hasExplicitVisibility,
+            line:                  $line,
+            isMagic:               $isMagic,
         );
     }
 
@@ -784,20 +1258,21 @@ final class AnalysisResultCache
      */
     private function constantNodeFromArray(array $constant): ?ConstantNode
     {
-        if (
-            ! is_string($constant['name'] ?? null)
-            || ! is_string($constant['visibility'] ?? null)
-            || ! is_bool($constant['hasExplicitVisibility'] ?? null)
-            || ! is_int($constant['line'] ?? null)
-        ) {
+        if (count($constant) !== 4 || ! array_is_list($constant)) {
+            return null;
+        }
+
+        [$name, $visibility, $hasExplicitVisibility, $line] = $constant;
+
+        if (! is_string($name) || ! is_string($visibility) || ! is_bool($hasExplicitVisibility) || ! is_int($line)) {
             return null;
         }
 
         return new ConstantNode(
-            name:                 $constant['name'],
-            visibility:           $constant['visibility'],
-            hasExplicitVisibility: $constant['hasExplicitVisibility'],
-            line:                 $constant['line'],
+            name:                  $name,
+            visibility:            $visibility,
+            hasExplicitVisibility: $hasExplicitVisibility,
+            line:                  $line,
         );
     }
 
@@ -806,20 +1281,21 @@ final class AnalysisResultCache
      */
     private function propertyNodeFromArray(array $property): ?PropertyNode
     {
-        if (
-            ! is_string($property['name'] ?? null)
-            || ! is_string($property['visibility'] ?? null)
-            || ! is_bool($property['hasExplicitVisibility'] ?? null)
-            || ! is_int($property['line'] ?? null)
-        ) {
+        if (count($property) !== 4 || ! array_is_list($property)) {
+            return null;
+        }
+
+        [$name, $visibility, $hasExplicitVisibility, $line] = $property;
+
+        if (! is_string($name) || ! is_string($visibility) || ! is_bool($hasExplicitVisibility) || ! is_int($line)) {
             return null;
         }
 
         return new PropertyNode(
-            name:                 $property['name'],
-            visibility:           $property['visibility'],
-            hasExplicitVisibility: $property['hasExplicitVisibility'],
-            line:                 $property['line'],
+            name:                  $name,
+            visibility:            $visibility,
+            hasExplicitVisibility: $hasExplicitVisibility,
+            line:                  $line,
         );
     }
 
@@ -828,28 +1304,32 @@ final class AnalysisResultCache
      */
     private function enumCaseNodeFromArray(array $enumCase): ?EnumCaseNode
     {
-        $value = $enumCase['value'] ?? null;
+        if (count($enumCase) !== 3 || ! array_is_list($enumCase)) {
+            return null;
+        }
 
-        if (
-            ! is_string($enumCase['name'] ?? null)
-            || ! is_int($enumCase['line'] ?? null)
-            || ($value !== null && ! is_int($value) && ! is_string($value))
-        ) {
+        [$name, $line, $value] = $enumCase;
+
+        if (! is_string($name) || ! is_int($line) || ($value !== null && ! is_int($value) && ! is_string($value))) {
             return null;
         }
 
         return new EnumCaseNode(
-            name:  $enumCase['name'],
-            line:  $enumCase['line'],
+            name:  $name,
+            line:  $line,
             value: $value,
         );
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The file is not stored: the payload belongs to one file, known when
+     * loading. The two lists are empty for most files and left out.
+     *
+     * @return array<string, mixed>
+     */
     private function fileAnalysisToArray(FileAnalysis $fileAnalysis): array
     {
-        return [
-            'file'              => $fileAnalysis->file,
+        $analysis = [
             'hasUtf8Bom'        => $fileAnalysis->hasUtf8Bom,
             'hasValidUtf8'      => $fileAnalysis->hasValidUtf8,
             'invalidPhpTagLine' => $fileAnalysis->invalidPhpTagLine,
@@ -858,14 +1338,26 @@ final class AnalysisResultCache
             'hasSideEffects'    => $fileAnalysis->hasSideEffects,
             'sideEffectLine'    => $fileAnalysis->sideEffectLine,
         ];
+
+        if ($fileAnalysis->nonCanonicalKeywordConstants !== []) {
+            $analysis['nonCanonicalKeywordConstants'] = $fileAnalysis->nonCanonicalKeywordConstants;
+        }
+
+        if ($fileAnalysis->numericLiterals !== []) {
+            $analysis['numericLiterals'] = $fileAnalysis->numericLiterals;
+        }
+
+        return $analysis;
     }
 
     /** @param array<mixed, mixed> $analysis */
-    private function fileAnalysisFromArray(array $analysis): ?FileAnalysis
+    private function fileAnalysisFromArray(array $analysis, string $file): ?FileAnalysis
     {
+        $nonCanonicalKeywordConstants = $analysis['nonCanonicalKeywordConstants'] ?? [];
+        $numericLiterals              = $analysis['numericLiterals'] ?? [];
+
         if (
-            ! is_string($analysis['file'] ?? null)
-            || ! is_bool($analysis['hasUtf8Bom'] ?? null)
+            ! is_bool($analysis['hasUtf8Bom'] ?? null)
             || ! is_bool($analysis['hasValidUtf8'] ?? null)
             || ! array_key_exists('invalidPhpTagLine', $analysis)
             || ($analysis['invalidPhpTagLine'] !== null && ! is_int($analysis['invalidPhpTagLine']))
@@ -873,12 +1365,14 @@ final class AnalysisResultCache
             || ! is_bool($analysis['declaresSymbols'] ?? null)
             || ! is_bool($analysis['hasSideEffects'] ?? null)
             || ! is_int($analysis['sideEffectLine'] ?? null)
+            || ! $this->isKeywordConstantList($nonCanonicalKeywordConstants)
+            || ! $this->isNumericLiteralList($numericLiterals)
         ) {
             return null;
         }
 
         return new FileAnalysis(
-            file: $analysis['file'],
+            file: $file,
             hasUtf8Bom: $analysis['hasUtf8Bom'],
             hasValidUtf8: $analysis['hasValidUtf8'],
             invalidPhpTagLine: $analysis['invalidPhpTagLine'],
@@ -886,7 +1380,56 @@ final class AnalysisResultCache
             declaresSymbols: $analysis['declaresSymbols'],
             hasSideEffects: $analysis['hasSideEffects'],
             sideEffectLine: $analysis['sideEffectLine'],
+            nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
+            numericLiterals: $numericLiterals,
         );
+    }
+
+    /**
+     * @phpstan-assert-if-true list<array{int, string}> $value
+     */
+    private function isKeywordConstantList(mixed $value): bool
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return false;
+        }
+
+        foreach ($value as $keywordConstant) {
+            if (
+                ! is_array($keywordConstant)
+                || count($keywordConstant) !== 2
+                || ! is_int($keywordConstant[0] ?? null)
+                || ! is_string($keywordConstant[1] ?? null)
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @phpstan-assert-if-true list<array{int, string, int|float}> $value
+     */
+    private function isNumericLiteralList(mixed $value): bool
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return false;
+        }
+
+        foreach ($value as $numericLiteral) {
+            if (
+                ! is_array($numericLiteral)
+                || count($numericLiteral) !== 3
+                || ! is_int($numericLiteral[0] ?? null)
+                || ! is_string($numericLiteral[1] ?? null)
+                || (! is_int($numericLiteral[2] ?? null) && ! is_float($numericLiteral[2] ?? null))
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -927,9 +1470,9 @@ final class AnalysisResultCache
         return sprintf('%s/%s.json', $this->cacheDirectory, $key);
     }
 
-    private function classNodesKey(string $file, string $namespace): string
+    private function analysisNodesKey(string $file, string $namespace): string
     {
-        return 'class-nodes-' . hash('xxh128', $namespace . "\0" . $file);
+        return 'analysis-nodes-' . hash('xxh128', $namespace . "\0" . $file);
     }
 
     /**

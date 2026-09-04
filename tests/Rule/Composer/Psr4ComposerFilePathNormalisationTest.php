@@ -17,25 +17,25 @@ final class Psr4ComposerFilePathNormalisationTest extends TestCase
 {
     private const WINDOWS_STYLE_MISSING_BASE_PATH = 'C:\structarmed-missing-fixture\app';
 
-    public function testDirectoryExistsRuleReportsForwardSlashesForWindowsStyleBasePath(): void
+    public function testDirectoryExistsRulePassesWhenComposerJsonIsMissingAtWindowsStyleBasePath(): void
     {
-        $violation = (new Psr4DirectoryExistsRule())->evaluateProject(
-            self::WINDOWS_STYLE_MISSING_BASE_PATH,
-            Architecture::define()
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4DirectoryExistsRule())->evaluateProject(
+                self::WINDOWS_STYLE_MISSING_BASE_PATH,
+                Architecture::define()
+            )
         );
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertSame('C:/structarmed-missing-fixture/app/composer.json', $violation->file);
     }
 
-    public function testSourcePathsRuleReportsForwardSlashesForWindowsStyleBasePath(): void
+    public function testSourcePathsRulePassesWhenComposerJsonIsMissingAtWindowsStyleBasePath(): void
     {
-        $violation = (new Psr4SourcePathsRule(null))->evaluateProject(
-            self::WINDOWS_STYLE_MISSING_BASE_PATH,
-            Architecture::define()
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new Psr4SourcePathsRule(null))->evaluateProject(
+                self::WINDOWS_STYLE_MISSING_BASE_PATH,
+                Architecture::define()
+            )
         );
-
-        $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertSame('C:/structarmed-missing-fixture/app/composer.json', $violation->file);
     }
 }

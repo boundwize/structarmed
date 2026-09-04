@@ -13,7 +13,6 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Util\Path;
 
 use function dirname;
-use function file_exists;
 use function implode;
 use function is_dir;
 use function rtrim;
@@ -28,22 +27,10 @@ final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRu
 
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
-        $composerFile = Path::normalise(rtrim($basePath, '/') . '/composer.json', canonicalise: true);
-
-        if (! file_exists($composerFile)) {
-            return $this->violation(
-                'composer.json was not found',
-                $composerFile
-            );
-        }
-
         $composer = $this->psr4PathResolver->composerConfig($basePath);
 
         if ($composer === null) {
-            return $this->violation(
-                'composer.json is not valid JSON',
-                $composerFile
-            );
+            return null;
         }
 
         $nonExistentPaths = [];
@@ -58,6 +45,7 @@ final readonly class Psr4DirectoryExistsRule extends AbstractJsonRecastFixableRu
             return null;
         }
 
+        $composerFile = Path::normalise(rtrim($basePath, '/') . '/composer.json', canonicalise: true);
         return $this->violation(
             sprintf(
                 'PSR-4 source path(s) [%s] declared in composer.json do not exist on disk',

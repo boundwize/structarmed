@@ -63,6 +63,8 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\File`.
 | `Psr1SymbolsOrSideEffectsRule` | `new Psr1SymbolsOrSideEffectsRule(sourcePaths: ['src/'])` | A file declares symbols or causes side effects, but does not do both. |
 | `Psr1ValidUtf8Rule` | `new Psr1ValidUtf8Rule(sourcePaths: ['src/'])` | PHP files use valid UTF-8 encoding. |
 | `Psr1Utf8WithoutBomRule` | `new Psr1Utf8WithoutBomRule(sourcePaths: ['src/'])` | PHP files do not start with a byte order mark. Supports `--fix`. |
+| `MustUseLowercaseKeywordConstantRule` | `new MustUseLowercaseKeywordConstantRule(sourcePaths: ['src/'])` | PHP's special keyword constants `true`, `false`, and `null` use their canonical lowercase spelling. Fully qualified forms such as `\TRUE` are preserved as `\true`. Supports `--fix`. |
+| `LargeNumericLiteralMustUseSeparatorRule` | `new LargeNumericLiteralMustUseSeparatorRule(minimum: 1_000_000, sourcePaths: ['src/'])` | Plain decimal integer and float literals whose magnitude is at least `minimum` (default `1_000_000`) group their integer digits in threes with `_` separators, so `1000500.001` becomes `1_000_500.001`. Hexadecimal, octal, binary, exponent, and already separated literals are ignored. Supports `--fix`. |
 {: .rule-table }
 
 Pass `sourcePaths: null` or omit it to let the rule read PSR-4 paths from `composer.json`.
@@ -73,13 +75,18 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 | Rule | Constructor | Checks |
 |---|---|---|
+| `AnonymousClassMayNotHaveEmptyParenthesesRule` | `new AnonymousClassMayNotHaveEmptyParenthesesRule(layer: 'Source')` | Anonymous classes that pass no constructor argument omit the parentheses after `class` (`new class {}`, not `new class () {}`), per [PER Coding Style](https://www.php-fig.org/per/coding-style/#8-anonymous-classes). Supports `--fix` by removing the empty parentheses. |
 | `ClassConstantNameMustBeUpperCaseRule` | `new ClassConstantNameMustBeUpperCaseRule(layer: 'Domain')` | Class, interface, and trait constants use upper case with underscore separators. Enums are skipped (PER Coding Style recommends PascalCase enum constants). |
 | `ClassImplementingInterfaceMustHaveSuffixRule` | `new ClassImplementingInterfaceMustHaveSuffixRule(layer: 'HTTP', interface: MiddlewareInterface::class, suffix: 'Middleware')` | Classes implementing a specific interface use the required suffix. |
 | `ClassNameMustBeStudlyCapsRule` | `new ClassNameMustBeStudlyCapsRule(layer: 'Source')` | Class names use StudlyCaps. |
 | `ClassNameMustHaveSuffixRule` | `new ClassNameMustHaveSuffixRule(layer: 'Controller', suffix: 'Controller')` | Classes in a layer have the required suffix. |
 | `ClassNameMustNotHavePrefixRule` | `new ClassNameMustNotHavePrefixRule(layer: 'Model', prefix: 'Model')` | Classes in a layer do not use a forbidden prefix. |
+| `EnumCaseNameMustBePascalCaseRule` | `new EnumCaseNameMustBePascalCaseRule(layer: 'Source')` | Enum case names use PascalCase, per [PER Coding Style](https://www.php-fig.org/per/coding-style/#9-enumerations). |
+| `EnumConstantMayNotBeProtectedRule` | `new EnumConstantMayNotBeProtectedRule(layer: 'Source')` | Enum constants are not declared `protected` — enums cannot be extended, so `private` is used instead, per [PER Coding Style](https://www.php-fig.org/per/coding-style/#9-enumerations). Supports `--fix` by changing `protected` to `private`. |
+| `EnumMethodMayNotBeProtectedRule` | `new EnumMethodMayNotBeProtectedRule(layer: 'Source')` | Enum methods are not declared `protected` — enums cannot be extended, so `private` is used instead, per [PER Coding Style](https://www.php-fig.org/per/coding-style/#9-enumerations). Supports `--fix` by changing `protected` to `private`. |
 | `ExtendedClassMustBeAbstractOrInstantiatedRule` | `new ExtendedClassMustBeAbstractOrInstantiatedRule(layer: 'Source')` | Classes another scanned class extends are declared `abstract` unless they are also instantiated (`new X`, a `new self`/`new static`/`new parent` resolving to them, a constant class expression such as `new (X::class)` or `new ('App\X')`, or a chained `(new ReflectionClass(X::class))->newInstance*()`). Type hints, `instanceof`, and `::class` keep working on an abstract class, so they do not count. Runtime-fed construction (`new $class` from a parameter, `unserialize()`, container factories) is outside the scanned-code boundary — exclude such factories' targets with rule-scoped `skip()` or `skipRule()`. Supports `--fix` by adding the `abstract` modifier. |
 | `MaxDependencyCountRule` | `new MaxDependencyCountRule(layer: 'Controller', maxCount: 5)` | Constructor dependency count stays below the configured limit. |
+| `MayNotExtendClassRule` | `new MayNotExtendClassRule(layer: 'Domain', class: 'Illuminate\\Database\\Eloquent\\Model')` | Classes in a layer do not extend a forbidden class, directly or through any parent class. |
 | `MayNotImplementInterfaceRule` | `new MayNotImplementInterfaceRule(layer: 'Domain', interface: JsonSerializable::class)` | Classes in a layer do not implement a forbidden interface. |
 | `MustBeFinalRule` | `new MustBeFinalRule(layer: 'Domain', classNamePattern: '/Entity$/')` | Matching classes in a layer are declared `final`. Classes extended by another scanned class are skipped (making them `final` would break the child). Supports `--fix`. |
 | `MustBeUsedInterfaceRule` | `new MustBeUsedInterfaceRule(layer: 'Source')` | Interfaces are implemented by a scanned class (directly or through inheritance), extended by another scanned interface, or referenced as a dependency (type hint, `instanceof`, `::class`, a class-name string, ...). Supports `--fix` by removing the unused interface (and deleting its file when only boilerplate remains). |
@@ -95,7 +102,37 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 
 `classNamePattern` and `excludePattern` are regular expressions matched against the fully-qualified class name.
 
-`Psr4DirectoryExistsRule`, `Psr1PhpTagsRule`, `Psr1Utf8WithoutBomRule`, `ExtendedClassMustBeAbstractOrInstantiatedRule`, `MustBeFinalRule`, `MustBeUsedInterfaceRule`, `MustBeUsedAbstractClassRule`, `MustBeUsedTraitRule`, `MustDeclareConstantVisibilityRule`, `MustDeclareMethodVisibilityRule`, and `MustDeclarePropertyVisibilityRule` implement `Boundwize\StructArmed\Rule\FixableInterface`, so StructArmed can automatically remove PSR-4 mappings for missing directories, normalize invalid PHP opening tags, remove UTF-8 byte order marks, add the `final` or `abstract` class modifier, remove unused interfaces, abstract classes, and traits (deleting their file when only `declare`/`namespace`/`use` boilerplate remains), and add missing constant, method, or property visibility modifiers when you run `vendor/bin/structarmed analyse --fix`.
+## Fixable Rules
+
+The following rules implement `Boundwize\StructArmed\Rule\FixableInterface` and can apply their changes when you run `vendor/bin/structarmed analyse --fix`.
+
+| Rule | Automatic fix |
+|---|---|
+| `Psr4DirectoryExistsRule` | Removes PSR-4 mappings for missing directories. |
+| `Psr1PhpTagsRule` | Normalizes invalid PHP opening tags. |
+| `Psr1Utf8WithoutBomRule` | Removes the UTF-8 byte order mark. |
+| `MustUseLowercaseKeywordConstantRule` | Lowercases `TRUE`, `FALSE`, and `NULL` keyword constants. |
+| `LargeNumericLiteralMustUseSeparatorRule` | Adds `_` separators to large numeric literals. |
+| `AnonymousClassMayNotHaveEmptyParenthesesRule` | Removes empty parentheses from anonymous classes that pass no constructor arguments. |
+| `ExtendedClassMustBeAbstractOrInstantiatedRule` | Adds the `abstract` modifier to an extended class that is not instantiated. |
+| `MustBeFinalRule` | Adds the `final` modifier. |
+| `MustBeUsedInterfaceRule` | Removes an unused interface, deleting its file when only boilerplate remains. |
+| `MustBeUsedAbstractClassRule` | Removes an unused abstract class, deleting its file when only boilerplate remains. |
+| `MustBeUsedTraitRule` | Removes an unused trait, deleting its file when only boilerplate remains. |
+| `MustDeclareConstantVisibilityRule` | Adds a missing constant visibility modifier. |
+| `MustDeclareMethodVisibilityRule` | Adds a missing method visibility modifier. |
+| `MustDeclarePropertyVisibilityRule` | Adds a missing property visibility modifier. |
+{: .rule-table }
+
+## Function Rules
+
+Namespace: `Boundwize\StructArmed\Rule\Rules\Function_`.
+
+| Rule | Constructor | Checks |
+|---|---|---|
+| `MustBeStaticAnonymousFunctionRule` | `new MustBeStaticAnonymousFunctionRule(layer: 'Domain')` | Closures and arrow functions in a layer are declared `static`. Anonymous functions that read `$this` (directly or through a nested closure) are skipped, since a static closure cannot access `$this`. Supports `--fix` by adding the `static` modifier. |
+| `MustHaveReturnTypeFunctionRule` | `new MustHaveReturnTypeFunctionRule(layer: 'Helper')` | Named function declarations in a layer declare a return type. |
+{: .rule-table }
 
 ## Layer Rules
 

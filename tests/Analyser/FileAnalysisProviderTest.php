@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+use function array_column;
 use function base64_encode;
 use function file_put_contents;
 use function sys_get_temp_dir;
@@ -110,6 +111,26 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertFalse($fileAnalysis->hasValidAst);
         $this->assertFalse($fileAnalysis->declaresSymbols);
         $this->assertFalse($fileAnalysis->hasSideEffects);
+    }
+
+    public function testExposesTokensOfTheFileParsedLast(): void
+    {
+        $fileAnalysisProvider = new FileAnalysisProvider();
+
+        $this->assertIsArray($fileAnalysisProvider->ast($this->source('<?php $foo = new class () {};')));
+
+        $tokenTexts = [];
+
+        foreach ($fileAnalysisProvider->tokens() as $token) {
+            $tokenTexts[] = $token->text;
+        }
+
+        $this->assertContains('class', $tokenTexts);
+        $this->assertContains('(', $tokenTexts);
+
+        // The next parse replaces them.
+        $this->assertIsArray($fileAnalysisProvider->ast($this->source('<?php $bar = 1;'), false));
+        $this->assertNotContains('class', array_column($fileAnalysisProvider->tokens(), 'text'));
     }
 
     public function testParsesAstWithoutRetainingItForAnalysis(): void

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cache;
 
+use function array_fill_keys;
+use function array_intersect_key;
 use function hash_file;
 
 /**
@@ -28,6 +30,17 @@ final class FileHashProvider
         }
 
         return $this->hashes[$file] = $hash;
+    }
+
+    /**
+     * @param list<string> $files
+     */
+    public function forFiles(array $files): self
+    {
+        $provider         = new self();
+        $provider->hashes = array_intersect_key($this->hashes, array_fill_keys($files, true));
+
+        return $provider;
     }
 
     public function clear(): void

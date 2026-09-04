@@ -33,7 +33,7 @@ vendor/bin/structarmed init --preset=psr4
 # Enforce basic coding standard rules
 vendor/bin/structarmed init --preset=psr1
 
-# PSR-12 extends PSR-1 with explicit member visibility checks
+# PSR-12 extends PSR-1 with lowercase keyword constants and explicit member visibility checks
 vendor/bin/structarmed init --preset=psr12
 
 # PSR-15 middleware and request handler interface checks
@@ -47,6 +47,9 @@ vendor/bin/structarmed init --preset=ddd
 
 # Remove speculative abstractions: unimplemented interfaces, unextended abstract classes, unused traits
 vendor/bin/structarmed init --preset=yagni
+
+# Static closures and digit separators in large numeric literals
+vendor/bin/structarmed init --preset=codequality
 
 # Enable every preset at once
 vendor/bin/structarmed init --preset=all

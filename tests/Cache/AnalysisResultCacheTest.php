@@ -6,10 +6,13 @@ namespace Boundwize\StructArmed\Tests\Cache;
 
 use App\Foo;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
+use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
+use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
@@ -35,6 +38,9 @@ use function file_put_contents;
 use function glob;
 use function hash;
 use function hash_file;
+use function hash_final;
+use function hash_init;
+use function hash_update;
 use function is_dir;
 use function json_decode;
 use function json_encode;
@@ -66,6 +72,42 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testForFilesUsesOnlyRequestedMemoisedHashes(): void
+    {
+        $directory     = $this->createTempDirectory();
+        $cacheDir      = $this->createTempDirectory();
+        $retainedFile  = $directory . '/Retained.php';
+        $unrelatedFile = $directory . '/Unrelated.php';
+
+        file_put_contents($retainedFile, '<?php class Retained {}');
+        file_put_contents($unrelatedFile, '<?php class Unrelated {}');
+
+        $fileHashProvider = new FileHashProvider();
+        $fileHashProvider->hash($retainedFile);
+        $fileHashProvider->hash($unrelatedFile);
+
+        $cacheForFile = (new AnalysisResultCache($directory, $fileHashProvider, $cacheDir))
+            ->forFiles([$retainedFile]);
+
+        file_put_contents($retainedFile, '<?php final class Retained {}');
+        file_put_contents($unrelatedFile, '<?php final class Unrelated {}');
+
+        try {
+            $cacheForFile->storeAnalysisNodes($retainedFile, 'config', []);
+            $cacheForFile->storeAnalysisNodes($unrelatedFile, 'config', []);
+
+            $analysisResultCache = new AnalysisResultCache($directory, new FileHashProvider(), $cacheDir);
+
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($retainedFile, 'config'));
+            $this->assertIsArray($analysisResultCache->loadAnalysisNodes($unrelatedFile, 'config'));
+        } finally {
+            unlink($retainedFile);
+            unlink($unrelatedFile);
+            $this->removeTempDirectory($directory);
+            $this->removeTempDirectory($cacheDir);
+        }
+    }
+
     public function testStoresAndLoadsViolationCollection(): void
     {
         $cacheDirectory          = $this->createTempDirectory();
@@ -83,6 +125,7 @@ final class AnalysisResultCacheTest extends TestCase
             methodName: 'save',
             constantName: 'VERSION',
             propertyName: 'status',
+            numericLiteral: '10000',
         ));
 
         try {
@@ -399,12 +442,74 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
             $analysisResultCache->store('key', ['configHash' => 'other'], new RuleViolationCollection());
 
             $this->assertFalse($analysisResultCache->shouldInvalidate());
         } finally {
             unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testCacheFromOlderFormatVersionIsInvalidated(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(
+            __DIR__,
+            new FileHashProvider(),
+            $cacheDirectory,
+            'same',
+            'composer-hash',
+        );
+
+        try {
+            // A marker written by a release before the format version was
+            // recorded, or by an older format version, with otherwise
+            // matching hashes.
+            file_put_contents($cacheDirectory . '/_metadata.json', json_encode([
+                'configHash'                   => 'same',
+                'composerGeneratedVersionHash' => 'composer-hash',
+            ], JSON_THROW_ON_ERROR));
+
+            $this->assertTrue($analysisResultCache->shouldInvalidate());
+
+            file_put_contents($cacheDirectory . '/_metadata.json', json_encode([
+                'version'                      => AnalysisResultCache::FORMAT_VERSION - 1,
+                'configHash'                   => 'same',
+                'composerGeneratedVersionHash' => 'composer-hash',
+            ], JSON_THROW_ON_ERROR));
+
+            $this->assertTrue($analysisResultCache->shouldInvalidate());
+
+            $analysisResultCache->clear();
+            $analysisResultCache->store('key', [], new RuleViolationCollection());
+
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testCacheIsInvalidatedWhenComposerJsonChanges(): void
+    {
+        $basePath       = $this->createTempDirectory();
+        $cacheDirectory = $this->createTempDirectory();
+        file_put_contents($basePath . '/composer.json', '{"autoload": {"psr-4": {"App\\\\": "src/"}}}');
+
+        try {
+            $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), $cacheDirectory);
+            $analysisResultCache->store('key', [], new RuleViolationCollection());
+
+            $this->assertFalse($analysisResultCache->shouldInvalidate());
+
+            file_put_contents($basePath . '/composer.json', '{"autoload": {"psr-4": {"App\\\\": "lib/"}}}');
+
+            $this->assertTrue(
+                (new AnalysisResultCache($basePath, new FileHashProvider(), $cacheDirectory))->shouldInvalidate()
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
             $this->removeTempDirectory($cacheDirectory);
         }
     }
@@ -485,19 +590,19 @@ final class AnalysisResultCacheTest extends TestCase
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory(new FileHashProvider());
 
         try {
-            $withoutComposer = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash');
+            $withoutComposer = $analysisCacheMetadataFactory->analysisNodeCacheNamespace($basePath, 'config-hash');
 
             $this->assertSame(
                 $withoutComposer,
-                $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash')
+                $analysisCacheMetadataFactory->analysisNodeCacheNamespace($basePath, 'config-hash')
             );
             $this->assertNotSame(
                 $withoutComposer,
-                $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'other-config-hash')
+                $analysisCacheMetadataFactory->analysisNodeCacheNamespace($basePath, 'other-config-hash')
             );
 
             file_put_contents($basePath . '/composer.json', '{"autoload":{"psr-4":{"App\\\\":"lib/"}}}');
-            $withComposer = $analysisCacheMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash');
+            $withComposer = $analysisCacheMetadataFactory->analysisNodeCacheNamespace($basePath, 'config-hash');
 
             $this->assertNotSame($withoutComposer, $withComposer);
 
@@ -507,10 +612,71 @@ final class AnalysisResultCacheTest extends TestCase
 
             $this->assertNotSame(
                 $withComposer,
-                $nextRunMetadataFactory->classNodeCacheNamespace($basePath, 'config-hash')
+                $nextRunMetadataFactory->analysisNodeCacheNamespace($basePath, 'config-hash')
             );
         } finally {
             $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testStoreExtractionResultStoresOnePayloadPerFile(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $fileWithNodes       = __FILE__;
+        $fileWithoutNodes    = __DIR__ . '/FileHashProviderTest.php';
+
+        try {
+            $analysisResultCache->storeExtractionResult(
+                [$fileWithNodes, $fileWithoutNodes],
+                'namespace',
+                new ExtractionResult(
+                    classNodes: [$this->makeClassNode($fileWithNodes)],
+                    fileAnalyses: [],
+                    anonymousClassNodes: [new AnonymousClassNode(file: $fileWithNodes, line: 7, extends: null)],
+                    functionNodes: [
+                        new FunctionNode(
+                            functionName:         'App\\format',
+                            file:                 $fileWithNodes,
+                            line:                 3,
+                            layer:                'Source',
+                            hasReturnType:        true,
+                            paramCount:           0,
+                            cyclomaticComplexity: 1,
+                            lineCount:            1,
+                        ),
+                    ],
+                    anonymousFunctionNodes: [
+                        new AnonymousFunctionNode(
+                            file:                  $fileWithNodes,
+                            line:                  5,
+                            layer:                 null,
+                            isArrowFunction:       true,
+                            isStatic:              true,
+                            enclosingFunctionName: 'App\\format',
+                            usesThis:              false,
+                            hasReturnType:         false,
+                            paramCount:            0,
+                            cyclomaticComplexity:  1,
+                            lineCount:             1,
+                        ),
+                    ],
+                )
+            );
+
+            $withNodes    = $analysisResultCache->loadAnalysisNodes($fileWithNodes, 'namespace');
+            $withoutNodes = $analysisResultCache->loadAnalysisNodes($fileWithoutNodes, 'namespace');
+
+            $this->assertNotNull($withNodes);
+            $this->assertCount(1, $withNodes['classNodes']);
+            $this->assertCount(1, $withNodes['anonymousClassNodes']);
+            $this->assertCount(1, $withNodes['functionNodes']);
+            $this->assertCount(1, $withNodes['anonymousFunctionNodes']);
+            $this->assertNotNull($withoutNodes);
+            $this->assertSame([], $withoutNodes['classNodes']);
+            $this->assertSame([], $withoutNodes['functionNodes']);
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
         }
     }
 
@@ -579,9 +745,9 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
 
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertStringNotContainsString(
                 "\n",
@@ -605,18 +771,36 @@ final class AnalysisResultCacheTest extends TestCase
         $classNodes          = [$this->makeClassNode($sourceFile)];
         $anonymousClassNodes = [
             new AnonymousClassNode(
-                file:       $sourceFile,
-                line:       7,
-                extends:    'App\BaseHandler',
-                implements: ['App\Contract'],
-                traits:     ['App\Helper'],
+                file:                  $sourceFile,
+                line:                  7,
+                extends:               'App\BaseHandler',
+                implements:            ['App\Contract'],
+                traits:                ['App\Helper'],
+                layer:                 'Source',
+                enclosingClassName:    'App\HandlerFactory',
+                hasEmptyParentheses:   true,
+                layers:                ['Source', 'Shared'],
+                isReadonly:            true,
+                dependencies:          ['App\BaseHandler', 'App\Contract'],
+                methods:               [new MethodNode('__construct', 'public', false, false, 1, 1, 3, true, 8)],
+                constants:             [new ConstantNode('LIMIT', 'public', true, 9)],
+                properties:            [new PropertyNode('clock', 'private', true, 8)],
+                functionCalls:         ['strtoupper'],
+                superglobals:          ['$_GET'],
+                languageConstructs:    ['exit'],
+            ),
+            new AnonymousClassNode(
+                file:                  $sourceFile,
+                line:                  12,
+                extends:               null,
+                enclosingFunctionName: 'App\make',
             ),
         ];
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes(
+            $analysisResultCache->storeAnalysisNodes(
                 $sourceFile,
                 'config',
                 $classNodes,
@@ -626,7 +810,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ['App\InstantiatedInFunction'],
             );
 
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config');
 
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded['classNodes']);
@@ -642,6 +826,231 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testStoresAndLoadsFunctionLikeNodes(): void
+    {
+        $cacheDirectory         = $this->createTempDirectory();
+        $sourceFile             = $cacheDirectory . '/helpers.php';
+        $analysisResultCache    = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $functionNodes          = [
+            new FunctionNode(
+                functionName:         'App\\format',
+                file:                 $sourceFile,
+                line:                 3,
+                layer:                'Source',
+                hasReturnType:        true,
+                paramCount:           2,
+                cyclomaticComplexity: 4,
+                lineCount:            9,
+                dependencies:         ['App\\Money'],
+                functionCalls:        ['sprintf'],
+                superglobals:         ['$_GET'],
+                languageConstructs:   ['echo'],
+                layers:               ['Source', 'Support'],
+            ),
+        ];
+        $anonymousFunctionNodes = [
+            new AnonymousFunctionNode(
+                file:                  $sourceFile,
+                line:                  5,
+                layer:                 null,
+                isArrowFunction:       true,
+                isStatic:              true,
+                enclosingClassName:    'App\\Handler',
+                enclosingFunctionName: 'App\\format',
+                usesThis:              true,
+                hasReturnType:         false,
+                paramCount:            1,
+                cyclomaticComplexity:  2,
+                lineCount:             1,
+                dependencies:          ['App\\Money'],
+                functionCalls:         ['App\\helper'],
+                superglobals:          [],
+                languageConstructs:    ['exit'],
+            ),
+        ];
+
+        file_put_contents($sourceFile, '<?php function format() {}');
+
+        try {
+            $analysisResultCache->storeAnalysisNodes(
+                $sourceFile,
+                'config',
+                [],
+                null,
+                [],
+                [],
+                [],
+                $functionNodes,
+                $anonymousFunctionNodes,
+            );
+
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertEquals($functionNodes, $loaded['functionNodes']);
+            $this->assertEquals($anonymousFunctionNodes, $loaded['anonymousFunctionNodes']);
+
+            // Compact payload: no per-node file, and empty lists are omitted.
+            $payload = json_decode((string) file_get_contents($this->firstJsonFile($cacheDirectory)), true);
+
+            $this->assertIsArray($payload);
+            $this->assertIsArray($payload['functionNodes']);
+            $this->assertIsArray($payload['anonymousFunctionNodes']);
+
+            $storedFunction = $payload['functionNodes'][0];
+            $storedClosure  = $payload['anonymousFunctionNodes'][0];
+
+            $this->assertIsArray($storedFunction);
+            $this->assertIsArray($storedClosure);
+            $this->assertArrayNotHasKey('file', $storedFunction);
+            $this->assertArrayNotHasKey('file', $storedClosure);
+            $this->assertArrayNotHasKey('superglobals', $storedClosure);
+            $this->assertArrayNotHasKey('layers', $storedClosure);
+            $this->assertSame(['App\\helper'], $storedClosure['functionCalls']);
+
+            // Function-likes also survive the file-analysis load path.
+            $analysisResultCache->storeAnalysisNodes(
+                $sourceFile,
+                'config',
+                [],
+                new FileAnalysis($sourceFile, false, true, null, true, true, false, 0),
+                [],
+                [],
+                [],
+                $functionNodes,
+                $anonymousFunctionNodes,
+            );
+
+            $loadedWithFileAnalysis = $analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config');
+
+            $this->assertIsArray($loadedWithFileAnalysis);
+            $this->assertEquals($functionNodes, $loadedWithFileAnalysis['functionNodes']);
+            $this->assertEquals($anonymousFunctionNodes, $loadedWithFileAnalysis['anonymousFunctionNodes']);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testFilesWithoutFunctionLikesOmitTheirKeysAndLoadAsEmpty(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $fileHashProvider    = new FileHashProvider();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, $fileHashProvider, $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', []);
+
+            $payload = json_decode((string) file_get_contents($this->firstJsonFile($cacheDirectory)), true);
+
+            $this->assertIsArray($payload);
+            $this->assertArrayNotHasKey('functionNodes', $payload);
+            $this->assertArrayNotHasKey('anonymousFunctionNodes', $payload);
+
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config');
+
+            $this->assertIsArray($loaded);
+            $this->assertSame([], $loaded['functionNodes']);
+            $this->assertSame([], $loaded['anonymousFunctionNodes']);
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $override
+     */
+    #[DataProvider('corruptedFunctionLikePayloadProvider')]
+    public function testLoadClassNodesRejectsCorruptedFunctionLikePayload(array $override): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', []);
+
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true);
+
+            $this->assertIsArray($payload);
+            file_put_contents($cacheFile, json_encode($override + $payload, JSON_THROW_ON_ERROR));
+
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
+        } finally {
+            if (file_exists($sourceFile)) {
+                unlink($sourceFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /** @return Iterator<string, array{0: array<string, mixed>}> */
+    public static function corruptedFunctionLikePayloadProvider(): Iterator
+    {
+        $validFunction = [
+            'functionName'         => 'App\\format',
+            'file'                 => '/src/helpers.php',
+            'line'                 => 1,
+            'layer'                => null,
+            'hasReturnType'        => true,
+            'paramCount'           => 0,
+            'cyclomaticComplexity' => 1,
+            'lineCount'            => 0,
+            'dependencies'         => [],
+            'functionCalls'        => [],
+            'superglobals'         => [],
+            'languageConstructs'   => [],
+            'layers'               => [],
+        ];
+        $validClosure  = [
+            'isArrowFunction'       => false,
+            'isStatic'              => false,
+            'enclosingClassName'    => null,
+            'enclosingFunctionName' => null,
+            'usesThis'              => false,
+        ] + $validFunction;
+
+        yield 'function nodes not an array' => [['functionNodes' => 'invalid']];
+        yield 'function node entry not an array' => [['functionNodes' => ['invalid']]];
+        yield 'function node without name' => [['functionNodes' => [['functionName' => 1] + $validFunction]]];
+        yield 'function node with invalid line' => [['functionNodes' => [['line' => '1'] + $validFunction]]];
+        yield 'function node with invalid layer' => [['functionNodes' => [['layer' => 1] + $validFunction]]];
+        yield 'function node with invalid dependencies' => [
+            ['functionNodes' => [['dependencies' => [1]] + $validFunction]],
+        ];
+        yield 'anonymous function nodes not an array' => [['anonymousFunctionNodes' => 'invalid']];
+        yield 'anonymous function node entry not an array' => [['anonymousFunctionNodes' => ['invalid']]];
+        yield 'anonymous function node with invalid arrow flag' => [
+            ['anonymousFunctionNodes' => [['isArrowFunction' => 'yes'] + $validClosure]],
+        ];
+        yield 'anonymous function node with invalid enclosing class' => [
+            ['anonymousFunctionNodes' => [['enclosingClassName' => 1] + $validClosure]],
+        ];
+        yield 'anonymous function node with invalid usesThis flag' => [
+            ['anonymousFunctionNodes' => [['usesThis' => 'no'] + $validClosure]],
+        ];
+        yield 'anonymous function node with invalid enclosing function' => [
+            ['anonymousFunctionNodes' => [['enclosingFunctionName' => 1] + $validClosure]],
+        ];
+        yield 'anonymous function node with invalid body' => [
+            ['anonymousFunctionNodes' => [['lineCount' => '0'] + $validClosure]],
+        ];
+    }
+
     public function testClassNodesLoadOldCachePayloadWithoutAnonymousClassNodes(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
@@ -652,7 +1061,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
 
             // Simulate a payload written before anonymous class nodes existed.
             $cacheFile = $this->firstJsonFile($cacheDirectory);
@@ -661,7 +1070,7 @@ final class AnalysisResultCacheTest extends TestCase
             unset($payload['anonymousClassNodes']);
             file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
 
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config');
 
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded['classNodes']);
@@ -691,6 +1100,18 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'entry with invalid traits' => [
             [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'traits' => 'invalid']],
         ];
+        yield 'entry with invalid isReadonly' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'isReadonly' => 'yes']],
+        ];
+        yield 'entry with invalid dependencies' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'dependencies' => [1]]],
+        ];
+        yield 'entry with invalid methods' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'methods' => ['invalid']]],
+        ];
+        yield 'entry with invalid method tuple' => [
+            [['file' => '/Foo.php', 'line' => 7, 'extends' => null, 'methods' => [['x']]]],
+        ];
     }
 
     public function testLoadClassNodesRejectsCorruptedFileReferencesPayload(): void
@@ -702,7 +1123,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
             $cacheFile = $this->firstJsonFile($cacheDirectory);
             $payload   = json_decode((string) file_get_contents($cacheFile), true);
@@ -710,7 +1131,7 @@ final class AnalysisResultCacheTest extends TestCase
             $payload['fileReferences'] = ['App\Contract', 1];
             file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
 
-            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -729,7 +1150,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
             $cacheFile = $this->firstJsonFile($cacheDirectory);
             $payload   = json_decode((string) file_get_contents($cacheFile), true);
@@ -737,7 +1158,7 @@ final class AnalysisResultCacheTest extends TestCase
             $payload['fileInstantiations'] = ['App\Base', 1];
             file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
 
-            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -757,7 +1178,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
             $cacheFile = $this->firstJsonFile($cacheDirectory);
             $payload   = json_decode((string) file_get_contents($cacheFile), true);
@@ -765,7 +1186,7 @@ final class AnalysisResultCacheTest extends TestCase
             $payload['anonymousClassNodes'] = $corrupted;
             file_put_contents($cacheFile, json_encode($payload, JSON_THROW_ON_ERROR));
 
-            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             if (file_exists($sourceFile)) {
                 unlink($sourceFile);
@@ -797,8 +1218,8 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertStringContainsString("\xEF\xBF\xBD", $loaded[0]->className);
@@ -835,8 +1256,8 @@ final class AnalysisResultCacheTest extends TestCase
         ];
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertTrue($loaded[0]->isTrait);
@@ -873,8 +1294,8 @@ final class AnalysisResultCacheTest extends TestCase
         ];
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertTrue($loaded[0]->isEnum);
@@ -912,8 +1333,8 @@ final class AnalysisResultCacheTest extends TestCase
         ];
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertSame(['App\BaseMiddleware'], $loaded[0]->interfaceExtends);
@@ -967,9 +1388,9 @@ final class AnalysisResultCacheTest extends TestCase
                         'layers'             => [],
                     ],
                 ],
-            ], 'class-nodes-' . hash('xxh128', "config\0" . $sourceFile) . '.json');
+            ], 'analysis-nodes-' . hash('xxh128', "config\0" . $sourceFile) . '.json');
 
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertSame([], $loaded[0]->interfaceExtends);
@@ -1019,8 +1440,8 @@ final class AnalysisResultCacheTest extends TestCase
         ];
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded);
@@ -1062,8 +1483,8 @@ final class AnalysisResultCacheTest extends TestCase
         ];
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded);
@@ -1112,8 +1533,8 @@ final class AnalysisResultCacheTest extends TestCase
         ];
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
-            $loaded = $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null;
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
             $this->assertIsArray($loaded);
             $this->assertEquals($classNodes, $loaded);
@@ -1141,11 +1562,11 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $analysisResultCache->clear();
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
             $this->assertInstanceOf(
                 ClassNode::class,
-                $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'][0] ?? null
+                $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'][0] ?? null
             );
         } finally {
             $analysisResultCache->clear();
@@ -1163,8 +1584,8 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
-            $this->assertNull($analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1185,15 +1606,17 @@ final class AnalysisResultCacheTest extends TestCase
             declaresSymbols: true,
             hasSideEffects: false,
             sideEffectLine: 1,
+            nonCanonicalKeywordConstants: [[3, 'TRUE'], [5, '\\NULL']],
+            numericLiterals: [[7, '10000', 10000], [8, '1e10', 10000000000.0]],
         );
 
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
             $classNodes = [$this->makeClassNode($sourceFile)];
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes, $fileAnalysis);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes, $fileAnalysis);
 
-            $loaded = $analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config');
 
             $this->assertNotNull($loaded);
             $this->assertEquals($classNodes, $loaded['classNodes']);
@@ -1213,9 +1636,9 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
-            $this->assertNull($analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1228,18 +1651,19 @@ final class AnalysisResultCacheTest extends TestCase
     public static function malformedFileAnalysisProvider(): iterable
     {
         $valid = [
-            'file'              => __FILE__,
-            'hasUtf8Bom'        => false,
-            'hasValidUtf8'      => true,
-            'invalidPhpTagLine' => null,
-            'hasValidAst'       => true,
-            'declaresSymbols'   => true,
-            'hasSideEffects'    => false,
-            'sideEffectLine'    => 1,
+            'file'                         => __FILE__,
+            'hasUtf8Bom'                   => false,
+            'hasValidUtf8'                 => true,
+            'invalidPhpTagLine'            => null,
+            'hasValidAst'                  => true,
+            'declaresSymbols'              => true,
+            'hasSideEffects'               => false,
+            'sideEffectLine'               => 1,
+            'nonCanonicalKeywordConstants' => [],
+            'numericLiterals'              => [],
         ];
 
         yield 'numeric keys' => [[0 => 'bad']];
-        yield 'invalid file' => [[...$valid, 'file' => 1]];
         yield 'invalid BOM flag' => [[...$valid, 'hasUtf8Bom' => 'bad']];
         yield 'invalid UTF-8 flag' => [[...$valid, 'hasValidUtf8' => 'bad']];
         yield 'missing invalid tag line' => [
@@ -1258,6 +1682,19 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'invalid declaration flag' => [[...$valid, 'declaresSymbols' => 'bad']];
         yield 'invalid side-effects flag' => [[...$valid, 'hasSideEffects' => 'bad']];
         yield 'invalid side-effect line' => [[...$valid, 'sideEffectLine' => 'bad']];
+        yield 'invalid keyword constants type' => [[...$valid, 'nonCanonicalKeywordConstants' => 'bad']];
+        yield 'keyword constants not a list' => [[...$valid, 'nonCanonicalKeywordConstants' => ['a' => [1, 'TRUE']]]];
+        yield 'keyword constant not a pair' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1]]]];
+        yield 'keyword constant with extra entry' => [
+            [...$valid, 'nonCanonicalKeywordConstants' => [[1, 'TRUE', 'extra']]],
+        ];
+        yield 'keyword constant with invalid line' => [[...$valid, 'nonCanonicalKeywordConstants' => [['1', 'TRUE']]]];
+        yield 'keyword constant with invalid spelling' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1, 1]]]];
+        yield 'numeric literals not a list' => [[...$valid, 'numericLiterals' => ['bad' => [1, '10000', 10000]]]];
+        yield 'numeric literal not a triple' => [[...$valid, 'numericLiterals' => [[1, '10000']]]];
+        yield 'numeric literal with invalid line' => [[...$valid, 'numericLiterals' => [['1', '10000', 10000]]]];
+        yield 'numeric literal with invalid spelling' => [[...$valid, 'numericLiterals' => [[1, 10000, 10000]]]];
+        yield 'numeric literal with invalid value' => [[...$valid, 'numericLiterals' => [[1, '10000', '10000']]]];
     }
 
     /** @param array<mixed, mixed> $fileAnalysis */
@@ -1271,7 +1708,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes(
+            $analysisResultCache->storeAnalysisNodes(
                 $sourceFile,
                 'config',
                 [$this->makeClassNode($sourceFile)],
@@ -1284,7 +1721,7 @@ final class AnalysisResultCacheTest extends TestCase
             $payload['fileAnalysis'] = $fileAnalysis;
             $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
 
-            $this->assertNull($analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1300,7 +1737,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes(
+            $analysisResultCache->storeAnalysisNodes(
                 $sourceFile,
                 'config',
                 [$this->makeClassNode($sourceFile)],
@@ -1313,7 +1750,7 @@ final class AnalysisResultCacheTest extends TestCase
             $payload['nodes'] = 'invalid';
             $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
 
-            $this->assertNull($analysisResultCache->loadClassNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1329,12 +1766,12 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
             file_put_contents($sourceFile, '<?php class Foo { public function changed(): void {} }');
 
             $nextRunCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
-            $this->assertNull($nextRunCache->loadClassNodes($sourceFile, 'config'));
+            $this->assertNull($nextRunCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1378,12 +1815,12 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', $classNodes);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes);
             touch($sourceFile, 1234567890);
 
             $this->assertEquals(
                 $classNodes,
-                $analysisResultCache->loadClassNodes($sourceFile, 'config')['classNodes'] ?? null
+                $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null
             );
         } finally {
             unlink($sourceFile);
@@ -1624,7 +2061,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'method has numeric keys' => [
+        yield 'method is not a tuple' => [
             [
                 'nodes' => [
                     [
@@ -1670,20 +2107,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'dependencies'  => [],
                         'implements'    => [],
                         'traits'        => [],
-                        'methods'       => [
-                            [
-                                'name'                  => 'run',
-                                'visibility'            => 'public',
-                                'hasReturnType'         => true,
-                                'isStatic'              => false,
-                                'paramCount'            => 0,
-                                'cyclomaticComplexity'  => 1,
-                                'lineCount'             => 1,
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                                'isMagic'               => false,
-                            ],
-                        ],
+                        'methods'       => [['run', 'public', true, false, 0, 1, 1, true, 'bad', false]],
                         'constants'     => [],
                         'properties'    => [],
                         'functionCalls' => [],
@@ -1693,7 +2117,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'method has missing hasExplicitVisibility' => [
+        yield 'method tuple is too short' => [
             [
                 'nodes' => [
                     [
@@ -1711,19 +2135,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'dependencies'  => [],
                         'implements'    => [],
                         'traits'        => [],
-                        'methods'       => [
-                            [
-                                'name'                 => 'run',
-                                'visibility'           => 'public',
-                                'hasReturnType'        => true,
-                                'isStatic'             => false,
-                                'paramCount'           => 0,
-                                'cyclomaticComplexity' => 1,
-                                'lineCount'            => 1,
-                                'line'                 => 1,
-                                'isMagic'              => false,
-                            ],
-                        ],
+                        'methods'       => [['run', 'public', true, false, 0, 1, 1, 1, false]],
                         'constants'     => [],
                         'properties'    => [],
                         'functionCalls' => [],
@@ -1789,7 +2201,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'constant has numeric keys' => [
+        yield 'constant is not a tuple' => [
             [
                 'nodes' => [
                     [
@@ -1836,14 +2248,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'implements'    => [],
                         'traits'        => [],
                         'methods'       => [],
-                        'constants'     => [
-                            [
-                                'name'                  => 'VERSION',
-                                'visibility'            => 'public',
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                            ],
-                        ],
+                        'constants'     => [['VERSION', 'public', true, 'bad']],
                         'properties'    => [],
                         'functionCalls' => [],
                         'superglobals'  => [],
@@ -1908,7 +2313,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'property has numeric keys' => [
+        yield 'property is not a tuple' => [
             [
                 'nodes' => [
                     [
@@ -1956,14 +2361,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'traits'        => [],
                         'methods'       => [],
                         'constants'     => [],
-                        'properties'    => [
-                            [
-                                'name'                  => 'name',
-                                'visibility'            => 'private',
-                                'hasExplicitVisibility' => true,
-                                'line'                  => 'bad',
-                            ],
-                        ],
+                        'properties'    => [['name', 'private', true, 'bad']],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
@@ -2029,7 +2427,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
-        yield 'enum case has non-string keys' => [
+        yield 'enum case is not a tuple' => [
             [
                 'nodes' => [
                     [
@@ -2079,7 +2477,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'methods'       => [],
                         'constants'     => [],
                         'properties'    => [],
-                        'enumCases'     => [['name' => 'Hearts', 'line' => 'bad']],
+                        'enumCases'     => [['Hearts', 'bad', null]],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
@@ -2108,7 +2506,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'methods'       => [],
                         'constants'     => [],
                         'properties'    => [],
-                        'enumCases'     => [['name' => 'Hearts', 'line' => 4, 'value' => ['bad']]],
+                        'enumCases'     => [['Hearts', 4, ['bad']]],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
@@ -2161,7 +2559,7 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
-            $analysisResultCache->storeClassNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
             $cacheFile = $this->firstJsonFile($cacheDirectory);
 
             $this->writeCachePayload($cacheDirectory, [
@@ -2173,7 +2571,7 @@ final class AnalysisResultCacheTest extends TestCase
                 ...$payloadOverride,
             ], $cacheFile);
 
-            $this->assertNull($analysisResultCache->loadClassNodes($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -2200,9 +2598,14 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertSame($directory, $metadata['basePath']);
             $this->assertSame($config, $metadata['configPath']);
             $this->assertSame(['src'], $metadata['scanPaths']);
+            $this->assertSame(5, $metadata['version']);
             $this->assertIsString($metadata['configHash']);
             $this->assertIsString($metadata['composerGeneratedVersionHash']);
-            $this->assertIsString($metadata['filesHash']);
+
+            $filesHashContext = hash_init('xxh128');
+            hash_update($filesHashContext, $source . "\0" . hash_file('xxh128', $source) . "\0");
+
+            $this->assertSame(hash_final($filesHashContext), $metadata['filesHash']);
             $this->assertSame(
                 (new AnalysisCacheMetadataFactory(new FileHashProvider()))->key($metadata),
                 (new AnalysisCacheMetadataFactory(new FileHashProvider()))->key($metadata)

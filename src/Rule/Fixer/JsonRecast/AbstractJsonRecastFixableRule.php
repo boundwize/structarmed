@@ -10,11 +10,23 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 
 abstract readonly class AbstractJsonRecastFixableRule implements FixableInterface
 {
-    final public function fix(RuleViolation $ruleViolation): bool
+    final public function fix(RuleViolation $ruleViolation, RuleViolation ...$additionalViolations): bool
     {
+        $ruleViolations = [$ruleViolation, ...$additionalViolations];
+        $file           = $ruleViolation->file;
+        $nodeVisitors   = [];
+
+        foreach ($ruleViolations as $ruleViolation) {
+            if ($ruleViolation->file !== $file) {
+                return false;
+            }
+
+            $nodeVisitors[] = $this->createFixerVisitor($ruleViolation);
+        }
+
         return $this->fixerProcessor()->process(
-            $ruleViolation->file,
-            $this->createFixerVisitor($ruleViolation),
+            $file,
+            $nodeVisitors,
         );
     }
 

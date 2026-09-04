@@ -83,19 +83,23 @@ PHP);
         return match ($preset) {
             'ddd' => '    ->withPreset(Preset::DDD());',
             'mvc' => '    ->withPreset(Preset::MVC());',
+            'psr4' => '    ->withPreset(Preset::PSR4());',
             'psr1' => '    ->withPreset(Preset::PSR1());',
             'psr12' => '    ->withPreset(Preset::PSR12());',
+            'per' => '    ->withPreset(Preset::PER());',
             'psr15' => '    ->withPreset(Preset::PSR15());',
-            'psr4' => '    ->withPreset(Preset::PSR4());',
             'yagni' => '    ->withPreset(Preset::YAGNI());',
+            'codequality' => '    ->withPreset(Preset::CODEQUALITY());',
             'all' => "    ->withPresets(\n"
+                . "        Preset::PSR4(),\n"
                 . "        Preset::PSR1(),\n"
                 . "        Preset::PSR12(),\n"
+                . "        Preset::PER(),\n"
                 . "        Preset::PSR15(),\n"
-                . "        Preset::PSR4(),\n"
                 . "        Preset::DDD(),\n"
                 . "        Preset::MVC(),\n"
-                . "        Preset::YAGNI()\n"
+                . "        Preset::YAGNI(),\n"
+                . "        Preset::CODEQUALITY()\n"
                 . "    );",
             default => null,
         };

@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
-use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
+use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Throwable;
 
@@ -17,7 +18,10 @@ use function unserialize;
 
 use const STDOUT;
 
-final readonly class ClassNodeWorker
+/**
+ * @internal
+ */
+final readonly class AnalysisNodeWorker
 {
     /** @param resource|null $outputStream */
     public static function run(string $inputFile, string $outputFile, mixed $outputStream = null): int
@@ -53,30 +57,38 @@ final readonly class ClassNodeWorker
 
             $progressHandler = $emitProgress ? new WorkerProgressHandler($stream) : null;
 
-            $result = (new ClassNodeExtractor($layerResolver))->extract(
-                $files,
-                $progressHandler,
-                $withFileAnalysis,
-            );
+            $cache = $payload['cache'] ?? null;
+            /** @var string $cacheNamespace */
+            $cacheNamespace = $payload['cacheNamespace'] ?? '';
+
+            $result = (new AnalysisNodeExtractor(
+                $layerResolver,
+                analysisResultCache: $cache instanceof AnalysisResultCache ? $cache : null,
+                analysisNodeCacheNamespace: $cacheNamespace,
+            ))->extract($files, $progressHandler, $withFileAnalysis);
 
             file_put_contents($outputFile, serialize([
-                'nodes'               => $result->classNodes,
-                'fileAnalyses'        => $result->fileAnalyses,
-                'anonymousClassNodes' => $result->anonymousClassNodes,
-                'fileReferences'      => $result->fileReferences,
-                'fileInstantiations'  => $result->fileInstantiations,
-                'error'               => null,
+                'nodes'                  => $result->classNodes,
+                'fileAnalyses'           => $result->fileAnalyses,
+                'anonymousClassNodes'    => $result->anonymousClassNodes,
+                'fileReferences'         => $result->fileReferences,
+                'fileInstantiations'     => $result->fileInstantiations,
+                'functionNodes'          => $result->functionNodes,
+                'anonymousFunctionNodes' => $result->anonymousFunctionNodes,
+                'error'                  => null,
             ]));
 
             return 0;
         } catch (Throwable $throwable) {
             file_put_contents($outputFile, serialize([
-                'nodes'               => [],
-                'fileAnalyses'        => [],
-                'anonymousClassNodes' => [],
-                'fileReferences'      => [],
-                'fileInstantiations'  => [],
-                'error'               => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
+                'nodes'                  => [],
+                'fileAnalyses'           => [],
+                'anonymousClassNodes'    => [],
+                'fileReferences'         => [],
+                'fileInstantiations'     => [],
+                'functionNodes'          => [],
+                'anonymousFunctionNodes' => [],
+                'error'                  => sprintf('%s: %s', $throwable::class, $throwable->getMessage()),
             ]));
 
             return 1;

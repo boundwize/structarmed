@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
-use Boundwize\StructArmed\Analyser\ClassNodeExtractor;
-use Boundwize\StructArmed\Analyser\Parallel\ParallelClassNodeExtractor;
+use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Composer\Psr4PathResolver;
@@ -13,11 +13,14 @@ use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
+use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
+use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
 use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
-use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
@@ -33,6 +36,7 @@ use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
+use function array_push;
 use function array_unique;
 use function array_values;
 use function count;
@@ -52,7 +56,7 @@ final readonly class Analyser
     public function __construct(
         string $basePath = '',
         private ?AnalysisResultCache $analysisResultCache = null,
-        private string $classNodeCacheNamespace = '',
+        private string $analysisNodeCacheNamespace = '',
         private PhpFileCollector $phpFileCollector = new PhpFileCollector(),
     ) {
         $this->basePath = $basePath !== '' ? $basePath : (string) getcwd();
@@ -77,24 +81,46 @@ final readonly class Analyser
         $ruleSkipPaths   = $architecture->getRuleSkipPaths();
         $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
 
-        $projectRuleViolations     = [];
-        $fileAnalysisRules         = [];
-        $classRules                = [];
-        $layerAwareRules           = [];
-        $hasExtendedClassAwareRule = false;
-        $hasUsedInterfaceAwareRule = false;
-        $hasUsedTraitAwareRule     = false;
+        $projectRuleViolations      = [];
+        $fileAnalysisRules          = [];
+        $nodeRules                  = [];
+        $classNodeRules             = [];
+        $functionNodeRules          = [];
+        $anonymousFunctionNodeRules = [];
+        $anonymousClassNodeRules    = [];
+        $layerAwareRules            = [];
+        $hasExtendedClassAwareRule  = false;
+        $hasUsedInterfaceAwareRule  = false;
+        $hasUsedTraitAwareRule      = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
                 continue;
             }
 
+            // Grouped per node kind here so the evaluation loop below matches
+            // rules to nodes without re-checking interfaces per node × rule.
             if ($rule instanceof RuleInterface) {
-                $classRules[$key] = $rule;
+                $nodeRules[$key]      = $rule;
+                $classNodeRules[$key] = $rule;
             }
 
-            if ($rule instanceof LayerAwareRuleInterface) {
+            if ($rule instanceof FunctionRuleInterface) {
+                $nodeRules[$key]         = $rule;
+                $functionNodeRules[$key] = $rule;
+            }
+
+            if ($rule instanceof AnonymousFunctionRuleInterface) {
+                $nodeRules[$key]                  = $rule;
+                $anonymousFunctionNodeRules[$key] = $rule;
+            }
+
+            if ($rule instanceof AnonymousClassRuleInterface) {
+                $nodeRules[$key]               = $rule;
+                $anonymousClassNodeRules[$key] = $rule;
+            }
+
+            if ($rule instanceof AbstractLayerAwareRule) {
                 $layerAwareRules[] = $rule;
             }
 
@@ -144,7 +170,7 @@ final readonly class Analyser
 
         $files          ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
         $withFileAnalysis = $fileAnalysisRules !== [];
-        $extractionResult = $this->collectClassNodes(
+        $extractionResult = $this->collectAnalysisNodes(
             $files,
             $progressHandler,
             $layers,
@@ -154,7 +180,7 @@ final readonly class Analyser
             $withFileAnalysis,
         );
         $classNodes       = $extractionResult->classNodes;
-        $classNodes       = $this->withRecursiveParents($classNodes);
+        $classNodes       = $this->withRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
 
         if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
             $this->markClassLikeUsage(
@@ -193,6 +219,8 @@ final readonly class Analyser
                     methodName: $violation->methodName,
                     constantName: $violation->constantName,
                     propertyName: $violation->propertyName,
+                    functionName: $violation->functionName,
+                    numericLiteral: $violation->numericLiteral,
                 ));
             }
         }
@@ -216,7 +244,7 @@ final readonly class Analyser
         }
 
         $globalSkipPathMatcher      = SkipPathMatcher::compile($this->basePath, $globalSkipPaths);
-        $ruleSkipMatchers           = $this->ruleSkipMatchers($classRules, $ruleSkipPaths);
+        $ruleSkipMatchers           = $this->ruleSkipMatchers($nodeRules, $ruleSkipPaths);
         $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
         $rulesetSkipPathMatcher     = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
         $rulesetViolationCollection = new RuleViolationCollection();
@@ -231,55 +259,29 @@ final readonly class Analyser
 
         $resolvedInheritedDependencies = [];
 
-        foreach ($layerAwareRules as $rule) {
-            $rule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
+        foreach ($layerAwareRules as $layerAwareRule) {
+            $layerAwareRule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
         }
 
-        foreach ($classNodes as $classNode) {
+        // Function-likes and anonymous classes are not part of the class
+        // hierarchy, so they take no part in the declarative ruleset below; a
+        // rule only sees the node kind whose interface it implements, so each
+        // node collection is paired with the rules grouped for its kind above.
+        $this->evaluateNodeRules(
+            [
+                [$classNodes, $classNodeRules],
+                [$extractionResult->functionNodes, $functionNodeRules],
+                [$extractionResult->anonymousFunctionNodes, $anonymousFunctionNodeRules],
+                [$extractionResult->anonymousClassNodes, $anonymousClassNodeRules],
+            ],
+            $globalSkipPathMatcher,
+            $ruleSkipMatchers,
+            $ruleViolationCollection
+        );
+
+        // Declarative ruleset dependency checks, per class node.
+        foreach ($hasRuleset ? $classNodes : [] as $classNode) {
             if ($globalSkipPathMatcher->isSkipped($classNode->file)) {
-                continue;
-            }
-
-            foreach ($classRules as $key => $rule) {
-                if (isset($ruleSkipMatchers[$key]) && $ruleSkipMatchers[$key]->isSkipped($classNode->file)) {
-                    continue;
-                }
-
-                if (! $rule->appliesTo($classNode)) {
-                    continue;
-                }
-
-                if ($rule instanceof MultipleRuleViolationInterface) {
-                    $violations = $rule->evaluateAll($classNode);
-                } else {
-                    $violation = $rule->evaluate($classNode);
-                    if (! $violation instanceof RuleViolation) {
-                        continue;
-                    }
-
-                    $violations = [$violation];
-                }
-
-                $isFixable = $rule instanceof FixableInterface;
-
-                foreach ($violations as $violation) {
-                    // Inject the rule key into the violation
-                    $ruleViolationCollection->add(new RuleViolation(
-                        message:   $violation->message,
-                        file:      $violation->file,
-                        line:      $violation->line,
-                        className: $violation->className,
-                        layer:     $violation->layer,
-                        ruleKey:   $key,
-                        fixable:   $isFixable,
-                        methodName: $violation->methodName,
-                        constantName: $violation->constantName,
-                        propertyName: $violation->propertyName,
-                    ));
-                }
-            }
-
-            if (! $hasRuleset) {
                 continue;
             }
 
@@ -370,6 +372,78 @@ final readonly class Analyser
         $ruleViolationCollection->merge($rulesetViolationCollection);
 
         return $ruleViolationCollection;
+    }
+
+    /**
+     * Evaluates each node collection against the rules grouped for its node
+     * kind, in a single evaluation implementation: all four rule interfaces
+     * share the appliesTo()/evaluate() method names, and a rule only receives
+     * the node kind whose interface it implements.
+     *
+     * @param list<array{0: list<object>, 1: array<string, object>}> $nodeGroups
+     * @param array<string, SkipPathMatcher> $ruleSkipMatchers
+     * @phpstan-param list<array{
+     *     0: list<ClassNode>|list<FunctionNode>|list<AnonymousFunctionNode>|list<AnonymousClassNode>,
+     *     1: array<string, RuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface
+     *         |AnonymousClassRuleInterface>
+     * }> $nodeGroups
+     */
+    private function evaluateNodeRules(
+        array $nodeGroups,
+        SkipPathMatcher $globalSkipPathMatcher,
+        array $ruleSkipMatchers,
+        RuleViolationCollection $ruleViolationCollection
+    ): void {
+        foreach ($nodeGroups as [$nodes, $rules]) {
+            if ($rules === []) {
+                continue;
+            }
+
+            foreach ($nodes as $node) {
+                if ($globalSkipPathMatcher->isSkipped($node->file)) {
+                    continue;
+                }
+
+                foreach ($rules as $key => $rule) {
+                    if (isset($ruleSkipMatchers[$key]) && $ruleSkipMatchers[$key]->isSkipped($node->file)) {
+                        continue;
+                    }
+
+                    if (! $rule->appliesTo($node)) {
+                        continue;
+                    }
+
+                    if ($rule instanceof MultipleRuleViolationInterface && $node instanceof ClassNode) {
+                        $violations = $rule->evaluateAll($node);
+                    } else {
+                        $violation = $rule->evaluate($node);
+                        if (! $violation instanceof RuleViolation) {
+                            continue;
+                        }
+
+                        $violations = [$violation];
+                    }
+
+                    $isFixable = $rule instanceof FixableInterface;
+                    foreach ($violations as $violation) {
+                        $ruleViolationCollection->add(new RuleViolation(
+                            message:      $violation->message,
+                            file:         $violation->file,
+                            line:         $violation->line,
+                            className:    $violation->className,
+                            layer:        $violation->layer,
+                            ruleKey:      $key,
+                            fixable:      $isFixable,
+                            methodName:   $violation->methodName,
+                            constantName: $violation->constantName,
+                            propertyName: $violation->propertyName,
+                            functionName: $violation->functionName,
+                            numericLiteral: $violation->numericLiteral,
+                        ));
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -479,16 +553,16 @@ final readonly class Analyser
     }
 
     /**
-     * @param array<string, RuleInterface> $classRules
+     * @param array<string, object> $nodeRules Node rules of every kind, by key
      * @param array<string, list<string>>  $ruleSkipPaths
      * @return array<string, SkipPathMatcher>
      */
-    private function ruleSkipMatchers(array $classRules, array $ruleSkipPaths): array
+    private function ruleSkipMatchers(array $nodeRules, array $ruleSkipPaths): array
     {
         $ruleSkipMatchers = [];
 
         foreach ($ruleSkipPaths as $key => $skipPaths) {
-            if (! isset($classRules[$key]) || $skipPaths === []) {
+            if (! isset($nodeRules[$key]) || $skipPaths === []) {
                 continue;
             }
 
@@ -688,6 +762,38 @@ final readonly class Analyser
     }
 
     /**
+     * A node's own inheritance-clause names (and the imports that exist for
+     * them) are structural relations, not value references. Excluding them
+     * keeps "referenced" meaningful for the unresolved dynamic instantiation
+     * check: a class extended by a child is not thereby a possible
+     * `new $class` target. The usage-aware deletion rules are unaffected —
+     * each combines this flag with its structural extended/implemented/trait
+     * marking.
+     *
+     * @param list<string>        $dependencies
+     * @param array<string|null>  $clauseNames  The node's own name, if any, and its extends, implements, and traits
+     * @param array<string, true> $used
+     */
+    private function markDependenciesUsed(array $dependencies, array $clauseNames, array &$used): void
+    {
+        $excludedKeys = [];
+
+        foreach ($clauseNames as $clauseName) {
+            if ($clauseName !== null) {
+                $excludedKeys[strtolower($clauseName)] = true;
+            }
+        }
+
+        foreach ($dependencies as $dependency) {
+            $dependencyKey = strtolower($dependency);
+
+            if (! isset($excludedKeys[$dependencyKey])) {
+                $used[$dependencyKey] = true;
+            }
+        }
+    }
+
+    /**
      * Collect and apply class-like usage flags with one collection pass and one
      * application pass over the class nodes. Extended classes use the recursive
      * parent chain resolved by {@see withRecursiveParents()}; instantiated
@@ -722,36 +828,22 @@ final readonly class Analyser
                 $used[strtolower($trait)] = true;
             }
 
-            // A node's own inheritance-clause names (and the imports that
-            // exist for them) are structural relations, not value references.
-            // Excluding them keeps "referenced" meaningful for the unresolved
-            // dynamic instantiation check below: a class extended by a child
-            // is not thereby a possible `new $class` target. The usage-aware
-            // deletion rules are unaffected — each combines this flag with its
-            // structural extended/implemented/trait marking.
-            $excludedKeys = [strtolower($classNode->className) => true];
-
-            if ($classNode->extends !== null) {
-                $excludedKeys[strtolower($classNode->extends)] = true;
-            }
-
-            foreach ([$classNode->implements, $classNode->interfaceExtends, $classNode->traits] as $clauseNames) {
-                foreach ($clauseNames as $clauseName) {
-                    $excludedKeys[strtolower($clauseName)] = true;
-                }
-            }
-
-            foreach ($classNode->dependencies as $dependency) {
-                $dependencyKey = strtolower($dependency);
-
-                if (! isset($excludedKeys[$dependencyKey])) {
-                    $used[$dependencyKey] = true;
-                }
-            }
+            $this->markDependenciesUsed(
+                $classNode->dependencies,
+                [
+                    $classNode->className,
+                    $classNode->extends,
+                    ...$classNode->implements,
+                    ...$classNode->interfaceExtends,
+                    ...$classNode->traits,
+                ],
+                $used,
+            );
         }
 
         // Anonymous classes have no ClassNode of their own, so their inheritance
-        // and trait-use relationships are tracked separately.
+        // and trait-use relationships, and their body references, are tracked
+        // separately.
         foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
             if ($markExtended && $anonymousClassNode->extends !== null) {
                 $extended[strtolower($anonymousClassNode->extends)] = true;
@@ -766,11 +858,17 @@ final readonly class Analyser
             foreach ($anonymousClassNode->traits as $trait) {
                 $used[strtolower($trait)] = true;
             }
+
+            $this->markDependenciesUsed(
+                $anonymousClassNode->dependencies,
+                [$anonymousClassNode->extends, ...$anonymousClassNode->implements, ...$anonymousClassNode->traits],
+                $used,
+            );
         }
 
-        // References made outside any named class-like scope — procedural
-        // functions, top-level statements, top-level anonymous class bodies —
-        // have no ClassNode either, so they are tracked per file.
+        // References made outside any class-like scope — procedural functions
+        // and top-level statements — have no ClassNode either, so they are
+        // tracked per file.
         foreach ($extractionResult->fileReferences as $references) {
             foreach ($references as $reference) {
                 $used[strtolower($reference)] = true;
@@ -782,7 +880,7 @@ final readonly class Analyser
 
         foreach ($extractionResult->fileInstantiations as $instantiations) {
             foreach ($instantiations as $instantiation) {
-                $deferredMarker = ClassCollector::parseDeferredInstantiationMarker($instantiation);
+                $deferredMarker = AnalysisNodeCollector::parseDeferredInstantiationMarker($instantiation);
 
                 if ($deferredMarker === null) {
                     $instantiated[strtolower($instantiation)] = true;
@@ -977,10 +1075,11 @@ final readonly class Analyser
     }
 
     /**
-     * @param list<ClassNode> $classNodes
+     * @param list<ClassNode>          $classNodes
+     * @param list<AnonymousClassNode> $anonymousClassNodes
      * @return list<ClassNode>
      */
-    private function withRecursiveParents(array $classNodes): array
+    private function withRecursiveParents(array $classNodes, array $anonymousClassNodes): array
     {
         $parentClassMap     = [];
         $parentInterfaceMap = [];
@@ -1019,13 +1118,32 @@ final readonly class Analyser
             $classNode->setRecursiveParents($result['classes'], $result['interfaces']);
         }
 
+        // An anonymous class is never a parent, so it is absent from the maps and
+        // starts the DFS from its own `extends`/`implements` clauses instead.
+        foreach ($anonymousClassNodes as $anonymousClassNode) {
+            if ($anonymousClassNode->extends === null && $anonymousClassNode->implements === []) {
+                continue;
+            }
+
+            $cycleDetected = false;
+            $result        = $this->collectRecursiveParents(
+                $anonymousClassNode->extends !== null ? [$anonymousClassNode->extends] : [],
+                $anonymousClassNode->implements,
+                $parentClassMap,
+                $parentInterfaceMap,
+                $parentsCache,
+                [],
+                $cycleDetected
+            );
+
+            $anonymousClassNode->setRecursiveParents($result['classes'], $result['interfaces']);
+        }
+
         return $classNodes;
     }
 
     /**
-     * Single DFS that collects both ancestor classes and transitively implemented/extended
-     * interfaces in one pass, avoiding the double traversal of the parent-class chain that
-     * the previous two-method approach required.
+     * Cached, name-keyed entry point to the parent-chain DFS for a scanned class-like.
      *
      * @param array<string, list<string>>                                        $parentClassMap
      * @param array<string, list<string>>                                        $parentInterfaceMap
@@ -1045,11 +1163,54 @@ final readonly class Analyser
             return $cache[$classNameKey];
         }
 
+        $hasCycle = false;
+        $result   = $this->collectRecursiveParents(
+            $parentClassMap[$classNameKey] ?? [],
+            $parentInterfaceMap[$classNameKey] ?? [],
+            $parentClassMap,
+            $parentInterfaceMap,
+            $cache,
+            $seen,
+            $hasCycle
+        );
+
+        if (! $hasCycle) {
+            $cache[$classNameKey] = $result;
+        }
+
+        $cycleDetected = $cycleDetected || $hasCycle;
+
+        return $result;
+    }
+
+    /**
+     * Single DFS that collects both ancestor classes and transitively implemented/extended
+     * interfaces in one pass, avoiding the double traversal of the parent-class chain that
+     * the previous two-method approach required. Seeded with a node's direct parents so an
+     * anonymous class, which has no name to look up in the maps, resolves its chain the
+     * same way a named class does.
+     *
+     * @param string[]                                                           $parentClasses
+     * @param string[]                                                           $parentInterfaces
+     * @param array<string, list<string>>                                        $parentClassMap
+     * @param array<string, list<string>>                                        $parentInterfaceMap
+     * @param array<string, array{classes: list<string>, interfaces: list<string>}> $cache
+     * @param array<string, true>                                                $seen
+     * @return array{classes: list<string>, interfaces: list<string>}
+     */
+    private function collectRecursiveParents(
+        array $parentClasses,
+        array $parentInterfaces,
+        array $parentClassMap,
+        array $parentInterfaceMap,
+        array &$cache,
+        array $seen,
+        bool &$hasCycle
+    ): array {
         $classesSet    = [];
         $interfacesSet = [];
-        $hasCycle      = false;
 
-        foreach ($parentClassMap[$classNameKey] ?? [] as $parentClass) {
+        foreach ($parentClasses as $parentClass) {
             $parentClassKey = strtolower($parentClass);
 
             if (isset($seen[$parentClassKey])) {
@@ -1079,7 +1240,7 @@ final readonly class Analyser
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        foreach ($parentInterfaceMap[$classNameKey] ?? [] as $parentInterface) {
+        foreach ($parentInterfaces as $parentInterface) {
             $parentInterfaceKey = strtolower($parentInterface);
 
             if (isset($seen[$parentInterfaceKey])) {
@@ -1105,18 +1266,10 @@ final readonly class Analyser
             $hasCycle = $hasCycle || $childHasCycle;
         }
 
-        $result = [
+        return [
             'classes'    => array_keys($classesSet),
             'interfaces' => array_keys($interfacesSet),
         ];
-
-        if (! $hasCycle) {
-            $cache[$classNameKey] = $result;
-        }
-
-        $cycleDetected = $cycleDetected || $hasCycle;
-
-        return $result;
     }
 
     /**
@@ -1128,7 +1281,7 @@ final readonly class Analyser
      *     excludePattern: string|list<string|null>|null
      * }> $layerPatterns
      */
-    private function collectClassNodes(
+    private function collectAnalysisNodes(
         array $files,
         ?ProgressHandlerInterface $progressHandler,
         array $layers,
@@ -1137,70 +1290,38 @@ final readonly class Analyser
         ?AnalyserOptions $analyserOptions = null,
         bool $withFileAnalysis = true,
     ): ExtractionResult {
-        $classNodes          = [];
-        $fileAnalyses        = [];
-        $anonymousClassNodes = [];
-        $fileReferences      = [];
-        $fileInstantiations  = [];
-        $filesToParse        = [];
+        $classNodes             = [];
+        $fileAnalyses           = [];
+        $anonymousClassNodes    = [];
+        $fileReferences         = [];
+        $fileInstantiations     = [];
+        $functionNodes          = [];
+        $anonymousFunctionNodes = [];
+        $filesToParse           = [];
 
         foreach ($files as $file) {
-            if ($withFileAnalysis) {
-                $cachedResult = $this->analysisResultCache?->loadClassNodesWithFileAnalysis(
+            $cachedResult = $withFileAnalysis
+                ? $this->analysisResultCache?->loadAnalysisNodesWithFileAnalysis(
                     $file,
-                    $this->classNodeCacheNamespace
-                );
-
-                if ($cachedResult === null) {
-                    $filesToParse[] = $file;
-                    continue;
-                }
-
-                foreach ($cachedResult['classNodes'] as $cachedClassNode) {
-                    $classNodes[] = $cachedClassNode;
-                }
-
-                foreach ($cachedResult['anonymousClassNodes'] as $cachedAnonymousClassNode) {
-                    $anonymousClassNodes[] = $cachedAnonymousClassNode;
-                }
-
-                if ($cachedResult['fileReferences'] !== []) {
-                    $fileReferences[$file] = $cachedResult['fileReferences'];
-                }
-
-                if ($cachedResult['fileInstantiations'] !== []) {
-                    $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
-                }
-
-                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
-
-                continue;
-            }
-
-            $cachedResult = $this->analysisResultCache?->loadClassNodes(
-                $file,
-                $this->classNodeCacheNamespace,
-            );
+                    $this->analysisNodeCacheNamespace
+                )
+                : $this->analysisResultCache?->loadAnalysisNodes($file, $this->analysisNodeCacheNamespace);
 
             if ($cachedResult === null) {
                 $filesToParse[] = $file;
                 continue;
             }
 
-            foreach ($cachedResult['classNodes'] as $cachedClassNode) {
-                $classNodes[] = $cachedClassNode;
-            }
+            array_push($classNodes, ...$cachedResult['classNodes']);
+            array_push($anonymousClassNodes, ...$cachedResult['anonymousClassNodes']);
+            array_push($functionNodes, ...$cachedResult['functionNodes']);
+            array_push($anonymousFunctionNodes, ...$cachedResult['anonymousFunctionNodes']);
 
-            foreach ($cachedResult['anonymousClassNodes'] as $cachedAnonymousClassNode) {
-                $anonymousClassNodes[] = $cachedAnonymousClassNode;
-            }
+            $fileReferences[$file]     = $cachedResult['fileReferences'];
+            $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
 
-            if ($cachedResult['fileReferences'] !== []) {
-                $fileReferences[$file] = $cachedResult['fileReferences'];
-            }
-
-            if ($cachedResult['fileInstantiations'] !== []) {
-                $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
+            if (isset($cachedResult['fileAnalysis'])) {
+                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
             }
         }
 
@@ -1215,77 +1336,44 @@ final readonly class Analyser
                 $anonymousClassNodes,
                 $fileReferences,
                 $fileInstantiations,
+                $functionNodes,
+                $anonymousFunctionNodes,
             );
         }
 
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
         if ($options->isParallel()) {
-            $parsedResult = (new ParallelClassNodeExtractor(
+            // Workers write their own files' cache payloads while other workers are
+            // still parsing, instead of the coordinator doing it serially afterwards.
+            $parsedResult = (new ParallelAnalysisNodeExtractor(
                 $this->basePath,
                 $layers,
                 $layerPatterns,
                 $options->workerCount,
                 $this->analysisResultCache?->getCacheDirectory(),
+                $this->analysisResultCache,
+                $this->analysisNodeCacheNamespace,
             ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         } else {
-            $parsedResult = (new ClassNodeExtractor($chainLayerResolver))->extract(
-                $filesToParse,
-                $progressHandler,
-                $withFileAnalysis,
-            );
-        }
-
-        $classNodesByFile = array_fill_keys($filesToParse, []);
-        foreach ($parsedResult->classNodes as $parsedClassNode) {
-            $classNodes[] = $parsedClassNode;
-
-            if (isset($classNodesByFile[$parsedClassNode->file])) {
-                $classNodesByFile[$parsedClassNode->file][] = $parsedClassNode;
-            }
-        }
-
-        $anonymousClassNodesByFile = array_fill_keys($filesToParse, []);
-        foreach ($parsedResult->anonymousClassNodes as $parsedAnonymousClassNode) {
-            $anonymousClassNodes[] = $parsedAnonymousClassNode;
-
-            if (isset($anonymousClassNodesByFile[$parsedAnonymousClassNode->file])) {
-                $anonymousClassNodesByFile[$parsedAnonymousClassNode->file][] = $parsedAnonymousClassNode;
-            }
-        }
-
-        foreach ($parsedResult->fileAnalyses as $file => $fileAnalysis) {
-            $fileAnalyses[$file] = $fileAnalysis;
-        }
-
-        foreach ($parsedResult->fileReferences as $file => $parsedFileReferences) {
-            $fileReferences[$file] = $parsedFileReferences;
-        }
-
-        foreach ($parsedResult->fileInstantiations as $file => $parsedFileInstantiations) {
-            $fileInstantiations[$file] = $parsedFileInstantiations;
-        }
-
-        foreach ($classNodesByFile as $fileToParse => $fileClassNodes) {
-            $this->analysisResultCache?->storeClassNodes(
-                $fileToParse,
-                $this->classNodeCacheNamespace,
-                $fileClassNodes,
-                $fileAnalyses[$fileToParse] ?? null,
-                $anonymousClassNodesByFile[$fileToParse] ?? [],
-                $fileReferences[$fileToParse] ?? [],
-                $fileInstantiations[$fileToParse] ?? [],
-            );
+            $parsedResult = (new AnalysisNodeExtractor(
+                $chainLayerResolver,
+                analysisResultCache: $this->analysisResultCache,
+                analysisNodeCacheNamespace: $this->analysisNodeCacheNamespace,
+            ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
         }
 
         $progressHandler?->finish();
 
+        // Cached nodes first, then the freshly parsed ones.
         return new ExtractionResult(
-            $classNodes,
-            $fileAnalyses,
-            $anonymousClassNodes,
-            $fileReferences,
-            $fileInstantiations,
+            classNodes: [...$classNodes, ...$parsedResult->classNodes],
+            fileAnalyses: $fileAnalyses + $parsedResult->fileAnalyses,
+            anonymousClassNodes: [...$anonymousClassNodes, ...$parsedResult->anonymousClassNodes],
+            fileReferences: $fileReferences + $parsedResult->fileReferences,
+            fileInstantiations: $fileInstantiations + $parsedResult->fileInstantiations,
+            functionNodes: [...$functionNodes, ...$parsedResult->functionNodes],
+            anonymousFunctionNodes: [...$anonymousFunctionNodes, ...$parsedResult->anonymousFunctionNodes],
         );
     }
 

@@ -5,17 +5,18 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
-use function in_array;
 use function preg_match;
-use function rtrim;
 use function str_ends_with;
 use function str_starts_with;
-use function strcasecmp;
 use function strrpos;
 use function substr;
 
 final class ClassNode
 {
+    use MemberQueryTrait;
+    use NodeQueryTrait;
+    use RecursiveParentsTrait;
+
     /** @var list<string> */
     public readonly array $layers;
 
@@ -94,16 +95,6 @@ final class ClassNode
     }
 
     /**
-     * @param list<string> $parentClasses
-     * @param list<string> $parentInterfaces
-     */
-    public function setRecursiveParents(array $parentClasses, array $parentInterfaces): void
-    {
-        $this->parentClasses    = $parentClasses;
-        $this->parentInterfaces = $parentInterfaces;
-    }
-
-    /**
      * Whether another scanned class extends this class. Computed by the analyser
      * for rules implementing ExtendedClassAwareRuleInterface; false otherwise.
      */
@@ -139,18 +130,9 @@ final class ClassNode
      * `new self`/`new static`/`new parent` resolving to it. Instantiation is
      * the one usage that requires a class to stay concrete. Computed by the
      * analyser when a usage-aware rule is active; false otherwise.
-     *
-     * Only a concrete named class can be an instantiation target — `new` on
-     * an abstract class, interface, trait, or enum is fatal — so marking any
-     * other class-like as instantiated is ignored. (Anonymous classes never
-     * become ClassNodes in the first place.)
      */
     public function setInstantiated(bool $isInstantiated): void
     {
-        if ($isInstantiated && (! $this->isClass() || $this->isAbstract)) {
-            return;
-        }
-
         $this->isInstantiated = $isInstantiated;
     }
 
@@ -161,11 +143,6 @@ final class ClassNode
         return $position === false
             ? $this->className
             : substr($this->className, $position + 1);
-    }
-
-    public function isInLayer(string $layer): bool
-    {
-        return in_array($layer, $this->layers, true);
     }
 
     public function isClass(): bool
@@ -188,98 +165,14 @@ final class ClassNode
         return (bool) preg_match($pattern, $isFullName ? $this->className : $this->shortName());
     }
 
-    public function dependsOn(string $class): bool
-    {
-        return in_array($class, $this->dependencies, true);
-    }
-
-    public function dependsOnNamespace(string $namespace): bool
-    {
-        $prefix = rtrim($namespace, '\\') . '\\';
-
-        foreach ($this->dependencies as $dependency) {
-            if (str_starts_with($dependency, $prefix)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /**
      * Implemented directly, extended directly (for interfaces), or via any parent class or interface.
+     * Overrides the trait method to also look at `$interfaceExtends`, which only a named interface has.
      */
     public function implementsInterface(string $interface): bool
     {
         return $this->matchesAnyClassLike($interface, $this->implements)
             || $this->matchesAnyClassLike($interface, $this->interfaceExtends)
             || $this->matchesAnyClassLike($interface, $this->parentInterfaces);
-    }
-
-    public function extendsClass(string $class): bool
-    {
-        if ($this->extends !== null && strcasecmp($this->extends, $class) === 0) {
-            return true;
-        }
-
-        return $this->matchesAnyClassLike($class, $this->parentClasses);
-    }
-
-    /**
-     * Class-like names are case-insensitive in PHP. This matching is kept
-     * separate from dependencies, which may also contain constants.
-     *
-     * @param string[] $classLikes
-     */
-    private function matchesAnyClassLike(string $needle, array $classLikes): bool
-    {
-        foreach ($classLikes as $classLike) {
-            if (strcasecmp($classLike, $needle) === 0) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public function callsFunction(string $function): bool
-    {
-        foreach ($this->functionCalls as $functionCall) {
-            if (strcasecmp($functionCall, $function) === 0) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public function usesLanguageConstruct(string $construct): bool
-    {
-        if (in_array($construct, $this->languageConstructs, true)) {
-            return true;
-        }
-
-        // `die` is a pure alias of `exit`, so banning either spelling catches both.
-        return match ($construct) {
-            'exit'  => in_array('die', $this->languageConstructs, true),
-            'die'   => in_array('exit', $this->languageConstructs, true),
-            default => false,
-        };
-    }
-
-    public function accessesSuperglobals(): bool
-    {
-        return $this->superglobals !== [];
-    }
-
-    public function constructorParamCount(): int
-    {
-        foreach ($this->methods as $method) {
-            if ($method->isConstructor()) {
-                return $method->paramCount;
-            }
-        }
-
-        return 0;
     }
 }

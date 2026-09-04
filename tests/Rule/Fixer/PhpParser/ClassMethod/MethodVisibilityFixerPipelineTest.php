@@ -45,6 +45,45 @@ PHP);
         }
     }
 
+    public function testProcessFixesMultipleMethodsInOneBatch(): void
+    {
+        $file = $this->temporaryPhpFile(<<<'PHP'
+<?php
+
+namespace App;
+
+class Order
+{
+    function create(): void
+    {
+    }
+
+    static function save(): void
+    {
+    }
+}
+PHP);
+
+        try {
+            $phpParserFixerProcessor = new PhpParserFixerProcessor();
+
+            $this->assertTrue($phpParserFixerProcessor->process($file, [
+                new AddPublicMethodVisibilityVisitor('App\\Order', 'create'),
+                new AddPublicMethodVisibilityVisitor('App\\Order', 'save'),
+            ]));
+            $this->assertStringContainsString(
+                '    public function create(): void',
+                (string) file_get_contents($file)
+            );
+            $this->assertStringContainsString(
+                '    public static function save(): void',
+                (string) file_get_contents($file)
+            );
+        } finally {
+            unlink($file);
+        }
+    }
+
     public function testProcessReturnsFalseForMissingFile(): void
     {
         $this->assertFalse($this->process(sys_get_temp_dir() . '/missing-structarmed.php', 'App\\Order', 'save'));

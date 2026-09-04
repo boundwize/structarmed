@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Preset;
 
+use Boundwize\StructArmed\Preset\Presets\CodeQualityPreset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
+use Boundwize\StructArmed\Preset\Presets\PerPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
@@ -18,11 +20,13 @@ use Boundwize\StructArmed\Preset\Presets\YagniPreset;
  * Usage:
  *   ->withPreset(Preset::DDD())
  *   ->withPreset(Preset::DDD(maxComplexity: 3))
- *   ->withPreset(Preset::PSR1())
  *   ->withPreset(Preset::PSR4())
+ *   ->withPreset(Preset::PSR1())
  *   ->withPreset(Preset::PSR12())
+ *   ->withPreset(Preset::PER())
  *   ->withPreset(Preset::PSR15())
  *   ->withPreset(Preset::YAGNI())
+ *   ->withPreset(Preset::CODEQUALITY())
  *   ->withPresets(Preset::DDD(), Preset::MVC())
  */
 final class Preset
@@ -63,6 +67,17 @@ final class Preset
     /**
      * @param list<string>|null $sourcePaths
      */
+    public static function PER(
+        ?array $sourcePaths = null,
+    ): PerPreset {
+        return new PerPreset(
+            sourcePaths: $sourcePaths,
+        );
+    }
+
+    /**
+     * @param list<string>|null $sourcePaths
+     */
     public static function PSR15(
         ?array $sourcePaths = null,
     ): Psr15Preset {
@@ -94,6 +109,17 @@ final class Preset
         ?array $sourcePaths = null,
     ): YagniPreset {
         return new YagniPreset(
+            sourcePaths: $sourcePaths,
+        );
+    }
+
+    /**
+     * @param list<string>|null $sourcePaths
+     */
+    public static function CODEQUALITY(
+        ?array $sourcePaths = null,
+    ): CodeQualityPreset {
+        return new CodeQualityPreset(
             sourcePaths: $sourcePaths,
         );
     }
