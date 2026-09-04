@@ -177,6 +177,55 @@ The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedI
 
 Trade-off: only usage within the scanned paths is known. A class-like used solely by a consumer outside the scan — a vendor package, an unscanned directory, runtime-fed dynamic construction — is reported as if unused. Widen the scan, or use `skipRule()` and skip paths where such consumers exist.
 
+## Reading Other Classes' Layers In A Custom Rule
+
+A rule only receives the node it is evaluating. When a check depends on the layer of *another* class — the layer a dependency belongs to, for instance — extend `Boundwize\StructArmed\Rule\AbstractLayerAwareRule`. Before any class is evaluated, the analyser injects the map of every scanned class into its protected `$classNodeMap` property, keyed by fully qualified class name:
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
+use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final class ControllerMayOnlyDependOnApplicationRule extends AbstractLayerAwareRule implements RuleInterface
+{
+    public function appliesTo(ClassNode $classNode): bool
+    {
+        return $classNode->isInLayer('Controller');
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        foreach ($classNode->dependencies as $dependency) {
+            $dependencyNode = $this->classNodeMap[$dependency] ?? null;
+
+            if (! $dependencyNode instanceof ClassNode || $dependencyNode->isInLayer('Application')) {
+                continue;
+            }
+
+            return new RuleViolation(
+                message:   sprintf('Controller [%s] must not depend on [%s]', $classNode->className, $dependency),
+                file:      $classNode->file,
+                line:      $classNode->line,
+                className: $classNode->className,
+                layer:     $classNode->layer,
+            );
+        }
+
+        return null;
+    }
+}
+```
+
+The base class holds the property and its `injectClassNodeMap()` setter, so the rule adds nothing but the check itself. A dependency outside the scanned paths — a vendor class, a PHP built-in — has no entry in the map, so fall back to path or namespace matching for those, or skip them as above. The built-in `MayNotDependOnRule` follows this pattern: it reads the dependency's layers from the map first and falls back to the `toPath` prefix only when the dependency was not scanned.
+
+
 ## Analysing Functions, Closures, And Anonymous Classes
 
 Named functions, closures, arrow functions, and anonymous classes are collected alongside named classes:
@@ -496,6 +545,8 @@ return Architecture::define()
 Use `rule()` when one project needs one extra check.
 
 Use a custom `RuleInterface` class when the check itself is new behavior; add `FunctionRuleInterface` / `AnonymousFunctionRuleInterface` / `AnonymousClassRuleInterface` when it must also cover named functions, closures, or anonymous classes.
+
+Extend `AbstractLayerAwareRule` when a rule must know the layer of a class other than the one under evaluation, such as the layer a dependency lives in.
 
 Use a custom `PresetInterface` class when several layers and rules should be applied together or reused across repositories.
 
