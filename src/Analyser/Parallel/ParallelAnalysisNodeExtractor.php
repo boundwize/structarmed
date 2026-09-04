@@ -18,6 +18,7 @@ use RuntimeException;
 use function array_fill;
 use function array_key_exists;
 use function array_keys;
+use function array_push;
 use function array_search;
 use function arsort;
 use function assert;
@@ -243,134 +244,26 @@ final readonly class ParallelAnalysisNodeExtractor
 
                     /** @var list<ClassNode> $workerNodes */
                     $workerNodes = $result['nodes'];
-
-                    foreach ($workerNodes as $workerNode) {
-                        $nodes[] = $workerNode;
-                    }
-
+                    /** @var array<string, FileAnalysis> $workerFileAnalyses */
                     $workerFileAnalyses = $result['fileAnalyses'] ?? [];
-
-                    if (! is_array($workerFileAnalyses)) {
-                        throw new RuntimeException('Parallel analysis worker returned invalid file analyses.');
-                    }
-
-                    foreach ($workerFileAnalyses as $file => $fileAnalysis) {
-                        if (! is_string($file) || ! $fileAnalysis instanceof FileAnalysis) {
-                            throw new RuntimeException('Parallel analysis worker returned invalid file analyses.');
-                        }
-
-                        $fileAnalyses[$file] = $fileAnalysis;
-                    }
-
-                    $workerAnonClassNodes = $result['anonymousClassNodes'] ?? [];
-
-                    if (! is_array($workerAnonClassNodes)) {
-                        throw new RuntimeException(
-                            'Parallel analysis worker returned invalid anonymous class nodes.'
-                        );
-                    }
-
-                    foreach ($workerAnonClassNodes as $workerAnonClassNode) {
-                        if (! $workerAnonClassNode instanceof AnonymousClassNode) {
-                            throw new RuntimeException(
-                                'Parallel analysis worker returned invalid anonymous class nodes.'
-                            );
-                        }
-
-                        $anonymousClassNodes[] = $workerAnonClassNode;
-                    }
-
+                    /** @var list<AnonymousClassNode> $workerAnonymousClassNodes */
+                    $workerAnonymousClassNodes = $result['anonymousClassNodes'] ?? [];
+                    /** @var array<string, list<string>> $workerFileReferences */
                     $workerFileReferences = $result['fileReferences'] ?? [];
-
-                    if (! is_array($workerFileReferences)) {
-                        throw new RuntimeException(
-                            'Parallel analysis worker returned invalid file references.'
-                        );
-                    }
-
-                    foreach ($workerFileReferences as $file => $references) {
-                        if (! is_string($file) || ! is_array($references)) {
-                            throw new RuntimeException(
-                                'Parallel analysis worker returned invalid file references.'
-                            );
-                        }
-
-                        $validReferences = [];
-
-                        foreach ($references as $reference) {
-                            if (! is_string($reference)) {
-                                throw new RuntimeException(
-                                    'Parallel analysis worker returned invalid file references.'
-                                );
-                            }
-
-                            $validReferences[] = $reference;
-                        }
-
-                        $fileReferences[$file] = $validReferences;
-                    }
-
+                    /** @var array<string, list<string>> $workerFileInstantiations */
                     $workerFileInstantiations = $result['fileInstantiations'] ?? [];
-
-                    if (! is_array($workerFileInstantiations)) {
-                        throw new RuntimeException(
-                            'Parallel analysis worker returned invalid file instantiations.'
-                        );
-                    }
-
-                    foreach ($workerFileInstantiations as $file => $instantiations) {
-                        if (! is_string($file) || ! is_array($instantiations)) {
-                            throw new RuntimeException(
-                                'Parallel analysis worker returned invalid file instantiations.'
-                            );
-                        }
-
-                        $validInstantiations = [];
-
-                        foreach ($instantiations as $instantiation) {
-                            if (! is_string($instantiation)) {
-                                throw new RuntimeException(
-                                    'Parallel analysis worker returned invalid file instantiations.'
-                                );
-                            }
-
-                            $validInstantiations[] = $instantiation;
-                        }
-
-                        $fileInstantiations[$file] = $validInstantiations;
-                    }
-
+                    /** @var list<FunctionNode> $workerFunctionNodes */
                     $workerFunctionNodes = $result['functionNodes'] ?? [];
-
-                    if (! is_array($workerFunctionNodes)) {
-                        throw new RuntimeException('Parallel analysis worker returned invalid function nodes.');
-                    }
-
-                    foreach ($workerFunctionNodes as $workerFunctionNode) {
-                        if (! $workerFunctionNode instanceof FunctionNode) {
-                            throw new RuntimeException('Parallel analysis worker returned invalid function nodes.');
-                        }
-
-                        $functionNodes[] = $workerFunctionNode;
-                    }
-
+                    /** @var list<AnonymousFunctionNode> $workerAnonymousFunctionNodes */
                     $workerAnonymousFunctionNodes = $result['anonymousFunctionNodes'] ?? [];
 
-                    if (! is_array($workerAnonymousFunctionNodes)) {
-                        throw new RuntimeException(
-                            'Parallel analysis worker returned invalid anonymous function nodes.'
-                        );
-                    }
-
-                    foreach ($workerAnonymousFunctionNodes as $workerAnonymousFunctionNode) {
-                        if (! $workerAnonymousFunctionNode instanceof AnonymousFunctionNode) {
-                            throw new RuntimeException(
-                                'Parallel analysis worker returned invalid anonymous function nodes.'
-                            );
-                        }
-
-                        $anonymousFunctionNodes[] = $workerAnonymousFunctionNode;
-                    }
+                    array_push($nodes, ...$workerNodes);
+                    array_push($anonymousClassNodes, ...$workerAnonymousClassNodes);
+                    array_push($functionNodes, ...$workerFunctionNodes);
+                    array_push($anonymousFunctionNodes, ...$workerAnonymousFunctionNodes);
+                    $fileAnalyses       += $workerFileAnalyses;
+                    $fileReferences     += $workerFileReferences;
+                    $fileInstantiations += $workerFileInstantiations;
                 } catch (RuntimeException $runtimeException) {
                     $failure ??= $runtimeException->getMessage();
                 } finally {
