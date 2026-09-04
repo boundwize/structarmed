@@ -31,6 +31,7 @@ use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\AnonymousClassMayNotHaveEmptyParenthesesRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4DirectoryExistsRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1PhpTagsRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1SymbolsOrSideEffectsRule;
@@ -2684,6 +2685,45 @@ final class AnalyserTest extends TestCase
 
         $this->assertCount(1, $files);
         $this->assertStringEndsWith('/src/Foo.php', $files[0]);
+    }
+
+    public function testFilesForAnalysisDoesNotIncludeRootComposerJsonForExplicitScanPath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/')
+            ->rule('composer.source_paths', new Psr4SourcePathsRule(['src/']));
+
+        $analyser = new Analyser($basePath);
+
+        $files = array_map($this->normalisePath(...), $analyser->filesForAnalysis($architecture, ['src/Foo.php']));
+
+        $this->assertCount(1, $files);
+        $this->assertStringEndsWith('/src/Foo.php', $files[0]);
+
+        $this->assertCount(2, $analyser->filesForAnalysis($architecture));
+    }
+
+    public function testAnalyserScopesComposerRulesToExplicitScanPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/","Missing\\\\":"missing/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/')
+            ->rule('composer.directory_exists', new Psr4DirectoryExistsRule());
+
+        $analyser = new Analyser($basePath);
+
+        $this->assertCount(0, $analyser->analyse($architecture, ['src/Foo.php'])->forRule('composer.directory_exists'));
+        $this->assertCount(1, $analyser->analyse($architecture, ['composer.json'])->forRule('composer.directory_exists'));
+        $this->assertCount(1, $analyser->analyse($architecture)->forRule('composer.directory_exists'));
     }
 
     public function testFilesForAnalysisDoesNotIncludeRootComposerJsonWhenComposerJsonRuleIsSkipped(): void
