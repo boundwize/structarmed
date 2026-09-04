@@ -13,6 +13,7 @@ use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
 use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
 use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\ComposerJsonRuleInterface;
@@ -20,7 +21,6 @@ use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
-use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
 use Boundwize\StructArmed\Rule\MultipleProjectRuleViolationInterface;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
@@ -120,7 +120,7 @@ final readonly class Analyser
                 $anonymousClassNodeRules[$key] = $rule;
             }
 
-            if ($rule instanceof LayerAwareRuleInterface) {
+            if ($rule instanceof AbstractLayerAwareRule) {
                 $layerAwareRules[] = $rule;
             }
 

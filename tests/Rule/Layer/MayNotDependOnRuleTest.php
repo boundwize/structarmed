@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Layer;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Rule\LayerAwareRuleInterface;
+use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -164,10 +164,10 @@ final class MayNotDependOnRuleTest extends TestCase
         $this->assertStringContainsString('App\Infrastructure\B', $violations[1]->message);
     }
 
-    public function testImplementsLayerAwareRuleInterface(): void
+    public function testExtendsAbstractLayerAwareRule(): void
     {
         $this->assertInstanceOf(
-            LayerAwareRuleInterface::class,
+            AbstractLayerAwareRule::class,
             new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure')
         );
     }
