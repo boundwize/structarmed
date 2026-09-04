@@ -85,11 +85,8 @@ final readonly class Analyser
         // Composer rules follow the same scope as every other rule kind: they
         // only run when the root composer.json is part of the file list, which
         // a layer-wide scan includes and an explicit path argument may not.
-        $analysesComposerJson = in_array(
-            Path::normalise(Path::resolve('composer.json', $this->basePath), canonicalise: true),
-            $files,
-            true
-        );
+        $composerJsonFile       = Path::normalise(Path::resolve('composer.json', $this->basePath), canonicalise: true);
+        $isAnalysesComposerJson = in_array($composerJsonFile, $files, true);
 
         $projectRuleViolations      = [];
         $fileAnalysisRules          = [];
@@ -150,7 +147,7 @@ final readonly class Analyser
                 continue;
             }
 
-            if ($rule instanceof ComposerJsonRuleInterface && ! $analysesComposerJson) {
+            if ($rule instanceof ComposerJsonRuleInterface && ! $isAnalysesComposerJson) {
                 continue;
             }
 
