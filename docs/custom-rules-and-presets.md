@@ -389,6 +389,60 @@ Built-in rules follow the same pattern: `MustBeFinalRule` returns `AddFinalClass
 
 Keep fixers deterministic and narrowly scoped. A failed or skipped fix should return `false` so StructArmed can leave the violation in the report.
 
+## Fixing Syntax The AST Does Not Record
+
+Some facts a rule reports exist only in the source text, not in any PHP-Parser node. The empty `()` of `new class () {}` is one: both `new class {}` and `new class () {}` parse to the same node with an empty argument list. A visitor that only edits nodes cannot remove those parentheses, and re-printing the whole class to drop them would reformat its body.
+
+Implement `Boundwize\StructArmed\Rule\Fixer\PhpParser\TokenAwareVisitorInterface` on the fixer visitor for such cases. It extends `PhpParser\NodeVisitor` with one method:
+
+```php
+/** @param array<PhpParser\Token> $tokens */
+public function setTokens(array $tokens): void;
+```
+
+`PhpParserFixerProcessor` calls `setTokens()` with the tokens the file was parsed into before traversing with that visitor. The tokens are the same objects the format-preserving printer copies unchanged code from, so editing a `Token` object's `text` changes the printed file without any node being re-printed.
+
+```diff
++ use Boundwize\StructArmed\Rule\Fixer\PhpParser\TokenAwareVisitorInterface;
+  use PhpParser\Node;
+  use PhpParser\NodeVisitorAbstract;
++ use PhpParser\Token;
+
+- final class RemoveSomethingVisitor extends NodeVisitorAbstract
++ final class RemoveSomethingVisitor extends NodeVisitorAbstract implements TokenAwareVisitorInterface
+  {
++     /** @var array<Token> */
++     private array $tokens = [];
++
++     public function setTokens(array $tokens): void
++     {
++         $this->tokens = $tokens;
++     }
++
+      public function enterNode(Node $node): ?Node
+      {
+          // ... locate the target node ...
+
++         for ($index = $node->getStartTokenPos(); $index <= $node->getEndTokenPos(); $index++) {
++             if ($this->tokens[$index]->text === '(' || $this->tokens[$index]->text === ')') {
++                 $this->tokens[$index]->text = '';
++             }
++         }
+
+          return $node;
+      }
+  }
+```
+
+Use `getStartTokenPos()` and `getEndTokenPos()` on the node to find the token range it spans, then walk that range and edit only the tokens the fix targets. Return the node from `enterNode()` unchanged; the fix lives in the tokens, not in the node.
+
+The built-in `AnonymousClassMayNotHaveEmptyParenthesesRule` follows this shape. It returns `Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\RemoveAnonymousClassParenthesesVisitor` from `createFixerVisitor()`, and that visitor uses `Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses::emptyTokenRange()` to locate the `()` tokens and blank them.
+
+- Edit token `text` in place; do not replace, add, or remove entries in the token array, since the printer matches tokens to nodes by index.
+- Keep the whitespace PHP needs. Blanking a token that separated two words may require leaving a single space in its place.
+- Leave a comment inside the edited range alone, or skip the fix when removing the tokens would delete it.
+- A rule may still combine a token edit with a node edit in the same visitor; the token edit reaches the output only for nodes the printer keeps unchanged.
+
 ## Custom Presets
 
 A custom preset is a class that implements `Boundwize\StructArmed\Preset\PresetInterface`. Inside `apply()`, add the layers and rules you want to reuse.
@@ -450,3 +504,5 @@ Use `rule()` when one project needs one extra check.
 Use a custom `RuleInterface` class when the check itself is new behavior; add `FunctionRuleInterface` / `AnonymousFunctionRuleInterface` / `AnonymousClassRuleInterface` when it must also cover named functions, closures, or anonymous classes.
 
 Use a custom `PresetInterface` class when several layers and rules should be applied together or reused across repositories.
+
+Use `AbstractPhpParserFixableRule` with a `PhpParser\NodeVisitor` when a rule can rewrite the offending file; add `TokenAwareVisitorInterface` to that visitor when the fix targets punctuation or whitespace PHP-Parser records in no node.
