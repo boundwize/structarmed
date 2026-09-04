@@ -21,4 +21,10 @@ abstract class AbstractLayerAwareRule
     {
         $this->classNodeMap = $classNodeMap;
     }
+
+    /** The scanned node of a dependency, or null when it lies outside the scanned paths */
+    protected function getDependencyNode(string $dependency): ?ClassNode
+    {
+        return $this->classNodeMap[$dependency] ?? null;
+    }
 }

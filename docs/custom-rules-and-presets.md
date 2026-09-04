@@ -179,7 +179,7 @@ Trade-off: only usage within the scanned paths is known. A class-like used solel
 
 ## Reading Other Classes' Layers In A Custom Rule
 
-A rule only receives the node it is evaluating. When a check depends on the layer of *another* class — the layer a dependency belongs to, for instance — extend `Boundwize\StructArmed\Rule\AbstractLayerAwareRule`. Before any class is evaluated, the analyser injects the map of every scanned class into its protected `$classNodeMap` property, keyed by fully qualified class name:
+A rule only receives the node it is evaluating. When a check depends on the layer of *another* class — the layer a dependency belongs to, for instance — extend `Boundwize\StructArmed\Rule\AbstractLayerAwareRule`. Before any class is evaluated, the analyser injects the map of every scanned class into its protected `$classNodeMap` property, keyed by fully qualified class name, and `getDependencyNode()` looks a class up in it:
 
 ```php
 <?php
@@ -203,7 +203,7 @@ final class ControllerMayOnlyDependOnApplicationRule extends AbstractLayerAwareR
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
         foreach ($classNode->dependencies as $dependency) {
-            $dependencyNode = $this->classNodeMap[$dependency] ?? null;
+            $dependencyNode = $this->getDependencyNode($dependency);
 
             if (! $dependencyNode instanceof ClassNode || $dependencyNode->isInLayer('Application')) {
                 continue;
@@ -223,7 +223,7 @@ final class ControllerMayOnlyDependOnApplicationRule extends AbstractLayerAwareR
 }
 ```
 
-The base class holds the property and its `injectClassNodeMap()` setter, so the rule adds nothing but the check itself. A dependency outside the scanned paths — a vendor class, a PHP built-in — has no entry in the map, so fall back to path or namespace matching for those, or skip them as above. The built-in `MayNotDependOnRule` follows this pattern: it reads the dependency's layers from the map first and falls back to the `toPath` prefix only when the dependency was not scanned.
+The base class holds the property, its `injectClassNodeMap()` setter, and the `getDependencyNode()` lookup, so the rule adds nothing but the check itself. A dependency outside the scanned paths — a vendor class, a PHP built-in — has no entry in the map, so `getDependencyNode()` returns null for it; fall back to path or namespace matching for those, or skip them as above. The built-in `MayNotDependOnRule` follows this pattern: it reads the dependency's layers from the map first and falls back to the `toPath` prefix only when the dependency was not scanned.
 
 
 ## Analysing Functions, Closures, And Anonymous Classes

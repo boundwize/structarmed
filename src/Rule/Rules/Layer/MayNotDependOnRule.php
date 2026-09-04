@@ -73,7 +73,7 @@ final class MayNotDependOnRule extends AbstractLayerAwareRule implements Multipl
     private function isInForbiddenLayer(string $dependency): bool
     {
         // Priority 1: Use the scanned dependency node if available
-        $dependencyNode = $this->classNodeMap[$dependency] ?? null;
+        $dependencyNode = $this->getDependencyNode($dependency);
 
         if ($dependencyNode instanceof ClassNode && $dependencyNode->layers !== []) {
             return in_array($this->to, $dependencyNode->layers, true);
