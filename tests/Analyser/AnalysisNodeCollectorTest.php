@@ -10,8 +10,17 @@ use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use PhpParser\Modifiers;
+use PhpParser\Node\Const_;
+use PhpParser\Node\Name;
+use PhpParser\Node\PropertyItem;
+use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\EnumCase;
+use PhpParser\Node\Stmt\Property;
+use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
@@ -2085,5 +2094,23 @@ PHP;
         $analysisNodeCollector->leaveNode($classMethod);
 
         $this->assertSame([], $analysisNodeCollector->getClassNodes());
+    }
+
+    public function testIgnoresMemberNodesOutsideTrackedClassLike(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $enumCase               = new EnumCase('Orphan');
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
+
+        $analysisNodeCollector->enterNode(new Property(Modifiers::PUBLIC, [new PropertyItem('orphan')]));
+        $analysisNodeCollector->enterNode(new ClassConst([new Const_('ORPHAN', new Int_(1))]));
+        $analysisNodeCollector->enterNode(new TraitUse([new Name('OrphanTrait')]));
+        $analysisNodeCollector->enterNode($enumCase);
+        $analysisNodeCollector->leaveNode($enumCase);
+
+        $this->assertSame([], $analysisNodeCollector->getClassNodes());
+        $this->assertSame([], $analysisNodeCollector->getAnonymousClassNodes());
     }
 }
