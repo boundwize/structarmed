@@ -11,6 +11,9 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 
+use function array_push;
+use function count;
+
 /**
  * @internal
  */
@@ -34,24 +37,33 @@ final readonly class AnalysisNodeExtractor
         $this->fileAnalysisProvider = $fileAnalysisProvider ?? new FileAnalysisProvider();
     }
 
-    /** @param list<string> $files */
+    /**
+     * Only files without a valid node-cache payload are parsed, and only those
+     * count towards the progress total.
+     *
+     * @param list<string> $files
+     */
     public function extract(
         array $files,
         ?ProgressHandlerInterface $progressHandler = null,
         bool $withFileAnalysis = true,
     ): ExtractionResult {
+        [$cachedResult, $filesToParse] = $this->loadFromCache($files, $withFileAnalysis);
+
+        $progressHandler?->start(count($filesToParse));
+
         $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver);
         $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $fileAnalyses          = [];
 
-        foreach ($files as $file) {
+        foreach ($filesToParse as $fileToParse) {
             try {
-                $ast                          = $this->fileAnalysisProvider->ast($file, $withFileAnalysis);
+                $ast                          = $this->fileAnalysisProvider->ast($fileToParse, $withFileAnalysis);
                 $nonCanonicalKeywordConstants = [];
                 $numericLiterals              = [];
 
                 if ($ast !== null && $ast !== []) {
-                    $analysisNodeCollector->setCurrentFile($file, $this->fileAnalysisProvider->tokens());
+                    $analysisNodeCollector->setCurrentFile($fileToParse, $this->fileAnalysisProvider->tokens());
                     $nodeTraverser->traverse($ast);
 
                     $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();
@@ -61,18 +73,18 @@ final readonly class AnalysisNodeExtractor
                 // Analysed after the traversal so the facts only the collector
                 // records reach the file analysis without a second AST walk.
                 if ($withFileAnalysis) {
-                    $fileAnalyses[$file] = $this->fileAnalysisProvider->analyse(
-                        $file,
+                    $fileAnalyses[$fileToParse] = $this->fileAnalysisProvider->analyse(
+                        $fileToParse,
                         $nonCanonicalKeywordConstants,
                         $numericLiterals,
                     );
                 }
             } finally {
                 if ($withFileAnalysis) {
-                    $this->fileAnalysisProvider->releaseAst($file);
+                    $this->fileAnalysisProvider->releaseAst($fileToParse);
                 }
 
-                $progressHandler?->advance($file);
+                $progressHandler?->advance($fileToParse);
             }
         }
 
@@ -87,11 +99,67 @@ final readonly class AnalysisNodeExtractor
         );
 
         $this->analysisResultCache?->storeExtractionResult(
-            $files,
+            $filesToParse,
             $this->analysisNodeCacheNamespace,
             $extractionResult
         );
 
-        return $extractionResult;
+        return $cachedResult->merge($extractionResult);
+    }
+
+    /**
+     * Hydrates every file with a valid node-cache payload; the rest still need parsing.
+     *
+     * @param list<string> $files
+     * @return array{ExtractionResult, list<string>}
+     */
+    private function loadFromCache(array $files, bool $withFileAnalysis): array
+    {
+        $classNodes             = [];
+        $fileAnalyses           = [];
+        $anonymousClassNodes    = [];
+        $fileReferences         = [];
+        $fileInstantiations     = [];
+        $functionNodes          = [];
+        $anonymousFunctionNodes = [];
+        $filesToParse           = [];
+
+        foreach ($files as $file) {
+            $cachedResult = $withFileAnalysis
+                ? $this->analysisResultCache?->loadAnalysisNodesWithFileAnalysis(
+                    $file,
+                    $this->analysisNodeCacheNamespace
+                )
+                : $this->analysisResultCache?->loadAnalysisNodes($file, $this->analysisNodeCacheNamespace);
+
+            if ($cachedResult === null) {
+                $filesToParse[] = $file;
+                continue;
+            }
+
+            array_push($classNodes, ...$cachedResult['classNodes']);
+            array_push($anonymousClassNodes, ...$cachedResult['anonymousClassNodes']);
+            array_push($functionNodes, ...$cachedResult['functionNodes']);
+            array_push($anonymousFunctionNodes, ...$cachedResult['anonymousFunctionNodes']);
+
+            $fileReferences[$file]     = $cachedResult['fileReferences'];
+            $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
+
+            if (isset($cachedResult['fileAnalysis'])) {
+                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
+            }
+        }
+
+        $cachedResult = new ExtractionResult(
+            $classNodes,
+            $fileAnalyses,
+            $anonymousClassNodes,
+            $fileReferences,
+            $fileInstantiations,
+            $functionNodes,
+            $anonymousFunctionNodes,
+        );
+
+        return [$cachedResult, $filesToParse];
     }
 }

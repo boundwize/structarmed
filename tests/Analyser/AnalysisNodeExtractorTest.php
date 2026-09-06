@@ -7,6 +7,8 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
+use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
@@ -198,5 +200,56 @@ PHP);
 
         $this->assertCount(1, $advanced);
         $this->assertSame($file, $advanced[0]);
+    }
+
+    public function testExtractHydratesCachedFilesAndStartsProgressWithFilesNeedingParse(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-extractor-cache');
+        $fooFile  = $dir . '/Foo.php';
+        $barFile  = $dir . '/Bar.php';
+
+        file_put_contents($fooFile, '<?php namespace App; final class Foo {}');
+        file_put_contents($barFile, '<?php namespace App; final class Bar {}');
+
+        $extractor = static fn (): AnalysisNodeExtractor => new AnalysisNodeExtractor(
+            analysisResultCache: new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
+            analysisNodeCacheNamespace: 'config',
+        );
+
+        $extractor()->extract([$fooFile, $barFile]);
+
+        file_put_contents($fooFile, '<?php namespace App; final class Foo { public function changed(): void {} }');
+
+        $progress = new class implements ProgressHandlerInterface {
+            public int $total = -1;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        $extractionResult = $extractor()->extract([$fooFile, $barFile], $progress);
+
+        $this->assertSame(1, $progress->total);
+        $this->assertSame([$fooFile], $progress->files);
+        $this->assertCount(2, $extractionResult->classNodes);
+        // Cached nodes first, then the freshly parsed ones.
+        $this->assertStringEndsWith('\\Bar', $extractionResult->classNodes[0]->className);
+        $this->assertStringEndsWith('\\Foo', $extractionResult->classNodes[1]->className);
+        $this->assertCount(1, $extractionResult->classNodes[1]->methods);
     }
 }

@@ -8,17 +8,20 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;
+use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
+use function array_map;
 use function bin2hex;
 use function file_put_contents;
 use function glob;
 use function is_dir;
 use function random_bytes;
 use function rmdir;
+use function sort;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -197,6 +200,73 @@ PHP);
 
         $this->assertNull($changedFileCache->loadAnalysisNodes($fooFile, 'config'));
         $this->assertIsArray($changedFileCache->loadAnalysisNodes($barFile, 'config'));
+    }
+
+    public function testWorkersHydrateCachedFilesAndReportOnlyParsedFilesAsProgress(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-parallel-cache');
+        $fooFile  = $dir . '/Foo.php';
+        $barFile  = $dir . '/Bar.php';
+
+        file_put_contents($fooFile, '<?php namespace App; final class Foo {}');
+        file_put_contents($barFile, '<?php namespace App; final class Bar {}');
+
+        $extractor = static fn (): ParallelAnalysisNodeExtractor => new ParallelAnalysisNodeExtractor(
+            basePath: $dir,
+            layers: [],
+            layerPatterns: [],
+            workerCount: 2,
+            cacheDirectory: $cacheDir,
+            analysisResultCache: new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
+            analysisNodeCacheNamespace: 'config',
+        );
+
+        $extractor()->extract([$fooFile, $barFile]);
+
+        file_put_contents($fooFile, '<?php namespace App; final class Foo { public function changed(): void {} }');
+
+        $progress = new class implements ProgressHandlerInterface {
+            public int $total = -1;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        $extractionResult = $extractor()->extract([$fooFile, $barFile], $progress);
+        $classNames       = array_map(
+            static fn (ClassNode $classNode): string => $classNode->className,
+            $extractionResult->classNodes
+        );
+        sort($classNames);
+
+        $this->assertCount(2, $classNames);
+        $this->assertStringEndsWith('\\Bar', $classNames[0]);
+        $this->assertStringEndsWith('\\Foo', $classNames[1]);
+        $this->assertSame(1, $progress->total);
+        $this->assertSame([$fooFile], $progress->files);
+
+        $progress->total = -1;
+        $progress->files = [];
+
+        $extractor()->extract([$fooFile, $barFile], $progress);
+
+        $this->assertSame(0, $progress->total);
+        $this->assertSame([], $progress->files);
     }
 
     public function testExtractWithLayerPatternsUsesChainResolver(): void
