@@ -10,6 +10,7 @@ use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Tests\ArchitectureTest;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function dirname;
@@ -171,6 +172,84 @@ final class NamespaceLayerResolverTest extends TestCase
         );
 
         $this->assertSame([], $layers);
+    }
+
+    #[DataProvider('provideResolutionOrder')]
+    public function testRepeatedFileResolutionsIgnoreSymbolNames(bool $resolveAllFirst): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                'Source'      => 'src/',
+                'Domain'      => ['src/Domain/', 'src/Domain/Entities/'],
+                'DomainAlias' => 'src/Domain/Entities/',
+                'Other'       => 'src/Other/',
+            ],
+            basePath: $this->basePath
+        );
+
+        foreach (['App\\Order', 'App\\OtherClass', 'App\\helper()', '{closure}', 'class@anonymous'] as $name) {
+            foreach (
+                [
+                    '/src/Domain/Entities/Order.php' => ['Domain', ['Source', 'Domain', 'DomainAlias']],
+                    '/src/Other/Service.php'         => ['Other', ['Source', 'Other']],
+                    '/src/DomainSibling/Order.php'   => ['Source', ['Source']],
+                    '/vendor/Unknown.php'            => [null, []],
+                ] as $file => [$expectedLayer, $expectedLayers]
+            ) {
+                $filePath = $this->basePath . $file;
+
+                if ($resolveAllFirst) {
+                    $this->assertSame($expectedLayers, $namespaceLayerResolver->resolveAll($name, $filePath));
+                    $this->assertSame($expectedLayer, $namespaceLayerResolver->resolve($name, $filePath));
+                } else {
+                    $this->assertSame($expectedLayer, $namespaceLayerResolver->resolve($name, $filePath));
+                    $this->assertSame($expectedLayers, $namespaceLayerResolver->resolveAll($name, $filePath));
+                }
+            }
+        }
+    }
+
+    /** @return iterable<string, array{bool}> */
+    public static function provideResolutionOrder(): iterable
+    {
+        yield 'resolve first' => [false];
+        yield 'resolveAll first' => [true];
+    }
+
+    /** @param list<string> $filePaths */
+    #[DataProvider('provideEquivalentFilePaths')]
+    public function testEquivalentFilePathsResolveIdentically(string $layerPath, array $filePaths): void
+    {
+        $resolver = new NamespaceLayerResolver(['Source' => $layerPath], $this->basePath);
+        $unknown  = new NamespaceLayerResolver([], $this->basePath);
+
+        foreach ($filePaths as $index => $filePath) {
+            $this->assertSame('Source', $resolver->resolve('Class' . $index, $filePath));
+            $this->assertSame(['Source'], $resolver->resolveAll('Function' . $index, $filePath));
+            $this->assertNull($unknown->resolve('Class' . $index, $filePath));
+            $this->assertSame([], $unknown->resolveAll('Function' . $index, $filePath));
+        }
+    }
+
+    /** @return iterable<string, array{string, list<string>}> */
+    public static function provideEquivalentFilePaths(): iterable
+    {
+        yield 'canonical existing file' => [
+            __DIR__,
+            [__FILE__, __DIR__ . '/../LayerResolver/NamespaceLayerResolverTest.php'],
+        ];
+        yield 'Windows drive separators' => [
+            'C:\\structarmed-cache-test\\src',
+            ['C:\\structarmed-cache-test\\src\\Order.php', 'C:/structarmed-cache-test/src/Order.php'],
+        ];
+        yield 'Windows UNC separators' => [
+            '\\\\structarmed-cache-test\\share\\src',
+            ['\\\\structarmed-cache-test\\share\\src\\Order.php', '//structarmed-cache-test/share/src/Order.php'],
+        ];
+        yield 'redundant separators' => [
+            '/structarmed-cache-test/src',
+            ['/structarmed-cache-test/src//Order.php', '/structarmed-cache-test/src/Order.php'],
+        ];
     }
 
     public function testReusesCachedMatchesForSameFilePath(): void
