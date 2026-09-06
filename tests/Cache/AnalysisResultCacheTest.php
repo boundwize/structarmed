@@ -1646,60 +1646,153 @@ final class AnalysisResultCacheTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{array<mixed, mixed>}>
+     * @return iterable<string, array{list<array{int, string}>, list<array{int, string, int|float}>}>
      */
-    public static function malformedFileAnalysisProvider(): iterable
+    public static function optionalFileAnalysisListsProvider(): iterable
     {
-        $valid = [
-            'file'                         => __FILE__,
-            'hasUtf8Bom'                   => false,
-            'hasValidUtf8'                 => true,
-            'invalidPhpTagLine'            => null,
-            'hasValidAst'                  => true,
-            'declaresSymbols'              => true,
-            'hasSideEffects'               => false,
-            'sideEffectLine'               => 1,
-            'nonCanonicalKeywordConstants' => [],
-            'numericLiterals'              => [],
-        ];
+        yield 'both omitted' => [[], []];
+        yield 'only keyword constants' => [[[3, 'TRUE'], [5, '\\NULL']], []];
+        yield 'only numeric literals' => [[], [[7, '10000', 10000], [8, '1.25', 1.25]]];
+        yield 'both present' => [[[3, 'TRUE']], [[7, '10000', 10000]]];
+    }
 
+    /**
+     * @param list<array{int, string}> $nonCanonicalKeywordConstants
+     * @param list<array{int, string, int|float}> $numericLiterals
+     */
+    #[DataProvider('optionalFileAnalysisListsProvider')]
+    public function testFileAnalysisUsesCompactScalarsAndSparseLists(
+        array $nonCanonicalKeywordConstants,
+        array $numericLiterals,
+    ): void {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $fileAnalysis        = new FileAnalysis(
+            file: $sourceFile,
+            hasUtf8Bom: true,
+            hasValidUtf8: false,
+            invalidPhpTagLine: 3,
+            hasValidAst: false,
+            declaresSymbols: false,
+            hasSideEffects: true,
+            sideEffectLine: 5,
+            nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
+            numericLiterals: $numericLiterals,
+        );
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [], $fileAnalysis);
+
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($payload);
+            $expected = ['scalars' => [true, false, 3, false, false, true, 5]];
+
+            if ($nonCanonicalKeywordConstants !== []) {
+                $expected['nonCanonicalKeywordConstants'] = $nonCanonicalKeywordConstants;
+            }
+
+            if ($numericLiterals !== []) {
+                $expected['numericLiterals'] = $numericLiterals;
+            }
+
+            $this->assertSame($expected, $payload['fileAnalysis']);
+
+            $nextRunCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+            $loaded       = $nextRunCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config');
+            $this->assertNotNull($loaded);
+            $this->assertEquals($fileAnalysis, $loaded['fileAnalysis']);
+            $this->assertSame($sourceFile, $loaded['fileAnalysis']->file);
+            $this->assertSame($nonCanonicalKeywordConstants, $loaded['fileAnalysis']->nonCanonicalKeywordConstants);
+            $this->assertSame($numericLiterals, $loaded['fileAnalysis']->numericLiterals);
+
+            // Explicit empty lists hydrate just like omitted lists.
+            $payload['fileAnalysis'] = $expected + ['nonCanonicalKeywordConstants' => [], 'numericLiterals' => []];
+            $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
+            $this->assertEquals($loaded, $nextRunCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    private function malformedFileAnalyses(): iterable
+    {
+        $scalars = [false, true, null, true, true, false, 1];
+        $valid   = ['scalars' => $scalars];
+
+        yield 'null facts' => [null];
+        yield 'string facts' => ['bad'];
+        yield 'boolean facts' => [false];
+        yield 'integer facts' => [1];
+        yield 'missing scalars' => [[]];
         yield 'numeric keys' => [[0 => 'bad']];
-        yield 'invalid BOM flag' => [[...$valid, 'hasUtf8Bom' => 'bad']];
-        yield 'invalid UTF-8 flag' => [[...$valid, 'hasValidUtf8' => 'bad']];
-        yield 'missing invalid tag line' => [
+        yield 'bare scalar list' => [$scalars];
+        yield 'null scalars' => [['scalars' => null]];
+        yield 'string scalars' => [['scalars' => 'bad']];
+        yield 'empty scalar list' => [['scalars' => []]];
+        yield 'missing scalar entry' => [['scalars' => [false, true, null, true, true, false]]];
+        yield 'extra scalar entry' => [['scalars' => [...$scalars, 2]]];
+        yield 'scalar list with gap' => [['scalars' => [false, true, null, true, true, false, 7 => 1]]];
+        yield 'scalar list with string key' => [
+            ['scalars' => [false, true, null, true, true, false, 'sideEffectLine' => 1]],
+        ];
+        yield 'scalar list with reordered keys' => [['scalars' => [1 => true, 0 => false] + $scalars]];
+        yield 'legacy associative scalars' => [
             [
-                'file'            => __FILE__,
-                'hasUtf8Bom'      => false,
-                'hasValidUtf8'    => true,
-                'hasValidAst'     => true,
-                'declaresSymbols' => true,
-                'hasSideEffects'  => false,
-                'sideEffectLine'  => 1,
+                'hasUtf8Bom'        => false,
+                'hasValidUtf8'      => true,
+                'invalidPhpTagLine' => null,
+                'hasValidAst'       => true,
+                'declaresSymbols'   => true,
+                'hasSideEffects'    => false,
+                'sideEffectLine'    => 1,
             ],
         ];
-        yield 'invalid tag line type' => [[...$valid, 'invalidPhpTagLine' => 'bad']];
-        yield 'invalid AST flag' => [[...$valid, 'hasValidAst' => 'bad']];
-        yield 'invalid declaration flag' => [[...$valid, 'declaresSymbols' => 'bad']];
-        yield 'invalid side-effects flag' => [[...$valid, 'hasSideEffects' => 'bad']];
-        yield 'invalid side-effect line' => [[...$valid, 'sideEffectLine' => 'bad']];
+
+        foreach ([0, 1, 3, 4, 5] as $index) {
+            foreach (['string' => 'true', 'integer' => 1, 'null' => null, 'array' => []] as $type => $value) {
+                $invalid         = $scalars;
+                $invalid[$index] = $value;
+                yield 'boolean scalar ' . $index . ' with ' . $type => [['scalars' => $invalid]];
+            }
+        }
+
+        foreach ([2, 6] as $index) {
+            foreach (['string' => '1', 'float' => 1.5, 'boolean' => false, 'array' => []] as $type => $value) {
+                $invalid         = $scalars;
+                $invalid[$index] = $value;
+                yield 'line scalar ' . $index . ' with ' . $type => [['scalars' => $invalid]];
+            }
+        }
+
+        yield 'null side-effect line' => [['scalars' => [false, true, null, true, true, false, null]]];
         yield 'invalid keyword constants type' => [[...$valid, 'nonCanonicalKeywordConstants' => 'bad']];
         yield 'keyword constants not a list' => [[...$valid, 'nonCanonicalKeywordConstants' => ['a' => [1, 'TRUE']]]];
+        yield 'keyword constant not an array' => [[...$valid, 'nonCanonicalKeywordConstants' => ['bad']]];
         yield 'keyword constant not a pair' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1]]]];
         yield 'keyword constant with extra entry' => [
             [...$valid, 'nonCanonicalKeywordConstants' => [[1, 'TRUE', 'extra']]],
         ];
         yield 'keyword constant with invalid line' => [[...$valid, 'nonCanonicalKeywordConstants' => [['1', 'TRUE']]]];
         yield 'keyword constant with invalid spelling' => [[...$valid, 'nonCanonicalKeywordConstants' => [[1, 1]]]];
+        yield 'invalid numeric literals type' => [[...$valid, 'numericLiterals' => 'bad']];
         yield 'numeric literals not a list' => [[...$valid, 'numericLiterals' => ['bad' => [1, '10000', 10000]]]];
+        yield 'numeric literal not an array' => [[...$valid, 'numericLiterals' => ['bad']]];
         yield 'numeric literal not a triple' => [[...$valid, 'numericLiterals' => [[1, '10000']]]];
+        yield 'numeric literal with extra entry' => [[...$valid, 'numericLiterals' => [[1, '10000', 10000, 'extra']]]];
         yield 'numeric literal with invalid line' => [[...$valid, 'numericLiterals' => [['1', '10000', 10000]]]];
         yield 'numeric literal with invalid spelling' => [[...$valid, 'numericLiterals' => [[1, 10000, 10000]]]];
         yield 'numeric literal with invalid value' => [[...$valid, 'numericLiterals' => [[1, '10000', '10000']]]];
     }
 
-    /** @param array<mixed, mixed> $fileAnalysis */
-    #[DataProvider('malformedFileAnalysisProvider')]
-    public function testClassNodesWithFileAnalysisMissesMalformedFacts(array $fileAnalysis): void
+    public function testClassNodesWithFileAnalysisMissesMalformedFacts(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -1718,10 +1811,16 @@ final class AnalysisResultCacheTest extends TestCase
             $cacheFile = $this->firstJsonFile($cacheDirectory);
             $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
             $this->assertIsArray($payload);
-            $payload['fileAnalysis'] = $fileAnalysis;
-            $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
 
-            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+            foreach ($this->malformedFileAnalyses() as $description => [$fileAnalysis]) {
+                $payload['fileAnalysis'] = $fileAnalysis;
+                $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
+
+                $this->assertNull(
+                    $analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'),
+                    $description,
+                );
+            }
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
