@@ -7,8 +7,10 @@ namespace Boundwize\StructArmed\LayerResolver\Resolvers;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\Path;
 
+use function in_array;
 use function str_starts_with;
 use function strlen;
+use function usort;
 
 /**
  * Resolves a layer by matching the file path against registered layer paths.
@@ -22,11 +24,12 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
     /**
      * Layer paths stored with a trailing '/' so a single str_starts_with()
      * against the file path (also suffixed with '/') covers both exact and
-     * descendant matches.
+     * descendant matches. Longest path first, so the first match is the most
+     * specific layer; equal lengths keep declaration order.
      *
-     * @var array<string, list<string>>
+     * @var list<array{0: string, 1: string}> [layerPath, layerName]
      */
-    private array $normalisedLayers;
+    private array $layerPaths;
 
     /**
      * @param array<string, string|list<string>> $layers  Map of layer name → path prefixes
@@ -35,56 +38,44 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         array $layers,
         string $basePath,
     ) {
-        $normalisedLayers = [];
+        $layerPaths = [];
 
-        foreach ($layers as $layerName => $layerPaths) {
-            foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayers[$layerName][] = Path::normalise(
-                    Path::resolve($layerPath, $basePath),
-                    canonicalise: true
-                ) . '/';
+        foreach ($layers as $layerName => $paths) {
+            foreach ((array) $paths as $path) {
+                $layerPath    = Path::normalise(Path::resolve($path, $basePath), canonicalise: true) . '/';
+                $layerPaths[] = [$layerPath, $layerName];
             }
         }
 
-        $this->normalisedLayers = $normalisedLayers;
+        usort($layerPaths, static fn (array $a, array $b): int => strlen($b[0]) <=> strlen($a[0]));
+
+        $this->layerPaths = $layerPaths;
     }
 
     public function resolve(string $className, string $filePath): ?string
     {
         $pathWithSlash = Path::normalise($filePath, canonicalise: true) . '/';
-        $matchedLayer  = null;
-        $matchedLength = -1;
 
-        foreach ($this->normalisedLayers as $layerName => $layerPaths) {
-            foreach ($layerPaths as $layerPath) {
-                if (str_starts_with($pathWithSlash, $layerPath)) {
-                    $length = strlen($layerPath);
-
-                    if ($length > $matchedLength) {
-                        $matchedLayer  = $layerName;
-                        $matchedLength = $length;
-                    }
-                }
+        foreach ($this->layerPaths as [$layerPath, $layerName]) {
+            if (str_starts_with($pathWithSlash, $layerPath)) {
+                return $layerName;
             }
         }
 
-        return $matchedLayer;
+        return null;
     }
 
     /**
-     * @return int[]|string[]
+     * @return list<string>
      */
     public function resolveAll(string $className, string $filePath): array
     {
         $pathWithSlash = Path::normalise($filePath, canonicalise: true) . '/';
         $matched       = [];
 
-        foreach ($this->normalisedLayers as $layerName => $layerPaths) {
-            foreach ($layerPaths as $layerPath) {
-                if (str_starts_with($pathWithSlash, $layerPath)) {
-                    $matched[] = $layerName;
-                    break;
-                }
+        foreach ($this->layerPaths as [$layerPath, $layerName]) {
+            if (str_starts_with($pathWithSlash, $layerPath) && ! in_array($layerName, $matched, true)) {
+                $matched[] = $layerName;
             }
         }
 

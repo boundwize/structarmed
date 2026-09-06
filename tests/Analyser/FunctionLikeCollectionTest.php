@@ -113,7 +113,7 @@ final class FunctionLikeCollectionTest extends TestCase
         $functionNode = $analysisNodeCollector->getFunctionNodes()[0];
 
         $this->assertSame('Domain', $functionNode->layer);
-        $this->assertSame(['Source', 'Domain'], $functionNode->layers);
+        $this->assertSame(['Domain', 'Source'], $functionNode->layers);
     }
 
     public function testCollectsFunctionDependenciesWithoutSeedingNamespaceImports(): void
