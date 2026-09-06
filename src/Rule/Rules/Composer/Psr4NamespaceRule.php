@@ -16,11 +16,13 @@ use function array_key_exists;
 use function array_key_first;
 use function array_unique;
 use function arsort;
+use function basename;
 use function dirname;
 use function file_exists;
 use function ltrim;
 use function max;
 use function preg_replace;
+use function rtrim;
 use function sprintf;
 use function str_ends_with;
 use function str_replace;
@@ -37,6 +39,9 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
 
     /** @var array<string, string|null> */
     private array $basePathByDirectory = [];
+
+    /** @var array<string, array<string, int>> */
+    private array $namespaceCandidatesByDirectory = [];
 
     public function __construct(
         private readonly string $layer,
@@ -55,7 +60,8 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
      */
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
-        $this->projectBasePath = Path::normalise($basePath, canonicalise: true);
+        $this->projectBasePath                = Path::normalise($basePath, canonicalise: true);
+        $this->namespaceCandidatesByDirectory = [];
 
         return null;
     }
@@ -87,45 +93,59 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
      */
     private function expectedClassNames(string $file): array
     {
-        $basePaths = array_unique([$this->projectBasePath, $this->basePathFor($file)]);
-
         $file = Path::normalise($file, canonicalise: true);
 
+        if (! str_ends_with($file, '.php')) {
+            return [];
+        }
+
+        $directory = dirname($file);
+        $shortName = basename($file, '.php');
+        $shortName = (string) preg_replace('/\.class$/i', '', $shortName);
+
         $candidates = [];
+
+        foreach ($this->namespaceCandidatesFor($directory, $file) as $namespace => $prefixLength) {
+            $candidates[$namespace . $shortName] = $prefixLength;
+        }
+
+        return $candidates;
+    }
+
+    /** @return array<string, int> */
+    private function namespaceCandidatesFor(string $directory, string $file): array
+    {
+        if (isset($this->namespaceCandidatesByDirectory[$directory])) {
+            return $this->namespaceCandidatesByDirectory[$directory];
+        }
+
+        $basePaths          = array_unique([$this->projectBasePath, $this->basePathFor($file)]);
+        $directoryWithSlash = rtrim($directory, '/') . '/';
+        $candidates         = [];
 
         foreach ($basePaths as $basePath) {
             if ($basePath === null) {
                 continue;
             }
 
-            foreach ($this->mappingsFor($basePath) as $namespace => $paths) {
-                foreach ($paths as $path) {
-                    $prefix = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
-
-                    if (! str_starts_with($file, $prefix . '/')) {
+            foreach ($this->mappingsFor($basePath) as $namespace => $prefixes) {
+                foreach ($prefixes as $prefix) {
+                    if (! str_starts_with($directoryWithSlash, $prefix . '/')) {
                         continue;
                     }
 
-                    $relativeClass = substr($file, strlen($prefix) + 1);
+                    $relativeNamespace = substr($directoryWithSlash, strlen($prefix) + 1);
+                    $relativeNamespace = str_replace('/', '\\', $relativeNamespace);
+                    $candidate         = $namespace . ltrim($relativeNamespace, '\\');
 
-                    if (! str_ends_with($relativeClass, '.php')) {
-                        continue;
-                    }
-
-                    $relativeClass = substr($relativeClass, 0, -4);
-                    $relativeClass = (string) preg_replace('/\.class$/i', '', $relativeClass);
-                    $relativeClass = str_replace('/', '\\', $relativeClass);
-
-                    $className = $namespace . ltrim($relativeClass, '\\');
-
-                    $candidates[$className] = max($candidates[$className] ?? 0, strlen($prefix));
+                    $candidates[$candidate] = max($candidates[$candidate] ?? 0, strlen($prefix));
                 }
             }
         }
 
         arsort($candidates);
 
-        return $candidates;
+        return $this->namespaceCandidatesByDirectory[$directory] = $candidates;
     }
 
     private function basePathFor(string $file): ?string
@@ -173,8 +193,19 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
      */
     private function mappingsFor(string $basePath): array
     {
-        $this->mappingsByBasePath[$basePath] ??= $this->psr4PathResolver->namespacePaths($basePath);
+        if (isset($this->mappingsByBasePath[$basePath])) {
+            return $this->mappingsByBasePath[$basePath];
+        }
 
-        return $this->mappingsByBasePath[$basePath];
+        $mappings = [];
+
+        // Resolve directory prefixes once per composer root, instead of for every class.
+        foreach ($this->psr4PathResolver->namespacePaths($basePath) as $namespace => $paths) {
+            foreach ($paths as $path) {
+                $mappings[$namespace][] = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
+            }
+        }
+
+        return $this->mappingsByBasePath[$basePath] = $mappings;
     }
 }

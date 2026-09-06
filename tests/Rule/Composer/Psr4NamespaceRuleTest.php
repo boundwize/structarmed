@@ -403,6 +403,57 @@ final class Psr4NamespaceRuleTest extends TestCase
         );
     }
 
+    public function testReusesDirectoryCandidatesWithLongestPrefixFirst(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-directory-candidates');
+        mkdir($basePath . '/src/Legacy', 0777, true);
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => [
+                'psr-4' => [
+                    'App\\'    => 'src/',
+                    'Legacy\\' => 'src/Legacy/',
+                ],
+            ],
+        ]));
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        foreach (['Foo', 'Bar'] as $name) {
+            $file = $basePath . '/src/Legacy/' . $name . '.class.php';
+            file_put_contents($file, '<?php');
+
+            $violation = $psr4NamespaceRule->evaluate($this->makeNode('Wrong', $file));
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame('Class [Wrong] must match PSR-4 class [Legacy\\' . $name . ']', $violation->message);
+            $this->assertNull($psr4NamespaceRule->evaluate($this->makeNode('App\\Legacy\\' . $name, $file)));
+        }
+    }
+
+    public function testRefreshesDirectoryCandidatesWhenProjectRootChanges(): void
+    {
+        $rootPath = $this->makeTemporaryDirectory('structarmed-psr4-changing-project');
+        mkdir($rootPath . '/shared');
+        $file = $rootPath . '/shared/Foo.php';
+        file_put_contents($file, '<?php');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+
+        foreach (['First', 'Second'] as $project) {
+            $basePath = $rootPath . '/' . $project;
+            mkdir($basePath);
+            file_put_contents($basePath . '/composer.json', json_encode([
+                'autoload' => ['psr-4' => [$project . '\\' => '../shared/']],
+            ]));
+
+            $psr4NamespaceRule->evaluateProject($basePath, Architecture::define());
+            $violation = $psr4NamespaceRule->evaluate($this->makeNode('Wrong', $file));
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertSame('Class [Wrong] must match PSR-4 class [' . $project . '\\Foo]', $violation->message);
+        }
+    }
+
     private function makeNode(
         string $className,
         string $file,
