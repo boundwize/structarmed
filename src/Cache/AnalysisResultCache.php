@@ -20,7 +20,6 @@ use Boundwize\StructArmed\Rule\RuleViolationCollection;
 
 use function array_fill_keys;
 use function array_is_list;
-use function array_key_exists;
 use function array_keys;
 use function array_map;
 use function array_values;
@@ -66,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 7;
+    public const FORMAT_VERSION = 8;
 
     private readonly string $cacheDirectory;
 
@@ -1323,20 +1322,24 @@ final class AnalysisResultCache
 
     /**
      * The file is not stored: the payload belongs to one file, known when
-     * loading. The two lists are empty for most files and left out.
+     * loading. Common scalars use a fixed positional list; append new fields
+     * to that list and bump FORMAT_VERSION. The two optional lists are empty
+     * for most files and left out.
      *
      * @return array<string, mixed>
      */
     private function fileAnalysisToArray(FileAnalysis $fileAnalysis): array
     {
         $analysis = [
-            'hasUtf8Bom'        => $fileAnalysis->hasUtf8Bom,
-            'hasValidUtf8'      => $fileAnalysis->hasValidUtf8,
-            'invalidPhpTagLine' => $fileAnalysis->invalidPhpTagLine,
-            'hasValidAst'       => $fileAnalysis->hasValidAst,
-            'declaresSymbols'   => $fileAnalysis->declaresSymbols,
-            'hasSideEffects'    => $fileAnalysis->hasSideEffects,
-            'sideEffectLine'    => $fileAnalysis->sideEffectLine,
+            'scalars' => [
+                $fileAnalysis->hasUtf8Bom,
+                $fileAnalysis->hasValidUtf8,
+                $fileAnalysis->invalidPhpTagLine,
+                $fileAnalysis->hasValidAst,
+                $fileAnalysis->declaresSymbols,
+                $fileAnalysis->hasSideEffects,
+                $fileAnalysis->sideEffectLine,
+            ],
         ];
 
         if ($fileAnalysis->nonCanonicalKeywordConstants !== []) {
@@ -1353,18 +1356,33 @@ final class AnalysisResultCache
     /** @param array<mixed, mixed> $analysis */
     private function fileAnalysisFromArray(array $analysis, string $file): ?FileAnalysis
     {
+        $scalars = $analysis['scalars'] ?? null;
+
+        if (! is_array($scalars) || count($scalars) !== 7 || ! array_is_list($scalars)) {
+            return null;
+        }
+
+        [
+            $hasUtf8Bom,
+            $hasValidUtf8,
+            $invalidPhpTagLine,
+            $hasValidAst,
+            $declaresSymbols,
+            $hasSideEffects,
+            $sideEffectLine,
+        ] = $scalars;
+
         $nonCanonicalKeywordConstants = $analysis['nonCanonicalKeywordConstants'] ?? [];
         $numericLiterals              = $analysis['numericLiterals'] ?? [];
 
         if (
-            ! is_bool($analysis['hasUtf8Bom'] ?? null)
-            || ! is_bool($analysis['hasValidUtf8'] ?? null)
-            || ! array_key_exists('invalidPhpTagLine', $analysis)
-            || ($analysis['invalidPhpTagLine'] !== null && ! is_int($analysis['invalidPhpTagLine']))
-            || ! is_bool($analysis['hasValidAst'] ?? null)
-            || ! is_bool($analysis['declaresSymbols'] ?? null)
-            || ! is_bool($analysis['hasSideEffects'] ?? null)
-            || ! is_int($analysis['sideEffectLine'] ?? null)
+            ! is_bool($hasUtf8Bom)
+            || ! is_bool($hasValidUtf8)
+            || ($invalidPhpTagLine !== null && ! is_int($invalidPhpTagLine))
+            || ! is_bool($hasValidAst)
+            || ! is_bool($declaresSymbols)
+            || ! is_bool($hasSideEffects)
+            || ! is_int($sideEffectLine)
             || ! $this->isKeywordConstantList($nonCanonicalKeywordConstants)
             || ! $this->isNumericLiteralList($numericLiterals)
         ) {
@@ -1373,13 +1391,13 @@ final class AnalysisResultCache
 
         return new FileAnalysis(
             file: $file,
-            hasUtf8Bom: $analysis['hasUtf8Bom'],
-            hasValidUtf8: $analysis['hasValidUtf8'],
-            invalidPhpTagLine: $analysis['invalidPhpTagLine'],
-            hasValidAst: $analysis['hasValidAst'],
-            declaresSymbols: $analysis['declaresSymbols'],
-            hasSideEffects: $analysis['hasSideEffects'],
-            sideEffectLine: $analysis['sideEffectLine'],
+            hasUtf8Bom: $hasUtf8Bom,
+            hasValidUtf8: $hasValidUtf8,
+            invalidPhpTagLine: $invalidPhpTagLine,
+            hasValidAst: $hasValidAst,
+            declaresSymbols: $declaresSymbols,
+            hasSideEffects: $hasSideEffects,
+            sideEffectLine: $sideEffectLine,
             nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
             numericLiterals: $numericLiterals,
         );
