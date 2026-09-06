@@ -12,6 +12,8 @@ use function fwrite;
 /**
  * Reports progress to the coordinator as one line per event: first the number
  * of files this worker has to parse, then the chunk index of each parsed file.
+ *
+ * @internal
  */
 final readonly class WorkerProgressHandler implements ProgressHandlerInterface
 {
