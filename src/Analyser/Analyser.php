@@ -36,10 +36,8 @@ use function array_filter;
 use function array_key_exists;
 use function array_keys;
 use function array_merge;
-use function array_push;
 use function array_unique;
 use function array_values;
-use function count;
 use function getcwd;
 use function in_array;
 use function is_dir;
@@ -1290,63 +1288,13 @@ final readonly class Analyser
         ?AnalyserOptions $analyserOptions = null,
         bool $withFileAnalysis = true,
     ): ExtractionResult {
-        $classNodes             = [];
-        $fileAnalyses           = [];
-        $anonymousClassNodes    = [];
-        $fileReferences         = [];
-        $fileInstantiations     = [];
-        $functionNodes          = [];
-        $anonymousFunctionNodes = [];
-        $filesToParse           = [];
-
-        foreach ($files as $file) {
-            $cachedResult = $withFileAnalysis
-                ? $this->analysisResultCache?->loadAnalysisNodesWithFileAnalysis(
-                    $file,
-                    $this->analysisNodeCacheNamespace
-                )
-                : $this->analysisResultCache?->loadAnalysisNodes($file, $this->analysisNodeCacheNamespace);
-
-            if ($cachedResult === null) {
-                $filesToParse[] = $file;
-                continue;
-            }
-
-            array_push($classNodes, ...$cachedResult['classNodes']);
-            array_push($anonymousClassNodes, ...$cachedResult['anonymousClassNodes']);
-            array_push($functionNodes, ...$cachedResult['functionNodes']);
-            array_push($anonymousFunctionNodes, ...$cachedResult['anonymousFunctionNodes']);
-
-            $fileReferences[$file]     = $cachedResult['fileReferences'];
-            $fileInstantiations[$file] = $cachedResult['fileInstantiations'];
-
-            if (isset($cachedResult['fileAnalysis'])) {
-                $fileAnalyses[$file] = $cachedResult['fileAnalysis'];
-            }
-        }
-
-        $progressHandler?->start(count($filesToParse));
-
-        if ($filesToParse === []) {
-            $progressHandler?->finish();
-
-            return new ExtractionResult(
-                $classNodes,
-                $fileAnalyses,
-                $anonymousClassNodes,
-                $fileReferences,
-                $fileInstantiations,
-                $functionNodes,
-                $anonymousFunctionNodes,
-            );
-        }
-
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
+        // Each extractor hydrates its files' node-cache payloads itself, so in
+        // parallel mode that work is split across the workers instead of being
+        // done serially here before any worker starts.
         if ($options->isParallel()) {
-            // Workers write their own files' cache payloads while other workers are
-            // still parsing, instead of the coordinator doing it serially afterwards.
-            $parsedResult = (new ParallelAnalysisNodeExtractor(
+            $extractionResult = (new ParallelAnalysisNodeExtractor(
                 $this->basePath,
                 $layers,
                 $layerPatterns,
@@ -1354,27 +1302,18 @@ final readonly class Analyser
                 $this->analysisResultCache?->getCacheDirectory(),
                 $this->analysisResultCache,
                 $this->analysisNodeCacheNamespace,
-            ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
+            ))->extract($files, $progressHandler, $withFileAnalysis);
         } else {
-            $parsedResult = (new AnalysisNodeExtractor(
+            $extractionResult = (new AnalysisNodeExtractor(
                 $chainLayerResolver,
                 analysisResultCache: $this->analysisResultCache,
                 analysisNodeCacheNamespace: $this->analysisNodeCacheNamespace,
-            ))->extract($filesToParse, $progressHandler, $withFileAnalysis);
+            ))->extract($files, $progressHandler, $withFileAnalysis);
         }
 
         $progressHandler?->finish();
 
-        // Cached nodes first, then the freshly parsed ones.
-        return new ExtractionResult(
-            classNodes: [...$classNodes, ...$parsedResult->classNodes],
-            fileAnalyses: $fileAnalyses + $parsedResult->fileAnalyses,
-            anonymousClassNodes: [...$anonymousClassNodes, ...$parsedResult->anonymousClassNodes],
-            fileReferences: $fileReferences + $parsedResult->fileReferences,
-            fileInstantiations: $fileInstantiations + $parsedResult->fileInstantiations,
-            functionNodes: [...$functionNodes, ...$parsedResult->functionNodes],
-            anonymousFunctionNodes: [...$anonymousFunctionNodes, ...$parsedResult->anonymousFunctionNodes],
-        );
+        return $extractionResult;
     }
 
     /**

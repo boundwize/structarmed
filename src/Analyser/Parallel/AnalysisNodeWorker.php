@@ -55,7 +55,7 @@ final readonly class AnalysisNodeWorker
 
             $stream = $outputStream ?? STDOUT;
 
-            $progressHandler = $emitProgress ? new WorkerProgressHandler($stream) : null;
+            $progressHandler = $emitProgress ? new WorkerProgressHandler($stream, $files) : null;
 
             $cache = $payload['cache'] ?? null;
             /** @var string $cacheNamespace */

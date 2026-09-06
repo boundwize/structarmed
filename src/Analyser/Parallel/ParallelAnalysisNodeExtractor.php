@@ -18,14 +18,17 @@ use RuntimeException;
 use function array_fill;
 use function array_key_exists;
 use function array_keys;
+use function array_pop;
 use function array_push;
 use function array_search;
 use function arsort;
 use function assert;
 use function count;
 use function dirname;
+use function explode;
 use function fclose;
 use function feof;
+use function fgets;
 use function file_put_contents;
 use function filesize;
 use function fread;
@@ -39,7 +42,6 @@ use function proc_close;
 use function serialize;
 use function sprintf;
 use function stream_set_blocking;
-use function substr_count;
 use function unlink;
 use function unserialize;
 use function usleep;
@@ -77,6 +79,8 @@ final readonly class ParallelAnalysisNodeExtractor
         bool $withFileAnalysis = true,
     ): ExtractionResult {
         if ($files === []) {
+            $progressHandler?->start(0);
+
             return new ExtractionResult([], []);
         }
 
@@ -131,18 +135,31 @@ final readonly class ParallelAnalysisNodeExtractor
             assert(isset($pipes[0]) && isset($pipes[1]));
             fclose($pipes[0]);
 
-            $stdoutPipe = $pipes[1];
-            stream_set_blocking($stdoutPipe, false);
-
             $pending[] = [
-                'process'       => $process,
-                'files'         => $chunk,
-                'filesAdvanced' => 0,
-                'inputFile'     => $inputFile,
-                'outputFile'    => $outputFile,
-                'stderrFile'    => $stderrFile,
-                'stdoutPipe'    => $stdoutPipe,
+                'process'    => $process,
+                'files'      => $chunk,
+                'buffer'     => '',
+                'inputFile'  => $inputFile,
+                'outputFile' => $outputFile,
+                'stderrFile' => $stderrFile,
+                'stdoutPipe' => $pipes[1],
             ];
+        }
+
+        // A worker's first line is how many of its files it still has to parse
+        // after hydrating the cached ones; summed, that is the progress total.
+        if ($emitProgress) {
+            $totalToParse = 0;
+
+            foreach ($pending as $worker) {
+                $totalToParse += (int) fgets($worker['stdoutPipe']);
+            }
+
+            $progressHandler->start($totalToParse);
+        }
+
+        foreach ($pending as $worker) {
+            stream_set_blocking($worker['stdoutPipe'], false);
         }
 
         $nodes                  = [];
@@ -162,15 +179,17 @@ final readonly class ParallelAnalysisNodeExtractor
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
-                    $workerFiles = $pending[$key]['files'];
-                    $nextFileIdx = $pending[$key]['filesAdvanced'];
-                    $lastFileIdx = min($nextFileIdx + substr_count($data, "\n"), count($workerFiles));
+                    // One chunk index per parsed file; a read may end mid-line.
+                    $lines                   = explode("\n", $pending[$key]['buffer'] . $data);
+                    $pending[$key]['buffer'] = array_pop($lines);
 
-                    for (; $nextFileIdx < $lastFileIdx; $nextFileIdx++) {
-                        $progressHandler?->advance($workerFiles[$nextFileIdx]);
+                    foreach ($lines as $line) {
+                        $file = $pending[$key]['files'][(int) $line] ?? null;
+
+                        if ($file !== null) {
+                            $progressHandler?->advance($file);
+                        }
                     }
-
-                    $pending[$key]['filesAdvanced'] = $nextFileIdx;
 
                     $anyActivity = true;
                 }

@@ -27,4 +27,18 @@ final readonly class ExtractionResult
         public array $anonymousFunctionNodes = [],
     ) {
     }
+
+    /** Nodes of this result first, then those of $other. */
+    public function merge(self $other): self
+    {
+        return new self(
+            [...$this->classNodes, ...$other->classNodes],
+            $this->fileAnalyses + $other->fileAnalyses,
+            [...$this->anonymousClassNodes, ...$other->anonymousClassNodes],
+            $this->fileReferences + $other->fileReferences,
+            $this->fileInstantiations + $other->fileInstantiations,
+            [...$this->functionNodes, ...$other->functionNodes],
+            [...$this->anonymousFunctionNodes, ...$other->anonymousFunctionNodes],
+        );
+    }
 }

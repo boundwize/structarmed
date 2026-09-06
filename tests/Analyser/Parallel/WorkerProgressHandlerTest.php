@@ -14,17 +14,20 @@ final class WorkerProgressHandlerTest extends TestCase
 {
     use InMemoryStreamTrait;
 
-    public function testAdvanceWritesNewlineTokenToStream(): void
+    public function testWritesParseCountThenChunkIndexOfEachAdvancedFile(): void
     {
         $stream = $this->openMemoryStream();
 
-        $workerProgressHandler = new WorkerProgressHandler($stream);
+        $workerProgressHandler = new WorkerProgressHandler(
+            $stream,
+            ['/path/Foo.php', '/path/Bar.php', '/path/Baz.php']
+        );
 
         $workerProgressHandler->start(2);
+        $workerProgressHandler->advance('/path/Baz.php');
         $workerProgressHandler->advance('/path/Foo.php');
-        $workerProgressHandler->advance('/path/Bar.php');
         $workerProgressHandler->finish();
 
-        $this->assertSame("\n\n", $this->streamContents($stream));
+        $this->assertSame("2\n2\n0\n", $this->streamContents($stream));
     }
 }
