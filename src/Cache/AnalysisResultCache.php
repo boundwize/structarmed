@@ -65,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 8;
+    public const FORMAT_VERSION = 9;
 
     private readonly string $cacheDirectory;
 
@@ -325,7 +325,7 @@ final class AnalysisResultCache
     {
         $payload = $this->read($this->analysisNodesKey($file, $namespace));
 
-        if ($payload === null || ($payload['metadata'] ?? null) !== $this->fileMetadata($file, $namespace)) {
+        if ($payload === null || ($payload['metadata'] ?? null) !== $this->fileMetadataHash($file, $namespace)) {
             return null;
         }
 
@@ -437,7 +437,7 @@ final class AnalysisResultCache
         $this->ensureCacheInitialised();
 
         $payload = [
-            'metadata' => $this->fileMetadata($file, $namespace),
+            'metadata' => $this->fileMetadataHash($file, $namespace),
             'nodes'    => array_map($this->classNodeToArray(...), $classNodes),
         ];
 
@@ -1493,15 +1493,9 @@ final class AnalysisResultCache
         return 'analysis-nodes-' . hash('xxh128', $namespace . "\0" . $file);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function fileMetadata(string $file, string $namespace): array
+    /** The metadata is only compared for equality; store one hash instead of repeating the file and namespace. */
+    private function fileMetadataHash(string $file, string $namespace): string
     {
-        return [
-            'namespace' => $namespace,
-            'file'      => $file,
-            'hash'      => $this->fileHashProvider->hash($file),
-        ];
+        return hash('xxh128', $namespace . "\0" . $file . "\0" . $this->fileHashProvider->hash($file));
     }
 }

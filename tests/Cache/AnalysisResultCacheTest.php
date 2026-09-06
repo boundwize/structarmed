@@ -1357,12 +1357,13 @@ final class AnalysisResultCacheTest extends TestCase
         file_put_contents($sourceFile, '<?php class Foo {}');
 
         try {
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', []);
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($payload);
+
             $this->writeCachePayload($cacheDirectory, [
-                'metadata' => [
-                    'namespace' => 'config',
-                    'file'      => $sourceFile,
-                    'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
-                ],
+                'metadata' => $payload['metadata'],
                 'nodes'    => [
                     [
                         'className'          => Foo::class,
@@ -1388,7 +1389,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'layers'             => [],
                     ],
                 ],
-            ], 'analysis-nodes-' . hash('xxh128', "config\0" . $sourceFile) . '.json');
+            ], $cacheFile);
 
             $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config')['classNodes'] ?? null;
 
@@ -1871,6 +1872,104 @@ final class AnalysisResultCacheTest extends TestCase
             $nextRunCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
             $this->assertNull($nextRunCache->loadAnalysisNodes($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function differentAnalysisIdentityProvider(): iterable
+    {
+        yield 'same contents at another path' => ['Bar.php', 'config'];
+        yield 'same file in another namespace' => ['Foo.php', 'other-config'];
+    }
+
+    #[DataProvider('differentAnalysisIdentityProvider')]
+    public function testAnalysisNodesRejectPayloadFromDifferentIdentity(string $filename, string $namespace): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $otherFile           = $cacheDirectory . '/' . $filename;
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+        file_put_contents($otherFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
+            $originalPayload = (string) file_get_contents($this->firstJsonFile($cacheDirectory));
+
+            $analysisResultCache->storeAnalysisNodes($otherFile, $namespace, [$this->makeClassNode($otherFile)]);
+            $this->assertNotNull($analysisResultCache->loadAnalysisNodes($otherFile, $namespace));
+
+            $otherCacheFile = $cacheDirectory . '/analysis-nodes-'
+                . hash('xxh128', $namespace . "\0" . $otherFile) . '.json';
+            file_put_contents($otherCacheFile, $originalPayload);
+
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($otherFile, $namespace));
+            $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
+        } finally {
+            unlink($sourceFile);
+
+            if ($otherFile !== $sourceFile) {
+                unlink($otherFile);
+            }
+
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testAnalysisNodesStoreCompactMetadataAndRejectMalformedHashes(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            $analysisResultCache->storeAnalysisNodes(
+                $sourceFile,
+                'config',
+                [],
+                new FileAnalysis($sourceFile, false, true, null, true, true, false, 1),
+            );
+            $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($payload);
+            $this->assertIsString($payload['metadata']);
+            $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $payload['metadata']);
+            $this->assertNotNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+
+            $invalidMetadata = [
+                'null'       => null,
+                'integer'    => 1,
+                'boolean'    => false,
+                'list'       => [],
+                'string'     => 'invalid',
+                'wrong hash' => hash('xxh128', 'other identity'),
+                'old format' => [
+                    'namespace' => 'config',
+                    'file'      => $sourceFile,
+                    'hash'      => hash_file('xxh128', $sourceFile),
+                ],
+            ];
+
+            foreach ($invalidMetadata as $description => $metadata) {
+                $payload['metadata'] = $metadata;
+                $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
+
+                $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'), $description);
+                $this->assertNull(
+                    $analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'),
+                    $description,
+                );
+            }
+
+            unset($payload['metadata']);
+            $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -2660,13 +2759,11 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
             $cacheFile = $this->firstJsonFile($cacheDirectory);
+            $payload   = json_decode((string) file_get_contents($cacheFile), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($payload);
 
             $this->writeCachePayload($cacheDirectory, [
-                'metadata' => [
-                    'namespace' => 'config',
-                    'file'      => $sourceFile,
-                    'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
-                ],
+                ...$payload,
                 ...$payloadOverride,
             ], $cacheFile);
 
