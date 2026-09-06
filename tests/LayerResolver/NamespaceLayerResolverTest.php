@@ -185,7 +185,7 @@ final class NamespaceLayerResolverTest extends TestCase
         $filePath           = $this->basePath . '/src/Domain/Order.php';
 
         $this->assertSame('Domain', $chainLayerResolver->resolve('App\\Domain\\Order', $filePath));
-        $this->assertSame(['Domain', 'Source'], $chainLayerResolver->resolveAll('App\\Domain\\Order', $filePath));
+        $this->assertSame(['Source', 'Domain'], $chainLayerResolver->resolveAll('App\\Domain\\Order', $filePath));
     }
 
     public function testChainResolverCachesResolveResult(): void
@@ -247,7 +247,7 @@ final class NamespaceLayerResolverTest extends TestCase
         $layers = $chainLayerResolver->resolveAll('App\\Domain\\Order', $filePath);
         $layer  = $chainLayerResolver->resolve('App\\Domain\\Order', $filePath);
 
-        $this->assertSame(['Domain', 'Source'], $layers);
+        $this->assertSame(['Source', 'Domain'], $layers);
         $this->assertSame('Domain', $layer);
     }
 
