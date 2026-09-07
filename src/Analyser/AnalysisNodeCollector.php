@@ -87,7 +87,6 @@ use function is_finite;
 use function is_int;
 use function is_string;
 use function preg_match;
-use function spl_object_id;
 use function str_starts_with;
 use function strcasecmp;
 use function strlen;
@@ -322,23 +321,18 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var array<string, true> */
     private array $currentNamespaceUses = [];
 
-    /** @var ClassLike[] */
-    private array $fileClassLikes = [];
-
     /**
-     * The named scopes declaring each anonymous class left in the current
-     * file — innermost class-like name, innermost function name — keyed by
-     * the class node's object id and read once its node is built.
+     * Each class-like left in the current file with the facts collected
+     * while traversing it and, for an anonymous class, the named scopes
+     * declaring it — innermost class-like name, innermost function name —
+     * read once its node is built.
      *
-     * @var array<int, array{string|null, string|null}>
+     * @var list<array{ClassLike, ClassLikeAnalysis, string|null, string|null}>
      */
-    private array $anonymousClassEnclosingNames = [];
+    private array $fileClassLikes = [];
 
     /** @var array<string, true> */
     private array $fileFunctions = [];
-
-    /** @var array<int, ClassLikeAnalysis> */
-    private array $classLikeAnalysis = [];
 
     /** @var list<ClassLikeAnalysis> */
     private array $activeClassLikeAnalyses = [];
@@ -417,9 +411,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->numericLiterals                   = [];
         $this->currentNamespaceUses              = [];
         $this->fileClassLikes                    = [];
-        $this->anonymousClassEnclosingNames      = [];
         $this->fileFunctions                     = [];
-        $this->classLikeAnalysis                 = [];
         $this->activeClassLikeAnalyses           = [];
         $this->activeMethodComplexities          = [];
         $this->activeClassLikeNames              = [];
@@ -703,6 +695,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         array_pop($this->activeClassLikeNames);
         array_pop($this->functionLikeDepthAtClassLikeEntry);
 
+        $analysis = array_pop($this->activeClassLikeAnalyses);
+        assert($analysis instanceof ClassLikeAnalysis);
+
         // Anonymous classes never become ClassNodes, but the class they
         // extend, the interfaces they implement, and the traits they use
         // are still used within the scanned paths, and their members and
@@ -711,14 +706,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // Its own (nameless) entry is already popped, so the innermost
             // active names are the named scopes declaring it; they also
             // resolve its layer, as they do for an anonymous function.
-            $this->anonymousClassEnclosingNames[spl_object_id($node)] = [
+            $this->fileClassLikes[] = [
+                $node,
+                $analysis,
                 $this->innermostActiveClassLikeName(),
                 $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
             ];
+        } else {
+            $this->fileClassLikes[] = [$node, $analysis, null, null];
         }
-
-        $this->fileClassLikes[] = $node;
-        array_pop($this->activeClassLikeAnalyses);
 
         return null;
     }
@@ -726,11 +722,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @param Node[] $nodes */
     public function afterTraverse(array $nodes): null
     {
-        foreach ($this->fileClassLikes as $fileClassLike) {
-            if ($fileClassLike instanceof Class_ && $fileClassLike->isAnonymous()) {
-                $this->collectAnonymousClass($fileClassLike);
+        foreach ($this->fileClassLikes as [$classLike, $analysis, $enclosingClassName, $enclosingFunctionName]) {
+            if ($classLike instanceof Class_ && $classLike->isAnonymous()) {
+                $this->collectAnonymousClass($classLike, $analysis, $enclosingClassName, $enclosingFunctionName);
             } else {
-                $this->collectClassLike($fileClassLike);
+                $this->collectClassLike($classLike, $analysis);
             }
         }
 
@@ -749,8 +745,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         $this->fileClassLikes                    = [];
-        $this->anonymousClassEnclosingNames      = [];
-        $this->classLikeAnalysis                 = [];
         $this->activeClassLikeAnalyses           = [];
         $this->activeClassLikeScopes             = [];
         $this->activeMethodComplexities          = [];
@@ -770,15 +764,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private function startClassLikeAnalysis(ClassLike $classLike): void
     {
-        $classLikeId       = spl_object_id($classLike);
         $classLikeAnalysis = new ClassLikeAnalysis($classLike instanceof Interface_);
 
         if ($classLike->name instanceof Identifier) {
             $classLikeAnalysis->dependencies = $this->currentNamespaceUses;
         }
 
-        $this->classLikeAnalysis[$classLikeId] = $classLikeAnalysis;
-        $this->activeClassLikeAnalyses[]       = $classLikeAnalysis;
+        $this->activeClassLikeAnalyses[] = $classLikeAnalysis;
     }
 
     /**
@@ -1401,10 +1393,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
     }
 
-    private function collectClassLike(ClassLike $classLike): void
+    private function collectClassLike(ClassLike $classLike, ClassLikeAnalysis $classLikeAnalysis): void
     {
-        $classLikeId      = spl_object_id($classLike);
-        $analysis         = $this->collectClassLikeAnalysis($classLikeId);
+        $analysis         = $this->collectClassLikeAnalysis($classLikeAnalysis);
         $className        = $this->resolveClassName($classLike);
         [$layer, $layers] = $this->resolveLayerData($className);
         $implements       = $this->collectImplements($classLike);
@@ -1442,14 +1433,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         );
     }
 
-    private function collectAnonymousClass(Class_ $class): void
-    {
-        $classLikeId                                  = spl_object_id($class);
-        $analysis                                     = $this->collectClassLikeAnalysis($classLikeId);
-        [$enclosingClassName, $enclosingFunctionName] = $this->anonymousClassEnclosingNames[$classLikeId];
-        [$layer, $layers]                             = $this->resolveLayerData(
-            $enclosingClassName ?? $enclosingFunctionName ?? ''
-        );
+    private function collectAnonymousClass(
+        Class_ $class,
+        ClassLikeAnalysis $classLikeAnalysis,
+        ?string $enclosingClassName,
+        ?string $enclosingFunctionName,
+    ): void {
+        $analysis         = $this->collectClassLikeAnalysis($classLikeAnalysis);
+        [$layer, $layers] = $this->resolveLayerData($enclosingClassName ?? $enclosingFunctionName ?? '');
 
         $this->anonymousClassNodes[] = new AnonymousClassNode(
             file:                  $this->currentFile,
@@ -1589,25 +1580,24 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *     enumCases: EnumCaseNode[]
      * }
      */
-    private function collectClassLikeAnalysis(int $classLikeId): array
+    private function collectClassLikeAnalysis(ClassLikeAnalysis $classLikeAnalysis): array
     {
-        $analysis      = $this->classLikeAnalysis[$classLikeId] ?? new ClassLikeAnalysis(false);
         $functionCalls = [];
 
-        foreach ($analysis->functionCallNames as $functionCallName) {
+        foreach ($classLikeAnalysis->functionCallNames as $functionCallName) {
             $functionCalls[] = $this->resolveFunctionName($functionCallName);
         }
 
         return [
-            'dependencies'       => array_keys($analysis->dependencies),
+            'dependencies'       => array_keys($classLikeAnalysis->dependencies),
             'functionCalls'      => array_values(array_unique($functionCalls)),
-            'superglobals'       => array_keys($analysis->superglobals),
-            'languageConstructs' => array_keys($analysis->languageConstructs),
-            'traits'             => $analysis->traits,
-            'constants'          => $analysis->constants,
-            'properties'         => $analysis->properties,
-            'methods'            => $analysis->methods,
-            'enumCases'          => $analysis->enumCases,
+            'superglobals'       => array_keys($classLikeAnalysis->superglobals),
+            'languageConstructs' => array_keys($classLikeAnalysis->languageConstructs),
+            'traits'             => $classLikeAnalysis->traits,
+            'constants'          => $classLikeAnalysis->constants,
+            'properties'         => $classLikeAnalysis->properties,
+            'methods'            => $classLikeAnalysis->methods,
+            'enumCases'          => $classLikeAnalysis->enumCases,
         ];
     }
 
