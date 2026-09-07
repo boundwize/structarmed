@@ -18,6 +18,9 @@ use ReflectionMethod;
 #[CoversClass(AddAbstractClassVisitor::class)]
 final class ExtendedClassMustBeAbstractOrInstantiatedRuleTest extends TestCase
 {
+    /**
+     * @param list<string> $parentClasses
+     */
     private function makeNode(
         string $className = 'App\\Domain\\BaseRepository',
         string $layer = 'Domain',
@@ -28,19 +31,22 @@ final class ExtendedClassMustBeAbstractOrInstantiatedRuleTest extends TestCase
         bool $isExtended = false,
         bool $isReferenced = false,
         bool $isInstantiated = false,
+        ?string $extends = null,
+        array $parentClasses = [],
     ): ClassNode {
         return new ClassNode(
             className:   $className,
             file:        '/src/Domain/BaseRepository.php',
             line:        1,
             layer:       $layer,
-            extends:     null,
+            extends:     $extends,
             isAbstract:  $isAbstract,
             isFinal:     false,
             isInterface: $isInterface,
             isReadonly:  false,
             isTrait:     $isTrait,
             isEnum:      $isEnum,
+            parentClasses: $parentClasses,
             isExtended:  $isExtended,
             isReferenced: $isReferenced,
             isInstantiated: $isInstantiated,
@@ -159,6 +165,54 @@ final class ExtendedClassMustBeAbstractOrInstantiatedRuleTest extends TestCase
         $classNode                                     = $this->makeNode(isAbstract: true);
 
         $this->assertFalse($extendedClassMustBeAbstractOrInstantiatedRule->appliesTo($classNode));
+    }
+
+    public function testDoesNotApplyToPhpUnitTestCases(): void
+    {
+        // PHPUnit instantiates test classes at runtime, so a test another
+        // test extends is never `new`-ed in scanned code yet must stay concrete.
+        $extendedClassMustBeAbstractOrInstantiatedRule = new ExtendedClassMustBeAbstractOrInstantiatedRule(
+            layer: 'Domain'
+        );
+        $classNode                                     = $this->makeNode(
+            className:     'App\\Tests\\FormatRulesTest',
+            isExtended:    true,
+            extends:       'App\\Tests\\CIUnitTestCase',
+            parentClasses: ['App\\Tests\\CIUnitTestCase', TestCase::class],
+        );
+
+        $this->assertFalse($extendedClassMustBeAbstractOrInstantiatedRule->appliesTo($classNode));
+    }
+
+    public function testAppliesToPhpUnitBaseTestCases(): void
+    {
+        // PHPUnit only runs `*Test` classes; a `*TestCase` base is never
+        // instantiated by the runner and may become abstract.
+        $extendedClassMustBeAbstractOrInstantiatedRule = new ExtendedClassMustBeAbstractOrInstantiatedRule(
+            layer: 'Domain'
+        );
+        $classNode                                     = $this->makeNode(
+            className:     'App\\Tests\\CIUnitTestCase',
+            isExtended:    true,
+            extends:       TestCase::class,
+            parentClasses: [TestCase::class],
+        );
+
+        $this->assertTrue($extendedClassMustBeAbstractOrInstantiatedRule->appliesTo($classNode));
+    }
+
+    public function testAppliesToExtendedClassOutsidePhpUnit(): void
+    {
+        $extendedClassMustBeAbstractOrInstantiatedRule = new ExtendedClassMustBeAbstractOrInstantiatedRule(
+            layer: 'Domain'
+        );
+        $classNode                                     = $this->makeNode(
+            isExtended:    true,
+            extends:       'App\\Domain\\AbstractRepository',
+            parentClasses: ['App\\Domain\\AbstractRepository'],
+        );
+
+        $this->assertTrue($extendedClassMustBeAbstractOrInstantiatedRule->appliesTo($classNode));
     }
 
     public function testDoesNotApplyToInterfaces(): void

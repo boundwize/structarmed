@@ -9,12 +9,23 @@ use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddAbstractClassVisitor;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use PHPUnit\Framework\TestCase;
 
 use function sprintf;
 
 final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends AbstractPhpParserFixableRule implements
     ExtendedClassAwareRuleInterface
 {
+    private const PHPUNIT_TEST_CASE = TestCase::class;
+
+    /**
+     * PHPUnit runs every `*Test` class it discovers, instantiating it outside
+     * the scanned code, so such a class must stay concrete even when another
+     * test extends it. Base test cases (`*TestCase`) are never run by
+     * themselves and may become abstract like any other extended class.
+     */
+    private const PHPUNIT_TEST_SUFFIX = 'Test';
+
     public function __construct(
         private string $layer,
         private ?string $classNamePattern = null,
@@ -28,6 +39,11 @@ final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends Abstr
         }
 
         if (! $classNode->isInLayer($this->layer)) {
+            return false;
+        }
+
+        if ($classNode->nameEndsWith(self::PHPUNIT_TEST_SUFFIX)
+            && $classNode->extendsClass(self::PHPUNIT_TEST_CASE)) {
             return false;
         }
 
