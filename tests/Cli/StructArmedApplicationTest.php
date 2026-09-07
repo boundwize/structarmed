@@ -1560,6 +1560,7 @@ PHP);
             'layers'        => [],
             'layerPatterns' => [],
             'files'         => [],
+            'emitProgress'  => false,
         ]));
 
         try {
