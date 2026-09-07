@@ -17,13 +17,6 @@ final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends Abstr
     ExtendedClassAwareRuleInterface
 {
     private const PHPUNIT_TEST_CASE = TestCase::class;
-
-    /**
-     * PHPUnit runs every `*Test` class it discovers, instantiating it outside
-     * the scanned code, so such a class must stay concrete even when another
-     * test extends it. Base test cases (`*TestCase`) are never run by
-     * themselves and may become abstract like any other extended class.
-     */
     private const PHPUNIT_TEST_SUFFIX = 'Test';
 
     public function __construct(
@@ -42,8 +35,10 @@ final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends Abstr
             return false;
         }
 
-        if ($classNode->nameEndsWith(self::PHPUNIT_TEST_SUFFIX)
-            && $classNode->extendsClass(self::PHPUNIT_TEST_CASE)) {
+        $hasTestSuffix            = $classNode->nameEndsWith(self::PHPUNIT_TEST_SUFFIX);
+        $isExtendsPHPUnitTestCase = $classNode->extendsClass(self::PHPUNIT_TEST_CASE);
+
+        if ($hasTestSuffix && $isExtendsPHPUnitTestCase) {
             return false;
         }
 
