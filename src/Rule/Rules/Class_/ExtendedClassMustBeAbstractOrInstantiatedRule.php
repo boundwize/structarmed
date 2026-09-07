@@ -16,7 +16,7 @@ use function sprintf;
 final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends AbstractPhpParserFixableRule implements
     ExtendedClassAwareRuleInterface
 {
-    private const PHPUNIT_TEST_CASE = TestCase::class;
+    private const PHPUNIT_TEST_CASE   = TestCase::class;
     private const PHPUNIT_TEST_SUFFIX = 'Test';
 
     public function __construct(
