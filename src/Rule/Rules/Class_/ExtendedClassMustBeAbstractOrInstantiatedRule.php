@@ -17,6 +17,7 @@ final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends Abstr
     ExtendedClassAwareRuleInterface
 {
     private const PHPUNIT_TEST_CASE   = TestCase::class;
+
     private const PHPUNIT_TEST_SUFFIX = 'Test';
 
     public function __construct(
