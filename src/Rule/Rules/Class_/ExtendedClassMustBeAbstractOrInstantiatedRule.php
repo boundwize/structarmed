@@ -35,10 +35,10 @@ final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends Abstr
             return false;
         }
 
-        $hasTestSuffix            = $classNode->nameEndsWith(self::PHPUNIT_TEST_SUFFIX);
-        $isExtendsPHPUnitTestCase = $classNode->extendsClass(self::PHPUNIT_TEST_CASE);
+        $hasTestSuffix = $classNode->nameEndsWith(self::PHPUNIT_TEST_SUFFIX);
+        $isTestCase    = $classNode->extendsClass(self::PHPUNIT_TEST_CASE);
 
-        if ($hasTestSuffix && $isExtendsPHPUnitTestCase) {
+        if ($hasTestSuffix && $isTestCase) {
             return false;
         }
 
