@@ -1023,6 +1023,32 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\BaseRepository', $violations[0]->className);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRuleSkipsPhpUnitTestCases(): void
+    {
+        // PHPUnit's TestCase is outside the scan; the transitive parent chain
+        // still records it, so the extended `*Test` class is recognised as a
+        // runner-instantiated test and kept concrete, while the concrete
+        // `*TestCase` base it extends is still reported.
+        $basePath = $this->makeTempProject([
+            'tests/CIUnitTestCase.php'        => '<?php namespace App\\Tests;'
+                . ' class CIUnitTestCase extends \\PHPUnit\\Framework\\TestCase {}',
+            'tests/FormatRulesTest.php'       => '<?php namespace App\\Tests;'
+                . ' class FormatRulesTest extends CIUnitTestCase {}',
+            'tests/StrictFormatRulesTest.php' => '<?php namespace App\\Tests;'
+                . ' final class StrictFormatRulesTest extends FormatRulesTest {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['tests/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('App\\Tests\\CIUnitTestCase', $violations[0]->className);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRuleFlagsTypeHintedButUninstantiatedParent(): void
     {
         $consumer = '<?php namespace App;' . "\n"

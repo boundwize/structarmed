@@ -9,12 +9,17 @@ use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddAbstractClassVisitor;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use PHPUnit\Framework\TestCase;
 
 use function sprintf;
 
 final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends AbstractPhpParserFixableRule implements
     ExtendedClassAwareRuleInterface
 {
+    private const PHPUNIT_TEST_CASE = TestCase::class;
+
+    private const PHPUNIT_TEST_SUFFIX = 'Test';
+
     public function __construct(
         private string $layer,
         private ?string $classNamePattern = null,
@@ -28,6 +33,13 @@ final readonly class ExtendedClassMustBeAbstractOrInstantiatedRule extends Abstr
         }
 
         if (! $classNode->isInLayer($this->layer)) {
+            return false;
+        }
+
+        $hasTestSuffix = $classNode->nameEndsWith(self::PHPUNIT_TEST_SUFFIX);
+        $isTestCase    = $classNode->extendsClass(self::PHPUNIT_TEST_CASE);
+
+        if ($hasTestSuffix && $isTestCase) {
             return false;
         }
 
