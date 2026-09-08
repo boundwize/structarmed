@@ -31,6 +31,23 @@ final class FunctionNodeTest extends TestCase
         $this->assertTrue($functionNode->nameMatches('/^App\\\\Support\\\\format_money$/', isFullName: true));
     }
 
+    public function testNameStartsWithAndEndsWithAreCaseInsensitive(): void
+    {
+        $functionNode = new FunctionNode(
+            functionName: 'App\\Support\\formatMoney',
+            file:         '/src/helpers.php',
+            line:         12,
+            layer:        'Support',
+        );
+
+        $this->assertTrue($functionNode->nameStartsWith('format'));
+        $this->assertTrue($functionNode->nameStartsWith('FORMAT'));
+        $this->assertTrue($functionNode->nameEndsWith('money'));
+        $this->assertTrue($functionNode->nameEndsWith('MONEY'));
+        $this->assertFalse($functionNode->nameStartsWith('money'));
+        $this->assertFalse($functionNode->nameEndsWith('format'));
+    }
+
     public function testGlobalFunctionShortNameIsItsName(): void
     {
         $functionNode = new FunctionNode(functionName: 'helper', file: '/src/helpers.php', line: 1, layer: null);

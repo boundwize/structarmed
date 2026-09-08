@@ -40,6 +40,28 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->nameMatches('/^App\\\\Domain\\\\CreateOrderHandler$/', isFullName: true));
     }
 
+    public function testNameStartsWithAndEndsWithAreCaseInsensitive(): void
+    {
+        $classNode = new ClassNode(
+            className:    'App\\Domain\\CreateOrderHandler',
+            file:         '/src/CreateOrderHandler.php',
+            line:         12,
+            layer:        'Application',
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      true,
+            isInterface:  false,
+            isReadonly:   false,
+        );
+
+        $this->assertTrue($classNode->nameStartsWith('create'));
+        $this->assertTrue($classNode->nameStartsWith('CREATE'));
+        $this->assertTrue($classNode->nameEndsWith('handler'));
+        $this->assertTrue($classNode->nameEndsWith('HANDLER'));
+        $this->assertFalse($classNode->nameStartsWith('handler'));
+        $this->assertFalse($classNode->nameEndsWith('create'));
+    }
+
     public function testShortNameReturnsFullNameForGlobalNamespaceClass(): void
     {
         $classNode = new ClassNode(

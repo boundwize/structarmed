@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use function str_ends_with;
 use function str_starts_with;
+use function strtolower;
 
 /**
  * Short-name query helpers shared by {@see ClassNode} and {@see FunctionNode}.
@@ -18,11 +19,17 @@ trait NameQueryTrait
 
     public function nameEndsWith(string $suffix): bool
     {
-        return str_ends_with($this->shortName(), $suffix);
+        $lowerSuffix    = strtolower($suffix);
+        $lowerShortName = strtolower($this->shortName());
+
+        return str_ends_with($lowerShortName, $lowerSuffix);
     }
 
     public function nameStartsWith(string $prefix): bool
     {
-        return str_starts_with($this->shortName(), $prefix);
+        $lowerPrefix    = strtolower($prefix);
+        $lowerShortName = strtolower($this->shortName());
+
+        return str_starts_with($lowerShortName, $lowerPrefix);
     }
 }
