@@ -6,8 +6,6 @@ namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
 use function preg_match;
-use function str_ends_with;
-use function str_starts_with;
 use function strrpos;
 use function substr;
 
@@ -18,6 +16,7 @@ use function substr;
  */
 final readonly class FunctionNode
 {
+    use NameQueryTrait;
     use NodeQueryTrait;
 
     /** @var list<string> */
@@ -56,16 +55,6 @@ final readonly class FunctionNode
         return $position === false
             ? $this->functionName
             : substr($this->functionName, $position + 1);
-    }
-
-    public function nameEndsWith(string $suffix): bool
-    {
-        return str_ends_with($this->shortName(), $suffix);
-    }
-
-    public function nameStartsWith(string $prefix): bool
-    {
-        return str_starts_with($this->shortName(), $prefix);
     }
 
     public function nameMatches(string $pattern, bool $isFullName = false): bool
