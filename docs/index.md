@@ -7,7 +7,7 @@ nav_order: 1
 ---
 
 <p align="center">
-    <img src="./assets/images/structarmed-universal.webp" alt="StructArmed" width="260">
+    <img src="./assets/images/structarmed-universal.webp" alt="StructArmed" width="300">
 </p>
 
 <p align="center">
