@@ -59,6 +59,19 @@ final class SkipPathMatcherTest extends TestCase
         );
     }
 
+    public function testDirectoryGlobSkipsDescendantsWithoutMatchingSiblingPrefixes(): void
+    {
+        foreach (['tests/**/Core', '/project/tests/**/Core'] as $pattern) {
+            $matcher = SkipPathMatcher::compile('/project', [$pattern]);
+
+            $this->assertTrue($matcher->isSkipped('/project/tests/functional/Core'));
+            $this->assertTrue($matcher->isSkipped('/project/tests/functional/Core/Foo.php'));
+            $this->assertTrue($matcher->isSkipped('/project/tests/functional/Core/Nested/Foo.php'));
+            $this->assertFalse($matcher->isSkipped('/project/tests/functional/CoreExtra/Foo.php'));
+            $this->assertFalse($matcher->isSkipped('/other/tests/functional/Core/Foo.php'));
+        }
+    }
+
     public function testLeadingSlashSkipPathMatchesOnlyTheAbsoluteLocation(): void
     {
         $skipPathMatcher = SkipPathMatcher::compile('/project', ['/vendor']);
