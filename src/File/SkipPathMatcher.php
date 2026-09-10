@@ -8,7 +8,6 @@ use Boundwize\StructArmed\Util\Path;
 
 use function array_unique;
 use function array_values;
-use function dirname;
 use function fnmatch;
 use function implode;
 use function realpath;
@@ -29,7 +28,7 @@ use function substr;
  * re-anchored under the base path.
  *
  * A glob pattern is matched against both the absolute path and the base-relative path,
- * including their ancestors so matching directories also skip their descendants.
+ * and matching directories also skip their descendants.
  *
  * Instances are cached per (base path, skip paths) pair, ignoring skip path
  * order and duplicates, and memoise per-path
@@ -151,17 +150,7 @@ final class SkipPathMatcher
 
     private function matchesPattern(string $pattern, string $path): bool
     {
-        while (true) {
-            if (fnmatch($pattern, $path)) {
-                return true;
-            }
-
-            $parent = dirname($path);
-            if ($parent === $path || $parent === '.') {
-                return false;
-            }
-
-            $path = $parent;
-        }
+        // Without FNM_PATHNAME, the appended wildcard also matches nested descendants.
+        return fnmatch($pattern, $path) || fnmatch($pattern . '/*', $path);
     }
 }
