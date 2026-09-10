@@ -1,7 +1,7 @@
 # StructArmed
 
 <p align="center">
-    <img src="./docs/assets/images/structarmed-universal.webp" alt="StructArmed" width="300">
+    <img src="./docs/assets/images/structarmed-universal.webp" alt="StructArmed" width="275">
 </p>
 
 <p align="center">
