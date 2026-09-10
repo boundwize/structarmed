@@ -7,7 +7,7 @@ nav_order: 1
 ---
 
 <p align="center">
-    <img src="https://github.com/user-attachments/assets/18024dc9-8658-40ca-abec-2df7b675a3b8" alt="StructArmed" width="260">
+    <img src="./assets/images/structarmed-universal.webp" alt="StructArmed" width="300">
 </p>
 
 <p align="center">
