@@ -49,6 +49,12 @@ code {
   border-radius: 4px;
 }
 
+.main-content code:not(pre code):not(figure code) {
+  color: #6639a6;
+  background-color: #f5f0ff;
+  border-color: #e4d8f5;
+}
+
 div.highlighter-rouge,
 figure.highlight {
   margin: 1rem 0 1.25rem;
