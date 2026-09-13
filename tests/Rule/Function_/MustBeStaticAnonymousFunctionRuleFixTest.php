@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\FunctionLike\AddStaticAnonymousFunctionVisitor;
 use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -22,6 +23,97 @@ use function mkdir;
 final class MustBeStaticAnonymousFunctionRuleFixTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
+
+    public function testObjectBoundAnonymousFunctionsProduceNoViolationOrFix(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-object-bound-closure');
+        mkdir($basePath . '/src');
+
+        $file = $basePath . '/src/closures.php';
+        $code = <<<'PHP'
+<?php
+
+\Closure::bind(function (): void { foo(); }, new stdClass());
+\Closure::bind(newThis: new stdClass(), closure: function (): void { foo(); });
+(function (): void { foo(); })->bindTo(new stdClass());
+(function (): void { foo(); })->bindTo(newThis: new stdClass());
+(function (): void { foo(); })->call(new stdClass());
+(function (): void { foo(); })->call(newThis: new stdClass());
+\Closure::bind(fn () => foo(), new stdClass());
+\Closure::bind(newThis: new stdClass(), closure: fn () => foo());
+(fn () => foo())->bindTo(new stdClass());
+(fn () => foo())->bindTo(newThis: new stdClass());
+(fn () => foo())->call(new stdClass());
+(fn () => foo())->call(newThis: new stdClass());
+PHP;
+        file_put_contents($file, $code);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.static_closures');
+
+        $this->assertCount(0, $violations);
+
+        $rule = $architecture->getRules()['source.static_closures'];
+        $this->assertInstanceOf(MustBeStaticAnonymousFunctionRule::class, $rule);
+        $this->assertFalse($rule->fix(new RuleViolation(
+            message:   'Closure in [file scope] must be declared static',
+            file:      $file,
+            line:      3,
+            className: 'file scope',
+            layer:     'Source',
+        )));
+        $this->assertSame($code, file_get_contents($file));
+    }
+
+    public function testScopeOnlyBindingsRemainFixable(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-scope-bound-closure');
+        mkdir($basePath . '/src');
+
+        $file = $basePath . '/src/closures.php';
+        file_put_contents(
+            $file,
+            <<<'PHP'
+<?php
+
+\Closure::bind(function (): void { foo(); }, null, Foo::class);
+(function (): void { foo(); })->bindTo(null, Foo::class);
+\Closure::bind(fn () => foo(), null, Foo::class);
+(fn () => foo())->bindTo(null, Foo::class);
+PHP
+        );
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.static_closures');
+
+        $this->assertCount(4, $violations);
+
+        $rule = $architecture->getRules()['source.static_closures'];
+        $this->assertInstanceOf(MustBeStaticAnonymousFunctionRule::class, $rule);
+        $this->assertTrue($rule->fix(...$violations));
+
+        $this->assertSame(
+            <<<'PHP'
+<?php
+
+\Closure::bind(static function (): void { foo(); }, null, Foo::class);
+(static function (): void { foo(); })->bindTo(null, Foo::class);
+\Closure::bind(static fn () => foo(), null, Foo::class);
+(static fn () => foo())->bindTo(null, Foo::class);
+PHP,
+            file_get_contents($file)
+        );
+    }
 
     public function testFixDoesNotChangeOtherAnonymousFunctionOnSameLine(): void
     {

@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
+use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
@@ -35,6 +36,7 @@ use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\Print_;
+use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
@@ -87,6 +89,7 @@ use function is_finite;
 use function is_int;
 use function is_string;
 use function preg_match;
+use function spl_object_id;
 use function str_starts_with;
 use function strcasecmp;
 use function strlen;
@@ -223,6 +226,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             ConstFetch::class     => true,
             Variable::class       => true,
             FuncCall::class       => true,
+            MethodCall::class     => true,
+            StaticCall::class     => true,
             Exit_::class          => true,
             Include_::class       => true,
         ];
@@ -379,6 +384,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $fileFunctionLikeAnalyses = [];
 
+    /** @var array<int, true> Object ids of directly object-bound anonymous functions in the current file */
+    private array $objectBoundAnonymousFunctions = [];
+
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
@@ -419,6 +427,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
+        $this->objectBoundAnonymousFunctions     = [];
     }
 
     /** @return list<ClassNode> */
@@ -620,6 +629,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
+        if ($node instanceof StaticCall || $node instanceof MethodCall) {
+            $this->collectObjectBindingRequirement($node);
+        }
+
         $this->collectNodeAnalysis($node);
 
         return null;
@@ -753,6 +766,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
+        $this->objectBoundAnonymousFunctions     = [];
 
         return null;
     }
@@ -871,8 +885,23 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
         );
 
+        $functionLikeAnalysis->requiresObjectBinding = isset(
+            $this->objectBoundAnonymousFunctions[spl_object_id($functionLike)]
+        );
+
         $this->activeFunctionLikeAnalyses[] = $functionLikeAnalysis;
         $this->fileFunctionLikeAnalyses[]   = $functionLikeAnalysis;
+    }
+
+    private function collectObjectBindingRequirement(StaticCall|MethodCall $call): void
+    {
+        $anonymousFunction = $call instanceof StaticCall
+            ? ObjectBoundAnonymousFunction::fromStaticCall($call)
+            : ObjectBoundAnonymousFunction::fromMethodCall($call);
+
+        if ($anonymousFunction instanceof Closure || $anonymousFunction instanceof ArrowFunction) {
+            $this->objectBoundAnonymousFunctions[spl_object_id($anonymousFunction)] = true;
+        }
     }
 
     private function innermostActiveClassLikeName(): ?string
@@ -1530,6 +1559,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             superglobals:          $superglobals,
             languageConstructs:    $languageConstructs,
             layers:                $layers,
+            requiresObjectBinding: $functionLikeAnalysis->requiresObjectBinding,
         );
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\FunctionLike;
 
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\FunctionLike\AddStaticAnonymousFunctionVisitor;
+use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
 use PhpParser\Node;
 use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
@@ -16,11 +17,15 @@ use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Return_;
+use PhpParser\NodeFinder;
 use PhpParser\NodeTraverser;
+use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(AddStaticAnonymousFunctionVisitor::class)]
+#[CoversClass(ObjectBoundAnonymousFunction::class)]
 final class AddStaticAnonymousFunctionVisitorTest extends TestCase
 {
     public function testAddsStaticToClosureOnMatchingLine(): void
@@ -97,6 +102,70 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         $this->assertTrue($closure->static);
     }
 
+    #[DataProvider('objectBoundAnonymousFunctionProvider')]
+    public function testDoesNotChangeDirectlyObjectBoundAnonymousFunction(string $expression): void
+    {
+        [$statements, $anonymousFunction] = $this->parseExpression($expression);
+
+        (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(1)))->traverse($statements);
+
+        $this->assertFalse($anonymousFunction->static);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function objectBoundAnonymousFunctionProvider(): iterable
+    {
+        yield 'Closure bind with positional object' => [
+            \Closure::class . '::bind(function (): void { foo(); }, new stdClass())',
+        ];
+        yield 'Closure bind with reordered named arguments' => [
+            \Closure::class . '::bind(newThis: new stdClass(), closure: function (): void { foo(); })',
+        ];
+        yield 'arrow bind with positional object' => [\Closure::class . '::bind(fn () => foo(), new stdClass())'];
+        yield 'arrow bind with reordered named arguments' => [
+            \Closure::class . '::bind(newThis: new stdClass(), closure: fn () => foo())',
+        ];
+        yield 'closure bindTo with positional object' => [
+            '(function (): void { foo(); })->bindTo(new stdClass())',
+        ];
+        yield 'closure bindTo with named object' => [
+            '(function (): void { foo(); })->bindTo(newThis: new stdClass())',
+        ];
+        yield 'arrow bindTo with positional object' => ['(fn () => foo())->bindTo(new stdClass())'];
+        yield 'arrow bindTo with named object' => ['(fn () => foo())->bindTo(newThis: new stdClass())'];
+        yield 'closure call with positional object' => [
+            '(function (): void { foo(); })->call(new stdClass())',
+        ];
+        yield 'closure call with named object' => [
+            '(function (): void { foo(); })->call(newThis: new stdClass())',
+        ];
+        yield 'arrow call with positional object' => ['(fn () => foo())->call(new stdClass())'];
+        yield 'arrow call with named object' => ['(fn () => foo())->call(newThis: new stdClass())'];
+    }
+
+    #[DataProvider('scopeOnlyAnonymousFunctionProvider')]
+    public function testChangesScopeOnlyBoundAnonymousFunction(string $expression): void
+    {
+        [$statements, $anonymousFunction] = $this->parseExpression($expression);
+
+        (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(1)))->traverse($statements);
+
+        $this->assertTrue($anonymousFunction->static);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function scopeOnlyAnonymousFunctionProvider(): iterable
+    {
+        yield 'Closure bind with explicit null' => [
+            \Closure::class . '::bind(function (): void { foo(); }, null, Foo::class)',
+        ];
+        yield 'arrow bind with explicit null' => [\Closure::class . '::bind(fn () => foo(), null, Foo::class)'];
+        yield 'closure bindTo with explicit null' => [
+            '(function (): void { foo(); })->bindTo(null, Foo::class)',
+        ];
+        yield 'arrow bindTo with explicit null' => ['(fn () => foo())->bindTo(null, Foo::class)'];
+    }
+
     public function testDoesNotChangeNonAnonymousFunctionNode(): void
     {
         $addStaticAnonymousFunctionVisitor = new AddStaticAnonymousFunctionVisitor(12);
@@ -107,5 +176,24 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
                 new ClassMethod('save', [], ['startLine' => 12])
             )
         );
+    }
+
+    /**
+     * @return array{array<Node\Stmt>, Closure|ArrowFunction}
+     */
+    private function parseExpression(string $expression): array
+    {
+        $statements = (new ParserFactory())->createForNewestSupportedVersion()->parse('<?php ' . $expression . ';');
+        $this->assertIsArray($statements);
+
+        $anonymousFunction = (new NodeFinder())->findFirst(
+            $statements,
+            static fn (Node $node): bool => $node instanceof Closure || $node instanceof ArrowFunction
+        );
+        if (! $anonymousFunction instanceof Closure && ! $anonymousFunction instanceof ArrowFunction) {
+            self::fail('Expected an anonymous function in the parsed expression');
+        }
+
+        return [$statements, $anonymousFunction];
     }
 }

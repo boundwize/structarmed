@@ -65,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 8;
+    public const FORMAT_VERSION = 9;
 
     private readonly string $cacheDirectory;
 
@@ -821,6 +821,7 @@ final class AnalysisResultCache
             'enclosingClassName'    => $anonymousFunctionNode->enclosingClassName,
             'enclosingFunctionName' => $anonymousFunctionNode->enclosingFunctionName,
             'usesThis'              => $anonymousFunctionNode->usesThis,
+            'requiresObjectBinding' => $anonymousFunctionNode->requiresObjectBinding,
         ] + $this->functionLikeBodyToArray(
             $anonymousFunctionNode->line,
             $anonymousFunctionNode->layer,
@@ -860,12 +861,14 @@ final class AnalysisResultCache
             $enclosingClassName    = $rawNode['enclosingClassName'] ?? null;
             $enclosingFunctionName = $rawNode['enclosingFunctionName'] ?? null;
             $usesThis              = $rawNode['usesThis'] ?? null;
+            $requiresObjectBinding = $rawNode['requiresObjectBinding'] ?? null;
             $body                  = $this->functionLikeBodyFromArray($rawNode, $file);
 
             if (
                 ! is_bool($isArrowFunction)
                 || ! is_bool($isStatic)
                 || ! is_bool($usesThis)
+                || ! is_bool($requiresObjectBinding)
                 || ($enclosingClassName !== null && ! is_string($enclosingClassName))
                 || ($enclosingFunctionName !== null && ! is_string($enclosingFunctionName))
                 || $body === null
@@ -891,6 +894,7 @@ final class AnalysisResultCache
                 superglobals:          $body['superglobals'],
                 languageConstructs:    $body['languageConstructs'],
                 layers:                $body['layers'],
+                requiresObjectBinding: $requiresObjectBinding,
             );
         }
 

@@ -19,18 +19,20 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
     private function makeNode(
         bool $isStatic = false,
         bool $usesThis = false,
+        bool $requiresObjectBinding = false,
         bool $isArrowFunction = false,
         ?string $layer = 'Domain',
         ?string $enclosingClassName = 'App\\Domain\\Handler',
     ): AnonymousFunctionNode {
         return new AnonymousFunctionNode(
-            file:               '/src/Domain/Handler.php',
-            line:               12,
-            layer:              $layer,
-            isArrowFunction:    $isArrowFunction,
-            isStatic:           $isStatic,
-            enclosingClassName: $enclosingClassName,
-            usesThis:           $usesThis,
+            file:                  '/src/Domain/Handler.php',
+            line:                  12,
+            layer:                 $layer,
+            isArrowFunction:       $isArrowFunction,
+            isStatic:              $isStatic,
+            enclosingClassName:    $enclosingClassName,
+            usesThis:              $usesThis,
+            requiresObjectBinding: $requiresObjectBinding,
         );
     }
 
@@ -64,6 +66,16 @@ final class MustBeStaticAnonymousFunctionRuleTest extends TestCase
         $this->assertNotInstanceOf(
             RuleViolation::class,
             $mustBeStaticAnonymousFunctionRule->evaluate($this->makeNode(usesThis: true))
+        );
+    }
+
+    public function testPassesWhenClosureRequiresObjectBinding(): void
+    {
+        $mustBeStaticAnonymousFunctionRule = new MustBeStaticAnonymousFunctionRule(layer: 'Domain');
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $mustBeStaticAnonymousFunctionRule->evaluate($this->makeNode(requiresObjectBinding: true))
         );
     }
 

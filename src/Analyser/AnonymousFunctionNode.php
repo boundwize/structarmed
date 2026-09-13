@@ -39,6 +39,8 @@ final readonly class AnonymousFunctionNode
      * @param string[]     $superglobals          Superglobals accessed ($_GET, $_POST, etc.)
      * @param string[]     $languageConstructs    Language constructs used (exit, die, etc.)
      * @param list<string> $layers                Layer names this anonymous function belongs to; defaults to [$layer]
+     * @param bool         $requiresObjectBinding Whether this anonymous function is directly bound to an object;
+     *                                            such a closure cannot be declared static
      */
     public function __construct(
         public string $file,
@@ -58,6 +60,7 @@ final readonly class AnonymousFunctionNode
         public array $superglobals = [],
         public array $languageConstructs = [],
         array $layers = [],
+        public bool $requiresObjectBinding = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
