@@ -141,6 +141,26 @@ PHP, file_get_contents($basePath . '/baseline.php'));
         }
     }
 
+    public function testBaselineSupportsEmptyBasePath(): void
+    {
+        $directory               = $this->createTempDirectory();
+        $baselinePath            = $directory . '/baseline.php';
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation('src/Foo.php'));
+
+        $baseline = new Baseline();
+
+        try {
+            $baseline->generate($ruleViolationCollection, $baselinePath, '');
+
+            $filtered = $baseline->filter($ruleViolationCollection, $baselinePath, '');
+
+            $this->assertFalse($filtered->hasViolations());
+        } finally {
+            $this->removeTempDirectory($directory, ['baseline.php']);
+        }
+    }
+
     public function testFilterKeepsViolationsMissingFromBaseline(): void
     {
         $basePath                = $this->createTempDirectory();
