@@ -14,7 +14,7 @@ use function array_filter;
  * The body-level facts of an anonymous function declared inside a class-like
  * or named function are also counted on that enclosing node, exactly as the
  * body of a method is counted on its class: a rule that only inspects the
- * enclosing node keeps seeing everything the closure does.
+ * enclosing node keeps seeing everything the anonymous function does.
  */
 final readonly class AnonymousFunctionNode
 {
@@ -32,13 +32,15 @@ final readonly class AnonymousFunctionNode
     /**
      * @param string|null  $enclosingClassName    Innermost named class-like this anonymous function is declared in
      * @param string|null  $enclosingFunctionName Innermost named function this anonymous function is declared in
-     * @param bool         $usesThis              Whether the body (or a nested closure) reads `$this`; such a
-     *                                            closure cannot be declared static
+     * @param bool         $usesThis              Whether the body (or a nested anonymous function) reads `$this`;
+     *                                            such an anonymous function cannot be declared static
      * @param list<string> $dependencies          Fully-qualified class, function, or constant dependencies
      * @param string[]     $functionCalls         Functions called within this anonymous function
      * @param string[]     $superglobals          Superglobals accessed ($_GET, $_POST, etc.)
      * @param string[]     $languageConstructs    Language constructs used (exit, die, etc.)
      * @param list<string> $layers                Layer names this anonymous function belongs to; defaults to [$layer]
+     * @param bool         $requiresObjectBinding Whether this anonymous function is directly bound to an object;
+     *                                            such an anonymous function cannot be declared static
      */
     public function __construct(
         public string $file,
@@ -58,6 +60,7 @@ final readonly class AnonymousFunctionNode
         public array $superglobals = [],
         public array $languageConstructs = [],
         array $layers = [],
+        public bool $requiresObjectBinding = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }

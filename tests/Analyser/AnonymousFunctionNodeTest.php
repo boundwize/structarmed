@@ -18,6 +18,7 @@ final class AnonymousFunctionNodeTest extends TestCase
         $this->assertSame('Closure', $anonymousFunctionNode->getType());
         $this->assertFalse($anonymousFunctionNode->isArrowFunction);
         $this->assertFalse($anonymousFunctionNode->isStatic);
+        $this->assertFalse($anonymousFunctionNode->requiresObjectBinding);
         $this->assertSame('file scope', $anonymousFunctionNode->enclosingScopeName());
         $this->assertSame(AnonymousFunctionNode::FILE_SCOPE, $anonymousFunctionNode->enclosingScopeName());
         $this->assertSame(['Support'], $anonymousFunctionNode->layers);

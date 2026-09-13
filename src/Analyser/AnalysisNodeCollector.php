@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
+use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
@@ -35,6 +36,7 @@ use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\Print_;
+use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
@@ -234,6 +236,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         Closure::class            => true,
         ArrowFunction::class      => true,
         New_::class               => true,
+        StaticCall::class         => true,
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
         ClassMethod::class        => true,
@@ -363,8 +366,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /**
      * For each class-like currently being entered, how many function-likes
      * were active at that point. `$this` inside a class-like body binds to
-     * that class-like, so only closures entered after it (deeper in the
-     * stack) are the ones reading it.
+     * that class-like, so only anonymous functions entered after it (deeper
+     * in the stack) are the ones reading it.
      *
      * @var list<int>
      */
@@ -653,6 +656,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 return null;
             }
 
+            if (
+                $node instanceof StaticCall
+                || $node instanceof MethodCall
+                || $node instanceof NullsafeMethodCall
+            ) {
+                $this->collectObjectBindingRequirement($node);
+            }
+
             // A ReflectionClass construction call instantiates the reflected
             // class when the reflection target is statically resolvable. The
             // `new` receiver is checked first: it is the rare shape, so the
@@ -873,6 +884,27 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $this->activeFunctionLikeAnalyses[] = $functionLikeAnalysis;
         $this->fileFunctionLikeAnalyses[]   = $functionLikeAnalysis;
+    }
+
+    private function collectObjectBindingRequirement(StaticCall|MethodCall|NullsafeMethodCall $call): void
+    {
+        $anonymousFunction = $call instanceof StaticCall
+            ? ObjectBoundAnonymousFunction::fromStaticCall($call)
+            : ObjectBoundAnonymousFunction::fromMethodCall($call);
+
+        if (! $anonymousFunction instanceof Closure && ! $anonymousFunction instanceof ArrowFunction) {
+            return;
+        }
+
+        for ($index = count($this->fileFunctionLikeAnalyses) - 1; $index >= 0; $index--) {
+            $functionLikeAnalysis = $this->fileFunctionLikeAnalyses[$index];
+
+            if ($functionLikeAnalysis->functionLike === $anonymousFunction) {
+                $functionLikeAnalysis->requiresObjectBinding = true;
+
+                return;
+            }
+        }
     }
 
     private function innermostActiveClassLikeName(): ?string
@@ -1364,9 +1396,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
-     * `$this` belongs to every closure entered since the innermost class-like,
-     * as a non-static closure captures it from its enclosing scope through
-     * any number of nested non-static closures.
+     * `$this` belongs to every anonymous function entered since the innermost
+     * class-like, as a non-static anonymous function captures it from its
+     * enclosing scope through any number of nested non-static anonymous
+     * functions.
      */
     private function markThisUsage(): void
     {
@@ -1530,6 +1563,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             superglobals:          $superglobals,
             languageConstructs:    $languageConstructs,
             layers:                $layers,
+            requiresObjectBinding: $functionLikeAnalysis->requiresObjectBinding,
         );
     }
 

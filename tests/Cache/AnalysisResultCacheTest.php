@@ -659,6 +659,7 @@ final class AnalysisResultCacheTest extends TestCase
                             paramCount:            0,
                             cyclomaticComplexity:  1,
                             lineCount:             1,
+                            requiresObjectBinding: true,
                         ),
                     ],
                 )
@@ -866,6 +867,7 @@ final class AnalysisResultCacheTest extends TestCase
                 functionCalls:         ['App\\helper'],
                 superglobals:          [],
                 languageConstructs:    ['exit'],
+                requiresObjectBinding: true,
             ),
         ];
 
@@ -1022,6 +1024,7 @@ final class AnalysisResultCacheTest extends TestCase
             'enclosingClassName'    => null,
             'enclosingFunctionName' => null,
             'usesThis'              => false,
+            'requiresObjectBinding' => false,
         ] + $validFunction;
 
         yield 'function nodes not an array' => [['functionNodes' => 'invalid']];
@@ -1042,6 +1045,9 @@ final class AnalysisResultCacheTest extends TestCase
         ];
         yield 'anonymous function node with invalid usesThis flag' => [
             ['anonymousFunctionNodes' => [['usesThis' => 'no'] + $validClosure]],
+        ];
+        yield 'anonymous function node with invalid object binding flag' => [
+            ['anonymousFunctionNodes' => [['requiresObjectBinding' => 'no'] + $validClosure]],
         ];
         yield 'anonymous function node with invalid enclosing function' => [
             ['anonymousFunctionNodes' => [['enclosingFunctionName' => 1] + $validClosure]],

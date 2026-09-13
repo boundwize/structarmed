@@ -9,11 +9,13 @@ use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\FunctionLikeAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
+use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -24,6 +26,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(AnalysisNodeCollector::class)]
 #[CoversClass(FunctionLikeAnalysis::class)]
 #[CoversClass(FunctionNode::class)]
+#[CoversClass(ObjectBoundAnonymousFunction::class)]
 final class FunctionLikeCollectionTest extends TestCase
 {
     private const BASE_PATH = '/structarmed-test-project';
@@ -387,6 +390,134 @@ final class FunctionLikeCollectionTest extends TestCase
         );
 
         $this->assertTrue($anonymousFunctionNode->usesThis);
+    }
+
+    #[DataProvider('objectBindingProvider')]
+    public function testTracksDirectObjectBindingSeparatelyFromThisUsage(
+        string $expression,
+        bool $requiresObjectBinding,
+    ): void {
+        $anonymousFunctionNode = $this->collectAnonymousFunction('<?php ' . $expression . ';');
+
+        $this->assertSame($requiresObjectBinding, $anonymousFunctionNode->requiresObjectBinding);
+        $this->assertFalse($anonymousFunctionNode->usesThis);
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function objectBindingProvider(): iterable
+    {
+        yield 'Closure bind with positional object' => [
+            \Closure::class . '::bind(function (): void { foo(); }, new stdClass())',
+            true,
+        ];
+        yield 'Closure bind with reordered named arguments' => [
+            \Closure::class . '::bind(newThis: new stdClass(), closure: function (): void { foo(); })',
+            true,
+        ];
+        yield 'arrow bind with positional object' => [
+            \Closure::class . '::bind(fn () => foo(), new stdClass())',
+            true,
+        ];
+        yield 'arrow bind with reordered named arguments' => [
+            \Closure::class . '::bind(newThis: new stdClass(), closure: fn () => foo())',
+            true,
+        ];
+        yield 'closure bindTo with positional object' => [
+            '(function (): void { foo(); })->bindTo(new stdClass())',
+            true,
+        ];
+        yield 'closure bindTo with named object' => [
+            '(function (): void { foo(); })->bindTo(newThis: new stdClass())',
+            true,
+        ];
+        yield 'arrow bindTo with positional object' => ['(fn () => foo())->bindTo(new stdClass())', true];
+        yield 'arrow bindTo with named object' => ['(fn () => foo())->bindTo(newThis: new stdClass())', true];
+        yield 'closure call with positional object' => [
+            '(function (): void { foo(); })->call(new stdClass())',
+            true,
+        ];
+        yield 'closure call with named object' => [
+            '(function (): void { foo(); })->call(newThis: new stdClass())',
+            true,
+        ];
+        yield 'arrow call with positional object' => ['(fn () => foo())->call(new stdClass())', true];
+        yield 'arrow call with named object' => ['(fn () => foo())->call(newThis: new stdClass())', true];
+        yield 'nullsafe closure bindTo with object' => [
+            '(function (): void { foo(); })?->bindTo(new stdClass())',
+            true,
+        ];
+        yield 'nullsafe arrow bindTo with object' => ['(fn () => foo())?->bindTo(new stdClass())', true];
+        yield 'nullsafe closure call with object' => [
+            '(function (): void { foo(); })?->call(new stdClass())',
+            true,
+        ];
+        yield 'nullsafe arrow call with object' => ['(fn () => foo())?->call(new stdClass())', true];
+        yield 'Closure bind with explicit null' => [
+            \Closure::class . '::bind(function (): void { foo(); }, null, Foo::class)',
+            false,
+        ];
+        yield 'arrow bind with explicit null' => [\Closure::class . '::bind(fn () => foo(), null, Foo::class)', false];
+        yield 'Closure bind with named explicit null' => [
+            \Closure::class
+                . '::bind(newThis: null, closure: function (): void { foo(); }, newScope: Foo::class)',
+            false,
+        ];
+        yield 'arrow bind with named explicit null' => [
+            \Closure::class . '::bind(newThis: null, closure: fn () => foo(), newScope: Foo::class)',
+            false,
+        ];
+        yield 'closure bindTo with explicit null' => [
+            '(function (): void { foo(); })->bindTo(null, Foo::class)',
+            false,
+        ];
+        yield 'arrow bindTo with explicit null' => ['(fn () => foo())->bindTo(null, Foo::class)', false];
+        yield 'closure bindTo with named explicit null' => [
+            '(function (): void { foo(); })->bindTo(newThis: null, newScope: Foo::class)',
+            false,
+        ];
+        yield 'arrow bindTo with named explicit null' => [
+            '(fn () => foo())->bindTo(newThis: null, newScope: Foo::class)',
+            false,
+        ];
+        yield 'unrelated static bind call' => [
+            'Other::bind(function (): void { foo(); }, new stdClass())',
+            false,
+        ];
+        yield 'unrelated anonymous function method call' => [
+            '(function (): void { foo(); })->__invoke()',
+            false,
+        ];
+        yield 'Closure bind with arbitrary newThis expression' => [
+            \Closure::class . '::bind(function (): void { foo(); }, $newThis)',
+            true,
+        ];
+        yield 'indirect bindTo is outside direct AST scope' => [
+            '$closure = function (): void { foo(); }; $closure->bindTo(new stdClass())',
+            false,
+        ];
+    }
+
+    public function testNullsafeObjectBindingStillCountsTowardEnclosingFunctionComplexity(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(
+            '<?php function bind(): void { (function (): void { foo(); })?->bindTo(new stdClass()); }'
+        );
+        $anonymousFunctionNode = $analysisNodeCollector->getAnonymousFunctionNodes()[0];
+        $functionNode          = $analysisNodeCollector->getFunctionNodes()[0];
+
+        $this->assertTrue($anonymousFunctionNode->requiresObjectBinding);
+        $this->assertSame(2, $functionNode->cyclomaticComplexity);
+    }
+
+    public function testObjectBindingLookupFindsTheClosureBeforeALaterAnonymousFunctionArgument(): void
+    {
+        $anonymousFunctionNodes = $this->makeCollector(
+            '<?php ' . \Closure::class . '::bind(function (): void { foo(); }, (fn () => new stdClass())());'
+        )->getAnonymousFunctionNodes();
+
+        $this->assertCount(2, $anonymousFunctionNodes);
+        $this->assertTrue($anonymousFunctionNodes[0]->requiresObjectBinding);
+        $this->assertFalse($anonymousFunctionNodes[1]->requiresObjectBinding);
     }
 
     public function testIgnoresFunctionLikeExitWithoutMatchingEntry(): void
