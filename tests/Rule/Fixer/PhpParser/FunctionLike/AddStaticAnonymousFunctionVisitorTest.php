@@ -185,6 +185,12 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         yield 'arrow bindTo with named explicit null' => [
             '(fn () => foo())->bindTo(newThis: null, newScope: Foo::class)',
         ];
+        yield 'unrelated static bind call' => [
+            'Other::bind(function (): void { foo(); }, new stdClass())',
+        ];
+        yield 'unrelated anonymous function method call' => [
+            '(function (): void { foo(); })->__invoke()',
+        ];
     }
 
     public function testDoesNotChangeNonAnonymousFunctionNode(): void

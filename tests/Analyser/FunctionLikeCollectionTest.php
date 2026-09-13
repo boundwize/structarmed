@@ -479,6 +479,14 @@ final class FunctionLikeCollectionTest extends TestCase
             '(fn () => foo())->bindTo(newThis: null, newScope: Foo::class)',
             false,
         ];
+        yield 'unrelated static bind call' => [
+            'Other::bind(function (): void { foo(); }, new stdClass())',
+            false,
+        ];
+        yield 'unrelated anonymous function method call' => [
+            '(function (): void { foo(); })->__invoke()',
+            false,
+        ];
         yield 'Closure bind with arbitrary newThis expression' => [
             \Closure::class . '::bind(function (): void { foo(); }, $newThis)',
             true,
