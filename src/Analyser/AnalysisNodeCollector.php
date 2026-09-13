@@ -368,8 +368,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /**
      * For each class-like currently being entered, how many function-likes
      * were active at that point. `$this` inside a class-like body binds to
-     * that class-like, so only closures entered after it (deeper in the
-     * stack) are the ones reading it.
+     * that class-like, so only anonymous functions entered after it (deeper
+     * in the stack) are the ones reading it.
      *
      * @var list<int>
      */
@@ -1393,9 +1393,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
-     * `$this` belongs to every closure entered since the innermost class-like,
-     * as a non-static closure captures it from its enclosing scope through
-     * any number of nested non-static closures.
+     * `$this` belongs to every anonymous function entered since the innermost
+     * class-like, as a non-static anonymous function captures it from its
+     * enclosing scope through any number of nested non-static anonymous
+     * functions.
      */
     private function markThisUsage(): void
     {

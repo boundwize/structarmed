@@ -13,8 +13,8 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use function sprintf;
 
 /**
- * Closures and arrow functions that neither read `$this` nor require object
- * binding are declared `static`, so they never capture the enclosing object.
+ * Anonymous functions that neither read `$this` nor require object binding
+ * are declared `static`, so they never capture the enclosing object.
  */
 final readonly class MustBeStaticAnonymousFunctionRule extends AbstractPhpParserFixableRule implements
     AnonymousFunctionRuleInterface
@@ -31,8 +31,8 @@ final readonly class MustBeStaticAnonymousFunctionRule extends AbstractPhpParser
 
     public function evaluate(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
     {
-        // A closure reading `$this` or directly bound to an object cannot be
-        // static without changing valid runtime behaviour.
+        // An anonymous function reading `$this` or directly bound to an
+        // object cannot be static without changing valid runtime behaviour.
         if (
             $anonymousFunctionNode->isStatic
             || $anonymousFunctionNode->usesThis

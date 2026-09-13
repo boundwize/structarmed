@@ -19,14 +19,14 @@ use PhpParser\NodeVisitorAbstract;
 use function spl_object_id;
 
 /**
- * Adds the `static` modifier to the closures and arrow functions starting on
- * the given line that neither read `$this` nor require object binding.
+ * Adds the `static` modifier to the anonymous functions starting on the given
+ * line that neither read `$this` nor require object binding.
  *
  * An anonymous function has no name, so its start line is the only identity
  * a violation can carry, and several may start on one line. Re-applying the
  * rule's own condition here — instead of trusting the line alone — means
  * every function this visitor changes is one the rule flags, so an unsafe
- * closure sharing the line with a flagged one is left untouched.
+ * anonymous function sharing the line with a flagged one is left untouched.
  */
 final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 {
@@ -78,7 +78,8 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * Whether the body reads `$this`, including through nested closures.
+     * Whether the body reads `$this`, including through nested anonymous
+     * functions.
      * `$this` inside a nested anonymous class body is that class's own, so
      * anonymous classes are not descended into.
      */
