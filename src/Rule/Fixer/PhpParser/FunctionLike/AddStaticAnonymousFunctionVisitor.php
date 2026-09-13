@@ -17,6 +17,8 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
 
+use function in_array;
+
 /**
  * Adds the `static` modifier to the anonymous functions starting on the given
  * line that neither read `$this` nor require object binding.
@@ -82,13 +84,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 
     private function requiresObjectBinding(Closure|ArrowFunction $anonymousFunction): bool
     {
-        foreach ($this->objectBoundAnonymousFunctions as $objectBoundAnonymousFunction) {
-            if ($objectBoundAnonymousFunction === $anonymousFunction) {
-                return true;
-            }
-        }
-
-        return false;
+        return in_array($anonymousFunction, $this->objectBoundAnonymousFunctions, true);
     }
 
     /**
