@@ -18,16 +18,21 @@ use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
 use function array_flip;
+use function array_slice;
 use function assert;
+use function count;
 use function dirname;
+use function explode;
 use function file_exists;
 use function file_put_contents;
+use function implode;
 use function is_array;
 use function is_dir;
 use function is_scalar;
 use function json_encode;
-use function ltrim;
+use function rtrim;
 use function sprintf;
+use function str_repeat;
 use function str_replace;
 use function str_starts_with;
 use function strlen;
@@ -230,7 +235,19 @@ final readonly class Baseline
 
     private function relativeMessagePath(string $message, string $file, string $basePath): string
     {
-        return str_replace($file, $this->relativePath($file, $basePath), $message);
+        $message  = str_replace($file, $this->relativePath($file, $basePath), $message);
+        $prefixes = [];
+
+        // The message may spell the path differently from `file` (unresolved "..",
+        // backslashes on Windows, ...), so strip the base path itself too.
+        foreach ([rtrim($basePath, '/\\'), Path::normalise($basePath, canonicalise: true)] as $base) {
+            if ($base !== '') {
+                $prefixes[] = $base . '/';
+                $prefixes[] = str_replace('/', '\\', $base) . '\\';
+            }
+        }
+
+        return str_replace($prefixes, '', $message);
     }
 
     private function relativePath(string $path, string $basePath): string
@@ -246,6 +263,23 @@ final readonly class Baseline
             return substr($normalisedPath, strlen($normalisedBasePath) + 1);
         }
 
-        return ltrim($normalisedPath, '/');
+        // Out-of-tree file (e.g. a PSR-4 path such as "../shared/src/"): walk up to the
+        // common ancestor so the baseline stays portable between checkouts.
+        $baseSegments = explode('/', $normalisedBasePath);
+        $pathSegments = explode('/', $normalisedPath);
+        $common       = 0;
+
+        while (
+            isset($baseSegments[$common], $pathSegments[$common])
+            && $baseSegments[$common] === $pathSegments[$common]
+        ) {
+            ++$common;
+        }
+
+        if ($common === 0) {
+            return $normalisedPath;
+        }
+
+        return str_repeat('../', count($baseSegments) - $common) . implode('/', array_slice($pathSegments, $common));
     }
 }
