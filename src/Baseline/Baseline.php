@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Baseline;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
-use PhpParser\BuilderHelpers;
+use PhpParser\BuilderFactory;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
@@ -102,7 +102,7 @@ final readonly class Baseline
 
         $header = "<?php\n\n"
             . "declare(strict_types=1);\n\n";
-        $expr   = BuilderHelpers::normalizeValue($violations);
+        $expr   = (new BuilderFactory())->val($violations);
 
         assert($expr instanceof Array_);
 
