@@ -13,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 use function bin2hex;
+use function copy;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
@@ -22,6 +23,7 @@ use function random_bytes;
 use function restore_error_handler;
 use function rmdir;
 use function set_error_handler;
+use function sprintf;
 use function sys_get_temp_dir;
 use function unlink;
 
@@ -338,6 +340,67 @@ PHP);
             }
         } finally {
             $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src/Bar.php', 'src']);
+        }
+    }
+
+    public function testBaselineStaysPortableWhenMessageSpellsPathDifferentlyFromFile(): void
+    {
+        $root      = $this->createTempDirectory();
+        $aliceBase = $root . '/alice';
+        $bobBase   = $root . '/bob';
+        mkdir($aliceBase);
+        mkdir($aliceBase . '/src');
+        file_put_contents($aliceBase . '/src/Foo.php', '<?php');
+        mkdir($bobBase);
+        mkdir($bobBase . '/src');
+        file_put_contents($bobBase . '/src/Foo.php', '<?php');
+
+        // A rule that embeds the file path in its message, but spelled differently
+        // from the `file` field (unresolved "..", backslashes on Windows, ...).
+        $collectionFor = static function (string $basePath): RuleViolationCollection {
+            $ruleViolationCollection = new RuleViolationCollection();
+            $ruleViolationCollection->add(new RuleViolation(
+                message:   sprintf('File [%s] must use UTF-8 without BOM', $basePath . '/src/../src/Foo.php'),
+                file:      $basePath . '/src/Foo.php',
+                line:      1,
+                className: '',
+                ruleKey:   'psr1.files.must_use_utf8_without_bom',
+            ));
+
+            return $ruleViolationCollection;
+        };
+
+        try {
+            // Machine A generates the baseline and commits it.
+            (new Baseline())->generate($collectionFor($aliceBase), 'baseline.php', $aliceBase);
+            copy($aliceBase . '/baseline.php', $bobBase . '/baseline.php');
+
+            $stored = require $bobBase . '/baseline.php';
+            $this->assertIsArray($stored);
+            $this->assertIsArray($stored[0]);
+            $this->assertIsString($stored[0]['message']);
+            $this->assertStringNotContainsString(
+                $aliceBase,
+                $stored[0]['message'],
+                "Baseline message must not leak the generating machine's absolute path",
+            );
+
+            // Machine B checks out the same code somewhere else; the identical
+            // violation must be suppressed by the committed baseline.
+            $remaining = (new Baseline())->filter($collectionFor($bobBase), 'baseline.php', $bobBase);
+
+            $this->assertFalse($remaining->hasViolations());
+        } finally {
+            $this->removeTempDirectory($root, [
+                'alice/baseline.php',
+                'alice/src/Foo.php',
+                'alice/src',
+                'alice',
+                'bob/baseline.php',
+                'bob/src/Foo.php',
+                'bob/src',
+                'bob',
+            ]);
         }
     }
 

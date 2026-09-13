@@ -27,6 +27,7 @@ use function is_dir;
 use function is_scalar;
 use function json_encode;
 use function ltrim;
+use function rtrim;
 use function sprintf;
 use function str_replace;
 use function str_starts_with;
@@ -230,7 +231,19 @@ final readonly class Baseline
 
     private function relativeMessagePath(string $message, string $file, string $basePath): string
     {
-        return str_replace($file, $this->relativePath($file, $basePath), $message);
+        $message  = str_replace($file, $this->relativePath($file, $basePath), $message);
+        $prefixes = [];
+
+        // The message may spell the path differently from `file` (unresolved "..",
+        // backslashes on Windows, ...), so strip the base path itself too.
+        foreach ([rtrim($basePath, '/\\'), Path::normalise($basePath, canonicalise: true)] as $base) {
+            if ($base !== '') {
+                $prefixes[] = $base . '/';
+                $prefixes[] = str_replace('/', '\\', $base) . '\\';
+            }
+        }
+
+        return str_replace($prefixes, '', $message);
     }
 
     private function relativePath(string $path, string $basePath): string
