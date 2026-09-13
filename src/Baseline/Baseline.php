@@ -7,17 +7,12 @@ namespace Boundwize\StructArmed\Baseline;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
-use PhpParser\Node;
+use PhpParser\BuilderHelpers;
 use PhpParser\Node\Expr\Array_;
-use PhpParser\Node\Scalar\Int_;
-use PhpParser\Node\Stmt\Return_;
-use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitorAbstract;
-use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
-use function array_flip;
+use function array_keys;
 use function array_slice;
 use function assert;
 use function count;
@@ -37,7 +32,6 @@ use function str_replace;
 use function str_starts_with;
 use function strlen;
 use function substr;
-use function var_export;
 
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
@@ -49,11 +43,18 @@ final readonly class Baseline
         string $baselinePath,
         string $basePath
     ): RuleViolationCollection {
-        $signatures = array_flip($this->loadSignatures($baselinePath, $basePath));
-        $filtered   = new RuleViolationCollection();
+        $normalisedBasePath  = Path::normalise($basePath, canonicalise: true);
+        $messagePathPrefixes = $this->messagePathPrefixes($basePath, $normalisedBasePath);
+        $signatures          = $this->loadSignatures(
+            $baselinePath,
+            $basePath,
+            $normalisedBasePath,
+            $messagePathPrefixes,
+        );
+        $filtered            = new RuleViolationCollection();
 
         foreach ($ruleViolationCollection as $violation) {
-            if (isset($signatures[$this->signature($violation, $basePath)])) {
+            if (isset($signatures[$this->signature($violation, $normalisedBasePath, $messagePathPrefixes)])) {
                 continue;
             }
 
@@ -79,75 +80,37 @@ final readonly class Baseline
             throw new RuntimeException(sprintf('Baseline directory [%s] does not exist.', $directory));
         }
 
-        $violations = [];
+        $normalisedBasePath  = Path::normalise($basePath, canonicalise: true);
+        $messagePathPrefixes = $this->messagePathPrefixes($basePath, $normalisedBasePath);
+        $violations          = [];
 
         foreach ($ruleViolationCollection as $violation) {
+            $relativeFile = $this->relativePath($violation->file, $normalisedBasePath);
             $violations[] = [
                 'rule'    => $violation->ruleKey,
-                'message' => $this->relativeMessagePath($violation->message, $violation->file, $basePath),
-                'file'    => $this->relativePath($violation->file, $basePath),
+                'message' => $this->relativeMessagePath(
+                    $violation->message,
+                    $violation->file,
+                    $relativeFile,
+                    $messagePathPrefixes,
+                ),
+                'file'    => $relativeFile,
                 'class'   => $violation->className,
                 'layer'   => $violation->layer,
             ];
         }
 
-        $header  = "<?php\n\n"
+        $header = "<?php\n\n"
             . "declare(strict_types=1);\n\n";
-        $content = $header . 'return ' . var_export($violations, true) . ";\n";
-        $content = $this->prettyPrintContent($header, $content);
+        $array  = BuilderHelpers::normalizeValue($violations);
+
+        assert($array instanceof Array_);
+
+        $content = $header . 'return ' . $this->prettyPrintArray($array) . ";\n";
 
         if (file_put_contents($path, $content) === false) {
             throw new RuntimeException(sprintf('Could not write baseline file [%s].', $baselinePath));
         }
-    }
-
-    private function prettyPrintContent(string $header, string $content): string
-    {
-        $statements = (new ParserFactory())->createForNewestSupportedVersion()->parse($content) ?? [];
-
-        $statements = (new NodeTraverser(new class extends NodeVisitorAbstract {
-            public function enterNode(Node $node): ?Node
-            {
-                if (! $node instanceof Array_) {
-                    return null;
-                }
-
-                if (! $this->isListArray($node)) {
-                    return $node;
-                }
-
-                foreach ($node->items as $item) {
-                    $item->key = null;
-                }
-
-                return $node;
-            }
-
-            private function isListArray(Array_ $array): bool
-            {
-                foreach ($array->items as $index => $item) {
-                    if (! $item->key instanceof Int_ || $item->key->value !== $index) {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-        }))->traverse($statements);
-
-        $array = null;
-
-        foreach ($statements as $statement) {
-            if ($statement instanceof Return_ && $statement->expr instanceof Array_) {
-                $array = $statement->expr;
-
-                break;
-            }
-        }
-
-        assert($array instanceof Array_);
-
-        return $header . 'return ' . $this->prettyPrintArray($array) . ";\n";
     }
 
     private function prettyPrintArray(Array_ $array): string
@@ -166,10 +129,15 @@ final readonly class Baseline
     }
 
     /**
-     * @return list<string>
+     * @param list<string> $messagePathPrefixes
+     * @return array<string, true>
      */
-    private function loadSignatures(string $baselinePath, string $basePath): array
-    {
+    private function loadSignatures(
+        string $baselinePath,
+        string $basePath,
+        string $normalisedBasePath,
+        array $messagePathPrefixes,
+    ): array {
         $path = Path::resolve($baselinePath, $basePath);
 
         if (! file_exists($path)) {
@@ -189,7 +157,7 @@ final readonly class Baseline
                 continue;
             }
 
-            $signatures[] = $this->arraySignature($violation, $basePath);
+            $signatures[$this->arraySignature($violation, $normalisedBasePath, $messagePathPrefixes)] = true;
         }
 
         return $signatures;
@@ -197,17 +165,25 @@ final readonly class Baseline
 
     /**
      * @param array<mixed, mixed> $violation
+     * @param list<string> $messagePathPrefixes
      */
-    private function arraySignature(array $violation, string $basePath): string
-    {
+    private function arraySignature(
+        array $violation,
+        string $normalisedBasePath,
+        array $messagePathPrefixes,
+    ): string {
+        $file         = $this->stringValue($violation['file'] ?? null);
+        $relativeFile = $this->relativePath($file, $normalisedBasePath);
+
         return (string) json_encode([
             'rule'    => $this->stringValue($violation['rule'] ?? null),
             'message' => $this->relativeMessagePath(
                 $this->stringValue($violation['message'] ?? null),
-                $this->stringValue($violation['file'] ?? null),
-                $basePath
+                $file,
+                $relativeFile,
+                $messagePathPrefixes,
             ),
-            'file'    => $this->relativePath($this->stringValue($violation['file'] ?? null), $basePath),
+            'file'    => $relativeFile,
             'class'   => $this->stringValue($violation['class'] ?? null),
             'layer'   => $violation['layer'] ?? null,
         ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -222,38 +198,64 @@ final readonly class Baseline
         return (string) $value;
     }
 
-    private function signature(RuleViolation $ruleViolation, string $basePath): string
-    {
+    /** @param list<string> $messagePathPrefixes */
+    private function signature(
+        RuleViolation $ruleViolation,
+        string $normalisedBasePath,
+        array $messagePathPrefixes,
+    ): string {
+        $relativeFile = $this->relativePath($ruleViolation->file, $normalisedBasePath);
+
         return (string) json_encode([
             'rule'    => $ruleViolation->ruleKey,
-            'message' => $this->relativeMessagePath($ruleViolation->message, $ruleViolation->file, $basePath),
-            'file'    => $this->relativePath($ruleViolation->file, $basePath),
+            'message' => $this->relativeMessagePath(
+                $ruleViolation->message,
+                $ruleViolation->file,
+                $relativeFile,
+                $messagePathPrefixes,
+            ),
+            'file'    => $relativeFile,
             'class'   => $ruleViolation->className,
             'layer'   => $ruleViolation->layer,
         ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
-    private function relativeMessagePath(string $message, string $file, string $basePath): string
+    /** @param list<string> $messagePathPrefixes */
+    private function relativeMessagePath(
+        string $message,
+        string $file,
+        string $relativeFile,
+        array $messagePathPrefixes,
+    ): string {
+        return str_replace(
+            $messagePathPrefixes,
+            '',
+            str_replace($file, $relativeFile, $message),
+        );
+    }
+
+    /** @return list<string> */
+    private function messagePathPrefixes(string $basePath, string $normalisedBasePath): array
     {
-        $message  = str_replace($file, $this->relativePath($file, $basePath), $message);
         $prefixes = [];
 
         // The message may spell the path differently from `file` (unresolved "..",
         // backslashes on Windows, ...), so strip the base path itself too.
-        foreach ([rtrim($basePath, '/\\'), Path::normalise($basePath, canonicalise: true)] as $base) {
-            if ($base !== '') {
-                $prefixes[] = $base . '/';
-                $prefixes[] = str_replace('/', '\\', $base) . '\\';
+        foreach ([rtrim($basePath, '/\\'), $normalisedBasePath] as $base) {
+            if ($base === '') {
+                continue;
             }
+
+            $prefixes[$base . '/']                          = true;
+            $prefixes[str_replace('/', '\\', $base) . '\\'] = true;
         }
 
-        return str_replace($prefixes, '', $message);
+        return array_keys($prefixes);
     }
 
-    private function relativePath(string $path, string $basePath): string
+    private function relativePath(string $path, string $normalisedBasePath): string
     {
-        $normalisedBasePath = Path::normalise($basePath, canonicalise: true);
-        $normalisedPath     = Path::normalise($path, canonicalise: true);
+        $normalisedPath = Path::normalise($path, canonicalise: true);
 
         if ($normalisedPath === $normalisedBasePath) {
             return '';
