@@ -102,11 +102,11 @@ final readonly class Baseline
 
         $header = "<?php\n\n"
             . "declare(strict_types=1);\n\n";
-        $array  = BuilderHelpers::normalizeValue($violations);
+        $expr   = BuilderHelpers::normalizeValue($violations);
 
-        assert($array instanceof Array_);
+        assert($expr instanceof Array_);
 
-        $content = $header . 'return ' . $this->prettyPrintArray($array) . ";\n";
+        $content = $header . 'return ' . $this->prettyPrintArray($expr) . ";\n";
 
         if (file_put_contents($path, $content) === false) {
             throw new RuntimeException(sprintf('Could not write baseline file [%s].', $baselinePath));
