@@ -509,6 +509,17 @@ final class FunctionLikeCollectionTest extends TestCase
         $this->assertSame(2, $functionNode->cyclomaticComplexity);
     }
 
+    public function testObjectBindingLookupFindsTheClosureBeforeALaterAnonymousFunctionArgument(): void
+    {
+        $anonymousFunctionNodes = $this->makeCollector(
+            '<?php ' . \Closure::class . '::bind(function (): void { foo(); }, (fn () => new stdClass())());'
+        )->getAnonymousFunctionNodes();
+
+        $this->assertCount(2, $anonymousFunctionNodes);
+        $this->assertTrue($anonymousFunctionNodes[0]->requiresObjectBinding);
+        $this->assertFalse($anonymousFunctionNodes[1]->requiresObjectBinding);
+    }
+
     public function testIgnoresFunctionLikeExitWithoutMatchingEntry(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);

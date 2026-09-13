@@ -89,7 +89,6 @@ use function is_finite;
 use function is_int;
 use function is_string;
 use function preg_match;
-use function spl_object_id;
 use function str_starts_with;
 use function strcasecmp;
 use function strlen;
@@ -226,8 +225,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             ConstFetch::class     => true,
             Variable::class       => true,
             FuncCall::class       => true,
-            MethodCall::class     => true,
-            StaticCall::class     => true,
             Exit_::class          => true,
             Include_::class       => true,
         ];
@@ -239,6 +236,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         Closure::class            => true,
         ArrowFunction::class      => true,
         New_::class               => true,
+        StaticCall::class         => true,
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
         ClassMethod::class        => true,
@@ -384,9 +382,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $fileFunctionLikeAnalyses = [];
 
-    /** @var array<int, true> Object ids of directly object-bound anonymous functions in the current file */
-    private array $objectBoundAnonymousFunctions = [];
-
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
@@ -427,7 +422,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
-        $this->objectBoundAnonymousFunctions     = [];
     }
 
     /** @return list<ClassNode> */
@@ -629,18 +623,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
-        if (
-            $node instanceof StaticCall
-            || $node instanceof MethodCall
-            || $node instanceof NullsafeMethodCall
-        ) {
-            $this->collectObjectBindingRequirement($node);
-
-            if (! $node instanceof NullsafeMethodCall) {
-                return null;
-            }
-        }
-
         $this->collectNodeAnalysis($node);
 
         return null;
@@ -672,6 +654,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $this->collectInstantiation($node);
 
                 return null;
+            }
+
+            if (
+                $node instanceof StaticCall
+                || $node instanceof MethodCall
+                || $node instanceof NullsafeMethodCall
+            ) {
+                $this->collectObjectBindingRequirement($node);
             }
 
             // A ReflectionClass construction call instantiates the reflected
@@ -774,7 +764,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
-        $this->objectBoundAnonymousFunctions     = [];
 
         return null;
     }
@@ -893,10 +882,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
         );
 
-        $functionLikeAnalysis->requiresObjectBinding = isset(
-            $this->objectBoundAnonymousFunctions[spl_object_id($functionLike)]
-        );
-
         $this->activeFunctionLikeAnalyses[] = $functionLikeAnalysis;
         $this->fileFunctionLikeAnalyses[]   = $functionLikeAnalysis;
     }
@@ -907,8 +892,18 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             ? ObjectBoundAnonymousFunction::fromStaticCall($call)
             : ObjectBoundAnonymousFunction::fromMethodCall($call);
 
-        if ($anonymousFunction instanceof Closure || $anonymousFunction instanceof ArrowFunction) {
-            $this->objectBoundAnonymousFunctions[spl_object_id($anonymousFunction)] = true;
+        if (! $anonymousFunction instanceof Closure && ! $anonymousFunction instanceof ArrowFunction) {
+            return;
+        }
+
+        for ($index = count($this->fileFunctionLikeAnalyses) - 1; $index >= 0; $index--) {
+            $functionLikeAnalysis = $this->fileFunctionLikeAnalyses[$index];
+
+            if ($functionLikeAnalysis->functionLike === $anonymousFunction) {
+                $functionLikeAnalysis->requiresObjectBinding = true;
+
+                return;
+            }
         }
     }
 
