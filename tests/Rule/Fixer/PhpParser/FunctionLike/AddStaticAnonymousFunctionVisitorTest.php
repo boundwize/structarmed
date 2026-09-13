@@ -151,6 +151,20 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         yield 'nullsafe arrow call with object' => ['(fn () => foo())?->call(new stdClass())'];
     }
 
+    public function testObjectBindingLookupFindsTheClosureBeforeALaterAnonymousFunctionArgument(): void
+    {
+        [$statements, $closure] = $this->parseExpression(
+            \Closure::class . '::bind(function (): void { foo(); }, (fn () => new stdClass())())'
+        );
+        $arrowFunction          = (new NodeFinder())->findFirstInstanceOf($statements, ArrowFunction::class);
+        $this->assertInstanceOf(ArrowFunction::class, $arrowFunction);
+
+        (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(1)))->traverse($statements);
+
+        $this->assertFalse($closure->static);
+        $this->assertTrue($arrowFunction->static);
+    }
+
     #[DataProvider('scopeOnlyAnonymousFunctionProvider')]
     public function testChangesScopeOnlyBoundAnonymousFunction(string $expression): void
     {

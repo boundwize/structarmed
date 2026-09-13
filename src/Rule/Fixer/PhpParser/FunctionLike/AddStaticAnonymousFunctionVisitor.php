@@ -17,8 +17,6 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
 
-use function spl_object_id;
-
 /**
  * Adds the `static` modifier to the anonymous functions starting on the given
  * line that neither read `$this` nor require object binding.
@@ -31,7 +29,7 @@ use function spl_object_id;
  */
 final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 {
-    /** @var array<int, true> */
+    /** @var list<Closure|ArrowFunction> */
     private array $objectBoundAnonymousFunctions = [];
 
     public function __construct(
@@ -59,7 +57,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
                 : ObjectBoundAnonymousFunction::fromMethodCall($node);
 
             if ($anonymousFunction instanceof Closure || $anonymousFunction instanceof ArrowFunction) {
-                $this->objectBoundAnonymousFunctions[spl_object_id($anonymousFunction)] = true;
+                $this->objectBoundAnonymousFunctions[] = $anonymousFunction;
             }
 
             return null;
@@ -73,13 +71,24 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        if (isset($this->objectBoundAnonymousFunctions[spl_object_id($node)]) || $this->usesThis($node)) {
+        if ($this->requiresObjectBinding($node) || $this->usesThis($node)) {
             return null;
         }
 
         $node->static = true;
 
         return $node;
+    }
+
+    private function requiresObjectBinding(Closure|ArrowFunction $anonymousFunction): bool
+    {
+        foreach ($this->objectBoundAnonymousFunctions as $objectBoundAnonymousFunction) {
+            if ($objectBoundAnonymousFunction === $anonymousFunction) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
