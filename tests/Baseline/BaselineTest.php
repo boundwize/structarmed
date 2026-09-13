@@ -404,6 +404,57 @@ PHP);
         }
     }
 
+    public function testBaselineStaysPortableForFileOutsideBasePath(): void
+    {
+        $root = $this->createTempDirectory();
+
+        // A monorepo where composer.json maps "Shared\\" to "../shared/src/", so the
+        // analysed file lives outside the project root.
+        foreach (['alice', 'bob'] as $machine) {
+            mkdir($root . '/' . $machine);
+            mkdir($root . '/' . $machine . '/app');
+            mkdir($root . '/' . $machine . '/shared');
+            mkdir($root . '/' . $machine . '/shared/src');
+            file_put_contents($root . '/' . $machine . '/shared/src/Thing.php', '<?php');
+        }
+
+        $collectionFor = function (string $machineRoot): RuleViolationCollection {
+            $ruleViolationCollection = new RuleViolationCollection();
+            $ruleViolationCollection->add($this->violation($machineRoot . '/shared/src/Thing.php'));
+
+            return $ruleViolationCollection;
+        };
+
+        try {
+            (new Baseline())->generate($collectionFor($root . '/alice'), 'baseline.php', $root . '/alice/app');
+            copy($root . '/alice/app/baseline.php', $root . '/bob/app/baseline.php');
+
+            $stored = require $root . '/bob/app/baseline.php';
+            $this->assertIsArray($stored);
+            $this->assertIsArray($stored[0]);
+            $this->assertSame('../shared/src/Thing.php', $stored[0]['file']);
+
+            $remaining = (new Baseline())->filter($collectionFor($root . '/bob'), 'baseline.php', $root . '/bob/app');
+
+            $this->assertFalse($remaining->hasViolations());
+        } finally {
+            $this->removeTempDirectory($root, [
+                'alice/app/baseline.php',
+                'alice/app',
+                'alice/shared/src/Thing.php',
+                'alice/shared/src',
+                'alice/shared',
+                'alice',
+                'bob/app/baseline.php',
+                'bob/app',
+                'bob/shared/src/Thing.php',
+                'bob/shared/src',
+                'bob/shared',
+                'bob',
+            ]);
+        }
+    }
+
     private function createTempDirectory(): string
     {
         $basePath = sys_get_temp_dir() . '/structarmed-baseline-' . bin2hex(random_bytes(6));
