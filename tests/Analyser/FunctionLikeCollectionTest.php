@@ -442,6 +442,16 @@ final class FunctionLikeCollectionTest extends TestCase
         ];
         yield 'arrow call with positional object' => ['(fn () => foo())->call(new stdClass())', true];
         yield 'arrow call with named object' => ['(fn () => foo())->call(newThis: new stdClass())', true];
+        yield 'nullsafe closure bindTo with object' => [
+            '(function (): void { foo(); })?->bindTo(new stdClass())',
+            true,
+        ];
+        yield 'nullsafe arrow bindTo with object' => ['(fn () => foo())?->bindTo(new stdClass())', true];
+        yield 'nullsafe closure call with object' => [
+            '(function (): void { foo(); })?->call(new stdClass())',
+            true,
+        ];
+        yield 'nullsafe arrow call with object' => ['(fn () => foo())?->call(new stdClass())', true];
         yield 'Closure bind with explicit null' => [
             \Closure::class . '::bind(function (): void { foo(); }, null, Foo::class)',
             false,
@@ -477,6 +487,18 @@ final class FunctionLikeCollectionTest extends TestCase
             '$closure = function (): void { foo(); }; $closure->bindTo(new stdClass())',
             false,
         ];
+    }
+
+    public function testNullsafeObjectBindingStillCountsTowardEnclosingFunctionComplexity(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(
+            '<?php function bind(): void { (function (): void { foo(); })?->bindTo(new stdClass()); }'
+        );
+        $anonymousFunctionNode = $analysisNodeCollector->getAnonymousFunctionNodes()[0];
+        $functionNode          = $analysisNodeCollector->getFunctionNodes()[0];
+
+        $this->assertTrue($anonymousFunctionNode->requiresObjectBinding);
+        $this->assertSame(2, $functionNode->cyclomaticComplexity);
     }
 
     public function testIgnoresFunctionLikeExitWithoutMatchingEntry(): void

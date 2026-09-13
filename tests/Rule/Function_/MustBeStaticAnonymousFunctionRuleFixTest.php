@@ -45,6 +45,10 @@ final class MustBeStaticAnonymousFunctionRuleFixTest extends TestCase
 (fn () => foo())->bindTo(newThis: new stdClass());
 (fn () => foo())->call(new stdClass());
 (fn () => foo())->call(newThis: new stdClass());
+(function (): void { foo(); })?->bindTo(new stdClass());
+(function (): void { foo(); })?->call(new stdClass());
+(fn () => foo())?->bindTo(new stdClass());
+(fn () => foo())?->call(new stdClass());
 PHP;
         file_put_contents($file, $code);
 

@@ -9,6 +9,7 @@ use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
@@ -46,8 +47,9 @@ final class ObjectBoundAnonymousFunction
         return $closureArg->value;
     }
 
-    public static function fromMethodCall(MethodCall $methodCall): Closure|ArrowFunction|null
-    {
+    public static function fromMethodCall(
+        MethodCall|NullsafeMethodCall $methodCall
+    ): Closure|ArrowFunction|null {
         if (
             (! $methodCall->var instanceof Closure && ! $methodCall->var instanceof ArrowFunction)
             || ! $methodCall->name instanceof Identifier

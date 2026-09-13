@@ -9,6 +9,7 @@ use PhpParser\Node;
 use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Stmt\Class_;
@@ -48,7 +49,11 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 
     public function enterNode(Node $node): ?Node
     {
-        if ($node instanceof StaticCall || $node instanceof MethodCall) {
+        if (
+            $node instanceof StaticCall
+            || $node instanceof MethodCall
+            || $node instanceof NullsafeMethodCall
+        ) {
             $anonymousFunction = $node instanceof StaticCall
                 ? ObjectBoundAnonymousFunction::fromStaticCall($node)
                 : ObjectBoundAnonymousFunction::fromMethodCall($node);

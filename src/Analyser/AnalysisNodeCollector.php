@@ -629,10 +629,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
-        if ($node instanceof StaticCall || $node instanceof MethodCall) {
+        if (
+            $node instanceof StaticCall
+            || $node instanceof MethodCall
+            || $node instanceof NullsafeMethodCall
+        ) {
             $this->collectObjectBindingRequirement($node);
 
-            return null;
+            if (! $node instanceof NullsafeMethodCall) {
+                return null;
+            }
         }
 
         $this->collectNodeAnalysis($node);
@@ -895,7 +901,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->fileFunctionLikeAnalyses[]   = $functionLikeAnalysis;
     }
 
-    private function collectObjectBindingRequirement(StaticCall|MethodCall $call): void
+    private function collectObjectBindingRequirement(StaticCall|MethodCall|NullsafeMethodCall $call): void
     {
         $anonymousFunction = $call instanceof StaticCall
             ? ObjectBoundAnonymousFunction::fromStaticCall($call)

@@ -141,6 +141,14 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         ];
         yield 'arrow call with positional object' => ['(fn () => foo())->call(new stdClass())'];
         yield 'arrow call with named object' => ['(fn () => foo())->call(newThis: new stdClass())'];
+        yield 'nullsafe closure bindTo with object' => [
+            '(function (): void { foo(); })?->bindTo(new stdClass())',
+        ];
+        yield 'nullsafe arrow bindTo with object' => ['(fn () => foo())?->bindTo(new stdClass())'];
+        yield 'nullsafe closure call with object' => [
+            '(function (): void { foo(); })?->call(new stdClass())',
+        ];
+        yield 'nullsafe arrow call with object' => ['(fn () => foo())?->call(new stdClass())'];
     }
 
     #[DataProvider('scopeOnlyAnonymousFunctionProvider')]
