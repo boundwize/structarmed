@@ -160,10 +160,23 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
             \Closure::class . '::bind(function (): void { foo(); }, null, Foo::class)',
         ];
         yield 'arrow bind with explicit null' => [\Closure::class . '::bind(fn () => foo(), null, Foo::class)'];
+        yield 'Closure bind with named explicit null' => [
+            \Closure::class
+                . '::bind(newThis: null, closure: function (): void { foo(); }, newScope: Foo::class)',
+        ];
+        yield 'arrow bind with named explicit null' => [
+            \Closure::class . '::bind(newThis: null, closure: fn () => foo(), newScope: Foo::class)',
+        ];
         yield 'closure bindTo with explicit null' => [
             '(function (): void { foo(); })->bindTo(null, Foo::class)',
         ];
         yield 'arrow bindTo with explicit null' => ['(fn () => foo())->bindTo(null, Foo::class)'];
+        yield 'closure bindTo with named explicit null' => [
+            '(function (): void { foo(); })->bindTo(newThis: null, newScope: Foo::class)',
+        ];
+        yield 'arrow bindTo with named explicit null' => [
+            '(fn () => foo())->bindTo(newThis: null, newScope: Foo::class)',
+        ];
     }
 
     public function testDoesNotChangeNonAnonymousFunctionNode(): void

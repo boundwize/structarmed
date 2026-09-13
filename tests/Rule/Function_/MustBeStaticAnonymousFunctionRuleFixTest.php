@@ -85,6 +85,10 @@ PHP;
 (function (): void { foo(); })->bindTo(null, Foo::class);
 \Closure::bind(fn () => foo(), null, Foo::class);
 (fn () => foo())->bindTo(null, Foo::class);
+\Closure::bind(newThis: null, closure: function (): void { foo(); }, newScope: Foo::class);
+(function (): void { foo(); })->bindTo(newThis: null, newScope: Foo::class);
+\Closure::bind(newThis: null, closure: fn () => foo(), newScope: Foo::class);
+(fn () => foo())->bindTo(newThis: null, newScope: Foo::class);
 PHP
         );
 
@@ -96,7 +100,7 @@ PHP
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
             ->forRule('source.static_closures');
 
-        $this->assertCount(4, $violations);
+        $this->assertCount(8, $violations);
 
         $rule = $architecture->getRules()['source.static_closures'];
         $this->assertInstanceOf(MustBeStaticAnonymousFunctionRule::class, $rule);
@@ -110,6 +114,10 @@ PHP
 (static function (): void { foo(); })->bindTo(null, Foo::class);
 \Closure::bind(static fn () => foo(), null, Foo::class);
 (static fn () => foo())->bindTo(null, Foo::class);
+\Closure::bind(newThis: null, closure: static function (): void { foo(); }, newScope: Foo::class);
+(static function (): void { foo(); })->bindTo(newThis: null, newScope: Foo::class);
+\Closure::bind(newThis: null, closure: static fn () => foo(), newScope: Foo::class);
+(static fn () => foo())->bindTo(newThis: null, newScope: Foo::class);
 PHP,
             file_get_contents($file)
         );

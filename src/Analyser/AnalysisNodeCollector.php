@@ -631,6 +631,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($node instanceof StaticCall || $node instanceof MethodCall) {
             $this->collectObjectBindingRequirement($node);
+
+            return null;
         }
 
         $this->collectNodeAnalysis($node);

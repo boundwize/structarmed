@@ -447,11 +447,28 @@ final class FunctionLikeCollectionTest extends TestCase
             false,
         ];
         yield 'arrow bind with explicit null' => [\Closure::class . '::bind(fn () => foo(), null, Foo::class)', false];
+        yield 'Closure bind with named explicit null' => [
+            \Closure::class
+                . '::bind(newThis: null, closure: function (): void { foo(); }, newScope: Foo::class)',
+            false,
+        ];
+        yield 'arrow bind with named explicit null' => [
+            \Closure::class . '::bind(newThis: null, closure: fn () => foo(), newScope: Foo::class)',
+            false,
+        ];
         yield 'closure bindTo with explicit null' => [
             '(function (): void { foo(); })->bindTo(null, Foo::class)',
             false,
         ];
         yield 'arrow bindTo with explicit null' => ['(fn () => foo())->bindTo(null, Foo::class)', false];
+        yield 'closure bindTo with named explicit null' => [
+            '(function (): void { foo(); })->bindTo(newThis: null, newScope: Foo::class)',
+            false,
+        ];
+        yield 'arrow bindTo with named explicit null' => [
+            '(fn () => foo())->bindTo(newThis: null, newScope: Foo::class)',
+            false,
+        ];
         yield 'Closure bind with arbitrary newThis expression' => [
             \Closure::class . '::bind(function (): void { foo(); }, $newThis)',
             true,
