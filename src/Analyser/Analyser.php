@@ -1343,12 +1343,26 @@ final readonly class Analyser
      */
     public function filesForAnalysis(Architecture $architecture, array $scanPaths = [], ?array $layers = null): array
     {
-        $layers        ??= $this->resolveLayers($architecture);
-        $files           = [];
-        $skipPathMatcher = SkipPathMatcher::compile($this->basePath, $architecture->getSkipPaths());
-        $scanPaths       = $this->scanPaths($layers, $scanPaths);
+        $layers          ??= $this->resolveLayers($architecture);
+        $files             = [];
+        $skipPathMatcher   = SkipPathMatcher::compile($this->basePath, $architecture->getSkipPaths());
+        $originalScanPaths = $scanPaths;
+        $scanPaths         = $this->scanPaths($layers, $scanPaths);
 
-        if ($this->shouldAnalyseComposerJson($architecture)) {
+        /**
+         * Avoid direct path run show invalid count progress bar:
+         *
+         *      vendor/bin/structarmed analyze src/Bar.php
+         *      Analyzing [============================] 100% 2/2
+         *
+         *  which should be:
+         *
+         *      vendor/bin/structarmed analyze src/Bar.php
+         *      Analyzing [============================] 100% 1/1
+         *
+         *  Of course, for rules that read composer.json, it internally read by the rule itself.
+         */
+        if ($originalScanPaths === [] && $this->shouldAnalyseComposerJson($architecture)) {
             $scanPaths[] = 'composer.json';
         }
 
