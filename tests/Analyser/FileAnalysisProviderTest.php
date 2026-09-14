@@ -14,6 +14,8 @@ use PHPUnit\Framework\TestCase;
 
 use function array_column;
 use function base64_encode;
+use function basename;
+use function dirname;
 use function file_put_contents;
 use function sys_get_temp_dir;
 use function tempnam;
@@ -99,6 +101,99 @@ final class FileAnalysisProviderTest extends TestCase
         } finally {
             unlink($file);
         }
+    }
+
+    public function testResolvesNamesBeforeFileStateWhenUsedStandalone(): void
+    {
+        $file = $this->source(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            use function Vendor\define;
+
+            final class Service
+            {
+            }
+
+            define('FOO', 'bar');
+            PHP);
+
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($file);
+
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertTrue($fileAnalysis->hasSideEffects);
+        $this->assertSame(11, $fileAnalysis->sideEffectLine);
+    }
+
+    public function testTrustsReplacedAstWithoutResolvingNamesAgain(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'structarmed');
+        file_put_contents($file, <<<'PHP'
+            <?php
+
+            namespace App;
+
+            use function Vendor\define;
+
+            final class Service
+            {
+            }
+
+            define('FOO', 'bar');
+            PHP);
+
+        try {
+            $fileAnalysisProvider = new FileAnalysisProvider();
+            $ast                  = $fileAnalysisProvider->ast($file);
+
+            $this->assertIsArray($ast);
+
+            // The parsed AST is handed back unresolved through a non-canonical path: were
+            // analyse() to run NameResolver again, the imported define() would resolve to
+            // Vendor\define and count as a side effect.
+            $fileAnalysisProvider->replaceAst(dirname($file) . '/./' . basename($file), $ast);
+
+            $this->assertSame($ast, $fileAnalysisProvider->ast($file));
+
+            $fileAnalysis = $fileAnalysisProvider->analyse($file);
+
+            $this->assertTrue($fileAnalysis->declaresSymbols);
+            $this->assertFalse($fileAnalysis->hasSideEffects);
+
+            // Token-dependent facts still come from the parse behind the replaced AST.
+            $this->assertContains('define', array_column($fileAnalysisProvider->tokens(), 'text'));
+            $this->assertNull($fileAnalysisProvider->invalidPhpTagLine($file));
+
+            $fileAnalysisProvider->releaseAst($file);
+
+            $this->assertNull($fileAnalysisProvider->ast($file));
+        } finally {
+            unlink($file);
+        }
+    }
+
+    public function testResolvesNamesAgainAfterReplacedAstIsReleased(): void
+    {
+        $file = $this->source(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            use function Vendor\define;
+
+            define('FOO', 'bar');
+            PHP);
+
+        $fileAnalysisProvider = new FileAnalysisProvider();
+        $ast                  = $fileAnalysisProvider->ast($file);
+
+        $this->assertIsArray($ast);
+
+        $fileAnalysisProvider->replaceAst($file, $ast);
+        $fileAnalysisProvider->releaseAst($file);
+
+        $this->assertTrue($fileAnalysisProvider->analyse($file)->hasSideEffects);
     }
 
     public function testReportsInvalidTagsAndInvalidAstWithoutThrowing(): void
@@ -481,6 +576,19 @@ final class FileAnalysisProviderTest extends TestCase
         yield 'guarded define() with include argument' => [
             "defined('X') || define('X', include 'config.php');",
             true,
+            true,
+        ];
+        yield 'fully qualified \\define()' => ["\\define('X', 1);", true, false];
+        yield 'fully qualified \\define() in a namespace' => ["namespace App;\n\\define('X', 1);", true, false];
+        yield 'unqualified define() in a namespace' => ["namespace App;\ndefine('X', 1);", true, false];
+        yield 'imported define() in a namespace' => [
+            "namespace App;\nuse function Vendor\\define;\ndefine('X', 1);",
+            false,
+            true,
+        ];
+        yield 'imported define() guarded by defined()' => [
+            "namespace App;\nuse function Vendor\\define;\ndefined('X') || define('X', 1);",
+            false,
             true,
         ];
     }

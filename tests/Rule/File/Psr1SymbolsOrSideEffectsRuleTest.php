@@ -231,6 +231,75 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
+    public function testPassesFullyQualifiedDefineConstantNextToClass(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+
+                namespace App;
+
+                \define('APP_VERSION', '1.2.3');
+
+                class Bootstrap {}
+                PHP
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertSame([], $violations);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testViolatesImportedDefineFunctionNextToClass(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use function Vendor\define;
+
+                final class Service
+                {
+                }
+
+                define('FOO', 'bar');
+                PHP
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(11, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testPassesDefinedGuardedDefineNextToClass(): void
     {
         $basePath = $this->makeTempDir();
