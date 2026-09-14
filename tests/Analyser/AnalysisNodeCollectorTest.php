@@ -1264,8 +1264,8 @@ PHP;
         $classNode = $this->collect($code);
 
         // PHP function names are case-insensitive: dangerous() calls
-        // App\Domain\Dangerous(), so the call resolves to the declared spelling.
-        $this->assertSame(['App\Domain\Dangerous'], $classNode->functionCalls);
+        // App\Domain\Dangerous(), so the call resolves to the namespaced function.
+        $this->assertSame(['App\Domain\dangerous'], $classNode->functionCalls);
         $this->assertTrue($classNode->callsFunction('App\Domain\Dangerous'));
     }
 
