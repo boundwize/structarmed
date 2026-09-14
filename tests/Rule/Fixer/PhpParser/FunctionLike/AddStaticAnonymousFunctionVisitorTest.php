@@ -202,8 +202,17 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         yield 'unrelated static bind call' => [
             'Other::bind(function (): void { foo(); }, new stdClass())',
         ];
+        yield 'unrelated Closure static method' => [
+            \Closure::class . '::fromCallable(function (): void { foo(); })',
+        ];
         yield 'unrelated anonymous function method call' => [
             '(function (): void { foo(); })->__invoke()',
+        ];
+        yield 'bindTo on a non-anonymous-function receiver' => [
+            '$closure = function (): void { foo(); }; $service->bindTo(new stdClass())',
+        ];
+        yield 'call on a non-anonymous-function receiver' => [
+            '$closure = function (): void { foo(); }; $service->call(new stdClass())',
         ];
     }
 

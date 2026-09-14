@@ -483,8 +483,20 @@ final class FunctionLikeCollectionTest extends TestCase
             'Other::bind(function (): void { foo(); }, new stdClass())',
             false,
         ];
+        yield 'unrelated Closure static method' => [
+            \Closure::class . '::fromCallable(function (): void { foo(); })',
+            false,
+        ];
         yield 'unrelated anonymous function method call' => [
             '(function (): void { foo(); })->__invoke()',
+            false,
+        ];
+        yield 'bindTo on a non-anonymous-function receiver' => [
+            '$closure = function (): void { foo(); }; $service->bindTo(new stdClass())',
+            false,
+        ];
+        yield 'call on a non-anonymous-function receiver' => [
+            '$closure = function (): void { foo(); }; $service->call(new stdClass())',
             false,
         ];
         yield 'Closure bind with arbitrary newThis expression' => [
