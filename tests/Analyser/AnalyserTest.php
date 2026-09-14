@@ -38,6 +38,7 @@ use Boundwize\StructArmed\Rule\Rules\File\Psr1Utf8WithoutBomRule;
 use Boundwize\StructArmed\Rule\Rules\File\Psr1ValidUtf8Rule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
@@ -670,6 +671,48 @@ final class AnalyserTest extends TestCase
             ->forRule('domain.base_must_be_final');
 
         $this->assertCount(0, $violations);
+    }
+
+    public function testMayNotCallFunctionRuleRecognizesSameNamespaceCallCaseInsensitively(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Service.php' => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                function Dangerous(): void
+                {
+                }
+
+                final class Service
+                {
+                    public function run(): void
+                    {
+                        dangerous();
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/')
+            ->rule(
+                'domain.no_dangerous',
+                new MayNotCallFunctionRule(layer: 'Domain', function: 'App\Domain\Dangerous'),
+            );
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('domain.no_dangerous');
+
+        // dangerous() calls App\Domain\Dangerous(): PHP function names are
+        // case-insensitive, so the rule must not be bypassed by call-site casing.
+        $this->assertCount(1, $violations);
+        $this->assertSame(
+            'Class [App\Domain\Service] must not call function [App\Domain\Dangerous()]',
+            $violations[0]->message,
+        );
     }
 
     public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClass(): void
