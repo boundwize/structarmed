@@ -1366,7 +1366,6 @@ final class AnalysisResultCacheTest extends TestCase
             $this->writeCachePayload($cacheDirectory, [
                 'metadata' => [
                     'namespace' => 'config',
-                    'file'      => $sourceFile,
                     'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
                 ],
                 'nodes'    => [
@@ -2670,7 +2669,6 @@ final class AnalysisResultCacheTest extends TestCase
             $this->writeCachePayload($cacheDirectory, [
                 'metadata' => [
                     'namespace' => 'config',
-                    'file'      => $sourceFile,
                     'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
                 ],
                 ...$payloadOverride,
