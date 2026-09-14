@@ -334,7 +334,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $fileClassLikes = [];
 
-    /** @var array<string, true> */
+    /**
+     * Lower-cased declared function name => declared spelling. PHP function
+     * names are case-insensitive, so calls are matched case-insensitively.
+     *
+     * @var array<string, string>
+     */
     private array $fileFunctions = [];
 
     /** @var list<ClassLikeAnalysis> */
@@ -586,8 +591,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             if ($node instanceof Function_) {
                 $functionName = $this->resolveFunctionDeclarationName($node);
 
-                $this->fileFunctions[$functionName] = true;
-                $this->activeFunctionNames[]        = $functionName;
+                $this->fileFunctions[strtolower($functionName)] = $functionName;
+                $this->activeFunctionNames[]                    = $functionName;
                 $this->startFunctionLikeAnalysis($node);
 
                 return null;
@@ -1646,10 +1651,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $namespacedName = $name->getAttribute('namespacedName');
 
         if ($namespacedName instanceof Name) {
-            $namespacedNameString = $namespacedName->toString();
+            $declaredFunction = $this->fileFunctions[strtolower($namespacedName->toString())] ?? null;
 
-            if (isset($this->fileFunctions[$namespacedNameString])) {
-                return $namespacedNameString;
+            if ($declaredFunction !== null) {
+                return $declaredFunction;
             }
         }
 

@@ -1243,6 +1243,32 @@ PHP;
         $this->assertNotContains('App\log', $classNode->functionCalls);
     }
 
+    public function testResolvesSameNamespaceFunctionCallCaseInsensitively(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App\Domain;
+
+function Dangerous(): void
+{
+}
+
+final class Service
+{
+    public function run(): void
+    {
+        dangerous();
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // PHP function names are case-insensitive: dangerous() calls
+        // App\Domain\Dangerous(), so the call resolves to the declared spelling.
+        $this->assertSame(['App\Domain\Dangerous'], $classNode->functionCalls);
+        $this->assertTrue($classNode->callsFunction('App\Domain\Dangerous'));
+    }
+
     public function testResolvesQualifiedCallViaNamespaceAlias(): void
     {
         $code      = <<<'PHP'
