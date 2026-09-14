@@ -68,29 +68,34 @@ A custom rule class implements `Boundwize\StructArmed\Rule\RuleInterface`.
 
 namespace App\Architecture\Rules;
 
+use App\Http\Controller\AbstractController;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
 use function sprintf;
 
-final readonly class ServiceClassMustBeFinalRule implements RuleInterface
+final readonly class ControllerMustExtendBaseControllerRule implements RuleInterface
 {
     public function appliesTo(ClassNode $classNode): bool
     {
         return $classNode->isClass()
-            && $classNode->isInLayer('Application')
-            && $classNode->nameEndsWith('Service');
+            && ! $classNode->isAbstract
+            && $classNode->isInLayer('Controller');
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ($classNode->isFinal) {
+        if ($classNode->extendsClass(AbstractController::class)) {
             return null;
         }
 
         return new RuleViolation(
-            message:   sprintf('Service class [%s] must be final', $classNode->className),
+            message:   sprintf(
+                'Controller [%s] must extend [%s]',
+                $classNode->className,
+                AbstractController::class,
+            ),
             file:      $classNode->file,
             line:      $classNode->line,
             className: $classNode->className,
@@ -105,20 +110,28 @@ Register the rule in `structarmed.php`:
 ```php
 <?php
 
-use App\Architecture\Rules\ServiceClassMustBeFinalRule;
+use App\Architecture\Rules\ControllerMustExtendBaseControllerRule;
 use Boundwize\StructArmed\Architecture;
 
 return Architecture::define()
-    ->layer('Application', 'src/Application/')
+    ->layer('Controller', 'src/Http/Controller/')
     ->rule(
-        'application.service_classes_must_be_final',
-        new ServiceClassMustBeFinalRule()
+        'controller.classes_must_extend_base_controller',
+        new ControllerMustExtendBaseControllerRule()
     );
 ```
 
 ## Reading Usage Flags In A Custom Rule
 
-Every `ClassNode` carries four usage flags describing how the class-like is used elsewhere in the scanned paths:
+Usage flags are opt-in because collecting them costs extra analysis time. Before reading a usage flag, a custom rule must declare that it needs the data by implementing the corresponding marker interface instead of the plain `Boundwize\StructArmed\Rule\RuleInterface`. Each marker extends `RuleInterface`, so no other change is needed:
+
+| Marker interface | Flags populated |
+| --- | --- |
+| `Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface` | `$isExtended`, `$isReferenced`, `$isInstantiated` |
+| `Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface` | `$isImplemented`, `$isReferenced` |
+| `Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface` | `$isReferenced` |
+
+The usage flags describe how each `ClassNode` is used elsewhere in the scanned paths:
 
 | Flag | Meaning |
 | --- | --- |
@@ -126,14 +139,6 @@ Every `ClassNode` carries four usage flags describing how the class-like is used
 | `$classNode->isImplemented` | A scanned class implements this interface (directly or through inheritance), or another scanned interface extends it |
 | `$classNode->isReferenced` | Another scanned scope references it as a dependency: a type hint, an `instanceof` check, a `::class` constant, a static call, a trait use, a class-name string, and so on |
 | `$classNode->isInstantiated` | Another scanned scope instantiates it: `new X`, `new self`/`static`/`parent`, a constant class expression such as `new (X::class)`, or a resolvable `ReflectionClass` construction |
-
-Collecting this usage information costs extra analysis time, so the analyser only computes it when an active rule declares that it needs it. A custom rule declares that by implementing one of three marker interfaces instead of the plain `Boundwize\StructArmed\Rule\RuleInterface` (each marker extends it, so no other change is needed):
-
-| Marker interface | Flags populated |
-| --- | --- |
-| `Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface` | `$isExtended`, `$isReferenced`, `$isInstantiated` |
-| `Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface` | `$isImplemented`, `$isReferenced` |
-| `Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface` | `$isReferenced` |
 
 Without a matching marker on at least one active rule, the corresponding flags keep their default `false` — reading them from a rule that only implements `RuleInterface` reports every class-like as unused.
 
@@ -143,27 +148,32 @@ Without a matching marker on at least one active rule, the corresponding flags k
 namespace App\Architecture\Rules;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
-use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 
 use function sprintf;
 
-final readonly class ContractMustBeImplementedRule implements UsedInterfaceAwareRuleInterface
+final readonly class ServiceClassMustBeFinalRule implements ExtendedClassAwareRuleInterface
 {
     public function appliesTo(ClassNode $classNode): bool
     {
-        return $classNode->isInterface
-            && $classNode->isInLayer('Contracts');
+        return $classNode->isClass()
+            && $classNode->isInLayer('Application')
+            && $classNode->nameEndsWith('Service');
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if ($classNode->isImplemented || $classNode->isReferenced) {
+        if ($classNode->isFinal) {
+            return null;
+        }
+
+        if ($classNode->isExtended) {
             return null;
         }
 
         return new RuleViolation(
-            message:   sprintf('Contract [%s] must be implemented or referenced', $classNode->className),
+            message:   sprintf('Service class [%s] must be final', $classNode->className),
             file:      $classNode->file,
             line:      $classNode->line,
             className: $classNode->className,
@@ -172,6 +182,8 @@ final readonly class ContractMustBeImplementedRule implements UsedInterfaceAware
     }
 }
 ```
+
+`ServiceClassMustBeFinalRule` uses `ExtendedClassAwareRuleInterface`, so the analyser populates `$isExtended` before evaluation. The rule leaves an extended service non-final because making it final would break its scanned child class.
 
 The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedInterfaceRule` implements `UsedInterfaceAwareRuleInterface`, `MustBeUsedTraitRule` implements `UsedTraitAwareRuleInterface`, and `MustBeUsedAbstractClassRule` and `ExtendedClassMustBeAbstractOrInstantiatedRule` implement `ExtendedClassAwareRuleInterface`.
 
@@ -413,10 +425,9 @@ For PHP-Parser based rewrites, extend `Boundwize\StructArmed\Rule\Fixer\PhpParse
 ```diff
 + use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 + use Boundwize\StructArmed\Rule\Fixer\PhpParser\Class_\AddFinalClassVisitor;
-+ use Boundwize\StructArmed\Rule\RuleViolation;
 
-- final readonly class ServiceClassMustBeFinalRule implements RuleInterface
-+ final readonly class ServiceClassMustBeFinalRule extends AbstractPhpParserFixableRule implements RuleInterface
+- final readonly class ServiceClassMustBeFinalRule implements ExtendedClassAwareRuleInterface
++ final readonly class ServiceClassMustBeFinalRule extends AbstractPhpParserFixableRule implements ExtendedClassAwareRuleInterface
     {
 +     protected function createFixerVisitor(RuleViolation $ruleViolation): AddFinalClassVisitor
 +     {
