@@ -25,10 +25,10 @@ final class ObjectBoundAnonymousFunction
     public static function fromStaticCall(StaticCall $staticCall): Closure|ArrowFunction|null
     {
         if (
-            ! $staticCall->class instanceof Name
-            || ! self::nameResolvesToClosure($staticCall->class)
-            || ! $staticCall->name instanceof Identifier
+            ! $staticCall->name instanceof Identifier
             || $staticCall->name->toLowerString() !== 'bind'
+            || ! $staticCall->class instanceof Name
+            || ! self::nameResolvesToClosure($staticCall->class)
         ) {
             return null;
         }
