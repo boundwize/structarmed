@@ -76,6 +76,9 @@ final class FileAnalysisProvider
     /** @var array<string, true> Files whose cached AST has already passed through NameResolver. */
     private array $resolvedAsts = [];
 
+    /** @var array<string, true> Lower-cased namespaced names of the functions the file being analysed declares. */
+    private array $localFunctions = [];
+
     /** @var array<string, string> */
     private array $contents = [];
 
@@ -158,11 +161,18 @@ final class FileAnalysisProvider
         $code        = $this->contents($file);
         $ast         = array_key_exists($file, $this->asts) ? $this->asts[$file] : $this->parse($file);
         $hasValidAst = $this->validAsts[$file];
-        $fileState   = $hasValidAst ? $this->fileState($this->resolvedAst($file, $ast ?? [])) : [
+        $fileState   = [
             'declaresSymbols' => false,
             'hasSideEffects'  => false,
             'sideEffectLine'  => 1,
         ];
+
+        if ($hasValidAst) {
+            $ast                  = $this->resolvedAst($file, $ast ?? []);
+            $this->localFunctions = $this->declaredFunctions($ast);
+            $fileState            = $this->fileState($ast);
+            $this->localFunctions = [];
+        }
 
         $fileAnalysis = new FileAnalysis(
             file: $file,
@@ -251,7 +261,7 @@ final class FileAnalysisProvider
      *
      * @param array<Node> $ast
      */
-    public function replaceAst(string $file, array $ast): void
+    public function replaceResolvedAst(string $file, array $ast): void
     {
         $file = Path::normalise($file, canonicalise: true);
 
@@ -262,7 +272,7 @@ final class FileAnalysisProvider
     /**
      * Standalone callers never traverse the AST themselves, so names are
      * resolved here once; the analyser supplies an already resolved AST via
-     * {@see replaceAst()} and skips this walk.
+     * {@see replaceResolvedAst()} and skips this walk.
      *
      * @param array<Node> $ast
      * @return array<Node>
@@ -567,16 +577,55 @@ final class FileAnalysisProvider
      * A top-level `define('CONST', ...)` call declares a constant symbol under PSR-1,
      * mirroring PHP_CodeSniffer's PSR1.Files.SideEffects sniff. Method calls such as
      * `$obj->define(...)` or `Foo::define(...)` are not FuncCall nodes, so they never match.
-     * The AST is name-resolved, so an imported `use function Vendor\define` no longer
-     * reads as `define`, while an unqualified call inside a namespace keeps its name
-     * and falls back to the global built-in as PHP does at runtime.
      */
     private function isDefineCall(Node $stmt): bool
     {
-        return $stmt instanceof Expression
-            && $stmt->expr instanceof FuncCall
-            && $stmt->expr->name instanceof Name
-            && $stmt->expr->name->toLowerString() === 'define';
+        return $stmt instanceof Expression && $this->isGlobalFunctionCall($stmt->expr, 'define');
+    }
+
+    /**
+     * Whether $expr calls the global built-in $function on the name-resolved AST. An
+     * imported `use function Vendor\define` resolved to a fully qualified name that no
+     * longer reads as `define`. An unqualified call inside a namespace keeps its name
+     * and falls back to the global built-in as PHP does at runtime, unless the file
+     * declares that function in the namespace itself.
+     */
+    private function isGlobalFunctionCall(Expr $expr, string $function): bool
+    {
+        if (
+            ! $expr instanceof FuncCall
+            || ! $expr->name instanceof Name
+            || $expr->name->toLowerString() !== $function
+        ) {
+            return false;
+        }
+
+        $namespacedName = $expr->name->getAttribute('namespacedName');
+
+        return ! $namespacedName instanceof Name || ! isset($this->localFunctions[$namespacedName->toLowerString()]);
+    }
+
+    /**
+     * @param array<Node> $nodes
+     * @return array<string, true>
+     */
+    private function declaredFunctions(array $nodes): array
+    {
+        $functions = [];
+
+        foreach ($nodes as $node) {
+            if (($node instanceof Namespace_ || $node instanceof Declare_) && $node->stmts !== null) {
+                $functions += $this->declaredFunctions($node->stmts);
+
+                continue;
+            }
+
+            if ($node instanceof Function_) {
+                $functions[($node->namespacedName ?? $node->name)->toLowerString()] = true;
+            }
+        }
+
+        return $functions;
     }
 
     /** `defined('X') || define('X', ...)` and `!defined('X') && define('X', ...)` patterns */
@@ -601,18 +650,12 @@ final class FileAnalysisProvider
 
     private function isDefineFuncCall(Expr $expr): bool
     {
-        return $expr instanceof FuncCall
-            && $expr->name instanceof Name
-            && $expr->name->toLowerString() === 'define';
+        return $this->isGlobalFunctionCall($expr, 'define');
     }
 
     private function isDefinedCondition(Expr $expr): bool
     {
-        if (
-            $expr instanceof FuncCall
-            && $expr->name instanceof Name
-            && $expr->name->toLowerString() === 'defined'
-        ) {
+        if ($this->isGlobalFunctionCall($expr, 'defined')) {
             return true;
         }
 

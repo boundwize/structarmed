@@ -300,6 +300,45 @@ final class Psr1SymbolsOrSideEffectsRuleTest extends TestCase
         }
     }
 
+    public function testViolatesNamespacedDefineFunctionDeclaredInFileNextToClass(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+
+                namespace App;
+
+                function define(string $name, mixed $value): void
+                {
+                }
+
+                final class Service
+                {
+                }
+
+                define('FOO', 'bar');
+                PHP
+            );
+
+            $violations = (new Psr1SymbolsOrSideEffectsRule(['src/']))->evaluateProjectAll(
+                $basePath,
+                Architecture::define()
+            );
+
+            $this->assertCount(1, $violations);
+            $this->assertSame(13, $violations[0]->line);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testPassesDefinedGuardedDefineNextToClass(): void
     {
         $basePath = $this->makeTempDir();

@@ -126,7 +126,7 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertSame(11, $fileAnalysis->sideEffectLine);
     }
 
-    public function testTrustsReplacedAstWithoutResolvingNamesAgain(): void
+    public function testTrustsReplacedResolvedAstWithoutResolvingNamesAgain(): void
     {
         $file = (string) tempnam(sys_get_temp_dir(), 'structarmed');
         file_put_contents($file, <<<'PHP'
@@ -152,7 +152,7 @@ final class FileAnalysisProviderTest extends TestCase
             // The parsed AST is handed back unresolved through a non-canonical path: were
             // analyse() to run NameResolver again, the imported define() would resolve to
             // Vendor\define and count as a side effect.
-            $fileAnalysisProvider->replaceAst(dirname($file) . '/./' . basename($file), $ast);
+            $fileAnalysisProvider->replaceResolvedAst(dirname($file) . '/./' . basename($file), $ast);
 
             $this->assertSame($ast, $fileAnalysisProvider->ast($file));
 
@@ -173,7 +173,7 @@ final class FileAnalysisProviderTest extends TestCase
         }
     }
 
-    public function testResolvesNamesAgainAfterReplacedAstIsReleased(): void
+    public function testResolvesNamesAgainAfterReplacedResolvedAstIsReleased(): void
     {
         $file = $this->source(<<<'PHP'
             <?php
@@ -190,7 +190,7 @@ final class FileAnalysisProviderTest extends TestCase
 
         $this->assertIsArray($ast);
 
-        $fileAnalysisProvider->replaceAst($file, $ast);
+        $fileAnalysisProvider->replaceResolvedAst($file, $ast);
         $fileAnalysisProvider->releaseAst($file);
 
         $this->assertTrue($fileAnalysisProvider->analyse($file)->hasSideEffects);
@@ -589,6 +589,27 @@ final class FileAnalysisProviderTest extends TestCase
         yield 'imported define() guarded by defined()' => [
             "namespace App;\nuse function Vendor\\define;\ndefined('X') || define('X', 1);",
             false,
+            true,
+        ];
+        yield 'define() declared by the file in its namespace' => [
+            "namespace App;\nfunction Define(string \$name, mixed \$value): void {}\ndefine('X', 1);",
+            true,
+            true,
+        ];
+        yield 'define() declared by the file in a namespace block' => [
+            "namespace App {\n    function define(string \$name, mixed \$value): void {}\n    define('X', 1);\n}",
+            true,
+            true,
+        ];
+        yield 'define() declared by the file in another namespace' => [
+            "namespace Other {\n    function define(string \$name, mixed \$value): void {}\n}\n"
+            . "namespace App {\n    define('X', 1);\n}",
+            true,
+            false,
+        ];
+        yield 'defined() declared by the file guarding define()' => [
+            "namespace App;\nfunction defined(string \$name): bool { return false; }\ndefined('X') || define('X', 1);",
+            true,
             true,
         ];
     }

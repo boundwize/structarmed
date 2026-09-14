@@ -72,7 +72,7 @@ final readonly class AnalysisNodeExtractor
                     // The same traversal ran NameResolver, so the file analysis
                     // reuses its AST instead of resolving names in a second walk.
                     if ($withFileAnalysis) {
-                        $this->fileAnalysisProvider->replaceAst($fileToParse, $resolvedAst);
+                        $this->fileAnalysisProvider->replaceResolvedAst($fileToParse, $resolvedAst);
                     }
                 }
 
