@@ -2678,6 +2678,26 @@ final class AnalyserTest extends TestCase
         $this->assertStringEndsWith('/src/Foo.php', $files[1]);
     }
 
+    public function testFilesForAnalysisDoesNotIncludeRootComposerJsonForExplicitScanPath(): void
+    {
+        $basePath = $this->makeTempProject([
+            'composer.json' => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/')
+            ->rule('composer.source_paths', new Psr4SourcePathsRule(['src/']));
+
+        $fooFile = realpath($basePath . '/src/Foo.php');
+
+        $this->assertIsString($fooFile);
+
+        $files = (new Analyser($basePath))->filesForAnalysis($architecture, [$fooFile]);
+
+        $this->assertSame([$this->normalisePath($fooFile)], array_map($this->normalisePath(...), $files));
+    }
+
     public function testFilesForAnalysisDoesNotIncludeRootComposerJsonWithoutComposerJsonRule(): void
     {
         $basePath = $this->makeTempProject([
