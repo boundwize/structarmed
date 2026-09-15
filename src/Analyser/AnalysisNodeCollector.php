@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Analyser;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
+use Boundwize\StructArmed\Util\PhpParser\UnconditionallyDeclaredFunctions;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
@@ -335,8 +336,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private array $fileClassLikes = [];
 
     /**
-     * Lower-cased declared function names: PHP function names are
+     * Lower-cased names of the functions the current file declares
+     * unconditionally at namespace level. PHP function names are
      * case-insensitive, so calls are matched case-insensitively.
+     *
+     * A function declared inside another function or a conditional only
+     * exists once that code has run, so an unqualified call cannot be
+     * resolved to it: until then PHP falls back to the global function.
      *
      * @var array<string, true>
      */
@@ -589,10 +595,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof Function_) {
-                $functionName = $this->resolveFunctionDeclarationName($node);
-
-                $this->fileFunctions[strtolower($functionName)] = true;
-                $this->activeFunctionNames[]                    = $functionName;
+                $this->activeFunctionNames[] = $this->resolveFunctionDeclarationName($node);
                 $this->startFunctionLikeAnalysis($node);
 
                 return null;
@@ -738,6 +741,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @param Node[] $nodes */
     public function afterTraverse(array $nodes): null
     {
+        $this->fileFunctions = UnconditionallyDeclaredFunctions::names($nodes);
+
         foreach ($this->fileClassLikes as [$classLike, $analysis, $enclosingClassName, $enclosingFunctionName]) {
             if ($classLike instanceof Class_ && $classLike->isAnonymous()) {
                 $this->collectAnonymousClass($classLike, $analysis, $enclosingClassName, $enclosingFunctionName);
