@@ -14,6 +14,10 @@ use PhpParser\Node\Stmt\Namespace_;
  * the file, its namespaces and declare blocks. A function nested in another
  * function, a conditional or a loop only exists once that code has run, so
  * those blocks are not descended into.
+ *
+ * A `declare {}` block is not hoisted, so a top-level call placed before it
+ * cannot reach a function it declares. Such blocks sit at the top of a file
+ * in practice, so their functions are treated as available throughout.
  */
 final class UnconditionallyDeclaredFunctions
 {
