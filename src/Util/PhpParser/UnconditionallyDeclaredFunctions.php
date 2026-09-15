@@ -16,8 +16,9 @@ use PhpParser\Node\Stmt\Namespace_;
  * those blocks are not descended into.
  *
  * A `declare {}` block is not hoisted, so a top-level call placed before it
- * cannot reach a function it declares. Such blocks sit at the top of a file
- * in practice, so their functions are treated as available throughout.
+ * cannot reach a function it declares. Such blocks usually sit near the top
+ * of a file in practice, so their functions are treated as available
+ * throughout.
  */
 final class UnconditionallyDeclaredFunctions
 {
