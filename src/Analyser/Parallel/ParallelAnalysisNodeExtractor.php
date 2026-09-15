@@ -17,7 +17,6 @@ use RuntimeException;
 
 use function array_fill;
 use function array_key_exists;
-use function array_keys;
 use function array_pop;
 use function array_push;
 use function array_search;
@@ -174,17 +173,17 @@ final readonly class ParallelAnalysisNodeExtractor
         while ($pending !== []) {
             $anyActivity = false;
 
-            foreach (array_keys($pending) as $key) {
-                $stdoutPipe = $pending[$key]['stdoutPipe'];
+            foreach ($pending as $key => $worker) {
+                $stdoutPipe = $worker['stdoutPipe'];
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
                     // One chunk index per parsed file; a read may end mid-line.
-                    $lines                   = explode("\n", $pending[$key]['buffer'] . $data);
+                    $lines                   = explode("\n", $worker['buffer'] . $data);
                     $pending[$key]['buffer'] = array_pop($lines);
 
                     foreach ($lines as $line) {
-                        $file = $pending[$key]['files'][(int) $line] ?? null;
+                        $file = $worker['files'][(int) $line] ?? null;
 
                         if ($file !== null) {
                             $progressHandler?->advance($file);
@@ -203,13 +202,13 @@ final readonly class ParallelAnalysisNodeExtractor
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
 
-                $procResource = $pending[$key]['process'];
+                $procResource = $worker['process'];
                 assert(is_resource($procResource));
                 $exitCode = proc_close($procResource);
 
                 try {
                     // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                    $output = (string) file_get_contents($pending[$key]['outputFile']);
+                    $output = (string) file_get_contents($worker['outputFile']);
                     // phpcs:enable
                     $result = $output !== '' ? unserialize($output) : null;
 
@@ -219,7 +218,7 @@ final readonly class ParallelAnalysisNodeExtractor
                     if ($exitCode !== 0) {
                         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
                         // to avoid error in test that mock it
-                        $stderr = (string) file_get_contents($pending[$key]['stderrFile']);
+                        $stderr = (string) file_get_contents($worker['stderrFile']);
                         // phpcs:enable
 
                         $error = is_array($result) && is_string($result['error'] ?? null)
@@ -251,7 +250,7 @@ final readonly class ParallelAnalysisNodeExtractor
                     if ($error !== null) {
                         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
                         // to avoid error in test that mock it
-                        $stderr = (string) file_get_contents($pending[$key]['stderrFile']);
+                        $stderr = (string) file_get_contents($worker['stderrFile']);
                         // phpcs:enable
 
                         throw new RuntimeException(sprintf(
@@ -287,9 +286,9 @@ final readonly class ParallelAnalysisNodeExtractor
                     $failure ??= $runtimeException->getMessage();
                 } finally {
                     $this->cleanup([
-                        $pending[$key]['inputFile'],
-                        $pending[$key]['outputFile'],
-                        $pending[$key]['stderrFile'],
+                        $worker['inputFile'],
+                        $worker['outputFile'],
+                        $worker['stderrFile'],
                     ]);
                 }
 
