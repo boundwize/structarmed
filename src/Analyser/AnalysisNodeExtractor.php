@@ -64,10 +64,16 @@ final readonly class AnalysisNodeExtractor
 
                 if ($ast !== null && $ast !== []) {
                     $analysisNodeCollector->setCurrentFile($fileToParse, $this->fileAnalysisProvider->tokens());
-                    $nodeTraverser->traverse($ast);
+                    $resolvedAst = $nodeTraverser->traverse($ast);
 
                     $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();
                     $numericLiterals              = $analysisNodeCollector->getNumericLiterals();
+
+                    // The same traversal ran NameResolver, so the file analysis
+                    // reuses its AST instead of resolving names in a second walk.
+                    if ($withFileAnalysis) {
+                        $this->fileAnalysisProvider->replaceResolvedAst($fileToParse, $resolvedAst);
+                    }
                 }
 
                 // Analysed after the traversal so the facts only the collector

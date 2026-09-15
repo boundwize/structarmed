@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
+use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
@@ -137,6 +138,54 @@ PHP);
         $this->assertArrayHasKey($file, $extractionResult->fileAnalyses);
         $this->assertTrue($extractionResult->fileAnalyses[$file]->declaresSymbols);
         $this->assertTrue($extractionResult->fileAnalyses[$file]->hasSideEffects);
+    }
+
+    public function testExtractAnalysesTheNameResolvedAstOfItsOwnTraversal(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $file = $dir . '/Service.php';
+
+        file_put_contents($file, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+use function Vendor\define;
+
+final class Service
+{
+    public function run(): void
+    {
+        define('BAR', TRUE);
+    }
+}
+
+define('FOO', 'bar');
+PHP);
+
+        $fileAnalysisProvider   = new FileAnalysisProvider();
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
+        $extractionResult       = (new AnalysisNodeExtractor($namespaceLayerResolver, $fileAnalysisProvider))
+            ->extract([$file]);
+
+        // The imported define() resolves to Vendor\define, so it is a side effect
+        // rather than a constant declaration for the file analysis ...
+        $fileAnalysis = $extractionResult->fileAnalyses[$file];
+
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertTrue($fileAnalysis->hasSideEffects);
+        $this->assertSame(15, $fileAnalysis->sideEffectLine);
+
+        // ... and the collector resolved it the same way on the same AST.
+        $this->assertSame('App\\Domain\\Service', $extractionResult->classNodes[0]->className);
+        $this->assertContains('Vendor\\define', $extractionResult->classNodes[0]->functionCalls);
+
+        // Token-dependent facts were recorded from the parse behind the replaced AST.
+        $this->assertSame([[11, 'TRUE']], $fileAnalysis->nonCanonicalKeywordConstants);
+
+        // The provider dropped the file once analysed.
+        $this->assertNull($fileAnalysisProvider->ast($file));
+        $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse($file));
     }
 
     public function testExtractSkipsFileAnalysisWhenItIsNotRequested(): void
