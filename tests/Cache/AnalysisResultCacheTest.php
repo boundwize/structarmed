@@ -923,7 +923,7 @@ final class AnalysisResultCacheTest extends TestCase
                 $anonymousFunctionNodes,
             );
 
-            $loadedWithFileAnalysis = $analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config');
+            $loadedWithFileAnalysis = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config', true);
 
             $this->assertIsArray($loadedWithFileAnalysis);
             $this->assertEquals($functionNodes, $loadedWithFileAnalysis['functionNodes']);
@@ -1590,7 +1590,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
-            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config', true));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1621,7 +1621,7 @@ final class AnalysisResultCacheTest extends TestCase
             $classNodes = [$this->makeClassNode($sourceFile)];
             $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', $classNodes, $fileAnalysis);
 
-            $loaded = $analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config');
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'config', true);
 
             $this->assertNotNull($loaded);
             $this->assertEquals($classNodes, $loaded['classNodes']);
@@ -1643,7 +1643,7 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->storeAnalysisNodes($sourceFile, 'config', [$this->makeClassNode($sourceFile)]);
 
-            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config', true));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1707,7 +1707,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertSame($expected, $payload['fileAnalysis']);
 
             $nextRunCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
-            $loaded       = $nextRunCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config');
+            $loaded       = $nextRunCache->loadAnalysisNodes($sourceFile, 'config', true);
             $this->assertNotNull($loaded);
             $this->assertEquals($fileAnalysis, $loaded['fileAnalysis']);
             $this->assertSame($sourceFile, $loaded['fileAnalysis']->file);
@@ -1717,7 +1717,7 @@ final class AnalysisResultCacheTest extends TestCase
             // Explicit empty lists hydrate just like omitted lists.
             $payload['fileAnalysis'] = $expected + ['nonCanonicalKeywordConstants' => [], 'numericLiterals' => []];
             $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
-            $this->assertEquals($loaded, $nextRunCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertEquals($loaded, $nextRunCache->loadAnalysisNodes($sourceFile, 'config', true));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -1822,7 +1822,7 @@ final class AnalysisResultCacheTest extends TestCase
                 $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
 
                 $this->assertNull(
-                    $analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'),
+                    $analysisResultCache->loadAnalysisNodes($sourceFile, 'config', true),
                     $description,
                 );
             }
@@ -1854,7 +1854,7 @@ final class AnalysisResultCacheTest extends TestCase
             $payload['nodes'] = 'invalid';
             $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
 
-            $this->assertNull($analysisResultCache->loadAnalysisNodesWithFileAnalysis($sourceFile, 'config'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config', true));
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);

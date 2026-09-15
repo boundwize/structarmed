@@ -131,12 +131,11 @@ final readonly class AnalysisNodeExtractor
         $filesToParse           = [];
 
         foreach ($files as $file) {
-            $cachedResult = $withFileAnalysis
-                ? $this->analysisResultCache?->loadAnalysisNodesWithFileAnalysis(
-                    $file,
-                    $this->analysisNodeCacheNamespace
-                )
-                : $this->analysisResultCache?->loadAnalysisNodes($file, $this->analysisNodeCacheNamespace);
+            $cachedResult = $this->analysisResultCache?->loadAnalysisNodes(
+                $file,
+                $this->analysisNodeCacheNamespace,
+                $withFileAnalysis
+            );
 
             if ($cachedResult === null) {
                 $filesToParse[] = $file;

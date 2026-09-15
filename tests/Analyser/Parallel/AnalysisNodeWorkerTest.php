@@ -96,7 +96,7 @@ PHP);
         $this->assertSame(0, AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream()));
 
         $cached = (new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir))
-            ->loadAnalysisNodesWithFileAnalysis($srcFile, 'namespace');
+            ->loadAnalysisNodes($srcFile, 'namespace', true);
 
         $this->assertNotNull($cached);
         $this->assertCount(1, $cached['classNodes']);
