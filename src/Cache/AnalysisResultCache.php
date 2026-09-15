@@ -221,28 +221,7 @@ final class AnalysisResultCache
     }
 
     /**
-     * @return array{
-     *     classNodes: list<ClassNode>,
-     *     anonymousClassNodes: list<AnonymousClassNode>,
-     *     fileReferences: list<string>,
-     *     fileInstantiations: list<string>,
-     *     functionNodes: list<FunctionNode>,
-     *     anonymousFunctionNodes: list<AnonymousFunctionNode>
-     * }|null
-     */
-    public function loadAnalysisNodes(string $file, string $namespace): ?array
-    {
-        $payload = $this->analysisNodePayload($file, $namespace);
-
-        if ($payload === null) {
-            return null;
-        }
-
-        return $this->analysisNodeResultFromPayload($payload, $file);
-    }
-
-    /**
-     * @return array{
+     * @return ($withFileAnalysis is true ? array{
      *     classNodes: list<ClassNode>,
      *     anonymousClassNodes: list<AnonymousClassNode>,
      *     fileReferences: list<string>,
@@ -250,9 +229,16 @@ final class AnalysisResultCache
      *     functionNodes: list<FunctionNode>,
      *     anonymousFunctionNodes: list<AnonymousFunctionNode>,
      *     fileAnalysis: FileAnalysis
-     * }|null
+     * } : array{
+     *     classNodes: list<ClassNode>,
+     *     anonymousClassNodes: list<AnonymousClassNode>,
+     *     fileReferences: list<string>,
+     *     fileInstantiations: list<string>,
+     *     functionNodes: list<FunctionNode>,
+     *     anonymousFunctionNodes: list<AnonymousFunctionNode>
+     * })|null
      */
-    public function loadAnalysisNodesWithFileAnalysis(string $file, string $namespace): ?array
+    public function loadAnalysisNodes(string $file, string $namespace, bool $withFileAnalysis = false): ?array
     {
         $payload = $this->analysisNodePayload($file, $namespace);
 
@@ -260,38 +246,18 @@ final class AnalysisResultCache
             return null;
         }
 
-        $fileAnalysis = is_array($payload['fileAnalysis'] ?? null)
-            ? $this->fileAnalysisFromArray($payload['fileAnalysis'], $file)
-            : null;
+        $fileAnalysis = null;
 
-        if (! $fileAnalysis instanceof FileAnalysis) {
-            return null;
+        if ($withFileAnalysis) {
+            $fileAnalysis = is_array($payload['fileAnalysis'] ?? null)
+                ? $this->fileAnalysisFromArray($payload['fileAnalysis'], $file)
+                : null;
+
+            if (! $fileAnalysis instanceof FileAnalysis) {
+                return null;
+            }
         }
 
-        $result = $this->analysisNodeResultFromPayload($payload, $file);
-
-        if ($result === null) {
-            return null;
-        }
-
-        $result['fileAnalysis'] = $fileAnalysis;
-
-        return $result;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return array{
-     *     classNodes: list<ClassNode>,
-     *     anonymousClassNodes: list<AnonymousClassNode>,
-     *     fileReferences: list<string>,
-     *     fileInstantiations: list<string>,
-     *     functionNodes: list<FunctionNode>,
-     *     anonymousFunctionNodes: list<AnonymousFunctionNode>
-     * }|null
-     */
-    private function analysisNodeResultFromPayload(array $payload, string $file): ?array
-    {
         $classNodes             = $this->classNodesFromPayload($payload, $file);
         $anonymousClassNodes    = $this->anonymousClassNodesFromPayload($payload);
         $fileReferences         = $this->fileReferencesFromPayload($payload);
@@ -310,7 +276,7 @@ final class AnalysisResultCache
             return null;
         }
 
-        return [
+        $result = [
             'classNodes'             => $classNodes,
             'anonymousClassNodes'    => $anonymousClassNodes,
             'fileReferences'         => $fileReferences,
@@ -318,6 +284,12 @@ final class AnalysisResultCache
             'functionNodes'          => $functionNodes,
             'anonymousFunctionNodes' => $anonymousFunctionNodes,
         ];
+
+        if ($fileAnalysis instanceof FileAnalysis) {
+            $result['fileAnalysis'] = $fileAnalysis;
+        }
+
+        return $result;
     }
 
     /** @return array<string, mixed>|null */
