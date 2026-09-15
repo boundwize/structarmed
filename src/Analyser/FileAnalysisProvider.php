@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use Boundwize\StructArmed\Util\Path;
+use Boundwize\StructArmed\Util\PhpParser\UnconditionallyDeclaredFunctions;
 use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
@@ -169,7 +170,7 @@ final class FileAnalysisProvider
 
         if ($hasValidAst) {
             $ast                  = $this->resolvedAst($file, $ast ?? []);
-            $this->localFunctions = $this->declaredFunctions($ast);
+            $this->localFunctions = UnconditionallyDeclaredFunctions::names($ast);
             $fileState            = $this->fileState($ast);
             $this->localFunctions = [];
         }
@@ -603,29 +604,6 @@ final class FileAnalysisProvider
         $namespacedName = $expr->name->getAttribute('namespacedName');
 
         return ! $namespacedName instanceof Name || ! isset($this->localFunctions[$namespacedName->toLowerString()]);
-    }
-
-    /**
-     * @param array<Node> $nodes
-     * @return array<string, true>
-     */
-    private function declaredFunctions(array $nodes): array
-    {
-        $functions = [];
-
-        foreach ($nodes as $node) {
-            if (($node instanceof Namespace_ || $node instanceof Declare_) && $node->stmts !== null) {
-                $functions += $this->declaredFunctions($node->stmts);
-
-                continue;
-            }
-
-            if ($node instanceof Function_) {
-                $functions[($node->namespacedName ?? $node->name)->toLowerString()] = true;
-            }
-        }
-
-        return $functions;
     }
 
     /** `defined('X') || define('X', ...)` and `!defined('X') && define('X', ...)` patterns */

@@ -1269,6 +1269,86 @@ PHP;
         $this->assertTrue($classNode->callsFunction('App\Domain\Dangerous'));
     }
 
+    public function testKeepsCallUnqualifiedWhenNamespacedFunctionIsDeclaredInsideAnotherFunction(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App;
+
+function boot(): void
+{
+    function strlen(string $value): int
+    {
+        return 999;
+    }
+}
+
+final class Service
+{
+    public function run(): int
+    {
+        return strlen('abc');
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        // App\strlen only exists once boot() has run: until then strlen()
+        // falls back to the global function, so the call stays unqualified.
+        $this->assertSame(['strlen'], $classNode->functionCalls);
+    }
+
+    public function testKeepsCallUnqualifiedWhenNamespacedFunctionIsDeclaredConditionally(): void
+    {
+        $code      = <<<'PHP_WRAP'
+        <?php
+        namespace App;
+        
+        if (PHP_VERSION_ID > 0) {
+            function strlen(string $value): int
+            {
+                return 999;
+            }
+        }
+        
+        final class Service
+        {
+            public function run(): int
+            {
+                return strlen('abc');
+            }
+        }
+        PHP_WRAP;
+        $classNode = $this->collect($code);
+
+        $this->assertSame(['strlen'], $classNode->functionCalls);
+    }
+
+    public function testResolvesSameNamespaceFunctionCallDeclaredInsideDeclareBlock(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App;
+
+declare(ticks=1) {
+    function dangerous(): void
+    {
+    }
+}
+
+final class Service
+{
+    public function run(): void
+    {
+        dangerous();
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertSame(['App\dangerous'], $classNode->functionCalls);
+    }
+
     public function testResolvesQualifiedCallViaNamespaceAlias(): void
     {
         $code      = <<<'PHP'
