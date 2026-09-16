@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Util;
 
+use function array_slice;
+use function count;
+use function explode;
+use function implode;
 use function ltrim;
 use function preg_replace;
 use function realpath;
 use function rtrim;
+use function str_repeat;
 use function str_contains;
 use function str_ends_with;
 use function str_replace;
@@ -82,6 +87,41 @@ final class Path
             self::resolve('composer.json', $basePath),
             canonicalise: true,
         );
+    }
+
+    /**
+     * Expresses $path relative to an already normalised, canonical base path.
+     */
+    public static function relativeTo(string $path, string $normalisedBasePath): string
+    {
+        $normalisedPath = self::normalise($path, canonicalise: true);
+
+        if ($normalisedPath === $normalisedBasePath) {
+            return '';
+        }
+
+        if (str_starts_with($normalisedPath, $normalisedBasePath . '/')) {
+            return substr($normalisedPath, strlen($normalisedBasePath) + 1);
+        }
+
+        // Out-of-tree file (e.g. a PSR-4 path such as "../shared/src/"): walk up to the
+        // common ancestor so the result stays portable between checkouts.
+        $baseSegments = explode('/', $normalisedBasePath);
+        $pathSegments = explode('/', $normalisedPath);
+        $common       = 0;
+
+        while (
+            isset($baseSegments[$common], $pathSegments[$common])
+            && $baseSegments[$common] === $pathSegments[$common]
+        ) {
+            ++$common;
+        }
+
+        if ($common === 0) {
+            return $normalisedPath;
+        }
+
+        return str_repeat('../', count($baseSegments) - $common) . implode('/', array_slice($pathSegments, $common));
     }
 
     private static function isAbsolute(string $path): bool

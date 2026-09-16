@@ -40,7 +40,7 @@ return Architecture::define()
         'PHPUnit'       => ['Analyser', 'Baseline', 'Cache', 'Config', 'Exception', 'Progress', 'Report', 'Rule'],
         'Preset'        => ['Core', 'Rule', 'Util'],
         'Progress'      => ['Cli'],
-        'Report'        => ['Cli', 'Core', 'Rule'],
+        'Report'        => ['Cli', 'Core', 'Rule', 'Util'],
         'Rule'          => ['Analyser', 'Composer', 'Core', 'Util'],
         'Util'          => [],
     ])

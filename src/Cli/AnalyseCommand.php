@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
+use Boundwize\StructArmed\Report\Reports\GithubReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
@@ -90,7 +91,7 @@ final readonly class AnalyseCommand
         [$options, $scanPaths] = $parsedArguments;
         $reportType            = $options['report'] ?? 'console';
 
-        if (! in_array($reportType, ['console', 'json'], true)) {
+        if (! in_array($reportType, ['console', 'json', 'github'], true)) {
             echo sprintf("Invalid report type: %s\n\n", $reportType);
             echo Usage::render();
 
@@ -246,7 +247,7 @@ final readonly class AnalyseCommand
             }
         }
 
-        if ($reportType === 'console' && $fixedCount > 0) {
+        if ($reportType !== 'json' && $fixedCount > 0) {
             echo PHP_EOL . $this->fixedViolationMessage($fixedCount) . PHP_EOL;
         }
 
@@ -272,6 +273,7 @@ final readonly class AnalyseCommand
 
         echo match ($reportType) {
             'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
+            'github' => (new GithubReport($basePath))->render($ruleViolationCollection, $elapsed),
             default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
         };
 
