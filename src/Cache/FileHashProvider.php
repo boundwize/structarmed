@@ -23,7 +23,7 @@ final class FileHashProvider
             return $this->hashes[$file];
         }
 
-        $hash = hash_file('xxh128', $file);
+        $hash = @hash_file('xxh128', $file);
 
         if ($hash === false) {
             return '';
