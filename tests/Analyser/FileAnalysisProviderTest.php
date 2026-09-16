@@ -173,6 +173,29 @@ final class FileAnalysisProviderTest extends TestCase
         }
     }
 
+    public function testUsesSuppliedLocalFunctionsInsteadOfWalkingTheAstForThem(): void
+    {
+        $file = $this->source(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            define('FOO', 'bar');
+            PHP);
+
+        // Walked by the provider, the file declares no App\define(), so the call
+        // is the global built-in and counts as a symbol declaration.
+        $this->assertFalse((new FileAnalysisProvider())->analyse($file)->hasSideEffects);
+
+        // Supplied names take precedence: told the file declares App\define(),
+        // the same call is a local function call and therefore a side effect.
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($file, localFunctions: ['app\\define' => true]);
+
+        $this->assertFalse($fileAnalysis->declaresSymbols);
+        $this->assertTrue($fileAnalysis->hasSideEffects);
+        $this->assertSame(5, $fileAnalysis->sideEffectLine);
+    }
+
     public function testResolvesNamesAgainAfterReplacedResolvedAstIsReleased(): void
     {
         $file = $this->source(<<<'PHP'

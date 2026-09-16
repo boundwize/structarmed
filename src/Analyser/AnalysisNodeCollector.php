@@ -493,6 +493,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
+     * Lower-cased namespaced names of the functions the file traversed last
+     * declares unconditionally, see {@see UnconditionallyDeclaredFunctions}.
+     *
+     * @return array<string, true>
+     */
+    public function getFileFunctions(): array
+    {
+        return $this->fileFunctions;
+    }
+
+    /**
      * Class-like instantiations (`new X`, with self/static/parent resolved to
      * the class names they target), per file. `new` on an abstract class is
      * fatal, so these are what an extended class needs to stay concrete.

@@ -188,6 +188,39 @@ PHP);
         $this->assertSame($fileAnalysis, $fileAnalysisProvider->analyse($file));
     }
 
+    public function testExtractResolvesLocalFunctionsForTheFileAnalysisFromItsOwnTraversal(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $file = $dir . '/functions.php';
+
+        file_put_contents($file, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+function define(string $name, mixed $value): void
+{
+}
+
+define('FOO', 'bar');
+PHP);
+
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
+        $extractionResult       = (new AnalysisNodeExtractor($namespaceLayerResolver))->extract([$file]);
+
+        // The unqualified call resolves to the local App\Domain\define(), not the
+        // built-in, so it is a side effect and the file only declares that function.
+        $fileAnalysis = $extractionResult->fileAnalyses[$file];
+
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertTrue($fileAnalysis->hasSideEffects);
+        $this->assertSame(9, $fileAnalysis->sideEffectLine);
+
+        // The function names the collector handed over match what a standalone
+        // provider gathers from the AST itself.
+        $this->assertEquals($fileAnalysis, (new FileAnalysisProvider())->analyse($file));
+    }
+
     public function testExtractSkipsFileAnalysisWhenItIsNotRequested(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');
