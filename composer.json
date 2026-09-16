@@ -69,7 +69,7 @@
         "rector": "rector process --dry-run",
         "docs:serve": "bin/docs-serve",
         "test": "phpunit",
-        "structarmed": "php bin/structarmed analyze"
+        "structarmed": "php bin/structarmed analyze --report=github"
     },
     "bin": [
         "bin/structarmed"
