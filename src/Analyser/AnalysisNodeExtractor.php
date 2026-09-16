@@ -61,6 +61,7 @@ final readonly class AnalysisNodeExtractor
                 $ast                          = $this->fileAnalysisProvider->ast($fileToParse, $withFileAnalysis);
                 $nonCanonicalKeywordConstants = [];
                 $numericLiterals              = [];
+                $fileFunctions                = [];
 
                 if ($ast !== null && $ast !== []) {
                     $analysisNodeCollector->setCurrentFile($fileToParse, $this->fileAnalysisProvider->tokens());
@@ -68,6 +69,7 @@ final readonly class AnalysisNodeExtractor
 
                     $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();
                     $numericLiterals              = $analysisNodeCollector->getNumericLiterals();
+                    $fileFunctions                = $analysisNodeCollector->getFileFunctions();
 
                     // The same traversal ran NameResolver, so the file analysis
                     // reuses its AST instead of resolving names in a second walk.
@@ -83,6 +85,7 @@ final readonly class AnalysisNodeExtractor
                         $fileToParse,
                         $nonCanonicalKeywordConstants,
                         $numericLiterals,
+                        $fileFunctions,
                     );
                 }
             } finally {

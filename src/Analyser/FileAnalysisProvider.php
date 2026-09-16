@@ -147,11 +147,16 @@ final class FileAnalysisProvider
      *                                                               walks the AST for them itself.
      * @param list<array{int, string, int|float}> $numericLiterals Numeric literals recorded by the
      *                                                               same analysis-node traversal.
+     * @param array<string, true>|null $localFunctions Lower-cased namespaced names of the functions
+     *                                                 the file declares unconditionally, as the same
+     *                                                 traversal collected them; null makes the
+     *                                                 provider gather them from the AST itself.
      */
     public function analyse(
         string $file,
         array $nonCanonicalKeywordConstants = [],
         array $numericLiterals = [],
+        ?array $localFunctions = null,
     ): FileAnalysis {
         $file = Path::normalise($file, canonicalise: true);
 
@@ -170,7 +175,7 @@ final class FileAnalysisProvider
 
         if ($hasValidAst) {
             $ast                  = $this->resolvedAst($file, $ast ?? []);
-            $this->localFunctions = UnconditionallyDeclaredFunctions::names($ast);
+            $this->localFunctions = $localFunctions ?? UnconditionallyDeclaredFunctions::names($ast);
             $fileState            = $this->fileState($ast);
             $this->localFunctions = [];
         }

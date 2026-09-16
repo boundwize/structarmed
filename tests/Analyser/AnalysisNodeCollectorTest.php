@@ -123,6 +123,31 @@ PHP);
         $this->assertSame([], $analysisNodeCollector->getNumericLiterals());
     }
 
+    public function testExposesUnconditionallyDeclaredFunctionsOfTheFileTraversedLast(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+namespace App;
+
+function Helper(): void
+{
+}
+
+if (true) {
+    function conditional(): void
+    {
+    }
+}
+PHP);
+
+        $this->assertSame(['app\\helper' => true], $analysisNodeCollector->getFileFunctions());
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Bar.php');
+
+        $this->assertSame([], $analysisNodeCollector->getFileFunctions());
+    }
+
     private function collect(string $code): ClassNode
     {
         $nodes = $this->collectNodes($code);
