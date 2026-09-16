@@ -84,7 +84,7 @@ final class AnalysisResultCache
     ) {
         $this->cacheDirectory = CachePathFactory::getPath($cacheDirectory, $basePath);
         $composerFile         = rtrim($basePath, '/') . '/composer.json';
-        $this->composerHash   = file_exists($composerFile) ? $fileHashProvider->hash($composerFile) : '';
+        $this->composerHash   = $fileHashProvider->hash($composerFile);
     }
 
     /**
