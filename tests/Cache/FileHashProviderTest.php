@@ -49,7 +49,7 @@ final class FileHashProviderTest extends TestCase
         $file             = $directory . '/created-later.php';
         $fileHashProvider = new FileHashProvider();
 
-        $this->assertSame('', @$fileHashProvider->hash($file));
+        $this->assertSame('', $fileHashProvider->hash($file));
 
         file_put_contents($file, '<?php echo "created later";');
 
