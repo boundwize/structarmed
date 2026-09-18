@@ -10,6 +10,7 @@ use Boundwize\StructArmed\LayerResolver\Resolvers\ClassNameRegexLayerResolver;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Tests\ArchitectureTest;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function dirname;
@@ -107,6 +108,68 @@ final class NamespaceLayerResolverTest extends TestCase
         );
 
         $this->assertSame('Infrastructure', $layer);
+    }
+
+    #[DataProvider('provideSourceLayerNames')]
+    public function testSpecificLayerWinsOverEquallySpecificSourceLayer(string $sourceLayerName): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                $sourceLayerName => ['lib/', 'src/'],
+                'Application'    => 'src/',
+            ],
+            basePath: $this->basePath
+        );
+
+        $filePath = $this->basePath . '/src/PlaceOrder.php';
+
+        $this->assertSame('Application', $namespaceLayerResolver->resolve('App\\PlaceOrder', $filePath));
+        $this->assertSame(
+            [$sourceLayerName, 'Application'],
+            $namespaceLayerResolver->resolveAll('App\\PlaceOrder', $filePath)
+        );
+    }
+
+    #[DataProvider('provideSourceLayerNames')]
+    public function testMoreSpecificSourceLayerStillWinsOverSpecificLayer(string $sourceLayerName): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                'Application'    => 'src/',
+                $sourceLayerName => 'src/Generated/',
+            ],
+            basePath: $this->basePath
+        );
+
+        $layer = $namespaceLayerResolver->resolve(
+            'App\\Generated\\Proxy',
+            $this->basePath . '/src/Generated/Proxy.php'
+        );
+
+        $this->assertSame($sourceLayerName, $layer);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function provideSourceLayerNames(): iterable
+    {
+        yield 'bare' => ['Source'];
+        yield 'single path' => ['Source[src/]'];
+        yield 'multiple paths' => ['Source[lib/,src/]'];
+    }
+
+    public function testFirstRegisteredLayerWinsBetweenEquallySpecificOrdinaryLayers(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                'Sourcing'    => 'src/',
+                'Application' => 'src/',
+            ],
+            basePath: $this->basePath
+        );
+
+        $layer = $namespaceLayerResolver->resolve('App\\PlaceOrder', $this->basePath . '/src/PlaceOrder.php');
+
+        $this->assertSame('Sourcing', $layer);
     }
 
     public function testDoesNotResolveSiblingPathWithSamePrefix(): void

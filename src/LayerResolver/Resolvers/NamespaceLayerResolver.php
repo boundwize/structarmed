@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\LayerResolver\Resolvers;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\Path;
+use Boundwize\StructArmed\Util\SourceLayerName;
 
 use function str_starts_with;
 use function strlen;
@@ -60,7 +61,14 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
                 if (str_starts_with($pathWithSlash, $layerPath)) {
                     $length = strlen($layerPath);
 
-                    if ($length > $matchedLength) {
+                    // A Source layer represents preset source scope: on an equally
+                    // specific match it yields to an architectural layer, regardless
+                    // of registration order.
+                    $isSourceTie = $length === $matchedLength
+                        && SourceLayerName::matches((string) $matchedLayer)
+                        && ! SourceLayerName::matches((string) $layerName);
+
+                    if ($length > $matchedLength || $isSourceTie) {
                         $matchedLayer  = $layerName;
                         $matchedLength = $length;
                     }
