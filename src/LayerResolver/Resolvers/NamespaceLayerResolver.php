@@ -61,9 +61,9 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
                 if (str_starts_with($pathWithSlash, $layerPath)) {
                     $length = strlen($layerPath);
 
-                    // A Source layer is a scan scope: on an equally specific
-                    // match it yields to an architectural layer, whatever the
-                    // registration order.
+                    // A Source layer represents preset source scope: on an equally
+                    // specific match it yields to an architectural layer, regardless
+                    // of registration order.
                     $isSourceTie = $length === $matchedLength
                         && $this->isSourceLayer((string) $matchedLayer)
                         && ! $this->isSourceLayer((string) $layerName);
