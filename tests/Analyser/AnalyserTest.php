@@ -48,7 +48,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function array_filter;
+use function array_keys;
 use function array_map;
+use function array_search;
 use function array_values;
 use function count;
 use function dirname;
@@ -4188,6 +4190,98 @@ final class AnalyserTest extends TestCase
             ->forRule('ruleset.Application');
 
         $this->assertCount(0, $violations);
+    }
+
+    #[DataProvider('provideArchitecturesWithSourceLayerSharingApplicationPath')]
+    public function testAnalyserRulesetUsesSpecificLayerOverEquallySpecificSourceLayer(
+        string $sourceLayerName,
+        Architecture $architecture,
+    ): void {
+        $basePath = $this->makeTempProject([
+            'composer.json'             => '{"autoload":{"psr-4":{"App\\\\":"src/"}}}',
+            'src/PlaceOrder.php'        => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use Domain\Order;
+                use Infrastructure\Mailer;
+
+                final class PlaceOrder
+                {
+                    public function __construct(private Order $order, private Mailer $mailer) {}
+                }
+                PHP,
+            'domain/Order.php'          => <<<'PHP'
+                <?php
+
+                namespace Domain;
+
+                final class Order {}
+                PHP,
+            'infrastructure/Mailer.php' => <<<'PHP'
+                <?php
+
+                namespace Infrastructure;
+
+                final class Mailer {}
+                PHP,
+        ]);
+
+        $architecture
+            ->layer('Application', 'src/')
+            ->layer('Domain', 'domain/')
+            ->layer('Infrastructure', 'infrastructure/')
+            ->ruleset([
+                'Application' => ['Domain'],
+            ]);
+
+        // The preset registered its Source layer before Application.
+        $layerNames = array_keys($architecture->getLayers());
+        $this->assertContains($sourceLayerName, $layerNames);
+        $this->assertLessThan(
+            array_search('Application', $layerNames, true),
+            array_search($sourceLayerName, $layerNames, true)
+        );
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture)
+            ->forRule('ruleset.Application');
+
+        $this->assertCount(1, $violations);
+        $this->assertSame(
+            'Class [App\\PlaceOrder] in layer [Application] must not depend on [Infrastructure\\Mailer] '
+            . 'which belongs to layer [Infrastructure]',
+            $violations[0]->message
+        );
+    }
+
+    /** @return iterable<string, array{string, Architecture}> */
+    public static function provideArchitecturesWithSourceLayerSharingApplicationPath(): iterable
+    {
+        yield 'bare Source resolved from composer.json' => [
+            'Source',
+            Architecture::define()->withPreset(Preset::PSR4()),
+        ];
+
+        yield 'bare Source with explicit path' => [
+            'Source',
+            Architecture::define()->withPreset(Preset::PSR4(sourcePaths: ['src/'])),
+        ];
+
+        yield 'disambiguated single-path Source' => [
+            'Source[src/]',
+            Architecture::define()
+                ->withPreset(Preset::PSR4(sourcePaths: ['lib/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['src/'])),
+        ];
+
+        yield 'disambiguated multi-path Source' => [
+            'Source[lib/,src/]',
+            Architecture::define()
+                ->withPreset(Preset::PSR4(sourcePaths: ['app/']))
+                ->withPreset(Preset::PSR1(sourcePaths: ['src/', 'lib/'])),
+        ];
     }
 
     public function testAnalyserRulesetUsesPathLayerWhenCallerIsExcludedFromPatternLayer(): void
