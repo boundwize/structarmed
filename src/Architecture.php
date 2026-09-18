@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Util\SourceLayerName;
 use InvalidArgumentException;
 
 use function array_filter;
@@ -20,8 +21,6 @@ use function array_unique;
 use function array_values;
 use function is_int;
 use function sprintf;
-use function str_ends_with;
-use function str_starts_with;
 
 /**
  * Fluent architecture definition builder.
@@ -147,7 +146,7 @@ final class Architecture
      */
     public function layerPattern(string $name, string|array $pattern, string|array|null $excludePattern = null): self
     {
-        if ($name === 'Source' || (str_starts_with($name, 'Source[') && str_ends_with($name, ']'))) {
+        if (SourceLayerName::matches($name)) {
             throw new InvalidArgumentException(
                 sprintf(
                     'Layer name "%s" is reserved for the path-based Source layer registered via ->layer(). '
