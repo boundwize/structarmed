@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 /**
- * @internal
+ * @api
  */
 final class NodeAttributes
 {
