@@ -164,7 +164,13 @@ final readonly class Analyser
         }
 
         $layerPatterns      = $architecture->getLayerPatterns();
-        $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
+        $layerExcludePaths  = $architecture->getLayerExcludePaths();
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
+            $layers,
+            $this->basePath,
+            $layerPatterns,
+            $layerExcludePaths
+        );
 
         $files          ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
         $withFileAnalysis = $fileAnalysisRules !== [];
@@ -176,6 +182,7 @@ final readonly class Analyser
             $chainLayerResolver,
             $analyserOptions ?? AnalyserOptions::parallel(),
             $withFileAnalysis,
+            $layerExcludePaths,
         );
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
@@ -1278,6 +1285,7 @@ final readonly class Analyser
      *     pattern: string|list<string>,
      *     excludePattern: string|list<string|null>|null
      * }> $layerPatterns
+     * @param array<string, list<string>> $layerExcludePaths
      */
     private function collectAnalysisNodes(
         array $files,
@@ -1287,6 +1295,7 @@ final readonly class Analyser
         ChainLayerResolver $chainLayerResolver,
         ?AnalyserOptions $analyserOptions = null,
         bool $withFileAnalysis = true,
+        array $layerExcludePaths = [],
     ): ExtractionResult {
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
@@ -1302,6 +1311,7 @@ final readonly class Analyser
                 $this->analysisResultCache?->getCacheDirectory(),
                 $this->analysisResultCache,
                 $this->analysisNodeCacheNamespace,
+                $layerExcludePaths,
             ))->extract($files, $progressHandler, $withFileAnalysis);
         } else {
             $extractionResult = (new AnalysisNodeExtractor(

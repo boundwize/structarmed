@@ -48,10 +48,17 @@ final readonly class AnalysisNodeWorker
              * }> $layerPatterns
              */
             $layerPatterns = $payload['layerPatterns'];
+            /** @var array<string, list<string>> $layerExcludePaths */
+            $layerExcludePaths = $payload['layerExcludePaths'] ?? [];
             /** @var list<string> $files */
             $files = $payload['files'];
 
-            $layerResolver = ChainLayerResolver::fromLayerConfig($layers, $basePath, $layerPatterns);
+            $layerResolver = ChainLayerResolver::fromLayerConfig(
+                $layers,
+                $basePath,
+                $layerPatterns,
+                $layerExcludePaths
+            );
 
             $stream = $outputStream ?? STDOUT;
 

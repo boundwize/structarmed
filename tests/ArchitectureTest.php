@@ -48,6 +48,33 @@ final class ArchitectureTest extends TestCase
         $this->assertSame(['Source' => ['src/', 'tests/']], $architecture->getLayers());
     }
 
+    public function testLayerRegistrationAcceptsExcludePath(): void
+    {
+        $architecture = Architecture::define()
+            ->layer('Logger', 'src/Logger/', excludePath: 'src/Logger/Factory/')
+            ->layer('Storage', 'src/Storage/', excludePath: ['src/Storage/Cache/', 'src/Storage/Lock/'])
+            ->layer('Factory', 'src/Logger/Factory/');
+
+        $this->assertSame(
+            [
+                'Logger'  => ['src/Logger/Factory/'],
+                'Storage' => ['src/Storage/Cache/', 'src/Storage/Lock/'],
+                'Factory' => [],
+            ],
+            $architecture->getLayerExcludePaths()
+        );
+        $this->assertSame('src/Logger/', $architecture->getLayers()['Logger']);
+    }
+
+    public function testRedefiningLayerWithoutExcludePathClearsIt(): void
+    {
+        $architecture = Architecture::define()
+            ->layer('Logger', 'src/Logger/', excludePath: 'src/Logger/Factory/')
+            ->layer('Logger', 'src/Logger/');
+
+        $this->assertSame(['Logger' => []], $architecture->getLayerExcludePaths());
+    }
+
     public function testSkipPathsAreRegistered(): void
     {
         $architecture = Architecture::define()

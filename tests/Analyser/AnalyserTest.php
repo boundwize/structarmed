@@ -4070,6 +4070,58 @@ final class AnalyserTest extends TestCase
         $this->assertStringContainsString('Database', $violations[0]->message);
     }
 
+    public function testAnalyserRulesetTreatsExcludedNestedPathAsSeparateLayer(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Logger/FileLogger.php'            => <<<'PHP'
+                <?php
+
+                namespace App\Logger;
+
+                use App\Logger\Factory\LoggerFactory;
+
+                final class FileLogger
+                {
+                    public function __construct(private LoggerFactory $factory) {}
+                }
+                PHP,
+            'src/Logger/Factory/LoggerFactory.php' => <<<'PHP'
+                <?php
+
+                namespace App\Logger\Factory;
+
+                final class LoggerFactory {}
+                PHP,
+        ]);
+
+        $nestedArchitecture = Architecture::define()
+            ->layer('Logger', 'src/Logger/')
+            ->layer('Factory', 'src/Logger/Factory/')
+            ->ruleset(['Logger' => []]);
+
+        $excludedArchitecture = Architecture::define()
+            ->layer('Logger', 'src/Logger/', excludePath: 'src/Logger/Factory/')
+            ->layer('Factory', 'src/Logger/Factory/')
+            ->ruleset(['Logger' => []]);
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            // Without excludePath the Factory class is still part of Logger: same-layer, allowed.
+            $this->assertCount(
+                0,
+                (new Analyser($basePath))
+                    ->analyse($nestedArchitecture, [], null, $analyserOptions)
+                    ->forRule('ruleset.Logger')
+            );
+
+            $violations = (new Analyser($basePath))
+                ->analyse($excludedArchitecture, [], null, $analyserOptions)
+                ->forRule('ruleset.Logger');
+
+            $this->assertCount(1, $violations);
+            $this->assertStringContainsString('Factory', $violations[0]->message);
+        }
+    }
+
     public function testAnalyserRulesetKeepsPathLayerWhenDependencyAlsoMatchesRegexLayer(): void
     {
         $basePath = $this->makeTempProject([
