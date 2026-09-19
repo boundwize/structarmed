@@ -30,6 +30,20 @@ Each class is assigned a layer based on which registered `layer()` path its file
 ->layer('Infrastructure', 'src/Infrastructure/')
 ```
 
+### Excluding A Nested Path From A Layer
+
+A path layer owns everything under its path. When a nested directory is registered as its own layer, its classes belong to **both** layers: rules targeting the parent layer still apply to them, and the ruleset treats parent-to-child dependencies as same-layer.
+
+Pass `excludePath` to carve the nested directory out of the parent layer:
+
+```php
+// Files under src/Logger/Factory/ resolve to 'Factory' only, not 'Logger'.
+->layer('Logger', 'src/Logger/', excludePath: 'src/Logger/Factory/')
+->layer('Factory', 'src/Logger/Factory/')
+```
+
+`excludePath` accepts a single path or a list of paths. An excluded path that is not registered as another layer resolves to no layer.
+
 ## Namespace-Based Layers
 
 When your architecture is expressed through namespace conventions rather than directory structure, use `layerPattern()` to resolve layers by matching the fully-qualified class name against a regex.
