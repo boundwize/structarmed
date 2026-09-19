@@ -59,6 +59,7 @@ final readonly class ParallelAnalysisNodeExtractor
      *     pattern: string|list<string>,
      *     excludePattern: string|list<string|null>|null
      * }> $layerPatterns
+     * @param array<string, list<string>> $layerExcludePaths
      */
     public function __construct(
         private string $basePath,
@@ -68,6 +69,7 @@ final readonly class ParallelAnalysisNodeExtractor
         private ?string $cacheDirectory = null,
         private ?AnalysisResultCache $analysisResultCache = null,
         private string $analysisNodeCacheNamespace = '',
+        private array $layerExcludePaths = [],
     ) {
     }
 
@@ -102,14 +104,15 @@ final readonly class ParallelAnalysisNodeExtractor
             ] = $this->createWorkerFiles($cacheDirectory);
 
             file_put_contents($inputFile, serialize([
-                'basePath'         => $this->basePath,
-                'layers'           => $this->layers,
-                'layerPatterns'    => $this->layerPatterns,
-                'files'            => $chunk,
-                'emitProgress'     => $emitProgress,
-                'withFileAnalysis' => $withFileAnalysis,
-                'cache'            => $this->analysisResultCache?->forFiles($chunk),
-                'cacheNamespace'   => $this->analysisNodeCacheNamespace,
+                'basePath'          => $this->basePath,
+                'layers'            => $this->layers,
+                'layerPatterns'     => $this->layerPatterns,
+                'layerExcludePaths' => $this->layerExcludePaths,
+                'files'             => $chunk,
+                'emitProgress'      => $emitProgress,
+                'withFileAnalysis'  => $withFileAnalysis,
+                'cache'             => $this->analysisResultCache?->forFiles($chunk),
+                'cacheNamespace'    => $this->analysisNodeCacheNamespace,
             ]));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName

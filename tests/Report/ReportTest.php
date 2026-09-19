@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Report;
 
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
+use Boundwize\StructArmed\Report\Reports\GithubReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
@@ -14,9 +15,11 @@ use PHPUnit\Framework\TestCase;
 
 use function json_decode;
 
+use const PHP_EOL;
 use const PHP_FLOAT_EPSILON;
 
 #[CoversClass(ConsoleReport::class)]
+#[CoversClass(GithubReport::class)]
 #[CoversClass(JsonReport::class)]
 #[CoversClass(Version::class)]
 final class ReportTest extends TestCase
@@ -114,6 +117,31 @@ final class ReportTest extends TestCase
         $this->assertIsArray($data['violations'][0]);
         $this->assertIsString($data['violations'][0]['message']);
         $this->assertStringContainsString("\xEF\xBF\xBD", $data['violations'][0]['message']);
+    }
+
+    public function testGithubReportRendersNothingForPassingResult(): void
+    {
+        $this->assertSame('', (new GithubReport('/project'))->render(new RuleViolationCollection(), 0.12));
+    }
+
+    public function testGithubReportRendersAnnotationsWithRelativePaths(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add(new RuleViolation(
+            message:   "Line one\nLine two: 100%",
+            file:      '/project/src/Order.php',
+            line:      10,
+            className: 'App\\Domain\\Order',
+            ruleKey:   'rule:key,with-separators',
+        ));
+
+        $report = (new GithubReport('/project'))->render($ruleViolationCollection, 0.34);
+
+        $this->assertSame(
+            '::error file=src/Order.php,line=10,title=rule%3Akey%2Cwith-separators::Line one%0ALine two: 100%25'
+                . PHP_EOL,
+            $report
+        );
     }
 
     private function violation(): RuleViolation

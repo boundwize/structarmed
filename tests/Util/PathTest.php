@@ -80,6 +80,23 @@ final class PathTest extends TestCase
         $this->assertSame($expected, Path::isAnalysableFile($path, $basePath));
     }
 
+    /**
+     * @return Iterator<string, array{string, string, string}>
+     */
+    public static function provideRelativeTo(): Iterator
+    {
+        yield 'inside base' => ['/project/src/Foo.php', '/project', 'src/Foo.php'];
+        yield 'base itself' => ['/project', '/project', ''];
+        yield 'sibling of base' => ['/shared/src/Foo.php', '/project', '../shared/src/Foo.php'];
+        yield 'no common ancestor' => ['C:/other/Foo.php', '/project', 'C:/other/Foo.php'];
+    }
+
+    #[DataProvider('provideRelativeTo')]
+    public function testRelativeTo(string $path, string $normalisedBasePath, string $expected): void
+    {
+        $this->assertSame($expected, Path::relativeTo($path, $normalisedBasePath));
+    }
+
     public function testMemoisesNormalisedAndResolvedPaths(): void
     {
         $path = __DIR__ . '/../Util/PathTest.php';

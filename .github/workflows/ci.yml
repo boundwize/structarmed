@@ -47,7 +47,9 @@ jobs:
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Run Structarmed
-        run: composer structarmed
+        # Annotate the pull request from one matrix job only, otherwise every
+        # job posts the same annotation.
+        run: composer structarmed -- --report=${{ matrix.coverage && 'github' || 'console' }}
 
       - name: Run coding standard check
         run: composer cs-check

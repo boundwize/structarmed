@@ -69,7 +69,12 @@ vendor/bin/structarmed analyse
 # JSON output for CI tools.
 vendor/bin/structarmed analyse --report=json
 vendor/bin/structarmed analyze --report=json
+
+# GitHub Actions annotations.
+vendor/bin/structarmed analyse --report=github
 ```
+
+The `github` report prints one `::error file=...,line=...,title=...::message` workflow command per violation and nothing else, so GitHub Actions shows each violation inline on the pull request. File paths are relative to the project root.
 
 ## Parallel Processing
 

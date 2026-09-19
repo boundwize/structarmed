@@ -13,25 +13,17 @@ use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
 use function array_keys;
-use function array_slice;
 use function assert;
-use function count;
 use function dirname;
-use function explode;
 use function file_exists;
 use function file_put_contents;
-use function implode;
 use function is_array;
 use function is_dir;
 use function is_scalar;
 use function json_encode;
 use function rtrim;
 use function sprintf;
-use function str_repeat;
 use function str_replace;
-use function str_starts_with;
-use function strlen;
-use function substr;
 
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
@@ -85,7 +77,7 @@ final readonly class Baseline
         $violations          = [];
 
         foreach ($ruleViolationCollection as $violation) {
-            $relativeFile = $this->relativePath($violation->file, $normalisedBasePath);
+            $relativeFile = Path::relativeTo($violation->file, $normalisedBasePath);
             $violations[] = [
                 'rule'    => $violation->ruleKey,
                 'message' => $this->relativeMessagePath(
@@ -173,7 +165,7 @@ final readonly class Baseline
         array $messagePathPrefixes,
     ): string {
         $file         = $this->stringValue($violation['file'] ?? null);
-        $relativeFile = $this->relativePath($file, $normalisedBasePath);
+        $relativeFile = Path::relativeTo($file, $normalisedBasePath);
 
         return (string) json_encode([
             'rule'    => $this->stringValue($violation['rule'] ?? null),
@@ -204,7 +196,7 @@ final readonly class Baseline
         string $normalisedBasePath,
         array $messagePathPrefixes,
     ): string {
-        $relativeFile = $this->relativePath($ruleViolation->file, $normalisedBasePath);
+        $relativeFile = Path::relativeTo($ruleViolation->file, $normalisedBasePath);
 
         return (string) json_encode([
             'rule'    => $ruleViolation->ruleKey,
@@ -251,37 +243,5 @@ final readonly class Baseline
         }
 
         return array_keys($prefixes);
-    }
-
-    private function relativePath(string $path, string $normalisedBasePath): string
-    {
-        $normalisedPath = Path::normalise($path, canonicalise: true);
-
-        if ($normalisedPath === $normalisedBasePath) {
-            return '';
-        }
-
-        if (str_starts_with($normalisedPath, $normalisedBasePath . '/')) {
-            return substr($normalisedPath, strlen($normalisedBasePath) + 1);
-        }
-
-        // Out-of-tree file (e.g. a PSR-4 path such as "../shared/src/"): walk up to the
-        // common ancestor so the baseline stays portable between checkouts.
-        $baseSegments = explode('/', $normalisedBasePath);
-        $pathSegments = explode('/', $normalisedPath);
-        $common       = 0;
-
-        while (
-            isset($baseSegments[$common], $pathSegments[$common])
-            && $baseSegments[$common] === $pathSegments[$common]
-        ) {
-            ++$common;
-        }
-
-        if ($common === 0) {
-            return $normalisedPath;
-        }
-
-        return str_repeat('../', count($baseSegments) - $common) . implode('/', array_slice($pathSegments, $common));
     }
 }

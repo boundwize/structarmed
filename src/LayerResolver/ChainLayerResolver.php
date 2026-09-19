@@ -33,16 +33,21 @@ final class ChainLayerResolver implements LayerResolverInterface
      *     pattern: string|list<string>,
      *     excludePattern: string|list<string|null>|null
      * }> $layerPatterns
+     * @param array<string, list<string>> $layerExcludePaths
      */
-    public static function fromLayerConfig(array $layers, string $basePath, array $layerPatterns = []): self
-    {
+    public static function fromLayerConfig(
+        array $layers,
+        string $basePath,
+        array $layerPatterns = [],
+        array $layerExcludePaths = [],
+    ): self {
         return $layerPatterns !== []
             ? new self(
                 new ClassNameRegexLayerResolver($layerPatterns),
-                new NamespaceLayerResolver($layers, $basePath)
+                new NamespaceLayerResolver($layers, $basePath, $layerExcludePaths)
             )
             : new self(
-                new NamespaceLayerResolver($layers, $basePath)
+                new NamespaceLayerResolver($layers, $basePath, $layerExcludePaths)
             );
     }
 

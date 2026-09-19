@@ -30,24 +30,23 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
     private array $normalisedLayers;
 
     /**
+     * Path prefixes carved out of a layer, normalised like $normalisedLayers.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $normalisedLayerExcludePaths;
+
+    /**
      * @param array<string, string|list<string>> $layers  Map of layer name → path prefixes
+     * @param array<string, string|list<string>> $layerExcludePaths  Map of layer name → excluded path prefixes
      */
     public function __construct(
         array $layers,
         string $basePath,
+        array $layerExcludePaths = [],
     ) {
-        $normalisedLayers = [];
-
-        foreach ($layers as $layerName => $layerPaths) {
-            foreach ((array) $layerPaths as $layerPath) {
-                $normalisedLayers[$layerName][] = Path::normalise(
-                    Path::resolve($layerPath, $basePath),
-                    canonicalise: true
-                ) . '/';
-            }
-        }
-
-        $this->normalisedLayers = $normalisedLayers;
+        $this->normalisedLayers            = $this->normalisePaths($layers, $basePath);
+        $this->normalisedLayerExcludePaths = $this->normalisePaths($layerExcludePaths, $basePath);
     }
 
     public function resolve(string $className, string $filePath): ?string
@@ -57,6 +56,10 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         $matchedLength = -1;
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
+            if ($this->isExcluded($layerName, $pathWithSlash)) {
+                continue;
+            }
+
             foreach ($layerPaths as $layerPath) {
                 if (str_starts_with($pathWithSlash, $layerPath)) {
                     $length = strlen($layerPath);
@@ -88,6 +91,10 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         $matched       = [];
 
         foreach ($this->normalisedLayers as $layerName => $layerPaths) {
+            if ($this->isExcluded($layerName, $pathWithSlash)) {
+                continue;
+            }
+
             foreach ($layerPaths as $layerPath) {
                 if (str_starts_with($pathWithSlash, $layerPath)) {
                     $matched[] = $layerName;
@@ -97,5 +104,36 @@ final readonly class NamespaceLayerResolver implements LayerResolverInterface
         }
 
         return $matched;
+    }
+
+    private function isExcluded(int|string $layerName, string $pathWithSlash): bool
+    {
+        foreach ($this->normalisedLayerExcludePaths[$layerName] ?? [] as $excludePath) {
+            if (str_starts_with($pathWithSlash, $excludePath)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, string|list<string>> $paths
+     * @return array<string, list<string>>
+     */
+    private function normalisePaths(array $paths, string $basePath): array
+    {
+        $normalisedPaths = [];
+
+        foreach ($paths as $layerName => $layerPaths) {
+            foreach ((array) $layerPaths as $layerPath) {
+                $normalisedPaths[$layerName][] = Path::normalise(
+                    Path::resolve($layerPath, $basePath),
+                    canonicalise: true
+                ) . '/';
+            }
+        }
+
+        return $normalisedPaths;
     }
 }
