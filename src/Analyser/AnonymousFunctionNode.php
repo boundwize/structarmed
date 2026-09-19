@@ -24,7 +24,7 @@ final readonly class AnonymousFunctionNode
      * Scope label reported by {@see enclosingScopeName()} for an anonymous
      * function declared outside any class-like or named function.
      */
-    public const FILE_SCOPE = 'file scope';
+    public const FILE_SCOPE = NodeAttributes::FILE_SCOPE;
 
     /** @var list<string> */
     public array $layers;
