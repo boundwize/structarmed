@@ -42,7 +42,7 @@ Pass `excludePath` to carve the nested directory out of the parent layer:
 ->layer('Factory', 'src/Logger/Factory/')
 ```
 
-`excludePath` accepts a single path or a list of paths. An excluded path that is not registered as another layer resolves to no layer.
+`excludePath` accepts a single path or a list of paths. It only removes the files from that one layer: they still resolve to any other `layer()` whose path covers them (including `Source`) and to any matching `layerPattern()`. When nothing else matches, they resolve to no layer.
 
 ## Namespace-Based Layers
 
