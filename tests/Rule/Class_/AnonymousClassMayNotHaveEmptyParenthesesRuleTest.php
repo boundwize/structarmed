@@ -231,6 +231,43 @@ final class AnonymousClassMayNotHaveEmptyParenthesesRuleTest extends TestCase
             PHP, file_get_contents($file));
     }
 
+    /**
+     * A `#` or `//` comment ends at the newline before the parentheses, so that
+     * newline stays, or `{` would become part of the comment.
+     */
+    public function testFixKeepsNewlineEndingLineCommentBeforeParentheses(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-anonymous-class-parentheses-comment');
+        $file     = $basePath . '/Factory.php';
+
+        file_put_contents($file, <<<'PHP'
+            <?php
+
+            $a = new class # why
+                () {};
+            $b = new class // why
+                () extends Foo {};
+
+            PHP);
+
+        $anonymousClassMayNotHaveEmptyParenthesesRule = new AnonymousClassMayNotHaveEmptyParenthesesRule('Source');
+
+        $this->assertTrue($anonymousClassMayNotHaveEmptyParenthesesRule->fix(
+            new RuleViolation('message', $file, 3, 'file scope'),
+            new RuleViolation('message', $file, 5, 'file scope'),
+        ));
+
+        $this->assertSame(<<<'PHP'
+            <?php
+
+            $a = new class # why
+                 {};
+            $b = new class // why
+                 extends Foo {};
+
+            PHP, file_get_contents($file));
+    }
+
     /** @param list<string> $layers */
     private function makeNode(
         ?string $layer = 'Source',

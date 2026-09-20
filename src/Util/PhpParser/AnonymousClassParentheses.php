@@ -9,6 +9,7 @@ use PhpParser\Token;
 
 use function end;
 use function in_array;
+use function str_starts_with;
 
 use const T_CLASS;
 use const T_COMMENT;
@@ -71,7 +72,18 @@ final class AnonymousClassParentheses
             $first--;
         }
 
+        // A `#` or `//` comment ends at the newline that whitespace holds, so
+        // removing it would pull what follows the parentheses into the comment.
+        if (self::isLineComment($tokens[$first - 1])) {
+            $first = $open;
+        }
+
         return [$first, $close];
+    }
+
+    private static function isLineComment(Token $token): bool
+    {
+        return $token->id === T_COMMENT && ! str_starts_with($token->text, '/*');
     }
 
     /** @param array<Token> $tokens */

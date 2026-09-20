@@ -61,6 +61,9 @@ final class AnonymousClassParenthesesTest extends TestCase
         yield 'comment inside parentheses' => ['<?php new class (/* none */) {};', null];
         yield 'comment before parentheses' => ['<?php new class /* c */ () {};', ' ()'];
         yield 'doc comment before parentheses' => ["<?php new class /** c */\n() {};", "\n()"];
+        yield 'hash comment before parentheses' => ["<?php new class # c\n () {};", '()'];
+        yield 'slash comment before parentheses' => ["<?php new class // c\n\t() {};", '()'];
+        yield 'line comment then block comment before parentheses' => ["<?php new class # c\n/* d */ () {};", ' ()'];
         yield 'named class' => ['<?php class Foo {}', null];
     }
 
