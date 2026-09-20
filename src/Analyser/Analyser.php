@@ -39,7 +39,6 @@ use function array_merge;
 use function array_unique;
 use function array_values;
 use function getcwd;
-use function in_array;
 use function is_dir;
 use function is_file;
 use function sprintf;
@@ -334,21 +333,22 @@ final readonly class Analyser
                     continue;
                 }
 
-                // Same-layer dependencies are always allowed, whether the shared
-                // layer is the dependency's primary layer or a secondary one.
-                // The explicit primary-layer check is not redundant: for a dep
-                // whose primary layer is a PSR-4 catch-all, $depLayers is
-                // regex-resolved only and need not contain the primary layer.
-                $isSameLayer = $primaryLayer === $classNode->layer
-                    || in_array($classNode->layer, $depLayers, true);
-
-                if ($isSameLayer) {
+                // Same primary layer is always allowed. This check is not redundant
+                // with the loop below: for a dep whose primary layer is a PSR-4
+                // catch-all, $depLayers is regex-resolved only and need not
+                // contain the primary layer.
+                if ($primaryLayer === $classNode->layer) {
                     continue;
                 }
 
-                // A dependency is permitted when any of its layers is explicitly allowed,
-                // regardless of whether the dependency was scanned or regex-resolved.
+                // A dependency is permitted when any of its layers is the class's own
+                // layer (shared secondary layer) or is explicitly allowed, regardless
+                // of whether the dependency was scanned or regex-resolved.
                 foreach ($depLayers as $depLayer) {
+                    if ($classNode->layer === $depLayer) {
+                        continue 2;
+                    }
+
                     if (isset($allowedLayerMap[$depLayer])) {
                         continue 2;
                     }
