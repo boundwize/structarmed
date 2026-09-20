@@ -117,6 +117,25 @@ final class AnalyserTest extends TestCase
         };
     }
 
+    private function makeFunctionRuleReturning(RuleViolation $violation): FunctionRuleInterface
+    {
+        return new class ($violation) implements FunctionRuleInterface {
+            public function __construct(private readonly RuleViolation $violation)
+            {
+            }
+
+            public function appliesTo(FunctionNode $functionNode): bool
+            {
+                return true;
+            }
+
+            public function evaluate(FunctionNode $functionNode): RuleViolation
+            {
+                return $this->violation;
+            }
+        };
+    }
+
     /** @return array<string, string> */
     private function functionRuleProjectFiles(): array
     {
@@ -154,25 +173,9 @@ final class AnalyserTest extends TestCase
             functionName: 'App\\dirty',
         );
 
-        $rule = new class ($violation) implements FunctionRuleInterface {
-            public function __construct(private readonly RuleViolation $violation)
-            {
-            }
-
-            public function appliesTo(FunctionNode $functionNode): bool
-            {
-                return true;
-            }
-
-            public function evaluate(FunctionNode $functionNode): ?RuleViolation
-            {
-                return $this->violation;
-            }
-        };
-
         $architecture = Architecture::define()
             ->layer('Source', 'src/')
-            ->rule('functions.annotated', $rule);
+            ->rule('functions.annotated', $this->makeFunctionRuleReturning($violation));
 
         $violations = (new Analyser($basePath))
             ->analyse($architecture, analyserOptions: AnalyserOptions::sequential())
@@ -180,6 +183,36 @@ final class AnalyserTest extends TestCase
 
         $this->assertCount(1, $violations);
         $this->assertSame($violation, $violations[0]);
+    }
+
+    public function testAnalyserReplacesViolationWithMismatchedRuleMetadata(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/helpers.php' => '<?php namespace App; function dirty(): void {}',
+        ]);
+
+        $violation = new RuleViolation(
+            message:      'Function [App\\dirty] is invalid',
+            file:         $basePath . '/src/helpers.php',
+            line:         1,
+            className:    'App\\dirty',
+            layer:        'Source',
+            ruleKey:      'functions.wrong',
+            functionName: 'App\\dirty',
+        );
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.annotated', $this->makeFunctionRuleReturning($violation));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, analyserOptions: AnalyserOptions::sequential())
+            ->forRule('functions.annotated');
+
+        $this->assertCount(1, $violations);
+        $this->assertNotSame($violation, $violations[0]);
+        $this->assertSame('functions.annotated', $violations[0]->ruleKey);
+        $this->assertFalse($violations[0]->fixable);
     }
 
     public function testFunctionRulesSkipNodesTheyDoNotApplyTo(): void
