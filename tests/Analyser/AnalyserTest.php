@@ -138,6 +138,50 @@ final class AnalyserTest extends TestCase
         ];
     }
 
+    public function testAnalyserReusesViolationWithMatchingRuleMetadata(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/helpers.php' => '<?php namespace App; function dirty(): void {}',
+        ]);
+
+        $violation = new RuleViolation(
+            message:      'Function [App\\dirty] is invalid',
+            file:         $basePath . '/src/helpers.php',
+            line:         1,
+            className:    'App\\dirty',
+            layer:        'Source',
+            ruleKey:      'functions.annotated',
+            functionName: 'App\\dirty',
+        );
+
+        $rule = new class ($violation) implements FunctionRuleInterface {
+            public function __construct(private readonly RuleViolation $violation)
+            {
+            }
+
+            public function appliesTo(FunctionNode $functionNode): bool
+            {
+                return true;
+            }
+
+            public function evaluate(FunctionNode $functionNode): ?RuleViolation
+            {
+                return $this->violation;
+            }
+        };
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('functions.annotated', $rule);
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, analyserOptions: AnalyserOptions::sequential())
+            ->forRule('functions.annotated');
+
+        $this->assertCount(1, $violations);
+        $this->assertSame($violation, $violations[0]);
+    }
+
     public function testFunctionRulesSkipNodesTheyDoNotApplyTo(): void
     {
         $basePath = $this->makeTempProject($this->functionRuleProjectFiles() + [
