@@ -324,7 +324,7 @@ final readonly class Analyser
                     // layer collected at scan time, including path-based ones.
                     $depLayers = $classLayerMap[$dependency] ?? [$primaryLayer];
                 } else {
-                    // Unscanned or catch-all dep: only class-name regex layers can match.
+                    // Unscanned or catch-all dep: resolve layers without a known file path.
                     $depLayers = $chainLayerResolver->resolveAll($dependency, '');
                 }
 
@@ -335,15 +335,15 @@ final readonly class Analyser
 
                 // Same primary layer is always allowed. This check is not redundant
                 // with the loop below: for a dep whose primary layer is a PSR-4
-                // catch-all, $depLayers is regex-resolved only and need not
-                // contain the primary layer.
+                // catch-all, $depLayers is re-resolved without its file path and
+                // therefore need not contain the primary layer.
                 if ($primaryLayer === $classNode->layer) {
                     continue;
                 }
 
                 // A dependency is permitted when any of its layers is the class's own
                 // layer (shared secondary layer) or is explicitly allowed, regardless
-                // of whether the dependency was scanned or regex-resolved.
+                // of whether the dependency was scanned or resolved without a file path.
                 foreach ($depLayers as $depLayer) {
                     if ($classNode->layer === $depLayer) {
                         continue 2;
