@@ -13,16 +13,20 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\Enum_;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor;
+use PhpParser\NodeVisitor\CloningVisitor;
+use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\ParserFactory;
+use PhpParser\PrettyPrinter\Standard;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ChangeProtectedConstantToPrivateVisitor::class)]
 final class ChangeProtectedConstantToPrivateVisitorTest extends TestCase
 {
-    public function testChangesProtectedConstantToPrivateKeepingOtherModifiers(): void
+    public function testChangesProtectedConstantToPrivate(): void
     {
-        $flags                                   = Modifiers::PROTECTED | Modifiers::FINAL;
-        $classConst                              = $this->makeClassConst('Grey', $flags);
+        $classConst                              = $this->makeClassConst('Grey', Modifiers::PROTECTED);
         $enum                                    = new Enum_('Status', ['stmts' => [$classConst]]);
         $changeProtectedConstantToPrivateVisitor = new ChangeProtectedConstantToPrivateVisitor('App\\Status', 'Grey');
 
@@ -30,7 +34,47 @@ final class ChangeProtectedConstantToPrivateVisitorTest extends TestCase
 
         (new NodeTraverser($changeProtectedConstantToPrivateVisitor))->traverse([$enum]);
 
-        $this->assertSame(Modifiers::PRIVATE | Modifiers::FINAL, $classConst->flags);
+        $this->assertSame(Modifiers::PRIVATE, $classConst->flags);
+    }
+
+    /**
+     * `final private const` is a compile error: "Private constant cannot be
+     * final as it is not visible to other classes".
+     */
+    public function testDropsFinalWhenChangingProtectedConstantToPrivate(): void
+    {
+        $code = <<<'PHP'
+            <?php
+
+            namespace App;
+
+            enum Status
+            {
+                case Draft;
+
+                final protected const Grey = 1;
+            }
+
+            PHP;
+
+        $expected = <<<'PHP'
+            <?php
+
+            namespace App;
+
+            enum Status
+            {
+                case Draft;
+
+                private const Grey = 1;
+            }
+
+            PHP;
+
+        $this->assertSame($expected, $this->fix($code, new ChangeProtectedConstantToPrivateVisitor(
+            'App\\Status',
+            'Grey'
+        )));
     }
 
     public function testDoesNotChangeConstantInNonEnumClassLike(): void
@@ -83,6 +127,18 @@ final class ChangeProtectedConstantToPrivateVisitorTest extends TestCase
         (new NodeTraverser($changeProtectedConstantToPrivateVisitor))->traverse([$enum]);
 
         $this->assertSame(Modifiers::PRIVATE, $classConst->flags);
+    }
+
+    private function fix(string $code, NodeVisitor $nodeVisitor): string
+    {
+        $parser             = (new ParserFactory())->createForNewestSupportedVersion();
+        $originalStatements = $parser->parse($code) ?? [];
+        $statements         = (new NodeTraverser(new CloningVisitor()))->traverse($originalStatements);
+        $statements         = (new NodeTraverser(new NameResolver(options: ['replaceNodes' => false])))
+            ->traverse($statements);
+        $statements         = (new NodeTraverser($nodeVisitor))->traverse($statements);
+
+        return (new Standard())->printFormatPreserving($statements, $originalStatements, $parser->getTokens());
     }
 
     private function makeClassConst(string $constantName, int $flags): ClassConst

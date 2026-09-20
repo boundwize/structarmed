@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassMethod;
 
-use PhpParser\Modifiers;
+use Boundwize\StructArmed\Util\PhpParser\ProtectedToPrivateFlags;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Enum_;
@@ -33,11 +33,12 @@ final class ChangeProtectedMethodToPrivateVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        if (($classMethod->flags & Modifiers::PROTECTED) === 0) {
+        $flags = ProtectedToPrivateFlags::tryFrom($classMethod->flags);
+        if ($flags === null) {
             return null;
         }
 
-        $classMethod->flags = ($classMethod->flags & ~Modifiers::PROTECTED) | Modifiers::PRIVATE;
+        $classMethod->flags = $flags;
 
         return $node;
     }

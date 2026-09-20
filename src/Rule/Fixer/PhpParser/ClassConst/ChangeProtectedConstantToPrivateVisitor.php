@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\ClassConst;
 
-use PhpParser\Modifiers;
+use Boundwize\StructArmed\Util\PhpParser\ProtectedToPrivateFlags;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\Enum_;
@@ -33,11 +33,12 @@ final class ChangeProtectedConstantToPrivateVisitor extends NodeVisitorAbstract
                 continue;
             }
 
-            if (($classConstant->flags & Modifiers::PROTECTED) === 0) {
+            $flags = ProtectedToPrivateFlags::tryFrom($classConstant->flags);
+            if ($flags === null) {
                 return null;
             }
 
-            $classConstant->flags = ($classConstant->flags & ~Modifiers::PROTECTED) | Modifiers::PRIVATE;
+            $classConstant->flags = $flags;
 
             return $node;
         }
