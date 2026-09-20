@@ -37,7 +37,10 @@ final class ChangeProtectedConstantToPrivateVisitor extends NodeVisitorAbstract
                 return null;
             }
 
-            $classConstant->flags = ($classConstant->flags & ~Modifiers::PROTECTED) | Modifiers::PRIVATE;
+            // `final private const` is a compile error, and `final` means
+            // nothing in an enum, which cannot be extended.
+            $classConstant->flags = ($classConstant->flags & ~Modifiers::PROTECTED & ~Modifiers::FINAL)
+                | Modifiers::PRIVATE;
 
             return $node;
         }

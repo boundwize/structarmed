@@ -37,7 +37,10 @@ final class ChangeProtectedMethodToPrivateVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        $classMethod->flags = ($classMethod->flags & ~Modifiers::PROTECTED) | Modifiers::PRIVATE;
+        // `final private function` raises a compile warning, and `final` means
+        // nothing in an enum, which cannot be extended.
+        $classMethod->flags = ($classMethod->flags & ~Modifiers::PROTECTED & ~Modifiers::FINAL)
+            | Modifiers::PRIVATE;
 
         return $node;
     }
