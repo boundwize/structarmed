@@ -39,7 +39,6 @@ use function array_merge;
 use function array_unique;
 use function array_values;
 use function getcwd;
-use function in_array;
 use function is_dir;
 use function is_file;
 use function sprintf;
