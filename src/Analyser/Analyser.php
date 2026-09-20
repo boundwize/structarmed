@@ -205,20 +205,7 @@ final readonly class Analyser
             $isFixable = $rules[$key] instanceof FixableInterface;
 
             foreach ($violations as $violation) {
-                $ruleViolationCollection->add(new RuleViolation(
-                    message:   $violation->message,
-                    file:      $violation->file,
-                    line:      $violation->line,
-                    className: $violation->className,
-                    layer:     $violation->layer,
-                    ruleKey:   $key,
-                    fixable:   $isFixable,
-                    methodName: $violation->methodName,
-                    constantName: $violation->constantName,
-                    propertyName: $violation->propertyName,
-                    functionName: $violation->functionName,
-                    numericLiteral: $violation->numericLiteral,
-                ));
+                $ruleViolationCollection->add($this->ruleViolation($violation, $key, $isFixable));
             }
         }
 
@@ -424,24 +411,33 @@ final readonly class Analyser
 
                     $isFixable = $rule instanceof FixableInterface;
                     foreach ($violations as $violation) {
-                        $ruleViolationCollection->add(new RuleViolation(
-                            message:      $violation->message,
-                            file:         $violation->file,
-                            line:         $violation->line,
-                            className:    $violation->className,
-                            layer:        $violation->layer,
-                            ruleKey:      $key,
-                            fixable:      $isFixable,
-                            methodName:   $violation->methodName,
-                            constantName: $violation->constantName,
-                            propertyName: $violation->propertyName,
-                            functionName: $violation->functionName,
-                            numericLiteral: $violation->numericLiteral,
-                        ));
+                        $ruleViolationCollection->add($this->ruleViolation($violation, $key, $isFixable));
                     }
                 }
             }
         }
+    }
+
+    private function ruleViolation(RuleViolation $ruleViolation, string $ruleKey, bool $fixable): RuleViolation
+    {
+        if ($ruleViolation->ruleKey === $ruleKey && $ruleViolation->fixable === $fixable) {
+            return $ruleViolation;
+        }
+
+        return new RuleViolation(
+            message:        $ruleViolation->message,
+            file:           $ruleViolation->file,
+            line:           $ruleViolation->line,
+            className:      $ruleViolation->className,
+            layer:          $ruleViolation->layer,
+            ruleKey:        $ruleKey,
+            fixable:        $fixable,
+            methodName:     $ruleViolation->methodName,
+            constantName:   $ruleViolation->constantName,
+            propertyName:   $ruleViolation->propertyName,
+            functionName:   $ruleViolation->functionName,
+            numericLiteral: $ruleViolation->numericLiteral,
+        );
     }
 
     /**
