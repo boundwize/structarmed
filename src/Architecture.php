@@ -50,6 +50,9 @@ final class Architecture
     /** @var array<string, string|list<string>> name → path prefixes */
     private array $layers = [];
 
+    /** @var array<string, list<string>> name → path prefixes excluded from the layer */
+    private array $layerExcludePaths = [];
+
     /**
      * @var array<string, RuleInterface|ProjectRuleInterface|FunctionRuleInterface|AnonymousFunctionRuleInterface
      *      |AnonymousClassRuleInterface> key → rule
@@ -123,11 +126,15 @@ final class Architecture
     // -------------------------------------------------------------------------
 
     /**
-     * @param string|list<string> $path
+     * @param string|list<string>      $path
+     * @param string|list<string>|null $excludePath Optional path prefixes; files under these are excluded
+     *                                              from the layer even when $path matches, e.g. a nested
+     *                                              directory registered as its own layer.
      */
-    public function layer(string $name, string|array $path): self
+    public function layer(string $name, string|array $path, string|array|null $excludePath = null): self
     {
-        $this->layers[$name] = $path;
+        $this->layers[$name]            = $path;
+        $this->layerExcludePaths[$name] = (array) $excludePath;
 
         return $this;
     }
@@ -399,6 +406,12 @@ final class Architecture
     public function getLayers(): array
     {
         return $this->layers;
+    }
+
+    /** @return array<string, list<string>> */
+    public function getLayerExcludePaths(): array
+    {
+        return $this->layerExcludePaths;
     }
 
     /**

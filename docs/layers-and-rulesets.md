@@ -30,6 +30,43 @@ Each class is assigned a layer based on which registered `layer()` path its file
 ->layer('Infrastructure', 'src/Infrastructure/')
 ```
 
+### Multiple Layer Paths
+
+You can assign a layer using multiple paths.
+
+```php
+return Architecture::define()
+    ->layer('Service', [
+        'src/Service/',
+        'src/Application/Service/',
+    ]);
+```
+
+### Excluding A Nested Path From A Layer
+
+A path layer owns everything under its path. When a nested directory is registered as its own layer, its classes belong to **both** layers: rules targeting the parent layer still apply to them, and the ruleset treats parent-to-child dependencies as same-layer.
+
+An optional third argument carves the nested directory out of the parent layer:
+
+```php
+// Files under src/Logger/Factory/ resolve to 'Factory' only, not 'Logger'.
+->layer('Logger',  'src/Logger/', 'src/Logger/Factory/')
+->layer('Factory', 'src/Logger/Factory/')
+```
+
+Use an array of exclude paths when several nested directories should be omitted from the same parent layer.
+
+```php
+->layer('Logger', 'src/Logger/', [
+    'src/Logger/Factory/',
+    'src/Logger/Formatter/',
+])
+```
+
+With the configuration above, files such as `src/Logger/FileLogger.php` still resolve to `Logger`, while files under `src/Logger/Factory/` and `src/Logger/Formatter/` do not.
+
+Excluding only removes the files from that one layer: they still resolve to any other `layer()` whose path covers them (including `Source`) and to any matching `layerPattern()`. When nothing else matches, they resolve to no layer.
+
 ## Namespace-Based Layers
 
 When your architecture is expressed through namespace conventions rather than directory structure, use `layerPattern()` to resolve layers by matching the fully-qualified class name against a regex.
@@ -41,48 +78,7 @@ return Architecture::define()
     ->layerPattern('Router', '/^App\\\\Router\\\\.*$/');
 ```
 
-## Declarative Rulesets
-
-Once layers are defined, declare which layers each layer is allowed to depend on. Any dependency that resolves to a layer outside the allowed list is a violation.
-
-```php
-return Architecture::define()
-    ->layerPattern('API',      '/^App\\\\API\\\\.*$/')
-    ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
-    ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
-    ->ruleset([
-        'API'      => ['HTTP'],     // API may only depend on HTTP.
-        'HTTP'     => ['Database'], // HTTP may only depend on Database.
-        'Database' => [],           // Database may not depend on any layer.
-    ]);
-```
-
-Layers absent from the ruleset keys are not checked. Dependencies on external, non-registered classes are always allowed.
-
-Same-layer dependencies are always allowed regardless of the ruleset.
-
-## Inheriting Allowed Layers
-
-Use the `+` prefix to merge a layer's allowed dependencies into another layer's allowed list.
-
-```php
-->ruleset([
-    'API'        => ['Format'],
-    'Controller' => ['Validation'],
-    'RESTful'    => ['+API', '+Controller'],
-])
-```
-
-Each `+LayerName` entry expands to that layer itself plus all layers it is allowed to depend on.
-
-```diff
--'RESTful' => ['API', 'Format', 'Controller', 'Validation'],
-+'RESTful' => ['+API', '+Controller'],
-```
-
-When the allowed layers of `API` or `Controller` change, `RESTful` picks them up automatically. Unknown `+` references expand to nothing silently.
-
-## Multiple Layer Patterns
+### Multiple Layer Patterns
 
 You can assign a layer using multiple regexes.
 
@@ -94,7 +90,7 @@ return Architecture::define()
     ]);
 ```
 
-## Excluding From Layer Patterns
+### Excluding From Layer Patterns
 
 An optional third argument excludes classes whose FQN matches one or more regexes, even when the layer pattern matches.
 
@@ -117,7 +113,48 @@ Use an array of exclude regexes when several class-name patterns should be omitt
 
 With the configuration above, classes such as `App\HTTP\Request` still resolve to `HTTP`, while `App\HTTP\RequestException` and `App\HTTP\URI` do not.
 
-## Skipping Class-Level Violations
+## Declarative Rulesets
+
+Once layers are defined, declare which layers each layer is allowed to depend on. Any dependency that resolves to a layer outside the allowed list is a violation.
+
+```php
+return Architecture::define()
+    ->layerPattern('API',      '/^App\\\\API\\\\.*$/')
+    ->layerPattern('HTTP',     '/^App\\\\HTTP\\\\.*$/')
+    ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+    ->ruleset([
+        'API'      => ['HTTP'],     // API may only depend on HTTP.
+        'HTTP'     => ['Database'], // HTTP may only depend on Database.
+        'Database' => [],           // Database may not depend on any layer.
+    ]);
+```
+
+Layers absent from the ruleset keys are not checked. Dependencies on external, non-registered classes are always allowed.
+
+Same-layer dependencies are always allowed regardless of the ruleset.
+
+### Inheriting Allowed Layers
+
+Use the `+` prefix to merge a layer's allowed dependencies into another layer's allowed list.
+
+```php
+->ruleset([
+    'API'        => ['Format'],
+    'Controller' => ['Validation'],
+    'RESTful'    => ['+API', '+Controller'],
+])
+```
+
+Each `+LayerName` entry expands to that layer itself plus all layers it is allowed to depend on.
+
+```diff
+-'RESTful' => ['API', 'Format', 'Controller', 'Validation'],
++'RESTful' => ['+API', '+Controller'],
+```
+
+When the allowed layers of `API` or `Controller` change, `RESTful` picks them up automatically. Unknown `+` references expand to nothing silently.
+
+### Skipping Class-Level Violations
 
 When a specific class-to-class dependency is a known exception, suppress it without disabling the whole layer rule.
 
@@ -130,7 +167,7 @@ When a specific class-to-class dependency is a known exception, suppress it with
 
 The first argument is the fully-qualified violating class name. The second argument is one or more dependency FQNs to ignore for that class.
 
-## Excluding Paths From Ruleset Checks Only
+### Excluding Paths From Ruleset Checks Only
 
 Test files often cross layer boundaries by design. Use `skipPathsForRuleset()` to exclude paths from ruleset evaluation while still scanning them for all other rules, such as PSR-4 namespace checks.
 
