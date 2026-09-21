@@ -119,9 +119,14 @@ final class ReportTest extends TestCase
         $this->assertStringContainsString("\xEF\xBF\xBD", $data['violations'][0]['message']);
     }
 
-    public function testGithubReportRendersNothingForPassingResult(): void
+    public function testGithubReportRendersOnlyConsoleReportForPassingResult(): void
     {
-        $this->assertSame('', (new GithubReport('/project'))->render(new RuleViolationCollection(), 0.12));
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        $this->assertSame(
+            (new ConsoleReport())->render($ruleViolationCollection, 0.12),
+            (new GithubReport('/project'))->render($ruleViolationCollection, 0.12)
+        );
     }
 
     public function testGithubReportRendersAnnotationsWithRelativePaths(): void
@@ -139,7 +144,8 @@ final class ReportTest extends TestCase
 
         $this->assertSame(
             '::error file=src/Order.php,line=10,title=rule%3Akey%2Cwith-separators::Line one%0ALine two: 100%25'
-                . PHP_EOL,
+                . PHP_EOL
+                . (new ConsoleReport())->render($ruleViolationCollection, 0.34),
             $report
         );
     }

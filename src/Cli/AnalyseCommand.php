@@ -277,6 +277,12 @@ final readonly class AnalyseCommand
             default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
         };
 
+        // The github report surfaces violations as pull request annotations,
+        // so the job itself is not failed on top of them.
+        if ($reportType === 'github') {
+            return 0;
+        }
+
         return $ruleViolationCollection->hasViolations() ? 1 : 0;
     }
 
