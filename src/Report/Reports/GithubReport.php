@@ -15,7 +15,8 @@ use const PHP_EOL;
 
 /**
  * Emits one GitHub Actions workflow command per violation, so each one shows
- * up as an inline annotation on the pull request.
+ * up as an inline annotation on the pull request. The console report follows,
+ * so the annotation's "View details" link lands on a readable job log.
  *
  * @see https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-error-message
  */
@@ -40,7 +41,7 @@ final readonly class GithubReport implements ReportInterface
             );
         }
 
-        return $output;
+        return $output . (new ConsoleReport())->render($ruleViolationCollection, $elapsedSeconds);
     }
 
     private function escapeData(string $value): string

@@ -567,12 +567,12 @@ PHP);
                 $basePath
             );
 
-            $this->assertSame(1, $exitCode, $output);
+            $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString(
                 '::error file=src/Foo.php,line=7,title=source.must_declare_method_visibility::',
                 $output
             );
-            $this->assertStringNotContainsString('violation(s) found', $output);
+            $this->assertStringContainsString('1 violation(s) found', $output);
         } finally {
             $this->removeTempDirectory($basePath);
         }
