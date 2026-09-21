@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\PHPUnit\StructArmedExtension;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Runner\Extension\Facade;
@@ -21,8 +22,10 @@ use RuntimeException;
 use function chdir;
 use function file_put_contents;
 use function getcwd;
+use function getenv;
 use function json_encode;
 use function mkdir;
+use function putenv;
 use function var_export;
 
 #[CoversClass(StructArmedExtension::class)]
@@ -44,6 +47,38 @@ final class StructArmedExtensionTest extends TestCase
             $this->configuration(),
             new Facade(),
             $this->parameters($configPath)
+        );
+    }
+
+    private string|false $originalDisabledValue = false;
+
+    protected function setUp(): void
+    {
+        // the suite itself may run with the extension disabled, eg: on CI
+        $this->originalDisabledValue = getenv('STRUCTARMED_DISABLED');
+        putenv('STRUCTARMED_DISABLED');
+    }
+
+    #[After]
+    protected function restoreDisabledEnvironmentVariable(): void
+    {
+        putenv(
+            $this->originalDisabledValue === false
+                ? 'STRUCTARMED_DISABLED'
+                : 'STRUCTARMED_DISABLED=' . $this->originalDisabledValue
+        );
+    }
+
+    public function testBootstrapDoesNothingWhenDisabledByEnvironmentVariable(): void
+    {
+        putenv('STRUCTARMED_DISABLED=1');
+
+        $this->expectOutputString('');
+
+        (new StructArmedExtension())->bootstrap(
+            $this->configuration(),
+            new Facade(),
+            $this->parameters('/missing/structarmed.php')
         );
     }
 
