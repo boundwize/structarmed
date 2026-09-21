@@ -46,7 +46,7 @@ use function str_starts_with;
 use function strtolower;
 use function substr;
 
-final readonly class Analyser
+readonly class Analyser
 {
     private string $basePath;
 
