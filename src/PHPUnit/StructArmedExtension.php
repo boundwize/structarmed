@@ -21,6 +21,7 @@ use PHPUnit\TextUI\Configuration\Configuration;
 
 use function filter_var;
 use function getcwd;
+use function getenv;
 use function microtime;
 use function sprintf;
 
@@ -34,6 +35,10 @@ final class StructArmedExtension implements Extension
         Facade $facade,
         ParameterCollection $parameters
     ): void {
+        if (getenv('STRUCTARMED_DISABLED') === '1') {
+            return;
+        }
+
         $cwd        = getcwd();
         $basePath   = $cwd !== false ? $cwd : '';
         $configFile = $parameters->has('config')
