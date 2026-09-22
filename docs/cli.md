@@ -78,6 +78,16 @@ The `github` report prints one `::error file=...,line=...,title=...::message` wo
 
 The `github` report always exits with `0`: violations surface as annotations instead of failing the job. Use the `console` or `json` report when the job must fail on violations.
 
+## Progress Output
+
+The console report shows a progress bar on stderr while files are parsed. Disable it for CI logs or when piping output:
+
+```bash
+vendor/bin/structarmed analyse --no-progress
+```
+
+The `json` and `github` reports never show a progress bar.
+
 ## Parallel Processing
 
 StructArmed runs in parallel by default. Disable parallel processing when debugging worker issues.

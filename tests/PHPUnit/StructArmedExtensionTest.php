@@ -272,17 +272,35 @@ PHP);
 
     public function testProgressIsEnabledWhenParameterIsMissing(): void
     {
-        $reflectionClass = new ReflectionClass(StructArmedExtension::class);
-
-        $this->assertTrue($reflectionClass->getMethod('isProgressEnabled')->invoke(
-            new StructArmedExtension(),
-            ParameterCollection::fromArray([])
-        ));
+        $this->assertTrue($this->isProgressEnabled($this->configuration(), []));
     }
 
-    private function configuration(): Configuration
+    public function testProgressIsDisabledByPhpUnitNoProgressFlag(): void
     {
-        return (new ReflectionClass(Configuration::class))->newInstanceWithoutConstructor();
+        $this->assertFalse($this->isProgressEnabled($this->configuration(noProgress: true), []));
+        $this->assertFalse($this->isProgressEnabled($this->configuration(noProgress: true), ['progress' => 'true']));
+    }
+
+    /** @param array<string, string> $parameters */
+    private function isProgressEnabled(Configuration $configuration, array $parameters): bool
+    {
+        $result = (new ReflectionClass(StructArmedExtension::class))->getMethod('isProgressEnabled')->invoke(
+            new StructArmedExtension(),
+            $configuration,
+            ParameterCollection::fromArray($parameters)
+        );
+        $this->assertIsBool($result);
+
+        return $result;
+    }
+
+    private function configuration(bool $noProgress = false): Configuration
+    {
+        $reflectionClass = new ReflectionClass(Configuration::class);
+        $configuration   = $reflectionClass->newInstanceWithoutConstructor();
+        $reflectionClass->getProperty('noProgress')->setValue($configuration, $noProgress);
+
+        return $configuration;
     }
 
     private function parameters(?string $configPath = null): ParameterCollection
