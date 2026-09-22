@@ -40,13 +40,13 @@ The extension remains configured in `phpunit.xml`, but it does not analyse anyth
 
 ## Disable Progress Output
 
-The extension shows the same progress bar as `structarmed analyse`. PHPUnit's own `--no-progress` flag also hides it:
+The extension shows the same progress bar as `structarmed analyse`. PHPUnit's own `--no-progress` flag hides it together with PHPUnit's test progress:
 
 ```bash
 vendor/bin/phpunit --no-progress
 ```
 
-To hide it permanently, set the `progress` parameter on the extension:
+To hide only the StructArmed progress bar while keeping PHPUnit's own progress output, set the `progress` parameter on the extension:
 
 ```xml
 <extensions>
