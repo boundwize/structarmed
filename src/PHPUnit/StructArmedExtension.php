@@ -77,9 +77,7 @@ final class StructArmedExtension implements Extension
         $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
 
         if (! $ruleViolationCollection instanceof RuleViolationCollection) {
-            $progressHandler = $this->isProgressEnabled($configuration, $parameters)
-                ? new ConsoleProgressBar()
-                : null;
+            $progressHandler = $this->isProgressEnabled($configuration, $parameters) ? new ConsoleProgressBar() : null;
 
             $ruleViolationCollection = $analyser->analyse(
                 $architecture,
