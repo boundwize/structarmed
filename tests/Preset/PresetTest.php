@@ -23,6 +23,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
 use Boundwize\StructArmed\Rule\Rules\File\LargeNumericLiteralMustUseSeparatorRule;
 use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
+use Boundwize\StructArmed\Rule\Rules\Function_\MustBeUsedFunctionRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -65,6 +66,10 @@ final class PresetTest extends TestCase
         $this->assertInstanceOf(
             ExtendedClassMustBeAbstractOrInstantiatedRule::class,
             $rules[YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED] ?? null
+        );
+        $this->assertInstanceOf(
+            MustBeUsedFunctionRule::class,
+            $rules[YagniPreset::FUNCTION_MUST_BE_USED] ?? null
         );
     }
 

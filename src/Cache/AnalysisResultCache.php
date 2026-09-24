@@ -65,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 10;
+    public const FORMAT_VERSION = 11;
 
     private readonly string $cacheDirectory;
 

@@ -185,7 +185,21 @@ final readonly class ServiceClassMustBeFinalRule implements ExtendedClassAwareRu
 
 `ServiceClassMustBeFinalRule` uses `ExtendedClassAwareRuleInterface`, so the analyser populates `$isExtended` before evaluation. The rule leaves an extended service non-final because making it final would break its scanned child class.
 
-The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedInterfaceRule` implements `UsedInterfaceAwareRuleInterface`, `MustBeUsedTraitRule` implements `UsedTraitAwareRuleInterface`, and `MustBeUsedAbstractClassRule` and `ExtendedClassMustBeAbstractOrInstantiatedRule` implement `ExtendedClassAwareRuleInterface`.
+Named functions follow the same opt-in. A function rule implements the marker instead of the plain `Boundwize\StructArmed\Rule\FunctionRuleInterface`; the marker extends `FunctionRuleInterface`, so no other change is needed:
+
+| Marker interface | Flags populated |
+| --- | --- |
+| `Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface` | `$isReferenced` |
+
+The usage flag describes how each `FunctionNode` is used elsewhere in the scanned paths:
+
+| Flag | Meaning |
+| --- | --- |
+| `$functionNode->isReferenced` | Another scanned scope calls it (including as a first-class callable such as `helper(...)`) or references it by a function-name string such as `'App\helper'`; a function calling only itself does not count |
+
+Without the marker on at least one active rule, `$isReferenced` keeps its default `false`, so a rule that only implements `FunctionRuleInterface` reports every function as unused.
+
+The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedInterfaceRule` implements `UsedInterfaceAwareRuleInterface`, `MustBeUsedTraitRule` implements `UsedTraitAwareRuleInterface`, `MustBeUsedAbstractClassRule` and `ExtendedClassMustBeAbstractOrInstantiatedRule` implement `ExtendedClassAwareRuleInterface`, and `MustBeUsedFunctionRule` implements `UsedFunctionAwareRuleInterface`.
 
 Trade-off: only usage within the scanned paths is known. A class-like used solely by a consumer outside the scan — a vendor package, an unscanned directory, runtime-fed dynamic construction — is reported as if unused. Widen the scan, or use `skipRule()` and skip paths where such consumers exist.
 

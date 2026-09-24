@@ -39,6 +39,19 @@ final class FunctionNodeTest extends TestCase
         $this->assertSame([], $functionNode->layers);
     }
 
+    public function testSetReferencedTogglesIsReferencedFlag(): void
+    {
+        $functionNode = new FunctionNode(functionName: 'helper', file: '/src/helpers.php', line: 1, layer: null);
+
+        $this->assertFalse($functionNode->isReferenced);
+
+        $functionNode->setReferenced(true);
+        $this->assertTrue($functionNode->isReferenced);
+
+        $functionNode->setReferenced(false);
+        $this->assertFalse($functionNode->isReferenced);
+    }
+
     public function testExplicitLayersOverrideSingleLayer(): void
     {
         $functionNode = new FunctionNode(
