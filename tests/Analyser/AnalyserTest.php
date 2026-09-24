@@ -1043,6 +1043,38 @@ final class AnalyserTest extends TestCase
         );
     }
 
+    public function testMustBeUsedFunctionRuleIgnoresFunctionExistsGuardName(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/helpers.php' => <<<'PHP'
+                <?php
+
+                if (! function_exists('unused_helper')) {
+                    function unused_helper(): void {}
+                }
+
+                if (! function_exists('used_helper')) {
+                    function used_helper(): void {}
+                }
+                PHP,
+            'src/bootstrap.php' => <<<'PHP'
+                <?php
+
+                used_helper();
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+        // The function_exists() guard probes for the function, it does not use it.
+        $this->assertSame(['unused_helper'], $this->violationClassNames($violations));
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
     {
         $checker = '<?php namespace App;' . "\n"

@@ -268,6 +268,34 @@ PHP);
         );
     }
 
+    public function testDoesNotCollectFunctionExistsNameAsFileReference(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+
+            if (! function_exists('top_level_helper')) {
+                function top_level_helper(): void {}
+            }
+
+            function guarded(): void
+            {
+                if (! \function_exists('App\nested_helper')) {
+                    function nested_helper(): void {}
+                }
+
+                function_exists();
+                is_callable('App\kept_helper');
+            }
+            PHP);
+
+        // The function_exists() argument probes for a function, it does not
+        // use it; other function-name strings stay references.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\kept_helper']],
+            $analysisNodeCollector->getFileReferences()
+        );
+    }
+
     public function testDoesNotCollectNonClassNameShapedStringValues(): void
     {
         $code = '<?php namespace App;' . "\n"
