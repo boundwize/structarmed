@@ -273,13 +273,15 @@ PHP);
         $analysisNodeCollector = $this->makeCollector(<<<'PHP'
             <?php
 
-            if (! function_exists('top_level_helper')) {
+            namespace App;
+
+            if (! function_exists('App\top_level_helper')) {
                 function top_level_helper(): void {}
             }
 
             function guarded(): void
             {
-                if (! \function_exists('App\nested_helper')) {
+                if (! function_exists('App\nested_helper')) {
                     function nested_helper(): void {}
                 }
 

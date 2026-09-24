@@ -1046,7 +1046,7 @@ final class AnalyserTest extends TestCase
     public function testMustBeUsedFunctionRuleIgnoresFunctionExistsGuardName(): void
     {
         $basePath = $this->makeTempProject([
-            'src/helpers.php' => <<<'PHP'
+            'src/helpers.php'   => <<<'PHP'
                 <?php
 
                 if (! function_exists('unused_helper')) {
