@@ -6,9 +6,11 @@ namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\Function_;
 
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\Function_\RemoveFunctionVisitor;
 use PhpParser\Node\Arg;
+use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
+use PhpParser\Node\Scalar\MagicConst\Namespace_;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Function_;
@@ -101,6 +103,40 @@ final class RemoveFunctionVisitorTest extends TestCase
 
         $this->assertSame([$if], $statements);
         $this->assertSame([], $if->stmts);
+    }
+
+    public function testKeepsNonNegatedFunctionExistsIfEmptiedByRemoval(): void
+    {
+        $function                 = new Function_('unused');
+        $function->namespacedName = new Name('App\\unused');
+
+        $if = new If_(
+            new FuncCall(new Name('function_exists'), [new Arg(new String_('App\\unused'))]),
+            ['stmts' => [$function]]
+        );
+
+        $statements = (new NodeTraverser(new RemoveFunctionVisitor('App\\unused')))
+            ->traverse([$if]);
+
+        $this->assertSame([$if], $statements);
+    }
+
+    public function testKeepsFunctionExistsGuardWithNonLiteralArgument(): void
+    {
+        $function                 = new Function_('unused');
+        $function->namespacedName = new Name('App\\unused');
+
+        $if = new If_(
+            new BooleanNot(new FuncCall(new Name('function_exists'), [
+                new Arg(new Concat(new Namespace_(), new String_('\\unused'))),
+            ])),
+            ['stmts' => [$function]]
+        );
+
+        $statements = (new NodeTraverser(new RemoveFunctionVisitor('App\\unused')))
+            ->traverse([$if]);
+
+        $this->assertSame([$if], $statements);
     }
 
     /** @param list<Function_> $stmts */

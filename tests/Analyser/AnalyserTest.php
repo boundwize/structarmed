@@ -986,7 +986,12 @@ final class AnalyserTest extends TestCase
                 function callableString(): void {}
                 function calledFromTopLevel(): void {}
                 function calledFromFunction(): void {}
-                function caller(): void { calledFromFunction(); }
+                function caller(): void { calledFromFunction(); $closure = static fn () => calledFromClosureInFunction(); }
+                function calledFromClosureInFunction(): void {}
+                function calledFromTopLevelClosure(): void {}
+                function calledFromClosureInClass(): void {}
+
+                $closure = static fn () => calledFromTopLevelClosure();
                 function recursive(int $n): int { return $n > 0 ? recursive($n - 1) : 0; }
                 function unused(): void {}
                 function sharesShortNameWithString(): void {}
@@ -1007,6 +1012,7 @@ final class AnalyserTest extends TestCase
                         $callable = firstClassCallable(...);
                         array_map('App\callableString', []);
                         $label = 'sharesShortNameWithString';
+                        $closure = static fn () => calledFromClosureInClass();
                     }
                 }
                 PHP,
