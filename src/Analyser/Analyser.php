@@ -273,6 +273,7 @@ final readonly class Analyser
         $classPrimaryLayerMap       = $classDependencyMaps['classPrimaryLayerMap'];
 
         $resolvedInheritedDependencies = [];
+        $resolvedDependencyLayers      = [];
 
         foreach ($layerAwareRules as $layerAwareRule) {
             $layerAwareRule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
@@ -336,7 +337,7 @@ final readonly class Analyser
                     $depLayers = $classLayerMap[$dependency] ?? [$primaryLayer];
                 } else {
                     // Unscanned or catch-all dep: resolve layers without a known file path.
-                    $depLayers = $chainLayerResolver->resolveAll($dependency, '');
+                    $depLayers = $resolvedDependencyLayers[$dependency] ??= $chainLayerResolver->resolveAll($dependency, '');
                 }
 
                 if ($depLayers === []) {
