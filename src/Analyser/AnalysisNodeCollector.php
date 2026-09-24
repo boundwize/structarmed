@@ -1106,6 +1106,21 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
+            // A top-level unqualified call in a namespace is not a FullyQualified
+            // node, so it is recorded here under the namespaced name PHP tries
+            // first, keeping the called function alive.
+            if (
+                $node instanceof FuncCall
+                && $node->name instanceof Name
+                && ! $node->name instanceof FullyQualified
+            ) {
+                $namespacedName = $node->name->getAttribute('namespacedName');
+
+                if ($namespacedName instanceof Name) {
+                    $this->currentFileReferences[$namespacedName->toString()] = true;
+                }
+            }
+
             return;
         }
 

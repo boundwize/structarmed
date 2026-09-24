@@ -975,7 +975,7 @@ final class AnalyserTest extends TestCase
     public function testMustBeUsedFunctionRuleRecognizesFunctionUsage(): void
     {
         $basePath = $this->makeTempProject([
-            'src/functions.php' => <<<'PHP'
+            'src/functions.php'            => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -994,13 +994,14 @@ final class AnalyserTest extends TestCase
                 function calledFromClosureInFunction(): void {}
                 function calledFromTopLevelClosure(): void {}
                 function calledFromClosureInClass(): void {}
+                function calledFromNamespacedTopLevel(): void {}
 
                 $closure = static fn () => calledFromTopLevelClosure();
                 function recursive(int $n): int { return $n > 0 ? recursive($n - 1) : 0; }
                 function unused(): void {}
                 function sharesShortNameWithString(): void {}
                 PHP,
-            'src/Consumer.php'  => <<<'PHP'
+            'src/Consumer.php'             => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1020,11 +1021,18 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/bootstrap.php' => <<<'PHP'
+            'src/bootstrap.php'            => <<<'PHP'
                 <?php
 
                 \App\calledFromTopLevel();
                 \App\caller();
+                PHP,
+            'src/namespaced_bootstrap.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                calledFromNamespacedTopLevel();
                 PHP,
         ]);
 
