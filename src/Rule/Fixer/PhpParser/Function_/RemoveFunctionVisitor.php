@@ -46,7 +46,7 @@ final class RemoveFunctionVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        if ($node->namespacedName->toString() !== $this->functionName) {
+        if (strcasecmp($node->namespacedName->toString(), $this->functionName) !== 0) {
             return null;
         }
 

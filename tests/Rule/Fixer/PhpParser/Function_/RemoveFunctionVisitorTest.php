@@ -33,6 +33,17 @@ final class RemoveFunctionVisitorTest extends TestCase
         $this->assertSame([], $statements);
     }
 
+    public function testRemovesMatchingFunctionCaseInsensitively(): void
+    {
+        $function                 = new Function_('unusedHelper');
+        $function->namespacedName = new Name('App\\unusedHelper');
+
+        $statements = (new NodeTraverser(new RemoveFunctionVisitor('app\\UNUSEDHELPER')))
+            ->traverse([$function]);
+
+        $this->assertSame([], $statements);
+    }
+
     public function testKeepsNonMatchingFunction(): void
     {
         $function                 = new Function_('used');
