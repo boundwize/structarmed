@@ -325,8 +325,12 @@ final class FileAnalysisProviderTest extends TestCase
 
         $this->assertSame($hasUtf8Bom, $fileAnalysisProvider->hasUtf8Bom($file));
         $this->assertSame($hasValidUtf8, $fileAnalysisProvider->hasValidUtf8($file));
-        $this->assertSame($invalidPhpTagLine, $fileAnalysisProvider->invalidPhpTagLine($file));
-        $this->assertSame($invalidPhpTagLine, $fileAnalysisProvider->invalidPhpTagLine($file));
+        // Checked twice: the second call is served from the provider's cache.
+        $firstInvalidPhpTagLine  = $fileAnalysisProvider->invalidPhpTagLine($file);
+        $cachedInvalidPhpTagLine = $fileAnalysisProvider->invalidPhpTagLine($file);
+
+        $this->assertSame($invalidPhpTagLine, $firstInvalidPhpTagLine);
+        $this->assertSame($invalidPhpTagLine, $cachedInvalidPhpTagLine);
     }
 
     public function testRecognisesNeutralStatementsAndConditionalDeclarations(): void
