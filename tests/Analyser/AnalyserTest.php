@@ -989,6 +989,7 @@ final class AnalyserTest extends TestCase
                 function caller(): void { calledFromFunction(); }
                 function recursive(int $n): int { return $n > 0 ? recursive($n - 1) : 0; }
                 function unused(): void {}
+                function sharesShortNameWithString(): void {}
                 PHP,
             'src/Consumer.php'  => <<<'PHP'
                 <?php
@@ -1005,6 +1006,7 @@ final class AnalyserTest extends TestCase
                         calledFromOtherFile();
                         $callable = firstClassCallable(...);
                         array_map('App\callableString', []);
+                        $label = 'sharesShortNameWithString';
                     }
                 }
                 PHP,
@@ -1023,8 +1025,12 @@ final class AnalyserTest extends TestCase
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
             ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
 
-        // A function calling only itself is not a usage.
-        $this->assertSame(['App\recursive', 'App\unused'], $this->violationClassNames($violations));
+        // A function calling only itself is not a usage, and a string matching
+        // only the short name of a namespaced function does not reference it.
+        $this->assertSame(
+            ['App\recursive', 'App\sharesShortNameWithString', 'App\unused'],
+            $this->violationClassNames($violations)
+        );
     }
 
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void

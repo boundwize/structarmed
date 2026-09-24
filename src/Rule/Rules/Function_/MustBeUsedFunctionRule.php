@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Function_;
 
 use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\Function_\RemoveFunctionVisitor;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface;
 
 use function sprintf;
 
-final readonly class MustBeUsedFunctionRule implements UsedFunctionAwareRuleInterface
+final readonly class MustBeUsedFunctionRule extends AbstractPhpParserFixableRule implements
+    UsedFunctionAwareRuleInterface
 {
     public function __construct(
         private string $layer,
@@ -48,5 +51,15 @@ final readonly class MustBeUsedFunctionRule implements UsedFunctionAwareRuleInte
             layer:        $functionNode->layer,
             functionName: $functionNode->functionName,
         );
+    }
+
+    protected function createFixerVisitor(RuleViolation $ruleViolation): RemoveFunctionVisitor
+    {
+        return new RemoveFunctionVisitor($ruleViolation->className);
+    }
+
+    protected function shouldRemoveFileWhenEmpty(): bool
+    {
+        return true;
     }
 }

@@ -119,6 +119,7 @@ The following rules implement `Boundwize\StructArmed\Rule\FixableInterface` and 
 | `MustBeUsedInterfaceRule` | Removes an unused interface, deleting its file when only boilerplate remains. |
 | `MustBeUsedAbstractClassRule` | Removes an unused abstract class, deleting its file when only boilerplate remains. |
 | `MustBeUsedTraitRule` | Removes an unused trait, deleting its file when only boilerplate remains. |
+| `MustBeUsedFunctionRule` | Removes an unused function and the `if (! function_exists(...))` guard it leaves empty, deleting its file when only boilerplate remains. |
 | `MustDeclareConstantVisibilityRule` | Adds a missing constant visibility modifier. |
 | `MustDeclareMethodVisibilityRule` | Adds a missing method visibility modifier. |
 | `MustDeclarePropertyVisibilityRule` | Adds a missing property visibility modifier. |
@@ -131,7 +132,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Function_`.
 | Rule | Constructor | Checks |
 |---|---|---|
 | `MustBeStaticAnonymousFunctionRule` | `new MustBeStaticAnonymousFunctionRule(layer: 'Domain')` | Closures and arrow functions in a layer are declared `static`. Anonymous functions that read `$this` (directly or through a nested closure), or are directly object-bound with `Closure::bind()`, `bindTo()`, or `call()`, are skipped. Supports `--fix` by adding the `static` modifier. |
-| `MustBeUsedFunctionRule` | `new MustBeUsedFunctionRule(layer: 'Source', functionNamePattern: '/_helper$/')` | Named functions (optionally only those matching `functionNamePattern`) are called by a scanned scope (including as a first-class callable `helper(...)`) or referenced by a function-name string such as `'App\helper'`. A function calling only itself counts as unused. |
+| `MustBeUsedFunctionRule` | `new MustBeUsedFunctionRule(layer: 'Source', functionNamePattern: '/_helper$/')` | Named functions (optionally only those matching `functionNamePattern`) are called by a scanned scope (including as a first-class callable `helper(...)`) or referenced by a function-name string such as `'App\helper'`. A function calling only itself counts as unused. Supports `--fix` by removing the unused function, along with an `if (! function_exists(...))` guard left with an empty block and no `else`/`elseif` (and deleting its file when only boilerplate remains). |
 | `MustHaveReturnTypeFunctionRule` | `new MustHaveReturnTypeFunctionRule(layer: 'Helper')` | Named function declarations in a layer declare a return type. |
 {: .rule-table }
 

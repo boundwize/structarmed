@@ -956,7 +956,8 @@ final readonly class Analyser
      * (including a first-class callable) or a function-name string such as a
      * callable 'App\helper'. A function calling itself is not a usage. An
      * unqualified call to a namespaced function declared in another file is
-     * recorded under its global fallback name, so a short-name match counts.
+     * recorded under its global fallback name, so a call also matches by short
+     * name; a string does not, as it spells the full name.
      *
      * Calls made in closures are already merged into their enclosing
      * function-like or class-like, so only top-level closures are read.
@@ -965,11 +966,11 @@ final readonly class Analyser
      */
     private function markFunctionUsage(array $classNodes, ExtractionResult $extractionResult): void
     {
-        $used = [];
+        $called = [];
 
         foreach ([...$classNodes, ...$extractionResult->anonymousClassNodes] as $classLikeNode) {
             foreach ($classLikeNode->functionCalls as $functionCall) {
-                $used[strtolower($functionCall)] = true;
+                $called[strtolower($functionCall)] = true;
             }
         }
 
@@ -983,28 +984,33 @@ final readonly class Analyser
             }
 
             foreach ($anonymousFunctionNode->functionCalls as $functionCall) {
-                $used[strtolower($functionCall)] = true;
+                $called[strtolower($functionCall)] = true;
             }
         }
 
         foreach ($extractionResult->functionNodes as $functionNode) {
             foreach ($functionNode->functionCalls as $functionCall) {
                 if (strcasecmp($functionCall, $functionNode->functionName) !== 0) {
-                    $used[strtolower($functionCall)] = true;
+                    $called[strtolower($functionCall)] = true;
                 }
             }
         }
 
+        $referenced = [];
+
         foreach ($extractionResult->fileReferences as $references) {
             foreach ($references as $reference) {
-                $used[strtolower($reference)] = true;
+                $referenced[strtolower($reference)] = true;
             }
         }
 
         foreach ($extractionResult->functionNodes as $functionNode) {
+            $functionNameKey = strtolower($functionNode->functionName);
+
             if (
-                isset($used[strtolower($functionNode->functionName)])
-                || isset($used[strtolower($functionNode->shortName())])
+                isset($called[$functionNameKey])
+                || isset($referenced[$functionNameKey])
+                || isset($called[strtolower($functionNode->shortName())])
             ) {
                 $functionNode->setReferenced(true);
             }

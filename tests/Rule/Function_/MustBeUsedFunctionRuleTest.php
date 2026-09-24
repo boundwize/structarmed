@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Function_;
 
 use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\Function_\RemoveFunctionVisitor;
 use Boundwize\StructArmed\Rule\Rules\Function_\MustBeUsedFunctionRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 #[CoversClass(MustBeUsedFunctionRule::class)]
 final class MustBeUsedFunctionRuleTest extends TestCase
@@ -56,6 +59,23 @@ final class MustBeUsedFunctionRuleTest extends TestCase
             UsedFunctionAwareRuleInterface::class,
             new MustBeUsedFunctionRule(layer: 'Domain')
         );
+    }
+
+    public function testIsFixable(): void
+    {
+        $this->assertInstanceOf(FixableInterface::class, new MustBeUsedFunctionRule(layer: 'Domain'));
+    }
+
+    public function testCreatesRemoveFunctionFixerVisitor(): void
+    {
+        $mustBeUsedFunctionRule = new MustBeUsedFunctionRule(layer: 'Domain');
+        $reflectionMethod       = new ReflectionMethod($mustBeUsedFunctionRule, 'createFixerVisitor');
+        $removeFunctionVisitor  = $reflectionMethod->invoke(
+            $mustBeUsedFunctionRule,
+            $mustBeUsedFunctionRule->evaluate($this->makeNode())
+        );
+
+        $this->assertInstanceOf(RemoveFunctionVisitor::class, $removeFunctionVisitor);
     }
 
     public function testAppliesToLayerWhenNoPatternConfigured(): void
