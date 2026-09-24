@@ -986,7 +986,11 @@ final class AnalyserTest extends TestCase
                 function callableString(): void {}
                 function calledFromTopLevel(): void {}
                 function calledFromFunction(): void {}
-                function caller(): void { calledFromFunction(); $closure = static fn () => calledFromClosureInFunction(); }
+                function caller(): void
+                {
+                    calledFromFunction();
+                    $closure = static fn () => calledFromClosureInFunction();
+                }
                 function calledFromClosureInFunction(): void {}
                 function calledFromTopLevelClosure(): void {}
                 function calledFromClosureInClass(): void {}
