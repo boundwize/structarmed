@@ -206,6 +206,64 @@ final class NamespaceLayerResolverTest extends TestCase
         $this->assertContains('Controller', $layers);
     }
 
+    public function testExcludePathRemovesNestedLayerFromParentLayer(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: [
+                'Logger'  => 'src/Logger/',
+                'Factory' => 'src/Logger/Factory/',
+            ],
+            basePath: $this->basePath,
+            layerExcludePaths: ['Logger' => ['src/Logger/Factory']]
+        );
+
+        $factoryFile = $this->basePath . '/src/Logger/Factory/LoggerFactory.php';
+        $loggerFile  = $this->basePath . '/src/Logger/FileLogger.php';
+
+        $this->assertSame(
+            'Factory',
+            $namespaceLayerResolver->resolve('App\\Logger\\Factory\\LoggerFactory', $factoryFile)
+        );
+        $this->assertSame(
+            ['Factory'],
+            $namespaceLayerResolver->resolveAll('App\\Logger\\Factory\\LoggerFactory', $factoryFile)
+        );
+
+        $this->assertSame('Logger', $namespaceLayerResolver->resolve('App\\Logger\\FileLogger', $loggerFile));
+        $this->assertSame(['Logger'], $namespaceLayerResolver->resolveAll('App\\Logger\\FileLogger', $loggerFile));
+    }
+
+    public function testExcludePathWithoutOwnLayerResolvesToNoLayer(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: ['Logger' => 'src/Logger/'],
+            basePath: $this->basePath,
+            layerExcludePaths: ['Logger' => ['src/Logger/Factory/']]
+        );
+
+        $factoryFile = $this->basePath . '/src/Logger/Factory/LoggerFactory.php';
+
+        $this->assertNull($namespaceLayerResolver->resolve('App\\Logger\\Factory\\LoggerFactory', $factoryFile));
+        $this->assertSame([], $namespaceLayerResolver->resolveAll('App\\Logger\\Factory\\LoggerFactory', $factoryFile));
+    }
+
+    public function testExcludePathDoesNotExcludeSiblingPathWithSamePrefix(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(
+            layers: ['Logger' => 'src/Logger/'],
+            basePath: $this->basePath,
+            layerExcludePaths: ['Logger' => ['src/Logger/Factory']]
+        );
+
+        $this->assertSame(
+            'Logger',
+            $namespaceLayerResolver->resolve(
+                'App\\Logger\\FactoryAware\\Handler',
+                $this->basePath . '/src/Logger/FactoryAware/Handler.php'
+            )
+        );
+    }
+
     public function testResolveAllDoesNotReturnSiblingPathWithSamePrefix(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(
@@ -397,5 +455,23 @@ final class NamespaceLayerResolverTest extends TestCase
 
         $this->assertSame('HTTP', $chainLayerResolver->resolve('App\\HTTP\\Request', ''));
         $this->assertNull($chainLayerResolver->resolve('App\\Other\\Foo', ''));
+    }
+
+    public function testFromLayerConfigPassesLayerExcludePathsToNamespaceResolver(): void
+    {
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
+            ['Logger' => 'src/Logger/', 'Factory' => 'src/Logger/Factory/'],
+            $this->basePath,
+            [],
+            ['Logger' => ['src/Logger/Factory/']]
+        );
+
+        $this->assertSame(
+            ['Factory'],
+            $chainLayerResolver->resolveAll(
+                'App\\Logger\\Factory\\LoggerFactory',
+                $this->basePath . '/src/Logger/Factory/LoggerFactory.php'
+            )
+        );
     }
 }

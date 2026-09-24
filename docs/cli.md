@@ -69,7 +69,24 @@ vendor/bin/structarmed analyse
 # JSON output for CI tools.
 vendor/bin/structarmed analyse --report=json
 vendor/bin/structarmed analyze --report=json
+
+# GitHub Actions annotations.
+vendor/bin/structarmed analyse --report=github
 ```
+
+The `github` report prints one `::error file=...,line=...,title=...::message` workflow command per violation, so GitHub Actions shows each violation inline on the pull request. File paths are relative to the project root. The console report follows the workflow commands, so an annotation's "View details" link lands on a readable job log.
+
+The `github` report always exits with `0`: violations surface as annotations instead of failing the job. Use the `console` or `json` report when the job must fail on violations.
+
+## Progress Output
+
+The console report shows a progress bar on stderr while files are parsed. Disable it for CI logs or when piping output:
+
+```bash
+vendor/bin/structarmed analyse --no-progress
+```
+
+The `json` and `github` reports never show a progress bar.
 
 ## Parallel Processing
 

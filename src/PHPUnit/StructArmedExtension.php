@@ -21,6 +21,7 @@ use PHPUnit\TextUI\Configuration\Configuration;
 
 use function filter_var;
 use function getcwd;
+use function getenv;
 use function microtime;
 use function sprintf;
 
@@ -34,6 +35,10 @@ final class StructArmedExtension implements Extension
         Facade $facade,
         ParameterCollection $parameters
     ): void {
+        if (getenv('STRUCTARMED_DISABLED') === '1') {
+            return;
+        }
+
         $cwd        = getcwd();
         $basePath   = $cwd !== false ? $cwd : '';
         $configFile = $parameters->has('config')
@@ -72,7 +77,7 @@ final class StructArmedExtension implements Extension
         $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
 
         if (! $ruleViolationCollection instanceof RuleViolationCollection) {
-            $progressHandler = $this->isProgressEnabled($parameters) ? new ConsoleProgressBar() : null;
+            $progressHandler = $this->isProgressEnabled($configuration, $parameters) ? new ConsoleProgressBar() : null;
 
             $ruleViolationCollection = $analyser->analyse(
                 $architecture,
@@ -97,8 +102,16 @@ final class StructArmedExtension implements Extension
         }
     }
 
-    private function isProgressEnabled(ParameterCollection $parameterCollection): bool
+    /**
+     * PHPUnit's own --no-progress flag wins; otherwise the extension's
+     * "progress" bootstrap parameter decides, defaulting to enabled.
+     */
+    private function isProgressEnabled(Configuration $configuration, ParameterCollection $parameterCollection): bool
     {
+        if ($configuration->noProgress()) {
+            return false;
+        }
+
         if (! $parameterCollection->has('progress')) {
             return true;
         }

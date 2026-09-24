@@ -14,13 +14,13 @@ use function substr;
  * file or a namespace. Closures and arrow functions are
  * {@see AnonymousFunctionNode}s instead.
  */
-final readonly class FunctionNode
+final class FunctionNode
 {
     use NameQueryTrait;
     use NodeQueryTrait;
 
     /** @var list<string> */
-    public array $layers;
+    public readonly array $layers;
 
     /**
      * @param string       $functionName       Fully-qualified function name
@@ -31,21 +31,33 @@ final readonly class FunctionNode
      * @param list<string> $layers             All layer names this function belongs to; defaults to [$layer]
      */
     public function __construct(
-        public string $functionName,
-        public string $file,
-        public int $line,
-        public ?string $layer,
-        public bool $hasReturnType = false,
-        public int $paramCount = 0,
-        public int $cyclomaticComplexity = 1,
-        public int $lineCount = 0,
-        public array $dependencies = [],
-        public array $functionCalls = [],
-        public array $superglobals = [],
-        public array $languageConstructs = [],
+        public readonly string $functionName,
+        public readonly string $file,
+        public readonly int $line,
+        public readonly ?string $layer,
+        public readonly bool $hasReturnType = false,
+        public readonly int $paramCount = 0,
+        public readonly int $cyclomaticComplexity = 1,
+        public readonly int $lineCount = 0,
+        public readonly array $dependencies = [],
+        public readonly array $functionCalls = [],
+        public readonly array $superglobals = [],
+        public readonly array $languageConstructs = [],
         array $layers = [],
+        public bool $isReferenced = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
+    }
+
+    /**
+     * Whether another scanned scope references this function — a call, a
+     * first-class callable, or a function-name string. Computed by the
+     * analyser for rules implementing UsedFunctionAwareRuleInterface; false
+     * otherwise.
+     */
+    public function setReferenced(bool $isReferenced): void
+    {
+        $this->isReferenced = $isReferenced;
     }
 
     public function shortName(): string

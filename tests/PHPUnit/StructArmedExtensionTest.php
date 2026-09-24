@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\PHPUnit\StructArmedExtension;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Runner\Extension\Facade;
@@ -21,8 +22,10 @@ use RuntimeException;
 use function chdir;
 use function file_put_contents;
 use function getcwd;
+use function getenv;
 use function json_encode;
 use function mkdir;
+use function putenv;
 use function var_export;
 
 #[CoversClass(StructArmedExtension::class)]
@@ -44,6 +47,38 @@ final class StructArmedExtensionTest extends TestCase
             $this->configuration(),
             new Facade(),
             $this->parameters($configPath)
+        );
+    }
+
+    private string|false $originalDisabledValue = false;
+
+    protected function setUp(): void
+    {
+        // the suite itself may run with the extension disabled, eg: on CI
+        $this->originalDisabledValue = getenv('STRUCTARMED_DISABLED');
+        putenv('STRUCTARMED_DISABLED');
+    }
+
+    #[After]
+    protected function restoreDisabledEnvironmentVariable(): void
+    {
+        putenv(
+            $this->originalDisabledValue === false
+                ? 'STRUCTARMED_DISABLED'
+                : 'STRUCTARMED_DISABLED=' . $this->originalDisabledValue
+        );
+    }
+
+    public function testBootstrapDoesNothingWhenDisabledByEnvironmentVariable(): void
+    {
+        putenv('STRUCTARMED_DISABLED=1');
+
+        $this->expectOutputString('');
+
+        (new StructArmedExtension())->bootstrap(
+            $this->configuration(),
+            new Facade(),
+            $this->parameters('/missing/structarmed.php')
         );
     }
 
@@ -237,17 +272,35 @@ PHP);
 
     public function testProgressIsEnabledWhenParameterIsMissing(): void
     {
-        $reflectionClass = new ReflectionClass(StructArmedExtension::class);
-
-        $this->assertTrue($reflectionClass->getMethod('isProgressEnabled')->invoke(
-            new StructArmedExtension(),
-            ParameterCollection::fromArray([])
-        ));
+        $this->assertTrue($this->isProgressEnabled($this->configuration(), []));
     }
 
-    private function configuration(): Configuration
+    public function testProgressIsDisabledByPhpUnitNoProgressFlag(): void
     {
-        return (new ReflectionClass(Configuration::class))->newInstanceWithoutConstructor();
+        $this->assertFalse($this->isProgressEnabled($this->configuration(noProgress: true), []));
+        $this->assertFalse($this->isProgressEnabled($this->configuration(noProgress: true), ['progress' => 'true']));
+    }
+
+    /** @param array<string, string> $parameters */
+    private function isProgressEnabled(Configuration $configuration, array $parameters): bool
+    {
+        $result = (new ReflectionClass(StructArmedExtension::class))->getMethod('isProgressEnabled')->invoke(
+            new StructArmedExtension(),
+            $configuration,
+            ParameterCollection::fromArray($parameters)
+        );
+        $this->assertIsBool($result);
+
+        return $result;
+    }
+
+    private function configuration(bool $noProgress = false): Configuration
+    {
+        $reflectionClass = new ReflectionClass(Configuration::class);
+        $configuration   = $reflectionClass->newInstanceWithoutConstructor();
+        $reflectionClass->getProperty('noProgress')->setValue($configuration, $noProgress);
+
+        return $configuration;
     }
 
     private function parameters(?string $configPath = null): ParameterCollection

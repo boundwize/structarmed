@@ -133,6 +133,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+)*+$/';
 
     /**
+     * Marks the name string passed to function_exists(): the check probes for
+     * a function, it does not use it, so the string is not a reference.
+     */
+    private const FUNCTION_EXISTS_CHECK_ATTRIBUTE = 'structarmedFunctionExistsCheck';
+
+    /**
      * Method names of the ReflectionClass object-construction APIs. Calling
      * one chained on a `new ReflectionClass(<resolvable class name>)` receiver
      * instantiates the reflected class.
@@ -1043,6 +1049,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // Whether it appears inside a class-like or in procedural code, treat
         // it as a file-level reference so the named class-like stays alive.
         if ($node instanceof String_) {
+            if ($node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)) {
+                return;
+            }
+
             // A leading `\` is a valid fully-qualified spelling
             // (`'\App\Contract'`); strip it so the stored name matches the
             // ClassNode::$className form used for usage lookups.
@@ -1083,7 +1093,34 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
+        // Entered before its arguments, so the name string is marked before
+        // the String_ branch sees it — also outside any scope, where a
+        // top-level `if (! function_exists(...))` guard usually sits.
+        if (
+            $node instanceof FuncCall
+            && $node->name instanceof Name
+            && $node->name->toLowerString() === 'function_exists'
+            && ! $node->isFirstClassCallable()
+        ) {
+            ($node->getArgs()[0] ?? null)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+        }
+
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
+            // A top-level unqualified call in a namespace is not a FullyQualified
+            // node, so it is recorded here under the namespaced name PHP tries
+            // first, keeping the called function alive.
+            if (
+                $node instanceof FuncCall
+                && $node->name instanceof Name
+                && ! $node->name instanceof FullyQualified
+            ) {
+                $namespacedName = $node->name->getAttribute('namespacedName');
+
+                if ($namespacedName instanceof Name) {
+                    $this->currentFileReferences[$namespacedName->toString()] = true;
+                }
+            }
+
             return;
         }
 

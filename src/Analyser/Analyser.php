@@ -27,6 +27,7 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
 use Boundwize\StructArmed\Util\Path;
@@ -43,6 +44,7 @@ use function is_dir;
 use function is_file;
 use function sprintf;
 use function str_starts_with;
+use function strcasecmp;
 use function strtolower;
 use function substr;
 
@@ -89,6 +91,7 @@ final readonly class Analyser
         $hasExtendedClassAwareRule  = false;
         $hasUsedInterfaceAwareRule  = false;
         $hasUsedTraitAwareRule      = false;
+        $hasUsedFunctionAwareRule   = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -133,6 +136,10 @@ final readonly class Analyser
                 $hasUsedTraitAwareRule = true;
             }
 
+            if ($rule instanceof UsedFunctionAwareRuleInterface) {
+                $hasUsedFunctionAwareRule = true;
+            }
+
             if (! $rule instanceof ProjectRuleInterface) {
                 continue;
             }
@@ -163,7 +170,13 @@ final readonly class Analyser
         }
 
         $layerPatterns      = $architecture->getLayerPatterns();
-        $chainLayerResolver = ChainLayerResolver::fromLayerConfig($layers, $this->basePath, $layerPatterns);
+        $layerExcludePaths  = $architecture->getLayerExcludePaths();
+        $chainLayerResolver = ChainLayerResolver::fromLayerConfig(
+            $layers,
+            $this->basePath,
+            $layerPatterns,
+            $layerExcludePaths
+        );
 
         $files          ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
         $withFileAnalysis = $fileAnalysisRules !== [];
@@ -175,6 +188,7 @@ final readonly class Analyser
             $chainLayerResolver,
             $analyserOptions ?? AnalyserOptions::parallel(),
             $withFileAnalysis,
+            $layerExcludePaths,
         );
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
@@ -186,6 +200,10 @@ final readonly class Analyser
                 $hasExtendedClassAwareRule,
                 $hasUsedInterfaceAwareRule,
             );
+        }
+
+        if ($hasUsedFunctionAwareRule) {
+            $this->markFunctionUsage($classNodes, $extractionResult);
         }
 
         if ($withFileAnalysis) {
@@ -934,6 +952,72 @@ final readonly class Analyser
     }
 
     /**
+     * Flag each named function referenced from another scanned scope: a call
+     * (including a first-class callable) or a function-name string such as a
+     * callable 'App\helper'. A function calling itself is not a usage. An
+     * unqualified call to a namespaced function declared in another file is
+     * recorded under its global fallback name, so a call also matches by short
+     * name; a string does not, as it spells the full name.
+     *
+     * Calls made in closures are already merged into their enclosing
+     * function-like or class-like, so only top-level closures are read.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markFunctionUsage(array $classNodes, ExtractionResult $extractionResult): void
+    {
+        $called = [];
+
+        foreach ([...$classNodes, ...$extractionResult->anonymousClassNodes] as $classLikeNode) {
+            foreach ($classLikeNode->functionCalls as $functionCall) {
+                $called[strtolower($functionCall)] = true;
+            }
+        }
+
+        foreach ($extractionResult->anonymousFunctionNodes as $anonymousFunctionNode) {
+            if ($anonymousFunctionNode->enclosingClassName !== null) {
+                continue;
+            }
+
+            if ($anonymousFunctionNode->enclosingFunctionName !== null) {
+                continue;
+            }
+
+            foreach ($anonymousFunctionNode->functionCalls as $functionCall) {
+                $called[strtolower($functionCall)] = true;
+            }
+        }
+
+        foreach ($extractionResult->functionNodes as $functionNode) {
+            foreach ($functionNode->functionCalls as $functionCall) {
+                if (strcasecmp($functionCall, $functionNode->functionName) !== 0) {
+                    $called[strtolower($functionCall)] = true;
+                }
+            }
+        }
+
+        $referenced = [];
+
+        foreach ($extractionResult->fileReferences as $references) {
+            foreach ($references as $reference) {
+                $referenced[strtolower($reference)] = true;
+            }
+        }
+
+        foreach ($extractionResult->functionNodes as $functionNode) {
+            $functionNameKey = strtolower($functionNode->functionName);
+
+            if (
+                isset($called[$functionNameKey])
+                || isset($referenced[$functionNameKey])
+                || isset($called[strtolower($functionNode->shortName())])
+            ) {
+                $functionNode->setReferenced(true);
+            }
+        }
+    }
+
+    /**
      * Whether `new static()` in any of the given classes can bind to this
      * one: the class itself or any descendant.
      *
@@ -1278,6 +1362,7 @@ final readonly class Analyser
      *     pattern: string|list<string>,
      *     excludePattern: string|list<string|null>|null
      * }> $layerPatterns
+     * @param array<string, list<string>> $layerExcludePaths
      */
     private function collectAnalysisNodes(
         array $files,
@@ -1287,6 +1372,7 @@ final readonly class Analyser
         ChainLayerResolver $chainLayerResolver,
         ?AnalyserOptions $analyserOptions = null,
         bool $withFileAnalysis = true,
+        array $layerExcludePaths = [],
     ): ExtractionResult {
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
@@ -1302,6 +1388,7 @@ final readonly class Analyser
                 $this->analysisResultCache?->getCacheDirectory(),
                 $this->analysisResultCache,
                 $this->analysisNodeCacheNamespace,
+                $layerExcludePaths,
             ))->extract($files, $progressHandler, $withFileAnalysis);
         } else {
             $extractionResult = (new AnalysisNodeExtractor(

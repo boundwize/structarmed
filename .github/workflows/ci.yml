@@ -47,7 +47,9 @@ jobs:
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Run Structarmed
-        run: composer structarmed
+        # Annotate the pull request from one matrix job only, otherwise every
+        # job posts the same annotation.
+        run: composer structarmed -- --report=${{ matrix.coverage && 'github' || 'console' }}
 
       - name: Run coding standard check
         run: composer cs-check
@@ -59,7 +61,11 @@ jobs:
         run: composer rector
 
       - name: Run tests with coverage
+        # This job only annotates violations, so disable StructArmedExtension:
+        # it would fail the run on them. The other jobs still run it.
         if: matrix.coverage
+        env:
+          STRUCTARMED_DISABLED: "1"
         run: composer test -- --coverage-clover coverage.xml
 
       - name: Run tests
