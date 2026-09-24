@@ -972,6 +972,61 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testMustBeUsedFunctionRuleRecognizesFunctionUsage(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/functions.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                function calledFromClass(): void {}
+                function calledFromOtherFile(): void {}
+                function firstClassCallable(): void {}
+                function callableString(): void {}
+                function calledFromTopLevel(): void {}
+                function calledFromFunction(): void {}
+                function caller(): void { calledFromFunction(); }
+                function recursive(int $n): int { return $n > 0 ? recursive($n - 1) : 0; }
+                function unused(): void {}
+                PHP,
+            'src/Consumer.php'  => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use function App\calledFromOtherFile;
+
+                final class Consumer
+                {
+                    public function run(): void
+                    {
+                        \App\calledFromClass();
+                        calledFromOtherFile();
+                        $callable = firstClassCallable(...);
+                        array_map('App\callableString', []);
+                    }
+                }
+                PHP,
+            'src/bootstrap.php' => <<<'PHP'
+                <?php
+
+                \App\calledFromTopLevel();
+                \App\caller();
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+        // A function calling only itself is not a usage.
+        $this->assertSame(['App\recursive', 'App\unused'], $this->violationClassNames($violations));
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
     {
         $checker = '<?php namespace App;' . "\n"
@@ -1781,7 +1836,8 @@ final class AnalyserTest extends TestCase
         ]);
 
         $architecture = Architecture::define()
-            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']))
+            ->skipRule(YagniPreset::FUNCTION_MUST_BE_USED);
 
         $ruleViolationCollection = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::sequential());
@@ -1829,7 +1885,8 @@ final class AnalyserTest extends TestCase
         $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
 
         $architecture = Architecture::define()
-            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']))
+            ->skipRule(YagniPreset::FUNCTION_MUST_BE_USED);
 
         $ruleViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
             ->analyse($architecture, [], null, AnalyserOptions::sequential());
@@ -1859,6 +1916,7 @@ final class AnalyserTest extends TestCase
         // file-analysis cache path, which must also restore file references.
         $architecture = Architecture::define()
             ->withPreset(Preset::YAGNI(sourcePaths: ['src/']))
+            ->skipRule(YagniPreset::FUNCTION_MUST_BE_USED)
             ->rule('psr1.php_tags', new Psr1PhpTagsRule(['src/']));
 
         $ruleViolationCollection = (new Analyser($basePath, $analysisResultCache, 'config'))
@@ -1966,7 +2024,8 @@ final class AnalyserTest extends TestCase
         ]);
 
         $architecture = Architecture::define()
-            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']))
+            ->skipRule(YagniPreset::FUNCTION_MUST_BE_USED);
 
         $ruleViolationCollection = (new Analyser($basePath))
             ->analyse($architecture, [], null, AnalyserOptions::parallel());

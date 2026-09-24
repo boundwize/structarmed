@@ -27,6 +27,7 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
 use Boundwize\StructArmed\Util\Path;
@@ -43,6 +44,7 @@ use function is_dir;
 use function is_file;
 use function sprintf;
 use function str_starts_with;
+use function strcasecmp;
 use function strtolower;
 use function substr;
 
@@ -89,6 +91,7 @@ final readonly class Analyser
         $hasExtendedClassAwareRule  = false;
         $hasUsedInterfaceAwareRule  = false;
         $hasUsedTraitAwareRule      = false;
+        $hasUsedFunctionAwareRule   = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -131,6 +134,10 @@ final readonly class Analyser
 
             if ($rule instanceof UsedTraitAwareRuleInterface) {
                 $hasUsedTraitAwareRule = true;
+            }
+
+            if ($rule instanceof UsedFunctionAwareRuleInterface) {
+                $hasUsedFunctionAwareRule = true;
             }
 
             if (! $rule instanceof ProjectRuleInterface) {
@@ -193,6 +200,10 @@ final readonly class Analyser
                 $hasExtendedClassAwareRule,
                 $hasUsedInterfaceAwareRule,
             );
+        }
+
+        if ($hasUsedFunctionAwareRule) {
+            $this->markFunctionUsage($classNodes, $extractionResult);
         }
 
         if ($withFileAnalysis) {
@@ -936,6 +947,66 @@ final readonly class Analyser
             // An instantiation is also a reference, so reuse its lookup here.
             if ($isInstantiated || isset($used[$classNameKey])) {
                 $classNode->setReferenced(true);
+            }
+        }
+    }
+
+    /**
+     * Flag each named function referenced from another scanned scope: a call
+     * (including a first-class callable) or a function-name string such as a
+     * callable 'App\helper'. A function calling itself is not a usage. An
+     * unqualified call to a namespaced function declared in another file is
+     * recorded under its global fallback name, so a short-name match counts.
+     *
+     * Calls made in closures are already merged into their enclosing
+     * function-like or class-like, so only top-level closures are read.
+     *
+     * @param list<ClassNode> $classNodes
+     */
+    private function markFunctionUsage(array $classNodes, ExtractionResult $extractionResult): void
+    {
+        $used = [];
+
+        foreach ([...$classNodes, ...$extractionResult->anonymousClassNodes] as $classLikeNode) {
+            foreach ($classLikeNode->functionCalls as $functionCall) {
+                $used[strtolower($functionCall)] = true;
+            }
+        }
+
+        foreach ($extractionResult->anonymousFunctionNodes as $anonymousFunctionNode) {
+            if ($anonymousFunctionNode->enclosingClassName !== null) {
+                continue;
+            }
+
+            if ($anonymousFunctionNode->enclosingFunctionName !== null) {
+                continue;
+            }
+
+            foreach ($anonymousFunctionNode->functionCalls as $functionCall) {
+                $used[strtolower($functionCall)] = true;
+            }
+        }
+
+        foreach ($extractionResult->functionNodes as $functionNode) {
+            foreach ($functionNode->functionCalls as $functionCall) {
+                if (strcasecmp($functionCall, $functionNode->functionName) !== 0) {
+                    $used[strtolower($functionCall)] = true;
+                }
+            }
+        }
+
+        foreach ($extractionResult->fileReferences as $references) {
+            foreach ($references as $reference) {
+                $used[strtolower($reference)] = true;
+            }
+        }
+
+        foreach ($extractionResult->functionNodes as $functionNode) {
+            if (
+                isset($used[strtolower($functionNode->functionName)])
+                || isset($used[strtolower($functionNode->shortName())])
+            ) {
+                $functionNode->setReferenced(true);
             }
         }
     }

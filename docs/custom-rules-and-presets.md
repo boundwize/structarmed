@@ -130,6 +130,7 @@ Usage flags are opt-in because collecting them costs extra analysis time. Before
 | `Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface` | `$isExtended`, `$isReferenced`, `$isInstantiated` |
 | `Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface` | `$isImplemented`, `$isReferenced` |
 | `Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface` | `$isReferenced` |
+| `Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface` | `$functionNode->isReferenced` (extends `FunctionRuleInterface` instead of `RuleInterface`) |
 
 The usage flags describe how each `ClassNode` is used elsewhere in the scanned paths:
 
@@ -185,7 +186,7 @@ final readonly class ServiceClassMustBeFinalRule implements ExtendedClassAwareRu
 
 `ServiceClassMustBeFinalRule` uses `ExtendedClassAwareRuleInterface`, so the analyser populates `$isExtended` before evaluation. The rule leaves an extended service non-final because making it final would break its scanned child class.
 
-The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedInterfaceRule` implements `UsedInterfaceAwareRuleInterface`, `MustBeUsedTraitRule` implements `UsedTraitAwareRuleInterface`, and `MustBeUsedAbstractClassRule` and `ExtendedClassMustBeAbstractOrInstantiatedRule` implement `ExtendedClassAwareRuleInterface`.
+The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedInterfaceRule` implements `UsedInterfaceAwareRuleInterface`, `MustBeUsedTraitRule` implements `UsedTraitAwareRuleInterface`, `MustBeUsedAbstractClassRule` and `ExtendedClassMustBeAbstractOrInstantiatedRule` implement `ExtendedClassAwareRuleInterface`, and `MustBeUsedFunctionRule` implements `UsedFunctionAwareRuleInterface`.
 
 Trade-off: only usage within the scanned paths is known. A class-like used solely by a consumer outside the scan — a vendor package, an unscanned directory, runtime-fed dynamic construction — is reported as if unused. Widen the scan, or use `skipRule()` and skip paths where such consumers exist.
 
