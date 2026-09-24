@@ -130,7 +130,6 @@ Usage flags are opt-in because collecting them costs extra analysis time. Before
 | `Boundwize\StructArmed\Rule\ExtendedClassAwareRuleInterface` | `$isExtended`, `$isReferenced`, `$isInstantiated` |
 | `Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface` | `$isImplemented`, `$isReferenced` |
 | `Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface` | `$isReferenced` |
-| `Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface` | `$functionNode->isReferenced` (extends `FunctionRuleInterface` instead of `RuleInterface`) |
 
 The usage flags describe how each `ClassNode` is used elsewhere in the scanned paths:
 
@@ -185,6 +184,20 @@ final readonly class ServiceClassMustBeFinalRule implements ExtendedClassAwareRu
 ```
 
 `ServiceClassMustBeFinalRule` uses `ExtendedClassAwareRuleInterface`, so the analyser populates `$isExtended` before evaluation. The rule leaves an extended service non-final because making it final would break its scanned child class.
+
+Named functions follow the same opt-in. A function rule implements the marker instead of the plain `Boundwize\StructArmed\Rule\FunctionRuleInterface`; the marker extends `FunctionRuleInterface`, so no other change is needed:
+
+| Marker interface | Flags populated |
+| --- | --- |
+| `Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface` | `$isReferenced` |
+
+The usage flag describes how each `FunctionNode` is used elsewhere in the scanned paths:
+
+| Flag | Meaning |
+| --- | --- |
+| `$functionNode->isReferenced` | Another scanned scope calls it (including as a first-class callable such as `helper(...)`) or references it by a function-name string such as `'App\helper'`; a function calling only itself does not count |
+
+Without the marker on at least one active rule, `$isReferenced` keeps its default `false`, so a rule that only implements `FunctionRuleInterface` reports every function as unused.
 
 The built-in [YAGNI preset](../presets/) rules follow this pattern: `MustBeUsedInterfaceRule` implements `UsedInterfaceAwareRuleInterface`, `MustBeUsedTraitRule` implements `UsedTraitAwareRuleInterface`, `MustBeUsedAbstractClassRule` and `ExtendedClassMustBeAbstractOrInstantiatedRule` implement `ExtendedClassAwareRuleInterface`, and `MustBeUsedFunctionRule` implements `UsedFunctionAwareRuleInterface`.
 
