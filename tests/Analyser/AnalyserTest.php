@@ -55,6 +55,9 @@ use function array_values;
 use function count;
 use function dirname;
 use function file_put_contents;
+use function gc_disable;
+use function gc_enable;
+use function gc_enabled;
 use function is_dir;
 use function mkdir;
 use function realpath;
@@ -136,6 +139,23 @@ final class AnalyserTest extends TestCase
                 . 'function skipped(): string { return $_GET["x"]; }' . "\n"
                 . '$skippedClosure = fn () => $_GET["x"];' . "\n",
         ];
+    }
+
+    public function testAnalyseRestoresTheCallersGarbageCollectorState(): void
+    {
+        $analyser = new Analyser(__DIR__);
+
+        try {
+            gc_enable();
+            $analyser->analyse(Architecture::define(), [], null, AnalyserOptions::sequential(), []);
+            $this->assertTrue(gc_enabled());
+
+            gc_disable();
+            $analyser->analyse(Architecture::define(), [], null, AnalyserOptions::sequential(), []);
+            $this->assertFalse(gc_enabled());
+        } finally {
+            gc_enable();
+        }
     }
 
     public function testFunctionRulesSkipNodesTheyDoNotApplyTo(): void
