@@ -461,7 +461,7 @@ final readonly class Analyser
     }
 
     /**
-     * @param array<int, RuleViolation> $violations
+     * @param RuleViolation[] $violations
      */
     private function addViolations(
         array $violations,
@@ -470,10 +470,7 @@ final readonly class Analyser
         RuleViolationCollection $ruleViolationCollection
     ): void {
         foreach ($violations as $violation) {
-            /**
-             * clone before adding to the collection
-             * so reused rule violations stay independent.
-             */
+            // clone before adding to the collection so reused rule violations stay independent.
             $freshViolation = clone $violation;
 
             $freshViolation->ruleKey = $ruleKey;
