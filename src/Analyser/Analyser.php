@@ -460,8 +460,15 @@ final readonly class Analyser
         }
     }
 
-    private function addViolations(array $violations, string $ruleKey, bool $isFixable, RuleViolationCollection $ruleViolationCollection): void
-    {
+    /**
+     * @param array<int, RuleViolation> $violations
+     */
+    private function addViolations(
+        array $violations,
+        string $ruleKey,
+        bool $isFixable,
+        RuleViolationCollection $ruleViolationCollection
+    ): void {
         foreach ($violations as $violation) {
             /**
              * clone before adding to the collection
