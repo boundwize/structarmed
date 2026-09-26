@@ -250,12 +250,7 @@ final readonly class Analyser
 
         foreach ($projectRuleViolations as $key => $violations) {
             $isFixable = $rules[$key] instanceof FixableInterface;
-
-            foreach ($violations as $violation) {
-                $violation->ruleKey = $key;
-                $violation->fixable = $isFixable;
-                $ruleViolationCollection->add($violation);
-            }
+            $this->addViolations($violations, $key, $isFixable, $ruleViolationCollection);
         }
 
         // Evaluate declarative ruleset alongside class rules, but buffer its
@@ -459,13 +454,24 @@ final readonly class Analyser
                     }
 
                     $isFixable = $rule instanceof FixableInterface;
-                    foreach ($violations as $violation) {
-                        $violation->ruleKey = $key;
-                        $violation->fixable = $isFixable;
-                        $ruleViolationCollection->add($violation);
-                    }
+                    $this->addViolations($violations, $key, $isFixable, $ruleViolationCollection);
                 }
             }
+        }
+    }
+
+    private function addViolations(array $violations, string $ruleKey, bool $isFixable, RuleViolationCollection $ruleViolationCollection): void
+    {
+        foreach ($violations as $violation) {
+            /**
+             * clone before adding to the collection
+             * so reused rule violations stay independent.
+             */
+            $freshViolation = clone $violation;
+
+            $freshViolation->ruleKey = $ruleKey;
+            $freshViolation->fixable = $isFixable;
+            $ruleViolationCollection->add($freshViolation);
         }
     }
 
