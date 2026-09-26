@@ -82,7 +82,7 @@ final readonly class Analyser
         gc_disable();
 
         try {
-            return $this->analyseWithoutGc($architecture, $scanPaths, $progressHandler, $analyserOptions, $files);
+            return $this->doAnalyse($architecture, $scanPaths, $progressHandler, $analyserOptions, $files);
         } finally {
             if ($isGcEnabled) {
                 gc_enable();
@@ -94,7 +94,7 @@ final readonly class Analyser
      * @param list<string>      $scanPaths
      * @param list<string>|null $files
      */
-    private function analyseWithoutGc(
+    private function doAnalyse(
         Architecture $architecture,
         array $scanPaths,
         ?ProgressHandlerInterface $progressHandler,
