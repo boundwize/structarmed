@@ -6,21 +6,21 @@ namespace Boundwize\StructArmed\Rule;
 
 use function sprintf;
 
-final readonly class RuleViolation
+final class RuleViolation
 {
     public function __construct(
-        public string $message,
-        public string $file,
-        public int $line,
-        public string $className,
-        public ?string $layer = null,
+        public readonly string $message,
+        public readonly string $file,
+        public readonly int $line,
+        public readonly string $className,
+        public readonly ?string $layer = null,
         public string $ruleKey = '',
         public bool $fixable = false,
-        public ?string $methodName = null,
-        public ?string $constantName = null,
-        public ?string $propertyName = null,
-        public ?string $functionName = null,
-        public ?string $numericLiteral = null,
+        public readonly ?string $methodName = null,
+        public readonly ?string $constantName = null,
+        public readonly ?string $propertyName = null,
+        public readonly ?string $functionName = null,
+        public readonly ?string $numericLiteral = null,
     ) {
     }
 

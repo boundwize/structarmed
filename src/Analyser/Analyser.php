@@ -252,20 +252,9 @@ final readonly class Analyser
             $isFixable = $rules[$key] instanceof FixableInterface;
 
             foreach ($violations as $violation) {
-                $ruleViolationCollection->add(new RuleViolation(
-                    message:   $violation->message,
-                    file:      $violation->file,
-                    line:      $violation->line,
-                    className: $violation->className,
-                    layer:     $violation->layer,
-                    ruleKey:   $key,
-                    fixable:   $isFixable,
-                    methodName: $violation->methodName,
-                    constantName: $violation->constantName,
-                    propertyName: $violation->propertyName,
-                    functionName: $violation->functionName,
-                    numericLiteral: $violation->numericLiteral,
-                ));
+                $violation->ruleKey = $key;
+                $violation->fixable = $isFixable;
+                $ruleViolationCollection->add($violation);
             }
         }
 
@@ -471,20 +460,9 @@ final readonly class Analyser
 
                     $isFixable = $rule instanceof FixableInterface;
                     foreach ($violations as $violation) {
-                        $ruleViolationCollection->add(new RuleViolation(
-                            message:      $violation->message,
-                            file:         $violation->file,
-                            line:         $violation->line,
-                            className:    $violation->className,
-                            layer:        $violation->layer,
-                            ruleKey:      $key,
-                            fixable:      $isFixable,
-                            methodName:   $violation->methodName,
-                            constantName: $violation->constantName,
-                            propertyName: $violation->propertyName,
-                            functionName: $violation->functionName,
-                            numericLiteral: $violation->numericLiteral,
-                        ));
+                        $violation->ruleKey = $key;
+                        $violation->fixable = $isFixable;
+                        $ruleViolationCollection->add($violation);
                     }
                 }
             }
