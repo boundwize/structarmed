@@ -39,6 +39,9 @@ use function array_keys;
 use function array_merge;
 use function array_unique;
 use function array_values;
+use function gc_disable;
+use function gc_enable;
+use function gc_enabled;
 use function getcwd;
 use function is_dir;
 use function is_file;
@@ -71,6 +74,32 @@ final readonly class Analyser
         ?ProgressHandlerInterface $progressHandler = null,
         ?AnalyserOptions $analyserOptions = null,
         ?array $files = null
+    ): RuleViolationCollection {
+        // The node graph holds no cycles to collect, yet its size makes every
+        // cycle collector run scan tens of thousands of nodes. The collector is
+        // enabled again only once the graph has been released.
+        $isGcEnabled = gc_enabled();
+        gc_disable();
+
+        try {
+            return $this->analyseWithoutGc($architecture, $scanPaths, $progressHandler, $analyserOptions, $files);
+        } finally {
+            if ($isGcEnabled) {
+                gc_enable();
+            }
+        }
+    }
+
+    /**
+     * @param list<string>      $scanPaths
+     * @param list<string>|null $files
+     */
+    private function analyseWithoutGc(
+        Architecture $architecture,
+        array $scanPaths,
+        ?ProgressHandlerInterface $progressHandler,
+        ?AnalyserOptions $analyserOptions,
+        ?array $files
     ): RuleViolationCollection {
         $ruleViolationCollection = new RuleViolationCollection();
 
