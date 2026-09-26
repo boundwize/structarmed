@@ -250,23 +250,7 @@ final readonly class Analyser
 
         foreach ($projectRuleViolations as $key => $violations) {
             $isFixable = $rules[$key] instanceof FixableInterface;
-
-            foreach ($violations as $violation) {
-                $ruleViolationCollection->add(new RuleViolation(
-                    message:   $violation->message,
-                    file:      $violation->file,
-                    line:      $violation->line,
-                    className: $violation->className,
-                    layer:     $violation->layer,
-                    ruleKey:   $key,
-                    fixable:   $isFixable,
-                    methodName: $violation->methodName,
-                    constantName: $violation->constantName,
-                    propertyName: $violation->propertyName,
-                    functionName: $violation->functionName,
-                    numericLiteral: $violation->numericLiteral,
-                ));
-            }
+            $this->addViolations($violations, $key, $isFixable, $ruleViolationCollection);
         }
 
         // Evaluate declarative ruleset alongside class rules, but buffer its
@@ -470,24 +454,28 @@ final readonly class Analyser
                     }
 
                     $isFixable = $rule instanceof FixableInterface;
-                    foreach ($violations as $violation) {
-                        $ruleViolationCollection->add(new RuleViolation(
-                            message:      $violation->message,
-                            file:         $violation->file,
-                            line:         $violation->line,
-                            className:    $violation->className,
-                            layer:        $violation->layer,
-                            ruleKey:      $key,
-                            fixable:      $isFixable,
-                            methodName:   $violation->methodName,
-                            constantName: $violation->constantName,
-                            propertyName: $violation->propertyName,
-                            functionName: $violation->functionName,
-                            numericLiteral: $violation->numericLiteral,
-                        ));
-                    }
+                    $this->addViolations($violations, $key, $isFixable, $ruleViolationCollection);
                 }
             }
+        }
+    }
+
+    /**
+     * @param RuleViolation[] $violations
+     */
+    private function addViolations(
+        array $violations,
+        string $ruleKey,
+        bool $isFixable,
+        RuleViolationCollection $ruleViolationCollection
+    ): void {
+        foreach ($violations as $violation) {
+            // clone before adding to the collection so reused rule violations stay independent.
+            $freshViolation = clone $violation;
+
+            $freshViolation->ruleKey = $ruleKey;
+            $freshViolation->fixable = $isFixable;
+            $ruleViolationCollection->add($freshViolation);
         }
     }
 
