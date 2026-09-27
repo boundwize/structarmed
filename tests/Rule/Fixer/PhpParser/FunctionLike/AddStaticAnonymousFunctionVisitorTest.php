@@ -107,6 +107,8 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
     {
         [$statements, $anonymousFunction] = $this->parseExpression($expression);
 
+        $this->assertFalse($anonymousFunction->static);
+
         (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(1)))->traverse($statements);
 
         $this->assertTrue($anonymousFunction->static);
