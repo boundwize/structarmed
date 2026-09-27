@@ -127,6 +127,57 @@ PHP,
         );
     }
 
+    public function testFixAddsStaticToAnonymousFunctionsWhoseNestedClassLikeReadsThis(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-static-closure-nested-class-like');
+        mkdir($basePath . '/src');
+
+        $file = $basePath . '/src/closures.php';
+        file_put_contents(
+            $file,
+            <<<'PHP'
+<?php
+
+$class = function (): void { class C { public function f() { return $this; } } };
+$trait = function (): void { trait T { public function f() { return $this; } } };
+$enum = function (): void { enum E { case A; public function f() { return $this; } } };
+PHP
+        );
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.static_closures');
+
+        $this->assertCount(3, $violations);
+
+        $rule = $architecture->getRules()['source.static_closures'];
+        $this->assertInstanceOf(MustBeStaticAnonymousFunctionRule::class, $rule);
+        $this->assertTrue($rule->fix(...$violations));
+
+        $this->assertSame(
+            <<<'PHP'
+<?php
+
+$class = static function (): void { class C { public function f() { return $this; } } };
+$trait = static function (): void { trait T { public function f() { return $this; } } };
+$enum = static function (): void { enum E { case A; public function f() { return $this; } } };
+PHP,
+            file_get_contents($file)
+        );
+
+        // A second analysis of the fixed file is clean.
+        $this->assertCount(
+            0,
+            (new Analyser($basePath))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+                ->forRule('source.static_closures')
+        );
+    }
+
     public function testFixDoesNotChangeOtherAnonymousFunctionOnSameLine(): void
     {
         $basePath = $this->makeTemporaryDirectory('structarmed-static-closure-line');

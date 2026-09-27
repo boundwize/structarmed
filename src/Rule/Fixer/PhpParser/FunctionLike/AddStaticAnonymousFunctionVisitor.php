@@ -12,7 +12,7 @@ use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
-use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
@@ -90,8 +90,9 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     /**
      * Whether the body reads `$this`, including through nested anonymous
      * functions.
-     * `$this` inside a nested anonymous class body is that class's own, so
-     * anonymous classes are not descended into.
+     * `$this` inside a nested class-like body (an anonymous class, or a class,
+     * trait, or enum declared in the body) is that class-like's own, so
+     * class-likes are not descended into.
      */
     private function usesThis(Closure|ArrowFunction $anonymousFunction): bool
     {
@@ -100,7 +101,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 
             public function enterNode(Node $node): ?int
             {
-                if ($node instanceof Class_) {
+                if ($node instanceof ClassLike) {
                     return NodeVisitor::DONT_TRAVERSE_CHILDREN;
                 }
 

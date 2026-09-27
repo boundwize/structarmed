@@ -102,6 +102,26 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         $this->assertTrue($closure->static);
     }
 
+    #[DataProvider('nestedClassLikeReadingThisProvider')]
+    public function testChangesClosureWhoseNestedClassLikeReadsThis(string $expression): void
+    {
+        [$statements, $anonymousFunction] = $this->parseExpression($expression);
+
+        $this->assertFalse($anonymousFunction->static);
+
+        (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(1)))->traverse($statements);
+
+        $this->assertTrue($anonymousFunction->static);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function nestedClassLikeReadingThisProvider(): iterable
+    {
+        yield 'class' => ['function (): void { class C { public function f() { return $this; } } }'];
+        yield 'trait' => ['function (): void { trait T { public function f() { return $this; } } }'];
+        yield 'enum' => ['function (): void { enum E { case A; public function f() { return $this; } } }'];
+    }
+
     #[DataProvider('objectBoundAnonymousFunctionProvider')]
     public function testDoesNotChangeDirectlyObjectBoundAnonymousFunction(string $expression): void
     {
