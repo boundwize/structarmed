@@ -82,7 +82,6 @@ use function array_pop;
 use function array_push;
 use function array_unique;
 use function array_values;
-use function assert;
 use function count;
 use function end;
 use function in_array;
@@ -725,14 +724,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         // Every remaining LEAVE_NODES entry is a class-like statement.
-        assert($node instanceof ClassLike);
+        /** @phpstan-var ClassLike $node */
 
         array_pop($this->activeClassLikeScopes);
         array_pop($this->activeClassLikeNames);
         array_pop($this->functionLikeDepthAtClassLikeEntry);
 
+        /** @var ClassLikeAnalysis $analysis */
         $analysis = array_pop($this->activeClassLikeAnalyses);
-        assert($analysis instanceof ClassLikeAnalysis);
 
         // Anonymous classes never become ClassNodes, but the class they
         // extend, the interfaces they implement, and the traits they use

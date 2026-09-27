@@ -13,7 +13,6 @@ use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
 use function array_keys;
-use function assert;
 use function dirname;
 use function file_exists;
 use function file_put_contents;
@@ -94,9 +93,9 @@ final readonly class Baseline
 
         $header = "<?php\n\n"
             . "declare(strict_types=1);\n\n";
-        $expr   = (new BuilderFactory())->val($violations);
 
-        assert($expr instanceof Array_);
+        /** @var Array_ $expr */
+        $expr = (new BuilderFactory())->val($violations);
 
         $content = $header . 'return ' . $this->prettyPrintArray($expr) . ";\n";
 
