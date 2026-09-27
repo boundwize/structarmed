@@ -681,12 +681,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 return null;
             }
 
-            if (
-                $node instanceof StaticCall
-                || $node instanceof MethodCall
-                || $node instanceof NullsafeMethodCall
-            ) {
-                $this->collectObjectBindingRequirement($node);
+            // The exact-class LEAVE_NODES filter and the returns above leave
+            // only these three call nodes on this path.
+            /** @phpstan-var StaticCall|MethodCall|NullsafeMethodCall $node */
+            $this->collectObjectBindingRequirement($node);
+
+            if ($node instanceof StaticCall) {
+                return null;
             }
 
             // A ReflectionClass construction call instantiates the reflected
@@ -694,8 +695,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // `new` receiver is checked first: it is the rare shape, so the
             // common method call skips the name lowering entirely.
             if (
-                ($node instanceof MethodCall || $node instanceof NullsafeMethodCall)
-                && $node->var instanceof New_
+                $node->var instanceof New_
                 && $node->name instanceof Identifier
                 && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
             ) {
