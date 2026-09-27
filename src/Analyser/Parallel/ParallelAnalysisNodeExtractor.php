@@ -21,7 +21,6 @@ use function array_pop;
 use function array_push;
 use function array_search;
 use function arsort;
-use function assert;
 use function count;
 use function dirname;
 use function explode;
@@ -33,7 +32,6 @@ use function filesize;
 use function fread;
 use function is_array;
 use function is_dir;
-use function is_resource;
 use function is_string;
 use function min;
 use function mkdir;
@@ -85,8 +83,10 @@ final readonly class ParallelAnalysisNodeExtractor
             return new ExtractionResult([], []);
         }
 
-        $totalFiles     = count($files);
-        $workerCount    = min($this->workerCount, $totalFiles);
+        $totalFiles = count($files);
+        /** @var positive-int $workerCount */
+        $workerCount = min($this->workerCount, $totalFiles);
+
         $script         = dirname(__DIR__, 3) . '/bin/structarmed.php';
         $pending        = [];
         $emitProgress   = $progressHandler instanceof ProgressHandlerInterface;
@@ -134,7 +134,7 @@ final readonly class ParallelAnalysisNodeExtractor
                 throw new RuntimeException('Unable to start parallel analysis worker.');
             }
 
-            assert(isset($pipes[0]) && isset($pipes[1]));
+            /** @phpstan-var array{resource, resource} $pipes */
             fclose($pipes[0]);
 
             $pending[] = [
@@ -205,9 +205,9 @@ final readonly class ParallelAnalysisNodeExtractor
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
 
+                /** @phpstan-var resource $procResource */
                 $procResource = $worker['process'];
-                assert(is_resource($procResource));
-                $exitCode = proc_close($procResource);
+                $exitCode     = proc_close($procResource);
 
                 try {
                     // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
@@ -326,6 +326,7 @@ final readonly class ParallelAnalysisNodeExtractor
      * even when one file is much larger than the rest.
      *
      * @param list<string> $files
+     * @param positive-int $workerCount
      * @return list<list<string>>
      */
     private function buildWorkerBuckets(array $files, int $workerCount): array
@@ -337,7 +338,6 @@ final readonly class ParallelAnalysisNodeExtractor
 
         arsort($fileSizes);
 
-        assert($workerCount > 0);
         $buckets     = array_fill(0, $workerCount, []);
         $bucketSizes = array_fill(0, $workerCount, 0);
 
