@@ -1366,6 +1366,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->writeCachePayload($cacheDirectory, [
                 'metadata' => [
                     'namespace' => 'config',
+                    'file'      => $sourceFile,
                     'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
                 ],
                 'nodes'    => [
@@ -1878,6 +1879,41 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertNull($nextRunCache->loadAnalysisNodes($sourceFile, 'config'));
         } finally {
             unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testAnalysisNodesOfDeletedFileAreLeftBehind(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $deletedFile         = $cacheDirectory . '/Deleted.php';
+        $remainingFile       = $cacheDirectory . '/Remaining.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($deletedFile, '<?php class Deleted {}');
+        file_put_contents($remainingFile, '<?php class Remaining {}');
+
+        try {
+            $analysisResultCache->storeAnalysisNodes($deletedFile, 'config', []);
+            $analysisResultCache->storeAnalysisNodes($remainingFile, 'config', []);
+            unlink($deletedFile);
+
+            $nextRunCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+            $nextRunCache->storeAnalysisNodes($remainingFile, 'config', []);
+
+            $storedFiles = [];
+
+            foreach (glob($cacheDirectory . '/analysis-nodes-*.json') ?: [] as $path) {
+                $payload = json_decode((string) file_get_contents($path), true);
+
+                $this->assertIsArray($payload);
+                $this->assertIsArray($payload['metadata']);
+                $storedFiles[] = $payload['metadata']['file'];
+            }
+
+            $this->assertEqualsCanonicalizing([$deletedFile, $remainingFile], $storedFiles);
+        } finally {
+            unlink($remainingFile);
             $this->removeTempDirectory($cacheDirectory);
         }
     }
@@ -2669,6 +2705,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->writeCachePayload($cacheDirectory, [
                 'metadata' => [
                     'namespace' => 'config',
+                    'file'      => $sourceFile,
                     'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
                 ],
                 ...$payloadOverride,

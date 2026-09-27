@@ -65,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 11;
+    public const FORMAT_VERSION = 12;
 
     private readonly string $cacheDirectory;
 
@@ -1476,6 +1476,7 @@ final class AnalysisResultCache
     {
         return [
             'namespace' => $namespace,
+            'file'      => $file,
             'hash'      => $this->fileHashProvider->hash($file),
         ];
     }
