@@ -683,7 +683,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             // The exact-class LEAVE_NODES filter and the returns above leave
             // only these three call nodes on this path.
-            /** @var StaticCall|MethodCall|NullsafeMethodCall $node */
+            /** @phpstan-var StaticCall|MethodCall|NullsafeMethodCall $node */
             $this->collectObjectBindingRequirement($node);
 
             if ($node instanceof StaticCall) {
