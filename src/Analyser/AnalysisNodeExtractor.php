@@ -9,6 +9,7 @@ use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
 
 use function array_push;
 use function count;
@@ -52,7 +53,7 @@ final readonly class AnalysisNodeExtractor
         $progressHandler?->start(count($filesToParse));
 
         $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver);
-        $nodeTraverser         = new NodeTraverser($analysisNodeCollector);
+        $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $fileAnalyses          = [];
 
         foreach ($filesToParse as $fileToParse) {

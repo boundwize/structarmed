@@ -74,7 +74,7 @@ use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
-use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
 use function array_keys;
@@ -104,7 +104,7 @@ use function substr;
  *
  * @internal
  */
-final class AnalysisNodeCollector extends NameResolver
+final class AnalysisNodeCollector extends NodeVisitorAbstract
 {
     private const SUPERGLOBALS = [
         '_GET'     => true,
@@ -402,8 +402,6 @@ final class AnalysisNodeCollector extends NameResolver
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
-        parent::__construct();
-
         $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): string {
             if (
                 $expr instanceof ClassConstFetch
@@ -564,9 +562,6 @@ final class AnalysisNodeCollector extends NameResolver
 
     public function enterNode(Node $node): null
     {
-        // Names are resolved first, so everything below sees resolved names.
-        parent::enterNode($node);
-
         if (! isset(self::ENTER_NODES[$node::class])) {
             return null;
         }
@@ -625,7 +620,7 @@ final class AnalysisNodeCollector extends NameResolver
 
             if ($node instanceof ClassLike) {
                 $classLikeName = $node->name instanceof Identifier
-                    ? $this->resolveClassDeclarationName($node)
+                    ? $this->resolveClassName($node)
                     : null;
 
                 $this->activeClassLikeScopes[]             = $this->createClassLikeScope($node, $classLikeName);
@@ -1492,7 +1487,7 @@ final class AnalysisNodeCollector extends NameResolver
     private function collectClassLike(ClassLike $classLike, ClassLikeAnalysis $classLikeAnalysis): void
     {
         $analysis         = $this->collectClassLikeAnalysis($classLikeAnalysis);
-        $className        = $this->resolveClassDeclarationName($classLike);
+        $className        = $this->resolveClassName($classLike);
         [$layer, $layers] = $this->resolveLayerData($className);
         $implements       = $this->collectImplements($classLike);
         $interfaceExtends = $this->collectInterfaceExtends($classLike);
@@ -1657,7 +1652,7 @@ final class AnalysisNodeCollector extends NameResolver
             : (string) $function->name;
     }
 
-    private function resolveClassDeclarationName(ClassLike $classLike): string
+    private function resolveClassName(ClassLike $classLike): string
     {
         return isset($classLike->namespacedName)
             ? $classLike->namespacedName->toString()
