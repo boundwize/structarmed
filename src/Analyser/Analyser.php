@@ -255,15 +255,7 @@ final readonly class Analyser
 
         // Evaluate declarative ruleset alongside class rules, but buffer its
         // violations so report ordering remains class rules before ruleset.
-        $ruleset = $this->expandRuleset($architecture->getRuleset());
-
-        // Precompute hash maps once so the per-dependency hot loop below uses
-        // O(1) isset() lookups instead of in_array()/array_intersect() scans.
-        $rulesetAllowedLayerMaps = [];
-
-        foreach ($ruleset as $rulesetLayer => $allowedLayers) {
-            $rulesetAllowedLayerMaps[$rulesetLayer] = array_fill_keys($allowedLayers, true);
-        }
+        $rulesetAllowedLayerMaps = $this->rulesetAllowedLayerMaps($architecture->getRuleset());
 
         $classViolationSkipMaps = [];
 
@@ -276,7 +268,7 @@ final readonly class Analyser
         $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
         $rulesetSkipPathMatcher     = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
         $rulesetViolationCollection = new RuleViolationCollection();
-        $hasRuleset                 = $ruleset !== [];
+        $hasRuleset                 = $rulesetAllowedLayerMaps !== [];
         $scanScopeLayerMap          = $hasRuleset ? $this->scanScopeLayerMap($architecture) : [];
         $hasLayerAwareRules         = $layerAwareRules !== [];
         $classDependencyMaps        = $this->classDependencyMaps($classNodes, $hasRuleset, $hasLayerAwareRules);
@@ -480,24 +472,29 @@ final readonly class Analyser
     }
 
     /**
-     * Expand `+LayerName` references in a ruleset into their concrete allowed layers.
+     * Expand `+LayerName` references in a ruleset into their concrete allowed layers,
+     * keyed as hash maps so the per-dependency hot loop uses O(1) isset() lookups
+     * instead of in_array()/array_intersect() scans.
      *
      * `+LayerName` means: include `LayerName` itself and all layers that `LayerName` is allowed to depend on.
      * References to unknown layers expand to nothing. Circular references are skipped.
      *
      * @param array<string, list<string>> $ruleset
-     * @return array<string, list<string>>
+     * @return array<string, array<string, true>>
      */
-    private function expandRuleset(array $ruleset): array
+    private function rulesetAllowedLayerMaps(array $ruleset): array
     {
-        $resolved = [];
+        $allowedLayerMaps = [];
 
         foreach ($ruleset as $layer => $allowedLayers) {
-            $resolving        = [$layer => true];
-            $resolved[$layer] = $this->expandRulesetLayer($allowedLayers, $ruleset, $resolving);
+            $resolving                = [$layer => true];
+            $allowedLayerMaps[$layer] = array_fill_keys(
+                $this->expandRulesetLayer($allowedLayers, $ruleset, $resolving),
+                true
+            );
         }
 
-        return $resolved;
+        return $allowedLayerMaps;
     }
 
     /**
