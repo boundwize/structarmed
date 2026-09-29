@@ -56,6 +56,7 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Const_;
 use PhpParser\Node\Stmt\Do_;
 use PhpParser\Node\Stmt\Echo_;
 use PhpParser\Node\Stmt\ElseIf_;
@@ -219,6 +220,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             Namespace_::class     => true,
             Use_::class           => true,
             GroupUse::class       => true,
+            Const_::class         => true,
             Function_::class      => true,
             Class_::class         => true,
             Interface_::class     => true,
@@ -317,8 +319,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /**
      * Constants the evaluator resolves, by name: 'builtIn' holds every
      * extension's constants from get_defined_constants(true), 'user' the
-     * current file's define() calls instead of the analysing process's own.
-     * setCurrentFile() drops 'user', and each define() entered adds to it.
+     * current file's define() calls and const statements instead of the
+     * analysing process's own. setCurrentFile() drops 'user', and each
+     * define() or const statement entered adds to it.
      *
      * @var array{builtIn: array<string, mixed>, user?: array<string, mixed>}
      */
@@ -420,14 +423,24 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->definedConstants   = ['builtIn' => array_merge(...array_values($constantsByExtension))];
         $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): mixed {
             if ($expr instanceof ConstFetch) {
-                $name = $expr->name->toString();
+                $name           = $expr->name->toString();
+                $userConstants  = $this->definedConstants['user'] ?? [];
+                $namespacedName = $expr->name->getAttribute('namespacedName');
+
+                // Like PHP, an unqualified name in a namespace tries the
+                // namespaced constant before the global one.
+                if ($namespacedName instanceof Name) {
+                    $namespacedConstant = $namespacedName->toString();
+
+                    if (array_key_exists($namespacedConstant, $userConstants)) {
+                        return $userConstants[$namespacedConstant];
+                    }
+                }
 
                 // A built-in wins: PHP rejects a define() that redeclares it.
                 if (array_key_exists($name, $this->definedConstants['builtIn'])) {
                     return $this->definedConstants['builtIn'][$name];
                 }
-
-                $userConstants = $this->definedConstants['user'] ?? [];
 
                 if (array_key_exists($name, $userConstants)) {
                     return $userConstants[$name];
@@ -640,6 +653,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 foreach ($node->uses as $use) {
                     $this->currentNamespaceUses[$prefix . '\\' . $use->name->toString()] = true;
                 }
+
+                return null;
+            }
+
+            if ($node instanceof Const_) {
+                $this->collectDeclaredConstants($node);
 
                 return null;
             }
@@ -1440,6 +1459,23 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         // Like PHP, a second define() of the same name keeps the first value.
         $this->definedConstants['user'][$name->value] ??= $value;
+    }
+
+    /**
+     * Record a top-level `const NAME = <constant expression>;` under its
+     * namespaced name, like collectDefinedConstant() does for define().
+     */
+    private function collectDeclaredConstants(Const_ $const): void
+    {
+        foreach ($const->consts as $constant) {
+            try {
+                $value = $this->constExprEvaluator->evaluateSilently($constant->value);
+            } catch (ConstExprEvaluationException) {
+                continue;
+            }
+
+            $this->definedConstants['user'][($constant->namespacedName ?? $constant->name)->toString()] ??= $value;
+        }
     }
 
     /**

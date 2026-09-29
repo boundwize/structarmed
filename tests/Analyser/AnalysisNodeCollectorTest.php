@@ -1213,6 +1213,46 @@ PHP);
         $this->assertSame([10], array_column($second->enumCases, 'value'));
     }
 
+    public function testCollectsEnumCaseValueOfConstDeclaredInFile(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            const LIMIT = 5, DOUBLE_LIMIT = LIMIT * 2;
+            const RUNTIME = LIMIT . STRUCTARMED_UNDEFINED;
+
+            enum Status: int
+            {
+                case Limit = LIMIT;
+                case Double = DOUBLE_LIMIT;
+                case Runtime = RUNTIME;
+            }
+            PHP);
+
+        $this->assertSame([5, 10, null], array_column($classNode->enumCases, 'value'));
+    }
+
+    public function testCollectsEnumCaseValueOfNamespacedConst(): void
+    {
+        // An unqualified name tries the namespaced constant first, so the
+        // file's own PHP_INT_MAX shadows the built-in.
+        $classNode = $this->collect(<<<'PHP_WRAP'
+        <?php
+        namespace App;
+        
+        const LIMIT = 5;
+        const PHP_INT_MAX = 1;
+        
+        enum Status: int
+        {
+            case Limit = LIMIT;
+            case Qualified = \App\LIMIT;
+            case Max = PHP_INT_MAX;
+        }
+        PHP_WRAP);
+
+        $this->assertSame([5, 5, 1], array_column($classNode->enumCases, 'value'));
+    }
+
     public function testSkipsDefineWithoutStaticNameOrValue(): void
     {
         $classNode = $this->collect(<<<'PHP'
