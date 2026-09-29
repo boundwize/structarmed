@@ -9,9 +9,10 @@ final readonly class EnumCaseNode
     /**
      * @param int|string|null $value Statically resolved backing value of the case. Null for
      *                               a pure enum case, and also for a backed case whose value
-     *                               the analyser cannot evaluate (a global or class constant
-     *                               expression, for instance) — use ClassNode::isBackedEnum()
-     *                               to tell whether the case is backed at all.
+     *                               the analyser cannot evaluate (a class constant, or a
+     *                               constant neither built in nor defined earlier in the
+     *                               file, for instance) — use ClassNode::isBackedEnum() to
+     *                               tell whether the case is backed at all.
      */
     public function __construct(
         public string $name,

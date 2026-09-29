@@ -30,6 +30,9 @@ use PHPUnit\Framework\TestCase;
 
 use function array_column;
 
+use const E_ALL;
+use const PHP_INT_MAX;
+
 #[CoversClass(AnonymousClassNode::class)]
 #[CoversClass(AnalysisNodeCollector::class)]
 #[CoversClass(ClassLikeAnalysis::class)]
@@ -1140,14 +1143,82 @@ PHP);
     public function testCollectsIntBackedEnumCaseValues(): void
     {
         $classNode = $this->collect(
-            '<?php enum Status: int { case Active = 1; case Shifted = 1 << 3; case Unresolvable = PHP_INT_MAX; }'
+            '<?php enum Status: int { case Active = 1; case Shifted = 1 << 3; case Max = PHP_INT_MAX; }'
         );
 
         $this->assertSame('int', $classNode->enumBackingType);
-        $this->assertSame([1, 8, null], array_column($classNode->enumCases, 'value'));
-        // Still a backed case: the analyser just cannot evaluate PHP_INT_MAX.
+        $this->assertSame([1, 8, PHP_INT_MAX], array_column($classNode->enumCases, 'value'));
         $this->assertTrue($classNode->isBackedEnum());
-        $this->assertFalse($classNode->enumCases[2]->hasResolvedValue());
+        $this->assertTrue($classNode->enumCases[2]->hasResolvedValue());
+    }
+
+    public function testCollectsEnumCaseValueOfConstantDefinedInFile(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            define('LIMIT', 5);
+            define('DOUBLE_LIMIT', LIMIT * 2);
+
+            enum Status: int
+            {
+                case Limit = LIMIT;
+                case Double = DOUBLE_LIMIT;
+            }
+            PHP);
+
+        $this->assertSame([5, 10], array_column($classNode->enumCases, 'value'));
+        $this->assertTrue($classNode->enumCases[0]->hasResolvedValue());
+    }
+
+    public function testDropsConstantDefinedInPreviousFile(): void
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
+        $nodeTraverser          = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
+
+        $files = [
+            '/fake/path/Limit.php' => "<?php define('LIMIT', 5); enum First: int { case Limit = LIMIT; }",
+            '/fake/path/Other.php' => '<?php enum Second: int { case Limit = LIMIT; }',
+        ];
+
+        foreach ($files as $file => $code) {
+            $analysisNodeCollector->setCurrentFile($file);
+            $nodeTraverser->traverse($parser->parse($code) ?? []);
+        }
+
+        [$first, $second] = $analysisNodeCollector->getClassNodes();
+
+        $this->assertSame([5], array_column($first->enumCases, 'value'));
+        $this->assertSame([null], array_column($second->enumCases, 'value'));
+    }
+
+    public function testKeepsFirstValueOfConstantDefinedTwice(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            define('LIMIT', 5);
+            define('LIMIT', 10);
+            define('E_ALL', 0);
+
+            enum Status: int
+            {
+                case Limit = LIMIT;
+                case All = E_ALL;
+            }
+            PHP);
+
+        $this->assertSame([5, E_ALL], array_column($classNode->enumCases, 'value'));
+    }
+
+    public function testLeavesUndefinedConstantEnumCaseValueUnresolved(): void
+    {
+        $classNode = $this->collect('<?php enum Status: int { case Limit = APP_LIMIT; case Own = self::Limit; }');
+
+        $this->assertSame([null, null], array_column($classNode->enumCases, 'value'));
+        // Still a backed case: the analyser just cannot evaluate an undefined constant.
+        $this->assertTrue($classNode->isBackedEnum());
+        $this->assertFalse($classNode->enumCases[0]->hasResolvedValue());
     }
 
     public function testPureEnumHasNoBackingTypeOrCaseValues(): void

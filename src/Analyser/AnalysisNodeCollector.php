@@ -77,6 +77,7 @@ use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
+use function array_key_exists;
 use function array_keys;
 use function array_pop;
 use function array_push;
@@ -84,6 +85,7 @@ use function array_unique;
 use function array_values;
 use function count;
 use function end;
+use function get_defined_constants;
 use function in_array;
 use function is_finite;
 use function is_int;
@@ -312,6 +314,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private readonly ConstExprEvaluator $constExprEvaluator;
 
     /**
+     * Constants the evaluator resolves, grouped by extension as
+     * get_defined_constants(true) returns them. The 'user' group holds the
+     * current file's define() calls instead of the analysing process's own:
+     * setCurrentFile() drops it, and each define() entered adds to it.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $definedConstants;
+
+    /**
      * Stack of class-likes currently being entered, so `new self`,
      * `new static`, and `new parent` instantiations can be resolved to the
      * class names (or deferred markers) they target. Anonymous classes have
@@ -401,7 +413,18 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
-        $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): string {
+        $this->definedConstants   = get_defined_constants(true);
+        $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): mixed {
+            if ($expr instanceof ConstFetch) {
+                $name = $expr->name->toString();
+
+                foreach ($this->definedConstants as $definedConstant) {
+                    if (array_key_exists($name, $definedConstant)) {
+                        return $definedConstant[$name];
+                    }
+                }
+            }
+
             if (
                 $expr instanceof ClassConstFetch
                 && $expr->name instanceof Identifier
@@ -415,7 +438,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 }
             }
 
-            throw new ConstExprEvaluationException('Expression is not a resolvable class name.');
+            throw new ConstExprEvaluationException('Expression is not a defined constant or resolvable class name.');
         });
     }
 
@@ -438,6 +461,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
+
+        unset($this->definedConstants['user']);
     }
 
     /** @return list<ClassNode> */
@@ -1092,16 +1117,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        // Entered before its arguments, so the name string is marked before
-        // the String_ branch sees it — also outside any scope, where a
-        // top-level `if (! function_exists(...))` guard usually sits.
-        if (
-            $node instanceof FuncCall
-            && $node->name instanceof Name
-            && $node->name->toLowerString() === 'function_exists'
-            && ! $node->isFirstClassCallable()
-        ) {
-            ($node->getArgs()[0] ?? null)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+        if ($node instanceof FuncCall && $node->name instanceof Name && ! $node->isFirstClassCallable()) {
+            $functionName = $node->name->toLowerString();
+
+            // Entered before its arguments, so the name string is marked before
+            // the String_ branch sees it — also outside any scope, where a
+            // top-level `if (! function_exists(...))` guard usually sits.
+            if ($functionName === 'function_exists') {
+                ($node->getArgs()[0] ?? null)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+            } elseif ($functionName === 'define') {
+                $this->collectDefinedConstant($node->getArgs());
+            }
         }
 
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
@@ -1384,10 +1410,34 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
+     * Record `define('NAME', <constant expression>)` so a later enum case in
+     * the same file can resolve NAME, without running the call.
+     *
+     * @param array<Arg> $args
+     */
+    private function collectDefinedConstant(array $args): void
+    {
+        $name = $args[0]->value ?? null;
+
+        if (! $name instanceof String_ || ! isset($args[1])) {
+            return;
+        }
+
+        try {
+            $value = $this->constExprEvaluator->evaluateSilently($args[1]->value);
+        } catch (ConstExprEvaluationException) {
+            return;
+        }
+
+        // Like PHP, a second define() of the same name keeps the first value.
+        $this->definedConstants['user'][$name->value] ??= $value;
+    }
+
+    /**
      * Statically resolve a backed enum case value. Returns null for a pure
      * enum case and for values that depend on symbols outside the expression
-     * (global constants, other class constants), which the analyser cannot
-     * evaluate.
+     * (constants neither built in nor defined earlier in the file, class
+     * constants), which the analyser cannot evaluate.
      */
     private function resolveEnumCaseValue(?Expr $expr): int|string|null
     {

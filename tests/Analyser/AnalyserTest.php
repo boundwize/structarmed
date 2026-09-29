@@ -1759,6 +1759,42 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnDefinedConstantClassExpression(): void
+    {
+        // The factory file's own define() is read statically, so the
+        // concatenated class expression resolves to App\BaseRepository.
+        $factory = <<<'PHP'
+            <?php
+            namespace App;
+
+            define('APP_NAMESPACE', 'App\\');
+
+            final class Factory
+            {
+                public function make(): object
+                {
+                    return new (APP_NAMESPACE . 'BaseRepository')();
+                }
+            }
+            PHP;
+
+        $basePath = $this->makeTempProject([
+            'src/BaseRepository.php' => '<?php namespace App; class BaseRepository {}',
+            'src/UserRepository.php' => '<?php namespace App;'
+                . ' final class UserRepository extends BaseRepository {}',
+            'src/Factory.php'        => $factory,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRuleFlagsFactoryFedParent(): void
     {
         // `make(Base::class)` cannot be connected to the factory's
