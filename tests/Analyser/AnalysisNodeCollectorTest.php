@@ -29,6 +29,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function array_column;
+use function define;
+use function defined;
 
 use const E_ALL;
 use const PHP_INT_MAX;
@@ -1269,6 +1271,27 @@ PHP);
             PHP);
 
         $this->assertSame([null, null], array_column($classNode->enumCases, 'value'));
+    }
+
+    public function testFileDefineWinsOverConstantDefinedByAnalysingProcess(): void
+    {
+        // The analysing process's own define()s (a bootstrap, say) are left
+        // out: parallel workers never run them, so only the file's counts.
+        if (! defined('STRUCTARMED_PROCESS_LIMIT')) {
+            define('STRUCTARMED_PROCESS_LIMIT', 5);
+        }
+
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            define('STRUCTARMED_PROCESS_LIMIT', 10);
+
+            enum Status: int
+            {
+                case Limit = STRUCTARMED_PROCESS_LIMIT;
+            }
+            PHP);
+
+        $this->assertSame([10], array_column($classNode->enumCases, 'value'));
     }
 
     public function testKeepsFirstValueOfConstantDefinedTwice(): void
