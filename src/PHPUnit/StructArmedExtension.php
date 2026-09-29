@@ -45,12 +45,13 @@ final class StructArmedExtension implements Extension
             ? $parameters->get('config')
             : ConfigLoader::discover($basePath);
 
-        $architecture = ConfigLoader::load($configFile);
+        $configFiles  = [];
+        $architecture = ConfigLoader::load($configFile, $configFiles);
 
         $start                        = microtime(true);
         $fileHashProvider             = new FileHashProvider();
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
-        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $configHash                   = $analysisCacheMetadataFactory->filesHash($configFiles);
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,
@@ -71,7 +72,13 @@ final class StructArmedExtension implements Extension
         );
 
         $files    = $analyser->filesForAnalysis($architecture);
-        $metadata = $analysisCacheMetadataFactory->metadata($basePath, $configFile, [], $files);
+        $metadata = $analysisCacheMetadataFactory->metadata(
+            $basePath,
+            $configFile,
+            [],
+            $files,
+            $configFiles
+        );
         $cacheKey = $analysisCacheMetadataFactory->key($metadata);
 
         $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);

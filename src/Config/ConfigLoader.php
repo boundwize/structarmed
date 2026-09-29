@@ -7,12 +7,21 @@ namespace Boundwize\StructArmed\Config;
 use Boundwize\StructArmed\Architecture;
 use RuntimeException;
 
+use function array_fill_keys;
+use function array_unique;
+use function array_values;
 use function file_exists;
+use function get_included_files;
+use function realpath;
 use function sprintf;
 
 final class ConfigLoader
 {
-    public static function load(string $configPath): Architecture
+    /**
+     * @param list<string> $configFiles
+     * @param-out list<string> $configFiles
+     */
+    public static function load(string $configPath, array &$configFiles = []): Architecture
     {
         if (! file_exists($configPath)) {
             throw new RuntimeException(sprintf(
@@ -22,7 +31,8 @@ final class ConfigLoader
             ));
         }
 
-        $architecture = require $configPath;
+        $previouslyIncludedFiles = array_fill_keys(get_included_files(), true);
+        $architecture            = require $configPath;
 
         if (! $architecture instanceof Architecture) {
             throw new RuntimeException(sprintf(
@@ -31,6 +41,19 @@ final class ConfigLoader
                 Architecture::class
             ));
         }
+
+        $rootConfigPath = realpath($configPath) ?: $configPath;
+        $configFiles    = [$rootConfigPath];
+
+        foreach (get_included_files() as $includedFile) {
+            if (isset($previouslyIncludedFiles[$includedFile]) || $includedFile === $rootConfigPath) {
+                continue;
+            }
+
+            $configFiles[] = $includedFile;
+        }
+
+        $configFiles = array_values(array_unique($configFiles));
 
         return $architecture;
     }

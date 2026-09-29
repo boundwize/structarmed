@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 use function file_put_contents;
+use function realpath;
 use function touch;
 
 #[CoversClass(ConfigLoader::class)]
@@ -34,6 +35,22 @@ final class ConfigLoaderTest extends TestCase
         $this->expectExceptionMessage('must return an instance of ' . Architecture::class);
 
         ConfigLoader::load($path);
+    }
+
+    public function testLoadCapturesRequiredPhpFiles(): void
+    {
+        $directory  = $this->makeTempDir();
+        $configPath = $directory . '/structarmed.php';
+        $dependency = $directory . '/architecture.php';
+
+        file_put_contents($configPath, "<?php\n\nreturn require __DIR__ . '/architecture.php';\n");
+        file_put_contents($dependency, '<?php return ' . Architecture::class . "::define();\n");
+
+        $configFiles  = [];
+        $architecture = ConfigLoader::load($configPath, $configFiles);
+
+        $this->assertSame([realpath($configPath), realpath($dependency)], $configFiles);
+        $this->assertInstanceOf(Architecture::class, $architecture);
     }
 
     public function testDiscoverPrefersProjectConfig(): void

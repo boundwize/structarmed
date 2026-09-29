@@ -14,7 +14,6 @@ use function hash_init;
 use function hash_update;
 use function json_encode;
 use function rtrim;
-use function sort;
 
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_THROW_ON_ERROR;
@@ -31,17 +30,21 @@ final readonly class AnalysisCacheMetadataFactory
     /**
      * @param list<string> $scanPaths
      * @param list<string> $files
+     * @param list<string> $configFiles
      * @return array<string, mixed>
      */
-    public function metadata(string $basePath, string $configPath, array $scanPaths, array $files): array
-    {
-        sort($files);
-
+    public function metadata(
+        string $basePath,
+        string $configPath,
+        array $scanPaths,
+        array $files,
+        array $configFiles = [],
+    ): array {
         return [
-            'version'                      => 5,
+            'version'                      => 6,
             'basePath'                     => $basePath,
             'configPath'                   => $configPath,
-            'configHash'                   => $this->fileHash($configPath),
+            'configHash'                   => $this->filesHash($configFiles === [] ? [$configPath] : $configFiles),
             'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash(),
             'composerHash'                 => $this->composerHash($basePath),
             'scanPaths'                    => $scanPaths,
@@ -81,7 +84,7 @@ final readonly class AnalysisCacheMetadataFactory
     /**
      * @param list<string> $files
      */
-    private function filesHash(array $files): string
+    public function filesHash(array $files): string
     {
         $hashContext = hash_init('xxh128');
 

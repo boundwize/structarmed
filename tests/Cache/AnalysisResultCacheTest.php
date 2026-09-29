@@ -15,9 +15,11 @@ use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use Boundwize\StructArmed\Analyser\PropertyNode;
+use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;
+use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Composer\InstalledVersions;
@@ -616,6 +618,53 @@ final class AnalysisResultCacheTest extends TestCase
             );
         } finally {
             $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testCacheInvalidatesWhenRequiredConfigDependencyChanges(): void
+    {
+        $basePath       = $this->createTempDirectory();
+        $cacheDirectory = $this->createTempDirectory();
+        $configPath     = $basePath . '/structarmed.php';
+        $dependencyPath = $basePath . '/architecture.php';
+
+        file_put_contents($configPath, "<?php\n\nreturn require __DIR__ . '/architecture.php';\n");
+        file_put_contents(
+            $dependencyPath,
+            '<?php return ' . Architecture::class . "::define();\n"
+        );
+
+        try {
+            $configFiles = [];
+            ConfigLoader::load($configPath, $configFiles);
+            $fileHashes    = new FileHashProvider();
+            $metadata      = new AnalysisCacheMetadataFactory($fileHashes);
+            $oldConfigHash = $metadata->filesHash($configFiles);
+            $staleCache    = new AnalysisResultCache($basePath, $fileHashes, $cacheDirectory, $oldConfigHash);
+
+            $staleCache->store('key', [], new RuleViolationCollection());
+
+            file_put_contents(
+                $dependencyPath,
+                '<?php return ' . Architecture::class . "::define()->layer('Changed', 'src/');\n"
+            );
+
+            $newFileHashes = new FileHashProvider();
+            $newConfigHash = (new AnalysisCacheMetadataFactory($newFileHashes))->filesHash($configFiles);
+            $freshCache    = new AnalysisResultCache(
+                $basePath,
+                $newFileHashes,
+                $cacheDirectory,
+                $newConfigHash
+            );
+
+            $this->assertNotSame($oldConfigHash, $newConfigHash);
+            $this->assertTrue($freshCache->shouldInvalidate());
+        } finally {
+            unlink($configPath);
+            unlink($dependencyPath);
+            $this->removeTempDirectory($basePath);
+            $this->removeTempDirectory($cacheDirectory);
         }
     }
 
@@ -2701,7 +2750,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertSame($directory, $metadata['basePath']);
             $this->assertSame($config, $metadata['configPath']);
             $this->assertSame(['src'], $metadata['scanPaths']);
-            $this->assertSame(5, $metadata['version']);
+            $this->assertSame(6, $metadata['version']);
             $this->assertIsString($metadata['configHash']);
             $this->assertIsString($metadata['composerGeneratedVersionHash']);
 

@@ -124,7 +124,8 @@ final readonly class AnalyseCommand
 
         try {
             $configFile   = $options['config'] ?? ConfigLoader::discover($basePath);
-            $architecture = ConfigLoader::load($configFile);
+            $configFiles  = [];
+            $architecture = ConfigLoader::load($configFile, $configFiles);
         } catch (RuntimeException $runtimeException) {
             return $this->reportError($runtimeException);
         }
@@ -132,7 +133,7 @@ final readonly class AnalyseCommand
         $start                        = microtime(true);
         $fileHashProvider             = new FileHashProvider();
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
-        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $configHash                   = $analysisCacheMetadataFactory->filesHash($configFiles);
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,
@@ -152,7 +153,13 @@ final readonly class AnalyseCommand
         }
 
         $files           = $analyser->filesForAnalysis($architecture, $scanPaths);
-        $metadata        = $analysisCacheMetadataFactory->metadata($basePath, $configFile, $scanPaths, $files);
+        $metadata        = $analysisCacheMetadataFactory->metadata(
+            $basePath,
+            $configFile,
+            $scanPaths,
+            $files,
+            $configFiles
+        );
         $cacheKey        = $analysisCacheMetadataFactory->key($metadata);
         $progress        = $reportType === 'console' && ! isset($options['no-progress'])
             ? $this->progressHandler ?? new ConsoleProgressBar()
@@ -208,7 +215,8 @@ final readonly class AnalyseCommand
                     $basePath,
                     $configFile,
                     $scanPaths,
-                    $files
+                    $files,
+                    $configFiles
                 );
                 $cacheKey                          = $analysisCacheMetadataFactory->key($metadata);
                 $unfilteredRuleViolationCollection = $analyser->analyse(
