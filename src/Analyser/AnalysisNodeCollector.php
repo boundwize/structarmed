@@ -719,7 +719,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         // Both instantiation handlers and the define() collection run on
         // leave, once the NameResolver has resolved the nested name nodes
-        // (e.g. Base::class inside the class expression or defined value). They only match expressions, and ClassMethod /
+        // (e.g. Base::class inside the class expression or defined value).
+        // They only match expressions, and ClassMethod /
         // ClassLike are statements, so one instanceof splits the two groups.
         if ($node instanceof Expr) {
             if ($node instanceof Closure || $node instanceof ArrowFunction) {
