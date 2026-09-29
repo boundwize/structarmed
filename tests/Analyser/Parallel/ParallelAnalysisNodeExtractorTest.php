@@ -404,24 +404,33 @@ PHP);
     public function testExtractReportsStderrWhenWorkerDiesBeforeWritingPayload(): void
     {
         // Simulates a worker killed by OOM / fatal error before AnalysisNodeWorker can serialize a result:
-        // non-zero exit code, empty output file, diagnostic on stderr.
+        // non-zero exit code, empty output file, diagnostic on stderr. Both workers die; each failure is reported.
         $GLOBALS['mock_proc_open_command'] = [
             PHP_BINARY,
             '-r',
             'fwrite(STDERR, "simulated worker fatal"); exit(255);',
         ];
 
-        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
-        $file = $dir . '/Foo.php';
-        file_put_contents($file, '<?php class Foo {}');
+        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file1 = $dir . '/Foo.php';
+        $file2 = $dir . '/Bar.php';
+        file_put_contents($file1, '<?php class Foo {}');
+        file_put_contents($file2, '<?php class Bar {}');
 
         $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
 
         try {
-            $parallelAnalysisNodeExtractor->extract([$file]);
+            $parallelAnalysisNodeExtractor->extract([$file1, $file2]);
             $this->fail('Expected RuntimeException was not thrown.');
         } catch (RuntimeException $runtimeException) {
-            $this->assertStringContainsString('Parallel analysis worker failed:', $runtimeException->getMessage());
+            $this->assertStringContainsString(
+                '[worker #1] Parallel analysis worker failed:',
+                $runtimeException->getMessage()
+            );
+            $this->assertStringContainsString(
+                '[worker #2] Parallel analysis worker failed:',
+                $runtimeException->getMessage()
+            );
             $this->assertStringContainsString('worker exited with code 255', $runtimeException->getMessage());
             $this->assertStringContainsString('simulated worker fatal', $runtimeException->getMessage());
             $this->assertStringNotContainsString('invalid payload', $runtimeException->getMessage());
