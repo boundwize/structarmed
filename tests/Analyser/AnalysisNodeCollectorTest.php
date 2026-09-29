@@ -1213,6 +1213,24 @@ PHP);
         $this->assertSame([10], array_column($second->enumCases, 'value'));
     }
 
+    public function testSkipsDefineWithoutStaticNameOrValue(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            define($name, 1);
+            define('NO_VALUE');
+            define('RUNTIME', getenv('LIMIT'));
+
+            enum Status: int
+            {
+                case NoValue = NO_VALUE;
+                case Runtime = RUNTIME;
+            }
+            PHP);
+
+        $this->assertSame([null, null], array_column($classNode->enumCases, 'value'));
+    }
+
     public function testKeepsFirstValueOfConstantDefinedTwice(): void
     {
         $classNode = $this->collect(<<<'PHP'
