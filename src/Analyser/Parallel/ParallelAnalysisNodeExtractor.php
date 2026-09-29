@@ -30,6 +30,7 @@ use function fgets;
 use function file_put_contents;
 use function filesize;
 use function fread;
+use function implode;
 use function is_array;
 use function is_dir;
 use function is_string;
@@ -171,7 +172,7 @@ final readonly class ParallelAnalysisNodeExtractor
         $fileInstantiations     = [];
         $functionNodes          = [];
         $anonymousFunctionNodes = [];
-        $failure                = null;
+        $failures               = [];
 
         while ($pending !== []) {
             $anyActivity = false;
@@ -286,7 +287,7 @@ final readonly class ParallelAnalysisNodeExtractor
                     $fileReferences     += $workerFileReferences;
                     $fileInstantiations += $workerFileInstantiations;
                 } catch (RuntimeException $runtimeException) {
-                    $failure ??= $runtimeException->getMessage();
+                    $failures[] = sprintf('[worker #%d] %s', $key + 1, $runtimeException->getMessage());
                 } finally {
                     $this->cleanup([
                         $worker['inputFile'],
@@ -304,8 +305,8 @@ final readonly class ParallelAnalysisNodeExtractor
             }
         }
 
-        if ($failure !== null) {
-            throw new RuntimeException($failure);
+        if ($failures !== []) {
+            throw new RuntimeException(implode("\n", $failures));
         }
 
         return new ExtractionResult(
