@@ -57,11 +57,13 @@ use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Const_;
+use PhpParser\Node\Stmt\Declare_;
 use PhpParser\Node\Stmt\Do_;
 use PhpParser\Node\Stmt\Echo_;
 use PhpParser\Node\Stmt\ElseIf_;
 use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\EnumCase;
+use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\Stmt\For_;
 use PhpParser\Node\Stmt\Foreach_;
 use PhpParser\Node\Stmt\Function_;
@@ -142,6 +144,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private const FUNCTION_EXISTS_CHECK_ATTRIBUTE = 'structarmedFunctionExistsCheck';
 
     /**
+     * Marks a define() call that always runs: a top-level statement, not one
+     * inside a branch or function body, whose constant may never be defined.
+     */
+    private const UNCONDITIONAL_DEFINE_ATTRIBUTE = 'structarmedUnconditionalDefine';
+
+    /**
      * Method names of the ReflectionClass object-construction APIs. Calling
      * one chained on a `new ReflectionClass(<resolvable class name>)` receiver
      * instantiates the reflected class.
@@ -220,7 +228,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             Namespace_::class     => true,
             Use_::class           => true,
             GroupUse::class       => true,
-            Const_::class         => true,
             Function_::class      => true,
             Class_::class         => true,
             Interface_::class     => true,
@@ -250,8 +257,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         StaticCall::class         => true,
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
+        FuncCall::class           => true,
         ClassMethod::class        => true,
         EnumCase::class           => true,
+        Const_::class             => true,
         Function_::class          => true,
         Class_::class             => true,
         Interface_::class         => true,
@@ -320,10 +329,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * Constants the evaluator resolves, by name: 'builtIn' holds every
      * extension's constants from get_defined_constants(true), 'user' the
      * current file's define() calls and const statements instead of the
-     * analysing process's own. setCurrentFile() drops 'user', and each
+     * analysing process's own. setCurrentFile() empties 'user', and each
      * define() or const statement entered adds to it.
      *
-     * @var array{builtIn: array<string, mixed>, user?: array<string, mixed>}
+     * @var array{builtIn: array<string, mixed>, user: array<string, mixed>}
      */
     private array $definedConstants;
 
@@ -420,11 +429,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $constantsByExtension = get_defined_constants(true);
         unset($constantsByExtension['user']);
 
-        $this->definedConstants   = ['builtIn' => array_merge(...array_values($constantsByExtension))];
+        $this->definedConstants   = [
+            'builtIn' => array_merge(...array_values($constantsByExtension)),
+            'user'    => [],
+        ];
         $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): mixed {
             if ($expr instanceof ConstFetch) {
                 $name           = $expr->name->toString();
-                $userConstants  = $this->definedConstants['user'] ?? [];
+                $userConstants  = $this->definedConstants['user'];
                 $namespacedName = $expr->name->getAttribute('namespacedName');
 
                 // Like PHP, an unqualified name in a namespace tries the
@@ -484,7 +496,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
 
-        unset($this->definedConstants['user']);
+        $this->definedConstants['user'] = [];
     }
 
     /** @return list<ClassNode> */
@@ -657,12 +669,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 return null;
             }
 
-            if ($node instanceof Const_) {
-                $this->collectDeclaredConstants($node);
-
-                return null;
-            }
-
             if ($node instanceof Function_) {
                 $this->activeFunctionNames[] = $this->resolveFunctionDeclarationName($node);
                 $this->startFunctionLikeAnalysis($node);
@@ -711,9 +717,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
-        // Both instantiation handlers run on leave, once the NameResolver
-        // has resolved the nested name nodes (e.g. Base::class inside the
-        // class expression). They only match expressions, and ClassMethod /
+        // Both instantiation handlers and the define() collection run on
+        // leave, once the NameResolver has resolved the nested name nodes
+        // (e.g. Base::class inside the class expression or defined value). They only match expressions, and ClassMethod /
         // ClassLike are statements, so one instanceof splits the two groups.
         if ($node instanceof Expr) {
             if ($node instanceof Closure || $node instanceof ArrowFunction) {
@@ -729,6 +735,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // once a class becomes abstract.
             if ($node instanceof New_) {
                 $this->collectInstantiation($node);
+
+                return null;
+            }
+
+            if ($node instanceof FuncCall) {
+                if ($node->hasAttribute(self::UNCONDITIONAL_DEFINE_ATTRIBUTE)) {
+                    $this->collectDefinedConstant($node);
+                }
 
                 return null;
             }
@@ -769,6 +783,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
+        if ($node instanceof Const_) {
+            $this->collectDeclaredConstants($node);
+
+            return null;
+        }
+
         if ($node instanceof Function_) {
             $this->finishFunctionLikeAnalysis();
             array_pop($this->activeFunctionNames);
@@ -803,6 +823,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         } else {
             $this->fileClassLikes[] = [$node, $analysis, null, null];
         }
+
+        return null;
+    }
+
+    /** @param Node[] $nodes */
+    public function beforeTraverse(array $nodes): null
+    {
+        $this->markUnconditionalDefines($nodes);
 
         return null;
     }
@@ -1145,17 +1173,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        if ($node instanceof FuncCall && $node->name instanceof Name && ! $node->isFirstClassCallable()) {
-            $functionName = $node->name->toLowerString();
-
-            // Entered before its arguments, so the name string is marked before
-            // the String_ branch sees it — also outside any scope, where a
-            // top-level `if (! function_exists(...))` guard usually sits.
-            if ($functionName === 'function_exists') {
-                ($node->getArgs()[0] ?? null)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
-            } elseif ($functionName === 'define') {
-                $this->collectDefinedConstant($node->getArgs());
-            }
+        // Entered before its arguments, so the name string is marked before
+        // the String_ branch sees it — also outside any scope, where a
+        // top-level `if (! function_exists(...))` guard usually sits.
+        if (
+            $node instanceof FuncCall
+            && $node->name instanceof Name
+            && $node->name->toLowerString() === 'function_exists'
+            && ! $node->isFirstClassCallable()
+        ) {
+            ($node->getArgs()[0] ?? null)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
         }
 
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
@@ -1410,19 +1437,28 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /**
      * Evaluate a constant expression to a class-name string: 'App\X' literals,
      * X::class (including self/static/parent::class, which may yield a
-     * deferred marker), and concatenations of those. Anything depending on
-     * runtime values resolves to null.
+     * deferred marker), concatenations of those, and constants holding one.
+     * Anything depending on runtime values resolves to null.
      */
     private function resolveClassNameExpr(Expr $expr): ?string
     {
-        if (! $expr instanceof String_ && ! $expr instanceof ClassConstFetch && ! $expr instanceof Concat) {
+        if (
+            ! $expr instanceof String_
+            && ! $expr instanceof ClassConstFetch
+            && ! $expr instanceof Concat
+            && ! $expr instanceof ConstFetch
+        ) {
             return null;
         }
 
         try {
-            /** @var string $value */
             $value = $this->constExprEvaluator->evaluateSilently($expr);
         } catch (ConstExprEvaluationException) {
+            return null;
+        }
+
+        // A constant may hold any value, not only a class-name string.
+        if (! is_string($value)) {
             return null;
         }
 
@@ -1438,13 +1474,40 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
+     * Mark the define() calls among the file's top-level statements, looking
+     * into namespace and declare blocks as {@see UnconditionallyDeclaredFunctions}
+     * does. Names are not resolved yet, so the calls are only collected on leave.
+     *
+     * @param Node[] $nodes
+     */
+    private function markUnconditionalDefines(array $nodes): void
+    {
+        foreach ($nodes as $node) {
+            if (($node instanceof Namespace_ || $node instanceof Declare_) && $node->stmts !== null) {
+                $this->markUnconditionalDefines($node->stmts);
+
+                continue;
+            }
+
+            if (
+                $node instanceof Expression
+                && $node->expr instanceof FuncCall
+                && $node->expr->name instanceof Name
+                && $node->expr->name->toLowerString() === 'define'
+                && ! $node->expr->isFirstClassCallable()
+            ) {
+                $node->expr->setAttribute(self::UNCONDITIONAL_DEFINE_ATTRIBUTE, true);
+            }
+        }
+    }
+
+    /**
      * Record `define('NAME', <constant expression>)` so a later enum case in
      * the same file can resolve NAME, without running the call.
-     *
-     * @param array<Arg> $args
      */
-    private function collectDefinedConstant(array $args): void
+    private function collectDefinedConstant(FuncCall $funcCall): void
     {
+        $args = $funcCall->getArgs();
         $name = $args[0]->value ?? null;
 
         if (! $name instanceof String_ || ! isset($args[1])) {
@@ -1457,8 +1520,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        // Like PHP, a second define() of the same name keeps the first value.
-        $this->definedConstants['user'][$name->value] ??= $value;
+        $this->definedConstants['user'][$name->value] = $value;
     }
 
     /**
@@ -1474,7 +1536,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 continue;
             }
 
-            $this->definedConstants['user'][($constant->namespacedName ?? $constant->name)->toString()] ??= $value;
+            $this->definedConstants['user'][($constant->namespacedName ?? $constant->name)->toString()] = $value;
         }
     }
 

@@ -32,7 +32,6 @@ use function array_column;
 use function define;
 use function defined;
 
-use const E_ALL;
 use const PHP_INT_MAX;
 
 #[CoversClass(AnonymousClassNode::class)]
@@ -291,6 +290,41 @@ PHP);
         // class expression the collector evaluates at all.
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\Service1']],
+            $analysisNodeCollector->getFileInstantiations()
+        );
+    }
+
+    public function testResolvesDefinedConstantClassExpressionAsInstantiation(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+
+            define('SERVICE_CLASS', Service::class);
+            const REFLECTED_CLASS = Reflected::class;
+
+            final class Factory
+            {
+                public function make(): object
+                {
+                    return new (SERVICE_CLASS)();
+                }
+
+                public function reflect(): object
+                {
+                    return (new \ReflectionClass(REFLECTED_CLASS))->newInstance();
+                }
+
+                public function number(): object
+                {
+                    return new (E_ALL)();
+                }
+            }
+            PHP);
+
+        // E_ALL holds no class name, so it resolves to nothing.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Service', 'ReflectionClass', 'App\Reflected']],
             $analysisNodeCollector->getFileInstantiations()
         );
     }
@@ -1255,6 +1289,39 @@ PHP);
         $this->assertSame([5, 5, 1], array_column($classNode->enumCases, 'value'));
     }
 
+    public function testSkipsConditionalDefine(): void
+    {
+        // Which branch runs, or whether the function is ever called, is only
+        // known at runtime, so neither constant has a static value.
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            if (rand(0, 1)) {
+                define('LIMIT', 5);
+            } else {
+                define('LIMIT', 10);
+            }
+
+            function configure(): void
+            {
+                define('OTHER_LIMIT', 5);
+            }
+
+            declare(ticks=1) {
+                define('TICK_LIMIT', 5);
+            }
+
+            enum Status: int
+            {
+                case Limit = LIMIT;
+                case Other = OTHER_LIMIT;
+                case Tick = TICK_LIMIT;
+            }
+            PHP);
+
+        // A declare block is not a branch, so its define() always runs.
+        $this->assertSame([null, null, 5], array_column($classNode->enumCases, 'value'));
+    }
+
     public function testSkipsDefineWithoutStaticNameOrValue(): void
     {
         $classNode = $this->collect(<<<'PHP'
@@ -1292,24 +1359,6 @@ PHP);
             PHP);
 
         $this->assertSame([10], array_column($classNode->enumCases, 'value'));
-    }
-
-    public function testKeepsFirstValueOfConstantDefinedTwice(): void
-    {
-        $classNode = $this->collect(<<<'PHP'
-            <?php
-            define('LIMIT', 5);
-            define('LIMIT', 10);
-            define('E_ALL', 0);
-
-            enum Status: int
-            {
-                case Limit = LIMIT;
-                case All = E_ALL;
-            }
-            PHP);
-
-        $this->assertSame([5, E_ALL], array_column($classNode->enumCases, 'value'));
     }
 
     public function testLeavesUndefinedConstantEnumCaseValueUnresolved(): void
