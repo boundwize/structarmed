@@ -40,11 +40,15 @@ final readonly class AnalysisCacheMetadataFactory
         array $files,
         array $configFiles = [],
     ): array {
+        if ($configFiles === []) {
+            $configFiles = [$configPath];
+        }
+
         return [
             'version'                      => 6,
             'basePath'                     => $basePath,
             'configPath'                   => $configPath,
-            'configHash'                   => $this->filesHash($configFiles === [] ? [$configPath] : $configFiles),
+            'configHash'                   => $this->filesHash($configFiles),
             'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash(),
             'composerHash'                 => $this->composerHash($basePath),
             'scanPaths'                    => $scanPaths,

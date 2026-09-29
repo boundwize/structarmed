@@ -637,10 +637,10 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $configFiles = [];
             ConfigLoader::load($configPath, $configFiles);
-            $fileHashes    = new FileHashProvider();
-            $metadata      = new AnalysisCacheMetadataFactory($fileHashes);
-            $oldConfigHash = $metadata->filesHash($configFiles);
-            $staleCache    = new AnalysisResultCache($basePath, $fileHashes, $cacheDirectory, $oldConfigHash);
+            $fileHashes                   = new FileHashProvider();
+            $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashes);
+            $oldConfigHash                = $analysisCacheMetadataFactory->filesHash($configFiles);
+            $staleCache                   = new AnalysisResultCache($basePath, $fileHashes, $cacheDirectory, $oldConfigHash);
 
             $staleCache->store('key', [], new RuleViolationCollection());
 
