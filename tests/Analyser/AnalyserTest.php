@@ -563,8 +563,7 @@ final class AnalyserTest extends TestCase
         $ruleViolationCollection = $analyser->analyse($architecture);
 
         // Order.php is a valid entity — should produce no layer violations
-        $this->assertEmpty($ruleViolationCollection->forLayer('Application'));
-        $this->assertEmpty($ruleViolationCollection->forLayer('Infrastructure'));
+        $this->assertTrue($ruleViolationCollection->isEmpty());
     }
 
     public function testAnalyserDetectsViolationsInBadCode(): void

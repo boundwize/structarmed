@@ -13,9 +13,6 @@ use function array_filter;
 use function array_map;
 use function array_values;
 use function count;
-use function json_encode;
-
-use const JSON_INVALID_UTF8_SUBSTITUTE;
 
 /**
  * @implements IteratorAggregate<int, RuleViolation>
@@ -58,17 +55,6 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
     }
 
     /** @return RuleViolation[] */
-    public function forLayer(string $layer): array
-    {
-        return array_values(
-            array_filter(
-                $this->violations,
-                static fn(RuleViolation $ruleViolation): bool => $ruleViolation->layer === $layer
-            )
-        );
-    }
-
-    /** @return RuleViolation[] */
     public function forRule(string $ruleKey): array
     {
         return array_values(
@@ -86,10 +72,5 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
             static fn(RuleViolation $ruleViolation): array => $ruleViolation->toArray(),
             $this->violations
         ));
-    }
-
-    public function toJson(): string
-    {
-        return (string) json_encode($this->toArray(), JSON_INVALID_UTF8_SUBSTITUTE);
     }
 }
