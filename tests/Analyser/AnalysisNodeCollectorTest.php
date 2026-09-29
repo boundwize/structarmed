@@ -171,6 +171,27 @@ PHP);
         return $this->makeCollector($code)->getAnonymousClassNodes();
     }
 
+    /**
+     * Visit each file with one collector, as AnalysisNodeExtractor does.
+     *
+     * @param array<string, string> $files File path => code
+     * @return list<ClassNode>
+     */
+    private function collectFiles(array $files): array
+    {
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
+        $nodeTraverser          = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
+
+        foreach ($files as $file => $code) {
+            $analysisNodeCollector->setCurrentFile($file);
+            $nodeTraverser->traverse($parser->parse($code) ?? []);
+        }
+
+        return $analysisNodeCollector->getClassNodes();
+    }
+
     private function makeCollector(string $code): AnalysisNodeCollector
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
@@ -1172,25 +1193,24 @@ PHP);
 
     public function testDropsConstantDefinedInPreviousFile(): void
     {
-        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
-        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
-        $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
-        $nodeTraverser          = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
-
-        $files = [
+        [$first, $second] = $this->collectFiles([
             '/fake/path/Limit.php' => "<?php define('LIMIT', 5); enum First: int { case Limit = LIMIT; }",
             '/fake/path/Other.php' => '<?php enum Second: int { case Limit = LIMIT; }',
-        ];
-
-        foreach ($files as $file => $code) {
-            $analysisNodeCollector->setCurrentFile($file);
-            $nodeTraverser->traverse($parser->parse($code) ?? []);
-        }
-
-        [$first, $second] = $analysisNodeCollector->getClassNodes();
+        ]);
 
         $this->assertSame([5], array_column($first->enumCases, 'value'));
         $this->assertSame([null], array_column($second->enumCases, 'value'));
+    }
+
+    public function testFollowsConstantRedefinedInNextFile(): void
+    {
+        [$first, $second] = $this->collectFiles([
+            '/fake/path/First.php'  => "<?php define('LIMIT', 5); enum First: int { case Limit = LIMIT; }",
+            '/fake/path/Second.php' => "<?php define('LIMIT', 10); enum Second: int { case Limit = LIMIT; }",
+        ]);
+
+        $this->assertSame([5], array_column($first->enumCases, 'value'));
+        $this->assertSame([10], array_column($second->enumCases, 'value'));
     }
 
     public function testKeepsFirstValueOfConstantDefinedTwice(): void

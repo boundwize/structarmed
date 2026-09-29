@@ -79,6 +79,7 @@ use PhpParser\Token;
 
 use function array_key_exists;
 use function array_keys;
+use function array_merge;
 use function array_pop;
 use function array_push;
 use function array_unique;
@@ -314,12 +315,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private readonly ConstExprEvaluator $constExprEvaluator;
 
     /**
-     * Constants the evaluator resolves, grouped by extension as
-     * get_defined_constants(true) returns them. The 'user' group holds the
-     * current file's define() calls instead of the analysing process's own:
-     * setCurrentFile() drops it, and each define() entered adds to it.
+     * Constants the evaluator resolves, by name: 'builtIn' holds every
+     * extension's constants from get_defined_constants(true), 'user' the
+     * current file's define() calls instead of the analysing process's own.
+     * setCurrentFile() drops 'user', and each define() entered adds to it.
      *
-     * @var array<string, array<string, mixed>>
+     * @var array{builtIn: array<string, mixed>, user?: array<string, mixed>}
      */
     private array $definedConstants;
 
@@ -413,15 +414,23 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     public function __construct(
         private readonly LayerResolverInterface $layerResolver
     ) {
-        $this->definedConstants   = get_defined_constants(true);
+        $constantsByExtension = get_defined_constants(true);
+        unset($constantsByExtension['user']);
+
+        $this->definedConstants   = ['builtIn' => array_merge(...array_values($constantsByExtension))];
         $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): mixed {
             if ($expr instanceof ConstFetch) {
                 $name = $expr->name->toString();
 
-                foreach ($this->definedConstants as $definedConstant) {
-                    if (array_key_exists($name, $definedConstant)) {
-                        return $definedConstant[$name];
-                    }
+                // A built-in wins: PHP rejects a define() that redeclares it.
+                if (array_key_exists($name, $this->definedConstants['builtIn'])) {
+                    return $this->definedConstants['builtIn'][$name];
+                }
+
+                $userConstants = $this->definedConstants['user'] ?? [];
+
+                if (array_key_exists($name, $userConstants)) {
+                    return $userConstants[$name];
                 }
             }
 
