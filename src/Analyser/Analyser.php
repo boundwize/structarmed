@@ -48,6 +48,7 @@ use function is_file;
 use function sprintf;
 use function str_starts_with;
 use function strcasecmp;
+use function strrchr;
 use function strtolower;
 use function substr;
 
@@ -968,10 +969,12 @@ final readonly class Analyser
     /**
      * Flag each named function referenced from another scanned scope: a call
      * (including a first-class callable) or a function-name string such as a
-     * callable 'App\helper'. A function calling itself is not a usage. An
-     * unqualified call to a namespaced function declared in another file is
-     * recorded under its global fallback name, and its namespaced name is a
-     * file reference, so it never matches a same-named function elsewhere.
+     * callable 'App\helper'. A function calling itself is not a usage.
+     *
+     * An unqualified call in a namespace to a function declared in another
+     * file is a fallback marker, which stands for that file's calls of the
+     * short name: it uses the namespaced function when declared and the
+     * global one otherwise, never a same-named function elsewhere.
      *
      * Calls made in closures are already merged into their enclosing
      * function-like or class-like, so only top-level closures are read.
@@ -980,11 +983,11 @@ final readonly class Analyser
      */
     private function markFunctionUsage(array $classNodes, ExtractionResult $extractionResult): void
     {
-        $called = [];
+        $fileCalls = [];
 
         foreach ([...$classNodes, ...$extractionResult->anonymousClassNodes] as $classLikeNode) {
             foreach ($classLikeNode->functionCalls as $functionCall) {
-                $called[strtolower($functionCall)] = true;
+                $fileCalls[$classLikeNode->file][strtolower($functionCall)] = true;
             }
         }
 
@@ -998,24 +1001,46 @@ final readonly class Analyser
             }
 
             foreach ($anonymousFunctionNode->functionCalls as $functionCall) {
-                $called[strtolower($functionCall)] = true;
+                $fileCalls[$anonymousFunctionNode->file][strtolower($functionCall)] = true;
             }
         }
 
+        $declared = [];
+
         foreach ($extractionResult->functionNodes as $functionNode) {
+            $declared[strtolower($functionNode->functionName)] = true;
+
             foreach ($functionNode->functionCalls as $functionCall) {
                 if (strcasecmp($functionCall, $functionNode->functionName) !== 0) {
-                    $called[strtolower($functionCall)] = true;
+                    $fileCalls[$functionNode->file][strtolower($functionCall)] = true;
                 }
             }
         }
 
         $referenced = [];
 
-        foreach ($extractionResult->fileReferences as $references) {
+        foreach ($extractionResult->fileReferences as $file => $references) {
             foreach ($references as $reference) {
-                $referenced[strtolower($reference)] = true;
+                $namespacedName = AnalysisNodeCollector::parseFunctionFallbackMarker($reference);
+
+                if ($namespacedName === null) {
+                    $referenced[strtolower($reference)] = true;
+
+                    continue;
+                }
+
+                $namespacedNameKey = strtolower($namespacedName);
+                $globalNameKey     = substr((string) strrchr($namespacedNameKey, '\\'), 1);
+
+                $referenced[isset($declared[$namespacedNameKey]) ? $namespacedNameKey : $globalNameKey] = true;
+                unset($fileCalls[$file][$globalNameKey]);
             }
+        }
+
+        $called = [];
+
+        foreach ($fileCalls as $fileCall) {
+            $called += $fileCall;
         }
 
         foreach ($extractionResult->functionNodes as $functionNode) {

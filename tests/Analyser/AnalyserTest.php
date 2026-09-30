@@ -1162,7 +1162,15 @@ final class AnalyserTest extends TestCase
             'src/helpers.php'   => <<<'PHP'
                 <?php
 
+                function helper(): void {}
                 function fallback_helper(): void {}
+                PHP,
+            'src/A/boot.php'    => <<<'PHP'
+                <?php
+
+                namespace A;
+
+                helper();
                 PHP,
             'src/A/Caller.php'  => <<<'PHP'
                 <?php
@@ -1201,12 +1209,78 @@ final class AnalyserTest extends TestCase
                 ->analyse($architecture, [], null, $analyserOptions)
                 ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
 
-            // helper() in namespace A reaches A\helper from another file, and
-            // fallback_helper() the global function as A\fallback_helper is
-            // not declared; neither reaches B\helper. The fully-qualified and
-            // imported calls keep theirs, and a self-call is no usage.
-            $this->assertSame(['A\recursive', 'B\helper'], $this->violationClassNames($violations));
+            // helper() in namespace A, scoped or top-level, reaches A\helper
+            // from another file, so PHP never falls back to the global helper()
+            // nor reaches B\helper; fallback_helper() reaches the global
+            // function as A\fallback_helper is not declared. The
+            // fully-qualified and imported calls keep theirs, and a self-call
+            // is no usage.
+            $this->assertSame(
+                ['A\recursive', 'B\helper', 'helper'],
+                $this->violationClassNames($violations)
+            );
         }
+    }
+
+    public function testNamespacedNativeFunctionCallFallsBackToNativeFunction(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Service.php'          => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Service
+                {
+                    public function run(): int
+                    {
+                        return strlen('x');
+                    }
+                }
+                PHP,
+            'src/Shadow/functions.php' => <<<'PHP'
+                <?php
+
+                namespace Shadow;
+
+                function strlen(string $value): int
+                {
+                    return 0;
+                }
+                PHP,
+        ]);
+
+        $yagniViolations = (new Analyser($basePath))
+            ->analyse(
+                Architecture::define()->withPreset(Preset::YAGNI(sourcePaths: ['src/'])),
+                [],
+                null,
+                AnalyserOptions::sequential()
+            )
+            ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+        // App\strlen() is not declared, so the call falls back to the native
+        // strlen(), never to Shadow\strlen() sharing its short name.
+        $this->assertSame(['Shadow\strlen'], $this->violationClassNames($yagniViolations));
+
+        $callViolations = (new Analyser($basePath))
+            ->analyse(
+                Architecture::define()
+                    ->layer('Source', 'src/')
+                    ->rule('source.no_strlen', new MayNotCallFunctionRule(layer: 'Source', function: 'strlen')),
+                [],
+                null,
+                AnalyserOptions::sequential()
+            )
+            ->forRule('source.no_strlen');
+
+        // The call keeps its global name, so a rule on the native function
+        // still sees it.
+        $this->assertCount(1, $callViolations);
+        $this->assertSame(
+            'Class [App\Service] must not call function [strlen()]',
+            $callViolations[0]->message,
+        );
     }
 
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
