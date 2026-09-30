@@ -1102,6 +1102,36 @@ final class AnalyserTest extends TestCase
         $this->assertSame(['unused_helper'], $this->violationClassNames($violations));
     }
 
+    public function testMustBeUsedFunctionRuleRecognizesGlobalFallbackCallFromNamespacedTopLevel(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/helpers.php'   => <<<'PHP'
+                <?php
+
+                function used_helper(): void {}
+                function unused_helper(): void {}
+                PHP,
+            'src/bootstrap.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                used_helper();
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+        // App\used_helper() is not declared, so PHP falls back to the global
+        // function at runtime: the top-level call keeps it alive.
+        $this->assertSame(['unused_helper'], $this->violationClassNames($violations));
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
     {
         $checker = '<?php namespace App;' . "\n"
