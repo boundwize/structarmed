@@ -32,7 +32,6 @@ use function file_put_contents;
 use function filesize;
 use function fread;
 use function implode;
-use function in_array;
 use function is_array;
 use function is_dir;
 use function is_string;
@@ -189,15 +188,11 @@ final readonly class ParallelAnalysisNodeExtractor
             $write  = null;
             $except = null;
 
-            // Blocks until a worker reports progress or exits; only the ready streams are left in $read.
+            // Blocks until a worker reports progress or exits.
             stream_select($read, $write, $except, null);
 
             foreach ($pending as $key => $worker) {
                 $stdoutPipe = $worker['stdoutPipe'];
-
-                if (! in_array($stdoutPipe, $read, true)) {
-                    continue;
-                }
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
