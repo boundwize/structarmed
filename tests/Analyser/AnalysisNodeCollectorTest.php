@@ -233,9 +233,10 @@ PHP);
 
         // '\App\Contract' is a valid fully-qualified spelling; the stored
         // name drops the leading separator so it matches ClassNode::$className.
-        // The top-level call itself is recorded under its namespaced name.
+        // The top-level call itself is recorded under its namespaced and
+        // global fallback names.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\interface_exists', 'App\Contract']],
+            ['/fake/path/Foo.php' => ['App\interface_exists', 'interface_exists', 'App\Contract']],
             $analysisNodeCollector->getFileReferences()
         );
     }
@@ -293,14 +294,15 @@ PHP);
 
         // The function_exists() argument probes for a function, it does not
         // use it; other function-name strings stay references. The top-level
-        // guard call itself is recorded under its namespaced name.
+        // guard call itself is recorded under its namespaced and global
+        // fallback names.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\function_exists', 'App\kept_helper']],
+            ['/fake/path/Foo.php' => ['App\function_exists', 'function_exists', 'App\kept_helper']],
             $analysisNodeCollector->getFileReferences()
         );
     }
 
-    public function testCollectsTopLevelUnqualifiedFunctionCallAsNamespacedFileReference(): void
+    public function testCollectsTopLevelUnqualifiedFunctionCallAsNamespacedAndGlobalFileReference(): void
     {
         $analysisNodeCollector = $this->makeCollector(<<<'PHP'
             <?php
@@ -310,9 +312,10 @@ PHP);
             helper();
             PHP);
 
-        // PHP tries the namespaced function first, so that name is referenced.
+        // PHP tries the namespaced function first and falls back to the
+        // global one, so both names are referenced.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\helper']],
+            ['/fake/path/Foo.php' => ['App\helper', 'helper']],
             $analysisNodeCollector->getFileReferences()
         );
     }

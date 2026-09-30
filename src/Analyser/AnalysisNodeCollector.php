@@ -1106,8 +1106,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
             // A top-level unqualified call in a namespace is not a FullyQualified
-            // node, so it is recorded here under the namespaced name PHP tries
-            // first, keeping the called function alive.
+            // node, so it is recorded here under both names PHP may call: the
+            // namespaced name it tries first and the global name it falls back
+            // to, keeping the called function alive.
             if (
                 $node instanceof FuncCall
                 && $node->name instanceof Name
@@ -1117,6 +1118,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
                 if ($namespacedName instanceof Name) {
                     $this->currentFileReferences[$namespacedName->toString()] = true;
+                    $this->currentFileReferences[$node->name->toString()]     = true;
                 }
             }
 
