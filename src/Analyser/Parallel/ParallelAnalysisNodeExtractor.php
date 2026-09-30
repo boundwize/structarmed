@@ -15,6 +15,7 @@ use Boundwize\StructArmed\Cache\CachePathFactory;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
+use function array_column;
 use function array_fill;
 use function array_key_exists;
 use function array_pop;
@@ -31,6 +32,7 @@ use function file_put_contents;
 use function filesize;
 use function fread;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_dir;
 use function is_string;
@@ -39,12 +41,14 @@ use function mkdir;
 use function proc_close;
 use function serialize;
 use function sprintf;
+use function stream_select;
 use function stream_set_blocking;
+use function stream_set_timeout;
 use function unlink;
 use function unserialize;
-use function usleep;
 
 use const PHP_BINARY;
+use const PHP_OS_FAMILY;
 
 /**
  * @internal
@@ -97,6 +101,9 @@ final readonly class ParallelAnalysisNodeExtractor
             mkdir($cacheDirectory, 0777, true);
         }
 
+        // On Windows stream_select() cannot wait on a proc_open() pipe (PHP 8.5 polls it), only on a socket.
+        $stdoutDescriptor = PHP_OS_FAMILY === 'Windows' ? ['socket'] : ['pipe', 'w'];
+
         foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             [
                 'inputFile'  => $inputFile,
@@ -123,7 +130,7 @@ final readonly class ParallelAnalysisNodeExtractor
                 [PHP_BINARY, $script, '--internal-worker', $inputFile, $outputFile],
                 [
                     0 => ['pipe', 'r'],
-                    1 => ['pipe', 'w'],
+                    1 => $stdoutDescriptor,
                     2 => ['file', $stderrFile, 'w'],
                 ],
                 $pipes,
@@ -155,6 +162,9 @@ final readonly class ParallelAnalysisNodeExtractor
             $totalToParse = 0;
 
             foreach ($pending as $worker) {
+                // A socket would give up this blocking read after default_socket_timeout.
+                stream_set_timeout($worker['stdoutPipe'], -1);
+
                 $totalToParse += (int) fgets($worker['stdoutPipe']);
             }
 
@@ -175,10 +185,19 @@ final readonly class ParallelAnalysisNodeExtractor
         $failures               = [];
 
         while ($pending !== []) {
-            $anyActivity = false;
+            $read   = array_column($pending, 'stdoutPipe');
+            $write  = null;
+            $except = null;
+
+            // Blocks until a worker reports progress or exits; only the ready streams are left in $read.
+            stream_select($read, $write, $except, null);
 
             foreach ($pending as $key => $worker) {
                 $stdoutPipe = $worker['stdoutPipe'];
+
+                if (! in_array($stdoutPipe, $read, true)) {
+                    continue;
+                }
 
                 $data = fread($stdoutPipe, 8192);
                 if ($data !== false && $data !== '') {
@@ -193,8 +212,6 @@ final readonly class ParallelAnalysisNodeExtractor
                             $progressHandler?->advance($file);
                         }
                     }
-
-                    $anyActivity = true;
                 }
 
                 if (! feof($stdoutPipe)) {
@@ -297,11 +314,6 @@ final readonly class ParallelAnalysisNodeExtractor
                 }
 
                 unset($pending[$key]);
-                $anyActivity = true;
-            }
-
-            if (! $anyActivity) {
-                usleep(5000);
             }
         }
 
