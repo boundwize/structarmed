@@ -970,8 +970,8 @@ final readonly class Analyser
      * (including a first-class callable) or a function-name string such as a
      * callable 'App\helper'. A function calling itself is not a usage. An
      * unqualified call to a namespaced function declared in another file is
-     * recorded under its global fallback name, so a call also matches by short
-     * name; a string does not, as it spells the full name.
+     * recorded under its global fallback name, and its namespaced name is a
+     * file reference, so it never matches a same-named function elsewhere.
      *
      * Calls made in closures are already merged into their enclosing
      * function-like or class-like, so only top-level closures are read.
@@ -1021,11 +1021,7 @@ final readonly class Analyser
         foreach ($extractionResult->functionNodes as $functionNode) {
             $functionNameKey = strtolower($functionNode->functionName);
 
-            if (
-                isset($called[$functionNameKey])
-                || isset($referenced[$functionNameKey])
-                || isset($called[strtolower($functionNode->shortName())])
-            ) {
+            if (isset($called[$functionNameKey]) || isset($referenced[$functionNameKey])) {
                 $functionNode->setReferenced(true);
             }
         }

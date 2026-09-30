@@ -295,9 +295,10 @@ PHP);
         // The function_exists() argument probes for a function, it does not
         // use it; other function-name strings stay references. The top-level
         // guard call itself is recorded under its namespaced and global
-        // fallback names.
+        // fallback names, and the in-function calls under their namespaced
+        // names.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\function_exists', 'function_exists', 'App\kept_helper']],
+            ['/fake/path/Foo.php' => ['App\function_exists', 'function_exists', 'App\kept_helper', 'App\is_callable']],
             $analysisNodeCollector->getFileReferences()
         );
     }
@@ -317,6 +318,39 @@ PHP);
         $this->assertSame(
             ['/fake/path/Foo.php' => ['App\helper', 'helper']],
             $analysisNodeCollector->getFileReferences()
+        );
+    }
+
+    public function testCollectsScopedUnqualifiedFunctionCallAsNamespacedFileReference(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            function local_helper(): void {}
+
+            final class Caller
+            {
+                public function run(): void
+                {
+                    local_helper();
+                    helper();
+                    \Other\qualified();
+                }
+            }
+            PHP);
+
+        // helper() is not declared in this file, so the namespaced name PHP
+        // tries first is referenced while the call keeps its global fallback
+        // name; the same-file and fully-qualified calls resolve exactly.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\helper']],
+            $analysisNodeCollector->getFileReferences()
+        );
+        $this->assertSame(
+            ['App\local_helper', 'helper', 'Other\qualified'],
+            $analysisNodeCollector->getClassNodes()[0]->functionCalls
         );
     }
 

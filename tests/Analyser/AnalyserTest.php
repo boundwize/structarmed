@@ -1133,6 +1133,82 @@ final class AnalyserTest extends TestCase
         $this->assertSame(['unused_helper'], $this->violationClassNames($violations));
     }
 
+    public function testMustBeUsedFunctionRuleResolvesUnqualifiedCallOnlyToItsNamespaceOrGlobal(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/A/helpers.php' => <<<'PHP'
+                <?php
+
+                namespace A;
+
+                function helper(): void {}
+
+                function recursive(int $depth): void
+                {
+                    if ($depth > 0) {
+                        recursive($depth - 1);
+                    }
+                }
+                PHP,
+            'src/B/helpers.php' => <<<'PHP'
+                <?php
+
+                namespace B;
+
+                function helper(): void {}
+                function qualified(): void {}
+                function imported(): void {}
+                PHP,
+            'src/helpers.php'   => <<<'PHP'
+                <?php
+
+                function fallback_helper(): void {}
+                PHP,
+            'src/A/Caller.php'  => <<<'PHP'
+                <?php
+
+                namespace A;
+
+                use function B\imported;
+
+                final class Caller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        fallback_helper();
+                        \B\qualified();
+                        imported();
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $violations = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+            // helper() in namespace A reaches A\helper from another file, and
+            // fallback_helper() the global function as A\fallback_helper is
+            // not declared; neither reaches B\helper. The fully-qualified and
+            // imported calls keep theirs, and a self-call is no usage.
+            $this->assertSame(['A\recursive', 'B\helper'], $this->violationClassNames($violations));
+        }
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
     {
         $checker = '<?php namespace App;' . "\n"

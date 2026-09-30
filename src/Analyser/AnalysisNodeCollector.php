@@ -1710,6 +1710,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             if (isset($this->fileFunctions[strtolower($namespacedNameString)])) {
                 return $namespacedNameString;
             }
+
+            // Declared in another file or not at all: PHP tries the namespaced
+            // name first, so it is referenced alongside the global fallback
+            // name returned below.
+            $this->currentFileReferences[$namespacedNameString] = true;
         }
 
         return $functionName;
