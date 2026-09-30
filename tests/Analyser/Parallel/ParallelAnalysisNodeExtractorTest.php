@@ -11,7 +11,6 @@ use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -19,8 +18,6 @@ use function array_map;
 use function bin2hex;
 use function file_put_contents;
 use function glob;
-use function ini_get;
-use function ini_set;
 use function is_dir;
 use function random_bytes;
 use function rmdir;
@@ -30,7 +27,6 @@ use function sys_get_temp_dir;
 use function unlink;
 
 use const PHP_BINARY;
-use const PHP_OS_FAMILY;
 
 #[CoversClass(ParallelAnalysisNodeExtractor::class)]
 final class ParallelAnalysisNodeExtractorTest extends TestCase
@@ -120,11 +116,6 @@ PHP);
         $classNames = [$extractionResult->classNodes[0]->className, $extractionResult->classNodes[1]->className];
         $this->assertContains('App\\Domain\\Foo', $classNames);
         $this->assertContains('App\\Domain\\Bar', $classNames);
-        // stream_select() needs a socket to wait on worker stdout on Windows
-        $this->assertSame(
-            PHP_OS_FAMILY === 'Windows' ? ['socket'] : ['pipe', 'w'],
-            $GLOBALS['mock_proc_open_seen_stdout']
-        );
     }
 
     public function testExtractReturnsWorkerFacts(): void
@@ -279,23 +270,8 @@ PHP);
         $this->assertSame([], $progress->files);
     }
 
-    /**
-     * @return iterable<string, array{list<string>|null}>
-     */
-    public static function provideStdoutDescriptors(): iterable
+    public function testExtractAcrossWorkersWithAndWithoutProgress(): void
     {
-        yield 'platform default' => [null];
-        yield 'socket, as used on Windows' => [['socket']];
-    }
-
-    /**
-     * @param list<string>|null $stdoutDescriptor
-     */
-    #[DataProvider('provideStdoutDescriptors')]
-    public function testExtractAcrossWorkersWithAndWithoutProgress(?array $stdoutDescriptor): void
-    {
-        $GLOBALS['mock_proc_open_stdout'] = $stdoutDescriptor;
-
         $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');
         $files = [];
 
@@ -329,30 +305,19 @@ PHP);
 
         $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 3);
 
-        try {
-            $withoutProgress = $parallelAnalysisNodeExtractor->extract($files);
-            $withProgress    = $parallelAnalysisNodeExtractor->extract($files, $progress);
-        } finally {
-            $GLOBALS['mock_proc_open_stdout'] = null;
-        }
+        $this->assertCount(6, $parallelAnalysisNodeExtractor->extract($files)->classNodes);
+        $this->assertCount(6, $parallelAnalysisNodeExtractor->extract($files, $progress)->classNodes);
 
         sort($progress->files);
 
-        $this->assertCount(6, $withoutProgress->classNodes);
-        $this->assertCount(6, $withProgress->classNodes);
         $this->assertSame(6, $progress->total);
         $this->assertSame($files, $progress->files);
     }
 
-    /**
-     * @param list<string>|null $stdoutDescriptor
-     */
-    #[DataProvider('provideStdoutDescriptors')]
-    public function testExtractBuffersProgressLineSplitAcrossReads(?array $stdoutDescriptor): void
+    public function testExtractBuffersProgressLineSplitAcrossReads(): void
     {
         // Simulates a worker whose progress lines reach the coordinator in pieces: index 10 arrives as "1" then
         // "0\n", index 3 as "3" then "\n".
-        $GLOBALS['mock_proc_open_stdout']          = $stdoutDescriptor;
         $GLOBALS['mock_proc_open_command']         = [
             PHP_BINARY,
             '-r',
@@ -395,7 +360,6 @@ PHP);
         try {
             (new ParallelAnalysisNodeExtractor($dir, [], [], 1))->extract($files, $progress);
         } finally {
-            $GLOBALS['mock_proc_open_stdout']          = null;
             $GLOBALS['mock_proc_open_command']         = null;
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -403,63 +367,6 @@ PHP);
 
         $this->assertSame(2, $progress->total);
         $this->assertSame([$files[10], $files[3]], $progress->files);
-    }
-
-    public function testExtractWaitsForFirstProgressLineBeyondDefaultSocketTimeout(): void
-    {
-        // A socket stream stops a blocking read after default_socket_timeout, a pipe never does: the progress total
-        // of a worker that is slow to report it must not be lost, nor later be mistaken for a file index.
-        $defaultSocketTimeout = ini_get('default_socket_timeout');
-        ini_set('default_socket_timeout', '1');
-
-        $GLOBALS['mock_proc_open_stdout']          = ['socket'];
-        $GLOBALS['mock_proc_open_command']         = [
-            PHP_BINARY,
-            '-r',
-            'usleep(1200000); fwrite(STDOUT, "1\n0\n");',
-        ];
-        $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => null];
-
-        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');
-        $file1 = $dir . '/Foo.php';
-        $file2 = $dir . '/Bar.php';
-        file_put_contents($file1, '<?php');
-        file_put_contents($file2, '<?php');
-
-        $progress = new class implements ProgressHandlerInterface {
-            public int $total = -1;
-
-            /** @var list<string> */
-            public array $files = [];
-
-            public function start(int $total): void
-            {
-                $this->total = $total;
-            }
-
-            public function advance(string $file): void
-            {
-                $this->files[] = $file;
-            }
-
-            public function finish(): void
-            {
-            }
-        };
-
-        try {
-            (new ParallelAnalysisNodeExtractor($dir, [], [], 1))->extract([$file1, $file2], $progress);
-        } finally {
-            ini_set('default_socket_timeout', $defaultSocketTimeout);
-
-            $GLOBALS['mock_proc_open_stdout']          = null;
-            $GLOBALS['mock_proc_open_command']         = null;
-            $GLOBALS['mock_file_get_contents_payload'] = null;
-            $GLOBALS['mock_tracked_tempnam_files']     = [];
-        }
-
-        $this->assertSame(1, $progress->total);
-        $this->assertSame([$file1], $progress->files);
     }
 
     public function testExtractWithLayerPatternsUsesChainResolver(): void
@@ -594,15 +501,10 @@ PHP);
         }
     }
 
-    /**
-     * @param list<string>|null $stdoutDescriptor
-     */
-    #[DataProvider('provideStdoutDescriptors')]
-    public function testExtractReportsStderrWhenWorkerDiesBeforeWritingPayload(?array $stdoutDescriptor): void
+    public function testExtractReportsStderrWhenWorkerDiesBeforeWritingPayload(): void
     {
         // Simulates a worker killed by OOM / fatal error before AnalysisNodeWorker can serialize a result:
         // non-zero exit code, empty output file, diagnostic on stderr. Both workers die; each failure is reported.
-        $GLOBALS['mock_proc_open_stdout']  = $stdoutDescriptor;
         $GLOBALS['mock_proc_open_command'] = [
             PHP_BINARY,
             '-r',
@@ -633,7 +535,6 @@ PHP);
             $this->assertStringContainsString('simulated worker fatal', $runtimeException->getMessage());
             $this->assertStringNotContainsString('invalid payload', $runtimeException->getMessage());
         } finally {
-            $GLOBALS['mock_proc_open_stdout']  = null;
             $GLOBALS['mock_proc_open_command'] = null;
         }
     }

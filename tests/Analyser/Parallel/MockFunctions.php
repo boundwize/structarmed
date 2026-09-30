@@ -11,8 +11,6 @@ use function str_replace;
 // phpcs:disable
 $GLOBALS['mock_proc_open']                 = false;
 $GLOBALS['mock_proc_open_command']         = null;
-$GLOBALS['mock_proc_open_stdout']          = null;
-$GLOBALS['mock_proc_open_seen_stdout']     = null;
 $GLOBALS['mock_tempnam']                   = false;
 $GLOBALS['mock_file_get_contents_payload'] = null;
 $GLOBALS['mock_tracked_tempnam_files']     = [];
@@ -32,14 +30,6 @@ function proc_open(array|string $command, array $descriptorspec, array|null &$pi
     if ($GLOBALS['mock_proc_open_command'] !== null) {
         /** @var list<string> $command */
         $command = $GLOBALS['mock_proc_open_command'];
-    }
-
-    $GLOBALS['mock_proc_open_seen_stdout'] = $descriptorspec[1];
-
-    if ($GLOBALS['mock_proc_open_stdout'] !== null) {
-        /** @var list<string> $stdout */
-        $stdout            = $GLOBALS['mock_proc_open_stdout'];
-        $descriptorspec[1] = $stdout;
     }
 
     return \proc_open($command, $descriptorspec, $pipes);
