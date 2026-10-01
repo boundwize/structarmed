@@ -305,6 +305,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var array<string, string> Global functions the current file calls by resolved name, keyed lower-cased */
     private array $currentFileGlobalFunctionCalls = [];
 
+    /** @var array<string, string> Resolved unqualified calls, keyed by their namespaced spelling */
+    private array $resolvedFunctionNames = [];
+
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
 
@@ -448,6 +451,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFileReferences             = [];
         $this->currentFileFallbackNames          = [];
         $this->currentFileGlobalFunctionCalls    = [];
+        $this->resolvedFunctionNames             = [];
         $this->currentFileInstantiations         = [];
         $this->nonCanonicalKeywordConstants      = [];
         $this->numericLiterals                   = [];
@@ -1759,15 +1763,22 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         if ($namespacedName instanceof Name) {
             $namespacedNameString = $namespacedName->toString();
 
+            // A call may be collected by its closure and enclosing scopes,
+            // and repeated throughout the file. Resolve each spelling once.
+            if (isset($this->resolvedFunctionNames[$namespacedNameString])) {
+                return $this->resolvedFunctionNames[$namespacedNameString];
+            }
+
             if (isset($this->fileFunctions[strtolower($namespacedNameString)])) {
-                return $namespacedNameString;
+                return $this->resolvedFunctionNames[$namespacedNameString] = $namespacedNameString;
             }
 
             // Declared in another file or not at all: which function PHP
             // calls is resolved once every function is known.
             $this->addFunctionFallback($name, $namespacedName);
 
-            $functionName = self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedNameString;
+            return $this->resolvedFunctionNames[$namespacedNameString]
+                = self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedNameString;
         }
 
         return $functionName;
