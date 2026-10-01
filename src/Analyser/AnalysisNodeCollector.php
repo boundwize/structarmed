@@ -77,6 +77,7 @@ use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
+use function array_intersect_key;
 use function array_keys;
 use function array_pop;
 use function array_push;
@@ -89,6 +90,7 @@ use function is_finite;
 use function is_int;
 use function is_string;
 use function preg_match;
+use function str_contains;
 use function str_starts_with;
 use function strcasecmp;
 use function strlen;
@@ -284,6 +286,24 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private const DEFERRED_MARKER_SEPARATOR = '@';
 
+    /**
+     * Prefix of a function fallback marker, `?<namespaced function>`, recorded
+     * as a file reference for an unqualified call in a namespace whose
+     * function is not declared in the same file. PHP calls the namespaced
+     * function when it exists and the global one otherwise, which is only
+     * known once every function has been collected. The `?` cannot occur in a
+     * name, so a marker never collides with a real reference.
+     *
+     * @see parseFunctionFallbackMarker()
+     */
+    private const FUNCTION_FALLBACK_MARKER_PREFIX = '?';
+
+    /** @var array<string, true> Lower-cased short names of the current file's fallback markers */
+    private array $currentFileFallbackNames = [];
+
+    /** @var array<string, string> Global functions the current file calls by resolved name, keyed lower-cased */
+    private array $currentFileGlobalFunctionCalls = [];
+
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
 
@@ -425,6 +445,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFile                       = $file;
         $this->currentTokens                     = $tokens;
         $this->currentFileReferences             = [];
+        $this->currentFileFallbackNames          = [];
+        $this->currentFileGlobalFunctionCalls    = [];
         $this->currentFileInstantiations         = [];
         $this->nonCanonicalKeywordConstants      = [];
         $this->numericLiterals                   = [];
@@ -557,6 +579,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         return [$keyword, substr($instantiation, $separatorPosition + 1)];
+    }
+
+    /**
+     * The namespaced function name carried by a function fallback marker, or
+     * null when the reference is a plain name.
+     */
+    public static function parseFunctionFallbackMarker(string $reference): ?string
+    {
+        return str_starts_with($reference, self::FUNCTION_FALLBACK_MARKER_PREFIX)
+            ? substr($reference, strlen(self::FUNCTION_FALLBACK_MARKER_PREFIX))
+            : null;
     }
 
     public function enterNode(Node $node): null
@@ -770,6 +803,21 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         foreach ($this->fileFunctionLikeAnalyses as $fileFunctionLikeAnalysis) {
             $this->collectFunctionLike($fileFunctionLikeAnalysis);
         }
+
+        // A fallback marker stands for this file's calls of its short name, so
+        // a global function also called by resolved name here is referenced
+        // by name.
+        $globalFunctionCalls = array_intersect_key(
+            $this->currentFileGlobalFunctionCalls,
+            $this->currentFileFallbackNames
+        );
+
+        foreach ($globalFunctionCalls as $globalFunctionCall) {
+            $this->currentFileReferences[$globalFunctionCall] = true;
+        }
+
+        $this->currentFileFallbackNames       = [];
+        $this->currentFileGlobalFunctionCalls = [];
 
         if ($this->currentFileReferences !== []) {
             $this->fileReferences[$this->currentFile] = array_keys($this->currentFileReferences);
@@ -1106,9 +1154,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
             // A top-level unqualified call in a namespace is not a FullyQualified
-            // node, so it is recorded here under both names PHP may call: the
-            // namespaced name it tries first and the global name it falls back
-            // to, keeping the called function alive.
+            // node, so it is recorded here as a fallback marker, keeping the
+            // function PHP calls alive.
             if (
                 $node instanceof FuncCall
                 && $node->name instanceof Name
@@ -1117,8 +1164,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $namespacedName = $node->name->getAttribute('namespacedName');
 
                 if ($namespacedName instanceof Name) {
-                    $this->currentFileReferences[$namespacedName->toString()] = true;
-                    $this->currentFileReferences[$node->name->toString()]     = true;
+                    $this->addFunctionFallback($node->name, $namespacedName);
                 }
             }
 
@@ -1699,6 +1745,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $functionName = $name->toString();
 
         if ($name instanceof FullyQualified) {
+            if (! str_contains($functionName, '\\')) {
+                $this->currentFileGlobalFunctionCalls[$name->toLowerString()] = $functionName;
+            }
+
             return $functionName;
         }
 
@@ -1710,9 +1760,19 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             if (isset($this->fileFunctions[strtolower($namespacedNameString)])) {
                 return $namespacedNameString;
             }
+
+            // Declared in another file or not at all: which function PHP
+            // calls is resolved once every function is known.
+            $this->addFunctionFallback($name, $namespacedName);
         }
 
         return $functionName;
+    }
+
+    private function addFunctionFallback(Name $name, Name $namespacedName): void
+    {
+        $this->currentFileReferences[self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedName->toString()] = true;
+        $this->currentFileFallbackNames[$name->toLowerString()]                                           = true;
     }
 
     /**
