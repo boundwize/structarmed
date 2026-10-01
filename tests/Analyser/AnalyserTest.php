@@ -1484,7 +1484,7 @@ final class AnalyserTest extends TestCase
     public function testMayNotUseClassRuleIgnoresFunctionAndConstantOfTheSameName(): void
     {
         $basePath            = $this->makeTempProject([
-            'src/Vendor/functions.php'  => <<<'PHP'
+            'src/Vendor/functions.php'      => <<<'PHP'
                 <?php
 
                 namespace Vendor;
@@ -1493,7 +1493,7 @@ final class AnalyserTest extends TestCase
 
                 const ForbiddenConstant = 1;
                 PHP,
-            'src/App/FunctionCall.php'  => <<<'PHP'
+            'src/App/FunctionCall.php'      => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1511,7 +1511,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/App/ConstantFetch.php' => <<<'PHP'
+            'src/App/ConstantFetch.php'     => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1526,7 +1526,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/App/Both.php'          => <<<'PHP'
+            'src/App/Both.php'              => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1544,7 +1544,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/App/BothImported.php'  => <<<'PHP'
+            'src/App/BothImported.php'      => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1578,7 +1578,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/App/Imported.php'      => <<<'PHP'
+            'src/App/Imported.php'          => <<<'PHP'
                 <?php
 
                 namespace App;
