@@ -51,8 +51,8 @@ trait NodeQueryTrait
 
     /**
      * Replaces the function calls once the analyser knows every function: an
-     * unqualified call in a namespace to a function declared in another file
-     * is collected under its short name until then.
+     * unqualified call in a namespace to a function not declared in the same
+     * file is collected as a fallback marker until then.
      *
      * @param string[] $functionCalls
      */

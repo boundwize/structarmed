@@ -288,11 +288,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * Prefix of a function fallback marker, `?<namespaced function>`, recorded
-     * as a file reference for an unqualified call in a namespace whose
-     * function is not declared in the same file. PHP calls the namespaced
-     * function when it exists and the global one otherwise, which is only
-     * known once every function has been collected. The `?` cannot occur in a
-     * name, so a marker never collides with a real reference.
+     * as a file reference and a node's function call for an unqualified call
+     * in a namespace whose function is not declared in the same file. PHP
+     * calls the namespaced function when it exists and the global one
+     * otherwise, which is only known once every function has been collected.
+     * The `?` cannot occur in a name, so a marker never collides with a real
+     * reference.
      *
      * @see parseFunctionFallbackMarker()
      */
@@ -1765,6 +1766,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // Declared in another file or not at all: which function PHP
             // calls is resolved once every function is known.
             $this->addFunctionFallback($name, $namespacedName);
+
+            return self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedNameString;
         }
 
         return $functionName;

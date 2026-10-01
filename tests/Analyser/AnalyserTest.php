@@ -1391,6 +1391,27 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
+            'src/App/Callers.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class NamespacedCaller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                    }
+                }
+
+                final class GlobalCaller
+                {
+                    public function run(): void
+                    {
+                        \helper();
+                    }
+                }
+                PHP,
             'src/App/NotDeclared.php' => <<<'PHP'
                 <?php
 
@@ -1431,15 +1452,16 @@ final class AnalyserTest extends TestCase
                 ->analyse($architecture, [], null, $analyserOptions);
 
             // helper() reaches App\helper declared in helpers.php, never the
-            // global helper(); \helper() beside it keeps its global name.
-            // App\maybe only exists once its block has run, so maybe() may
-            // reach either. strlen() has no App\strlen to reach.
+            // global helper(); \helper() keeps its global name, beside it in
+            // one class or in another class of the same file. App\maybe only
+            // exists once its block has run, so maybe() may reach either.
+            // strlen() has no App\strlen to reach.
             $this->assertSame(
-                ['App\Explicit', 'App\Service'],
+                ['App\Explicit', 'App\NamespacedCaller', 'App\Service'],
                 $this->violationClassNames($ruleViolationCollection->forRule('source.no_namespaced_helper'))
             );
             $this->assertSame(
-                ['App\Explicit'],
+                ['App\Explicit', 'App\GlobalCaller'],
                 $this->violationClassNames($ruleViolationCollection->forRule('source.no_global_helper'))
             );
             $this->assertSame(

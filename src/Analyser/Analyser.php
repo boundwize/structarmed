@@ -970,12 +970,11 @@ final readonly class Analyser
     }
 
     /**
-     * Resolve each node's unqualified calls in a namespace to a function
-     * declared in another file, which the collector keeps under the short
-     * name: PHP calls the namespaced function once it is declared. The global
-     * name is kept beside it when the namespaced function is only declared
-     * conditionally, or when the file also calls the global function by its
-     * resolved name.
+     * Resolve each node's fallback markers, its unqualified calls in a
+     * namespace to a function not declared in the same file: PHP calls the
+     * namespaced function when it is declared and the global one otherwise. A
+     * conditionally declared namespaced function may not exist when the call
+     * runs, so it keeps both.
      *
      * @param list<ClassNode> $classNodes
      */
@@ -991,51 +990,6 @@ final readonly class Analyser
             }
         }
 
-        if ($declared === []) {
-            return;
-        }
-
-        // File => short name of an unqualified call => the functions it reaches.
-        $fallbackCalls = [];
-
-        foreach ($extractionResult->fileReferences as $file => $references) {
-            foreach ($references as $reference) {
-                $namespacedName = AnalysisNodeCollector::parseFunctionFallbackMarker($reference);
-
-                if ($namespacedName === null) {
-                    continue;
-                }
-
-                $isUnconditional = $declared[strtolower($namespacedName)] ?? null;
-
-                if ($isUnconditional === null) {
-                    continue;
-                }
-
-                $globalName = substr((string) strrchr($namespacedName, '\\'), 1);
-
-                $fallbackCalls[$file][strtolower($globalName)] = $isUnconditional
-                    ? [$namespacedName]
-                    : [$namespacedName, $globalName];
-            }
-        }
-
-        // A global function called by resolved name in the same file is a file
-        // reference by that name; a marker never matches a short name.
-        foreach ($fallbackCalls as $file => $fileFallbackCalls) {
-            foreach ($extractionResult->fileReferences[$file] as $reference) {
-                $referenceKey = strtolower($reference);
-
-                if (isset($fileFallbackCalls[$referenceKey])) {
-                    $fallbackCalls[$file][$referenceKey][] = $reference;
-                }
-            }
-        }
-
-        if ($fallbackCalls === []) {
-            return;
-        }
-
         $nodes = [
             ...$classNodes,
             ...$extractionResult->anonymousClassNodes,
@@ -1044,21 +998,33 @@ final readonly class Analyser
         ];
 
         foreach ($nodes as $node) {
-            $fileFallbackCalls = $fallbackCalls[$node->file] ?? null;
-
-            if ($fileFallbackCalls === null) {
-                continue;
-            }
-
             $functionCalls = [];
+            $hasFallback   = false;
 
             foreach ($node->functionCalls as $functionCall) {
-                foreach ($fileFallbackCalls[strtolower($functionCall)] ?? [$functionCall] as $resolvedCall) {
-                    $functionCalls[] = $resolvedCall;
+                $namespacedName = AnalysisNodeCollector::parseFunctionFallbackMarker($functionCall);
+
+                if ($namespacedName === null) {
+                    $functionCalls[] = $functionCall;
+
+                    continue;
+                }
+
+                $hasFallback     = true;
+                $isUnconditional = $declared[strtolower($namespacedName)] ?? null;
+
+                if ($isUnconditional !== null) {
+                    $functionCalls[] = $namespacedName;
+                }
+
+                if ($isUnconditional !== true) {
+                    $functionCalls[] = substr((string) strrchr($namespacedName, '\\'), 1);
                 }
             }
 
-            $node->setFunctionCalls(array_values(array_unique($functionCalls)));
+            if ($hasFallback) {
+                $node->setFunctionCalls(array_values(array_unique($functionCalls)));
+            }
         }
     }
 
