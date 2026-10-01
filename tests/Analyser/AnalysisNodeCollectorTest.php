@@ -233,10 +233,9 @@ PHP);
 
         // '\App\Contract' is a valid fully-qualified spelling; the stored
         // name drops the leading separator so it matches ClassNode::$className.
-        // The top-level call itself is recorded under its namespaced and
-        // global fallback names.
+        // The top-level call itself is recorded as a fallback marker.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\interface_exists', 'interface_exists', 'App\Contract']],
+            ['/fake/path/Foo.php' => ['?App\interface_exists', 'App\Contract']],
             $analysisNodeCollector->getFileReferences()
         );
     }
@@ -294,15 +293,15 @@ PHP);
 
         // The function_exists() argument probes for a function, it does not
         // use it; other function-name strings stay references. The top-level
-        // guard call itself is recorded under its namespaced and global
-        // fallback names.
+        // guard call and the in-function calls themselves are recorded as
+        // fallback markers.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\function_exists', 'function_exists', 'App\kept_helper']],
+            ['/fake/path/Foo.php' => ['?App\function_exists', 'App\kept_helper', '?App\is_callable']],
             $analysisNodeCollector->getFileReferences()
         );
     }
 
-    public function testCollectsTopLevelUnqualifiedFunctionCallAsNamespacedAndGlobalFileReference(): void
+    public function testCollectsTopLevelUnqualifiedFunctionCallAsFallbackMarker(): void
     {
         $analysisNodeCollector = $this->makeCollector(<<<'PHP'
             <?php
@@ -312,11 +311,55 @@ PHP);
             helper();
             PHP);
 
-        // PHP tries the namespaced function first and falls back to the
-        // global one, so both names are referenced.
+        // PHP calls the namespaced function when it exists and the global one
+        // otherwise, which is only known once every function is collected.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['App\helper', 'helper']],
+            ['/fake/path/Foo.php' => ['?App\helper']],
             $analysisNodeCollector->getFileReferences()
+        );
+    }
+
+    public function testCollectsScopedUnqualifiedFunctionCallAsFallbackMarker(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            function local_helper(): void {}
+
+            final class Caller
+            {
+                public function run(): void
+                {
+                    local_helper();
+                    helper();
+                    \Other\qualified();
+                }
+            }
+
+            final class GlobalCaller
+            {
+                public function run(): void
+                {
+                    \helper();
+                    \strlen('');
+                }
+            }
+            PHP);
+
+        // helper() is not declared in this file, so it is a fallback marker
+        // while the call keeps its global name; the same-file and
+        // fully-qualified calls resolve exactly. The marker stands for this
+        // file's helper() calls, so the fully-qualified \helper() is also
+        // referenced by name.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['?App\helper', 'helper']],
+            $analysisNodeCollector->getFileReferences()
+        );
+        $this->assertSame(
+            ['App\local_helper', 'helper', 'Other\qualified'],
+            $analysisNodeCollector->getClassNodes()[0]->functionCalls
         );
     }
 
@@ -383,6 +426,24 @@ PHP);
 
         $this->assertNull(AnalysisNodeCollector::parseDeferredInstantiationMarker('App\\Factory'));
         $this->assertNull(AnalysisNodeCollector::parseDeferredInstantiationMarker('other@App\\Factory'));
+    }
+
+    public function testParsesFunctionFallbackMarker(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            helper();
+            PHP);
+
+        [$marker] = $analysisNodeCollector->getFileReferences()['/fake/path/Foo.php'];
+
+        // The collected marker carries the namespaced name; a plain reference
+        // is not a marker.
+        $this->assertSame('App\helper', AnalysisNodeCollector::parseFunctionFallbackMarker($marker));
+        $this->assertNull(AnalysisNodeCollector::parseFunctionFallbackMarker('App\helper'));
     }
 
     public function testDoesNotRecordStringWithMarkerSeparatorAsInstantiation(): void

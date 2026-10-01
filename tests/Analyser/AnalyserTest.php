@@ -1133,6 +1133,161 @@ final class AnalyserTest extends TestCase
         $this->assertSame(['unused_helper'], $this->violationClassNames($violations));
     }
 
+    public function testMustBeUsedFunctionRuleResolvesUnqualifiedCallOnlyToItsNamespaceOrGlobal(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/A/helpers.php' => <<<'PHP'
+                <?php
+
+                namespace A;
+
+                function helper(): void {}
+                function explicit_helper(): void {}
+
+                function recursive(int $depth): void
+                {
+                    if ($depth > 0) {
+                        recursive($depth - 1);
+                    }
+                }
+                PHP,
+            'src/B/helpers.php' => <<<'PHP'
+                <?php
+
+                namespace B;
+
+                function helper(): void {}
+                function qualified(): void {}
+                function imported(): void {}
+                PHP,
+            'src/helpers.php'   => <<<'PHP'
+                <?php
+
+                function helper(): void {}
+                function fallback_helper(): void {}
+                function explicit_helper(): void {}
+                PHP,
+            'src/A/boot.php'    => <<<'PHP'
+                <?php
+
+                namespace A;
+
+                helper();
+                PHP,
+            'src/A/Caller.php'  => <<<'PHP'
+                <?php
+
+                namespace A;
+
+                use function B\imported;
+
+                final class Caller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        fallback_helper();
+                        explicit_helper();
+                        \explicit_helper();
+                        \B\qualified();
+                        imported();
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $violations = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+            // helper() in namespace A, scoped or top-level, reaches A\helper
+            // from another file, so PHP never falls back to the global helper()
+            // nor reaches B\helper; fallback_helper() reaches the global
+            // function as A\fallback_helper is not declared. The
+            // fully-qualified and imported calls keep theirs, even beside an
+            // unqualified call of the same short name, and a self-call is no
+            // usage.
+            $this->assertSame(
+                ['A\recursive', 'B\helper', 'helper'],
+                $this->violationClassNames($violations)
+            );
+        }
+    }
+
+    public function testNamespacedNativeFunctionCallFallsBackToNativeFunction(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Service.php'          => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Service
+                {
+                    public function run(): int
+                    {
+                        return strlen('x');
+                    }
+                }
+                PHP,
+            'src/Shadow/functions.php' => <<<'PHP'
+                <?php
+
+                namespace Shadow;
+
+                function strlen(string $value): int
+                {
+                    return 0;
+                }
+                PHP,
+        ]);
+
+        $yagniViolations = (new Analyser($basePath))
+            ->analyse(
+                Architecture::define()->withPreset(Preset::YAGNI(sourcePaths: ['src/'])),
+                [],
+                null,
+                AnalyserOptions::sequential()
+            )
+            ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+        // App\strlen() is not declared, so the call falls back to the native
+        // strlen(), never to Shadow\strlen() sharing its short name.
+        $this->assertSame(['Shadow\strlen'], $this->violationClassNames($yagniViolations));
+
+        $callViolations = (new Analyser($basePath))
+            ->analyse(
+                Architecture::define()
+                    ->layer('Source', 'src/')
+                    ->rule('source.no_strlen', new MayNotCallFunctionRule(layer: 'Source', function: 'strlen')),
+                [],
+                null,
+                AnalyserOptions::sequential()
+            )
+            ->forRule('source.no_strlen');
+
+        // The call keeps its global name, so a rule on the native function
+        // still sees it.
+        $this->assertCount(1, $callViolations);
+        $this->assertSame(
+            'Class [App\Service] must not call function [strlen()]',
+            $callViolations[0]->message,
+        );
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
     {
         $checker = '<?php namespace App;' . "\n"
