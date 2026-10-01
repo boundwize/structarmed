@@ -1637,6 +1637,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 superglobals:         $superglobals,
                 languageConstructs:   $languageConstructs,
                 layers:               $layers,
+                isConditional:        ! isset($this->fileFunctions[strtolower($functionName)]),
             );
 
             return;

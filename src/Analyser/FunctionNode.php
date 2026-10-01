@@ -29,6 +29,8 @@ final class FunctionNode
      * @param string[]     $superglobals       Superglobals accessed ($_GET, $_POST, etc.)
      * @param string[]     $languageConstructs Language constructs used (exit, die, etc.)
      * @param list<string> $layers             All layer names this function belongs to; defaults to [$layer]
+     * @param bool         $isConditional      Declared in a conditional, a loop or another function, so it
+     *                                         only exists once that code has run
      */
     public function __construct(
         public readonly string $functionName,
@@ -45,6 +47,7 @@ final class FunctionNode
         public readonly array $languageConstructs = [],
         array $layers = [],
         public bool $isReferenced = false,
+        public readonly bool $isConditional = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }

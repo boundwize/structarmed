@@ -65,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 11;
+    public const FORMAT_VERSION = 12;
 
     private readonly string $cacheDirectory;
 
@@ -669,7 +669,10 @@ final class AnalysisResultCache
      */
     private function functionNodeToArray(FunctionNode $functionNode): array
     {
-        return ['functionName' => $functionNode->functionName] + $this->functionLikeBodyToArray(
+        return [
+            'functionName'  => $functionNode->functionName,
+            'isConditional' => $functionNode->isConditional,
+        ] + $this->functionLikeBodyToArray(
             $functionNode->line,
             $functionNode->layer,
             $functionNode->hasReturnType,
@@ -755,10 +758,11 @@ final class AnalysisResultCache
                 return null;
             }
 
-            $functionName = $rawNode['functionName'] ?? null;
-            $body         = $this->functionLikeBodyFromArray($rawNode, $file);
+            $functionName  = $rawNode['functionName'] ?? null;
+            $isConditional = $rawNode['isConditional'] ?? null;
+            $body          = $this->functionLikeBodyFromArray($rawNode, $file);
 
-            if (! is_string($functionName) || $body === null) {
+            if (! is_string($functionName) || ! is_bool($isConditional) || $body === null) {
                 return null;
             }
 
@@ -776,6 +780,7 @@ final class AnalysisResultCache
                 superglobals:         $body['superglobals'],
                 languageConstructs:   $body['languageConstructs'],
                 layers:               $body['layers'],
+                isConditional:        $isConditional,
             );
         }
 

@@ -143,6 +143,13 @@ PHP);
 
         $this->assertSame(['app\\helper' => true], $analysisNodeCollector->getFileFunctions());
 
+        // The conditional function only exists once its block has run.
+        $functionNodes = $analysisNodeCollector->getFunctionNodes();
+
+        $this->assertCount(2, $functionNodes);
+        $this->assertFalse($functionNodes[0]->isConditional);
+        $this->assertTrue($functionNodes[1]->isConditional);
+
         $analysisNodeCollector->setCurrentFile('/fake/path/Bar.php');
 
         $this->assertSame([], $analysisNodeCollector->getFileFunctions());

@@ -1288,6 +1288,50 @@ final class AnalyserTest extends TestCase
         );
     }
 
+    public function testConditionalNamespacedFunctionDoesNotShadowGlobalFallback(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/global.php'        => <<<'PHP'
+                <?php
+
+                function helper(): void {}
+                PHP,
+            'src/App/functions.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                if (false) {
+                    function helper(): void {}
+                }
+
+                helper();
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $violations = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+            // App\helper only exists once its block has run, so helper() may
+            // fall back to the global helper(): both count as used.
+            $this->assertSame([], $this->violationClassNames($violations));
+        }
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
     {
         $checker = '<?php namespace App;' . "\n"
