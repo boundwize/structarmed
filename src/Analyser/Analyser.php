@@ -974,7 +974,9 @@ final readonly class Analyser
      * An unqualified call in a namespace to a function declared in another
      * file is a fallback marker, which stands for that file's calls of the
      * short name: it uses the namespaced function when declared and the
-     * global one otherwise, never a same-named function elsewhere.
+     * global one otherwise, never a same-named function elsewhere. A
+     * conditionally declared namespaced function may not exist when the call
+     * runs, so it counts both.
      *
      * Calls made in closures are already merged into their enclosing
      * function-like or class-like, so only top-level closures are read.
@@ -1008,7 +1010,9 @@ final readonly class Analyser
         $declared = [];
 
         foreach ($extractionResult->functionNodes as $functionNode) {
-            $declared[strtolower($functionNode->functionName)] = true;
+            if (! $functionNode->isConditional) {
+                $declared[strtolower($functionNode->functionName)] = true;
+            }
 
             foreach ($functionNode->functionCalls as $functionCall) {
                 if (strcasecmp($functionCall, $functionNode->functionName) !== 0) {
@@ -1032,7 +1036,12 @@ final readonly class Analyser
                 $namespacedNameKey = strtolower($namespacedName);
                 $globalNameKey     = substr((string) strrchr($namespacedNameKey, '\\'), 1);
 
-                $referenced[isset($declared[$namespacedNameKey]) ? $namespacedNameKey : $globalNameKey] = true;
+                $referenced[$namespacedNameKey] = true;
+
+                if (! isset($declared[$namespacedNameKey])) {
+                    $referenced[$globalNameKey] = true;
+                }
+
                 unset($fileCalls[$file][$globalNameKey]);
             }
         }
