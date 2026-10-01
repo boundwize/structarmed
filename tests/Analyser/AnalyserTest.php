@@ -6548,6 +6548,77 @@ final class AnalyserTest extends TestCase
         $this->assertStringContainsString('Database', $violations[0]->message);
     }
 
+    public function testRulesetSharedReferencesPreserveAllowedLayersAndViolationOrder(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/A/ClassA.php' => <<<'PHP'
+                <?php
+
+                namespace App\A;
+
+                use App\B\ClassB;
+                use App\Shared\SharedClass;
+                use App\Format\Formatter;
+                use App\Database\QueryBuilder;
+
+                class ClassA {}
+                PHP,
+            'src/B/ClassB.php' => <<<'PHP'
+                <?php
+
+                namespace App\B;
+
+                use App\A\ClassA;
+                use App\Shared\SharedClass;
+                use App\Format\Formatter;
+                use App\Database\QueryBuilder;
+
+                class ClassB {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('A', '/^App\\\\A\\\\/')
+            ->layerPattern('B', '/^App\\\\B\\\\/')
+            ->layerPattern('Shared', '/^App\\\\Shared\\\\/')
+            ->layerPattern('Format', '/^App\\\\Format\\\\/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\/')
+            ->ruleset([
+                'A'      => ['Shared', '+Shared', '+B', '+Shared', 'Shared'],
+                'B'      => ['+A', '+Shared'],
+                'Shared' => ['Format', '+B'],
+            ])
+            ->rule('a.must_be_final', new MustBeFinalRule('A'))
+            ->rule('b.must_be_final', new MustBeFinalRule('B'));
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            analyserOptions: AnalyserOptions::sequential(),
+            files: [$basePath . '/src/A/ClassA.php', $basePath . '/src/B/ClassB.php'],
+        );
+
+        $violations = [];
+
+        foreach ($ruleViolationCollection as $violation) {
+            $violations[] = [$violation->ruleKey, $violation->className];
+        }
+
+        $this->assertSame([
+            ['a.must_be_final', 'App\\A\\ClassA'],
+            ['b.must_be_final', 'App\\B\\ClassB'],
+            ['ruleset.A', 'App\\A\\ClassA'],
+            ['ruleset.B', 'App\\B\\ClassB'],
+        ], $violations);
+        $this->assertStringContainsString(
+            'App\\Database\\QueryBuilder',
+            $ruleViolationCollection->forRule('ruleset.A')[0]->message,
+        );
+        $this->assertStringContainsString(
+            'App\\Database\\QueryBuilder',
+            $ruleViolationCollection->forRule('ruleset.B')[0]->message,
+        );
+    }
+
     public function testMayNotDependOnRuleViolationIsDetectedViaAnalyser(): void
     {
         $basePath = $this->makeTempProject([
