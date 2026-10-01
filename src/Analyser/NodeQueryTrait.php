@@ -31,9 +31,19 @@ trait NodeQueryTrait
         return in_array($layer, $this->layers, true);
     }
 
-    public function dependsOn(string $class): bool
+    public function dependsOn(string $class, bool $isCaseSensitive = true): bool
     {
-        return in_array($class, $this->dependencies, true);
+        if ($isCaseSensitive) {
+            return in_array($class, $this->dependencies, true);
+        }
+
+        foreach ($this->dependencies as $dependency) {
+            if (strcasecmp($dependency, $class) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function dependsOnNamespace(string $namespace): bool

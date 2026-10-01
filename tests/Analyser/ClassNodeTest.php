@@ -459,6 +459,47 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->dependsOn(DateTime::class));
     }
 
+    public function testDependsOnMatchesCaseInsensitivelyOnlyWhenRequested(): void
+    {
+        $classNode = new ClassNode(
+            className:    'App\\Domain\\OrderService',
+            file:         '/src/OrderService.php',
+            line:         5,
+            layer:        'Domain',
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  false,
+            isReadonly:   false,
+            dependencies: [DateTimeImmutable::class],
+        );
+
+        $this->assertFalse($classNode->dependsOn('datetimeimmutable'));
+        $this->assertTrue($classNode->dependsOn('datetimeimmutable', isCaseSensitive: false));
+        $this->assertFalse($classNode->dependsOn('datetime', isCaseSensitive: false));
+    }
+
+    public function testUsesClassMatchesCaseInsensitively(): void
+    {
+        $classNode = new ClassNode(
+            className:            'App\\Domain\\OrderService',
+            file:                 '/src/OrderService.php',
+            line:                 5,
+            layer:                'Domain',
+            extends:              null,
+            isAbstract:           false,
+            isFinal:              false,
+            isInterface:          false,
+            isReadonly:           false,
+            dependencies:         [DateTimeImmutable::class, 'Vendor\\helper'],
+            nonClassDependencies: ['Vendor\\helper'],
+        );
+
+        $this->assertTrue($classNode->usesClass('datetimeimmutable'));
+        $this->assertTrue($classNode->usesClass('DATETIMEIMMUTABLE'));
+        $this->assertFalse($classNode->usesClass('VENDOR\\HELPER'));
+    }
+
     public function testUsesClassIgnoresDependencyOnlyUsedAsFunctionOrConstant(): void
     {
         $classNode = new ClassNode(

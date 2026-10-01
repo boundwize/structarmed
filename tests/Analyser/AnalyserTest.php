@@ -1483,7 +1483,7 @@ final class AnalyserTest extends TestCase
     public function testMayNotUseClassRuleIgnoresFunctionAndConstantOfTheSameName(): void
     {
         $basePath            = $this->makeTempProject([
-            'src/Vendor/functions.php'  => <<<'PHP'
+            'src/Vendor/functions.php'      => <<<'PHP'
                 <?php
 
                 namespace Vendor;
@@ -1492,7 +1492,7 @@ final class AnalyserTest extends TestCase
 
                 const ForbiddenConstant = 1;
                 PHP,
-            'src/App/FunctionCall.php'  => <<<'PHP'
+            'src/App/FunctionCall.php'      => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1510,7 +1510,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/App/ConstantFetch.php' => <<<'PHP'
+            'src/App/ConstantFetch.php'     => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1525,7 +1525,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/App/Both.php'          => <<<'PHP'
+            'src/App/Both.php'              => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1543,7 +1543,7 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/App/BothImported.php'  => <<<'PHP'
+            'src/App/BothImported.php'      => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1560,7 +1560,24 @@ final class AnalyserTest extends TestCase
                     }
                 }
                 PHP,
-            'src/App/Imported.php'      => <<<'PHP'
+            'src/App/BothDifferentCase.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use function vendor\forbiddenservice;
+                use Vendor\ForbiddenService;
+
+                final class BothDifferentCase
+                {
+                    public function run(): void
+                    {
+                        forbiddenservice();
+                        new ForbiddenService();
+                    }
+                }
+                PHP,
+            'src/App/Imported.php'          => <<<'PHP'
                 <?php
 
                 namespace App;
@@ -1607,9 +1624,10 @@ final class AnalyserTest extends TestCase
 
             // Only `new` and a class import use a class; a function call, a
             // constant fetch, and their `use function`/`use const` imports
-            // do not, even when a class of the same name is used beside them.
+            // do not, even when a class of the same name, in any letter case,
+            // is used beside them.
             $this->assertSame(
-                ['App\Both', 'App\BothImported'],
+                ['App\Both', 'App\BothDifferentCase', 'App\BothImported'],
                 $this->violationClassNames($ruleViolationCollection->forRule('source.no_service_class'))
             );
             $this->assertSame(
@@ -1617,7 +1635,7 @@ final class AnalyserTest extends TestCase
                 $this->violationClassNames($ruleViolationCollection->forRule('source.no_constant_class'))
             );
             $this->assertSame(
-                ['App\Both', 'App\BothImported', 'App\FunctionCall'],
+                ['App\Both', 'App\BothDifferentCase', 'App\BothImported', 'App\FunctionCall'],
                 $this->violationClassNames($ruleViolationCollection->forRule('source.no_service_function'))
             );
         }

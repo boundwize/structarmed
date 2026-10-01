@@ -77,7 +77,7 @@ use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
-use function array_diff_key;
+use function array_diff_ukey;
 use function array_intersect_key;
 use function array_keys;
 use function array_pop;
@@ -1781,7 +1781,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         return [
             'dependencies'         => array_keys($classLikeAnalysis->dependencies),
             'nonClassDependencies' => array_keys(
-                array_diff_key($classLikeAnalysis->dependencies, $classLikeAnalysis->classDependencies)
+                array_diff_ukey(
+                    $classLikeAnalysis->dependencies,
+                    $classLikeAnalysis->classDependencies,
+                    strcasecmp(...)
+                )
             ),
             'functionCalls'        => array_values(array_unique($functionCalls)),
             'superglobals'         => array_keys($classLikeAnalysis->superglobals),
