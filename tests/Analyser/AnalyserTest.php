@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
+use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
@@ -29,6 +30,7 @@ use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
 use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
+use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\AnonymousClassMayNotHaveEmptyParenthesesRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
@@ -1476,6 +1478,123 @@ final class AnalyserTest extends TestCase
                 ['App\NotDeclared'],
                 $this->violationClassNames($ruleViolationCollection->forRule('source.no_strlen'))
             );
+        }
+    }
+
+    public function testResolvedFunctionCallsKeepOrderAndRemoveDuplicatesAcrossNodeKinds(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/helpers.php' => <<<'PHP'
+                <?php
+                namespace App;
+                function helper(): void {}
+                if (false) { function maybe(): void {} }
+                PHP,
+            'src/Callers.php' => str_replace('CALLS', <<<'PHP'
+                \before();
+                \maybe();
+                maybe();
+                helper();
+                \App\helper();
+                \after();
+                PHP, <<<'PHP'
+                <?php
+                namespace App;
+                final class Caller { public function run(): void { CALLS } }
+                function caller(): void { CALLS }
+                $object = new class { public function run(): void { CALLS } };
+                $closure = static function (): void { CALLS };
+                PHP),
+        ]);
+
+        $rule = new class implements
+            RuleInterface,
+            FunctionRuleInterface,
+            AnonymousClassRuleInterface,
+            AnonymousFunctionRuleInterface
+        {
+            /** @var list<list<string>> */
+            public array $calls = [];
+
+            public function appliesTo(
+                ClassNode|FunctionNode|AnonymousClassNode|AnonymousFunctionNode $node
+            ): bool {
+                return $node->functionCalls !== [];
+            }
+
+            public function evaluate(
+                ClassNode|FunctionNode|AnonymousClassNode|AnonymousFunctionNode $node
+            ): ?RuleViolation {
+                $this->calls[] = array_values($node->functionCalls);
+
+                return null;
+            }
+        };
+
+        $architecture        = Architecture::define()->layer('Source', 'src/')->rule('calls', $rule);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+        $expected            = ['before', 'maybe', 'App\maybe', 'App\helper', 'after'];
+
+        foreach (
+            [
+                [null, AnalyserOptions::sequential()],
+                [null, AnalyserOptions::parallel(2)],
+                [$analysisResultCache, AnalyserOptions::sequential()],
+                [$analysisResultCache, AnalyserOptions::sequential()],
+            ] as [$cache, $options]
+        ) {
+            $rule->calls = [];
+            (new Analyser($basePath, $cache, 'config'))->analyse($architecture, [], null, $options);
+
+            $this->assertSame([$expected, $expected, $expected, $expected], $rule->calls);
+        }
+    }
+
+    public function testCachedFunctionCallsAreResolvedAgainWhenDeclarationsChange(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Caller.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Caller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        helper();
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('namespaced', new MayNotCallFunctionRule('Source', 'App\helper'))
+            ->rule('global', new MayNotCallFunctionRule('Source', 'helper'));
+
+        $declarations = [
+            ['', 0, 1],
+            ['function helper(): void {}', 1, 0],
+            ['if (false) { function helper(): void {} }', 1, 1],
+            ['', 0, 1],
+        ];
+
+        foreach ($declarations as [$declaration, $namespacedCount, $globalCount]) {
+            file_put_contents($basePath . '/src/helpers.php', '<?php namespace App; ' . $declaration);
+
+            $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+            $analyser            = new Analyser($basePath, $analysisResultCache, 'config');
+
+            // Caller.php stays cached while helpers.php changes. Repeating
+            // the run also covers a fully warm cache for each declaration.
+            for ($run = 0; $run < 2; $run++) {
+                $violations = $analyser->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+                $this->assertCount($namespacedCount, $violations->forRule('namespaced'));
+                $this->assertCount($globalCount, $violations->forRule('global'));
+            }
         }
     }
 

@@ -370,6 +370,80 @@ PHP);
         );
     }
 
+    public function testRepeatedFunctionCallsKeepTheirNamespaceAndSpelling(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+            <?php
+
+            namespace App {
+                function helper(): void {}
+
+                final class LocalCaller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        helper();
+                        HELPER();
+                        \helper();
+                    }
+                }
+            }
+
+            namespace Other {
+                final class ExternalCaller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        helper();
+                        HELPER();
+                        \helper();
+                    }
+                }
+            }
+            PHP);
+
+        $this->assertSame(['App\helper', 'App\HELPER', 'helper'], $nodes[0]->functionCalls);
+        $this->assertSame(['?Other\helper', '?Other\HELPER', 'helper'], $nodes[1]->functionCalls);
+    }
+
+    public function testFunctionCallResolutionDoesNotLeakBetweenFiles(): void
+    {
+        $analysisNodeCollector = new AnalysisNodeCollector(new NamespaceLayerResolver([], self::BASE_PATH));
+        $parser                = (new ParserFactory())->createForNewestSupportedVersion();
+        $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
+
+        // A local declaration resolves directly; the following files need
+        // their own fallback markers and global references for the same call.
+        foreach (['function helper(): void {}', '', ''] as $index => $declaration) {
+            $ast = $parser->parse('<?php namespace App; ' . $declaration . <<<'PHP'
+                final class Caller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        helper();
+                        \helper();
+                    }
+                }
+                PHP);
+
+            $analysisNodeCollector->setCurrentFile('/fake/path/Caller' . $index . '.php', $parser->getTokens());
+            $nodeTraverser->traverse($ast ?? []);
+        }
+
+        $nodes = $analysisNodeCollector->getClassNodes();
+
+        $this->assertSame(['App\helper', 'helper'], $nodes[0]->functionCalls);
+        $this->assertSame(['?App\helper', 'helper'], $nodes[1]->functionCalls);
+        $this->assertSame(['?App\helper', 'helper'], $nodes[2]->functionCalls);
+        $this->assertSame([
+            '/fake/path/Caller1.php' => ['?App\helper', 'helper'],
+            '/fake/path/Caller2.php' => ['?App\helper', 'helper'],
+        ], $analysisNodeCollector->getFileReferences());
+    }
+
     public function testDoesNotCollectNonClassNameShapedStringValues(): void
     {
         $code = '<?php namespace App;' . "\n"
