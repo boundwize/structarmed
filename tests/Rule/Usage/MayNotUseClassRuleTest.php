@@ -88,6 +88,28 @@ final class MayNotUseClassRuleTest extends TestCase
         $this->assertSame('Class [App\\Domain\\OrderValueObject] must not use [DateTime]', $violation->message);
     }
 
+    public function testViolatesWhenForbiddenClassIsUsedWithDifferentCase(): void
+    {
+        $mayNotUseClassRule = new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class);
+        $classNode          = $this->makeNode(['datetime']);
+
+        $this->assertInstanceOf(RuleViolation::class, $mayNotUseClassRule->evaluate($classNode));
+    }
+
+    public function testPassesWhenForbiddenNameIsOnlyAFunctionOrConstantWithDifferentCase(): void
+    {
+        $mayNotUseClassRule = new MayNotUseClassRule(
+            layer: 'Domain',
+            forbiddenClass: 'Vendor\\ForbiddenService'
+        );
+        $classNode          = $this->makeNode(
+            dependencies:         ['vendor\\forbiddenservice'],
+            nonClassDependencies: ['vendor\\forbiddenservice'],
+        );
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseClassRule->evaluate($classNode));
+    }
+
     #[DataProvider('nonClassKindProvider')]
     public function testViolationMessageNamesTheClassLikeKind(
         string $expectedKind,
