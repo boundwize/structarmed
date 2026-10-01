@@ -42,7 +42,7 @@ final class FunctionNode
         public readonly int $cyclomaticComplexity = 1,
         public readonly int $lineCount = 0,
         public readonly array $dependencies = [],
-        public readonly array $functionCalls = [],
+        public array $functionCalls = [],
         public readonly array $superglobals = [],
         public readonly array $languageConstructs = [],
         array $layers = [],

@@ -20,7 +20,7 @@ use function strcasecmp;
  *
  * @property list<string> $layers All layer names this node belongs to; assigned once in each node's constructor
  * @property-read list<string> $dependencies       Fully-qualified class, function, or constant dependencies
- * @property-read string[]     $functionCalls      Functions called within this node
+ * @property      string[]     $functionCalls      Functions called within this node
  * @property-read string[]     $superglobals       Superglobals accessed ($_GET, $_POST, etc.)
  * @property-read string[]     $languageConstructs Language constructs used (exit, die, etc.)
  */
@@ -47,6 +47,18 @@ trait NodeQueryTrait
         }
 
         return false;
+    }
+
+    /**
+     * Replaces the function calls once the analyser knows every function: an
+     * unqualified call in a namespace to a function declared in another file
+     * is collected under its short name until then.
+     *
+     * @param string[] $functionCalls
+     */
+    public function setFunctionCalls(array $functionCalls): void
+    {
+        $this->functionCalls = $functionCalls;
     }
 
     public function callsFunction(string $function): bool
