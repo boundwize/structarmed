@@ -75,17 +75,17 @@ final class ClassNode
     }
 
     /**
-     * Whether the class depends on $dependency as a class-like: a function or
+     * Whether the class depends on $class as a class-like: a function or
      * constant of the same name does not count.
      */
-    public function usesClass(string $dependency): bool
+    public function usesClass(string $class): bool
     {
-        if (! $this->dependsOn($dependency, isCaseSensitive: false)) {
+        if (! $this->dependsOn($class, isCaseSensitive: false)) {
             return false;
         }
 
         foreach ($this->nonClassDependencies as $nonClassDependency) {
-            if (strcasecmp($nonClassDependency, $dependency) === 0) {
+            if (strcasecmp($nonClassDependency, $class) === 0) {
                 return false;
             }
         }
