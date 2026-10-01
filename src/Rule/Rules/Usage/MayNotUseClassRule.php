@@ -35,7 +35,7 @@ final readonly class MayNotUseClassRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if (! $classNode->dependsOn($this->forbiddenClass)) {
+        if (! $classNode->usesClass($this->forbiddenClass)) {
             return null;
         }
 
