@@ -36,7 +36,6 @@ use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
-use function array_merge;
 use function array_unique;
 use function array_values;
 use function count;
@@ -266,8 +265,6 @@ final readonly class Analyser
             $this->addViolations($violations, $key, $isFixable, $ruleViolationCollection);
         }
 
-        // Evaluate declarative ruleset alongside class rules, but buffer its
-        // violations so report ordering remains class rules before ruleset.
         $rulesetAllowedLayerMaps = $this->rulesetAllowedLayerMaps($architecture->getRuleset());
 
         $classViolationSkipMaps = [];
@@ -276,19 +273,18 @@ final readonly class Analyser
             $classViolationSkipMaps[$skipClassName] = array_fill_keys($skippedDependencies, true);
         }
 
-        $globalSkipPathMatcher      = SkipPathMatcher::compile($this->basePath, $globalSkipPaths);
-        $ruleSkipMatchers           = $this->ruleSkipMatchers($nodeRules, $ruleSkipPaths);
-        $rulesetSkipPaths           = $architecture->getRulesetSkipPaths();
-        $rulesetSkipPathMatcher     = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
-        $rulesetViolationCollection = new RuleViolationCollection();
-        $hasRuleset                 = $rulesetAllowedLayerMaps !== [];
-        $scanScopeLayerMap          = $hasRuleset ? $this->scanScopeLayerMap($architecture) : [];
-        $hasLayerAwareRules         = $layerAwareRules !== [];
-        $classDependencyMaps        = $this->classDependencyMaps($classNodes, $hasRuleset, $hasLayerAwareRules);
-        $dependencyMap              = $classDependencyMaps['dependencies'];
-        $inheritanceDependencyMap   = $classDependencyMaps['inheritanceDependencies'];
-        $classLayerMap              = $classDependencyMaps['classLayerMap'];
-        $classPrimaryLayerMap       = $classDependencyMaps['classPrimaryLayerMap'];
+        $globalSkipPathMatcher    = SkipPathMatcher::compile($this->basePath, $globalSkipPaths);
+        $ruleSkipMatchers         = $this->ruleSkipMatchers($nodeRules, $ruleSkipPaths);
+        $rulesetSkipPaths         = $architecture->getRulesetSkipPaths();
+        $rulesetSkipPathMatcher   = SkipPathMatcher::compile($this->basePath, $rulesetSkipPaths);
+        $hasRuleset               = $rulesetAllowedLayerMaps !== [];
+        $scanScopeLayerMap        = $hasRuleset ? $this->scanScopeLayerMap($architecture) : [];
+        $hasLayerAwareRules       = $layerAwareRules !== [];
+        $classDependencyMaps      = $this->classDependencyMaps($classNodes, $hasRuleset, $hasLayerAwareRules);
+        $dependencyMap            = $classDependencyMaps['dependencies'];
+        $inheritanceDependencyMap = $classDependencyMaps['inheritanceDependencies'];
+        $classLayerMap            = $classDependencyMaps['classLayerMap'];
+        $classPrimaryLayerMap     = $classDependencyMaps['classPrimaryLayerMap'];
 
         $resolvedInheritedDependencies = [];
 
@@ -312,7 +308,7 @@ final readonly class Analyser
             $ruleViolationCollection
         );
 
-        // Declarative ruleset dependency checks, per class node.
+        // Append ruleset violations after node rules to preserve report ordering.
         foreach ($hasRuleset ? $classNodes : [] as $classNode) {
             if ($globalSkipPathMatcher->isSkipped($classNode->file)) {
                 continue;
@@ -348,6 +344,11 @@ final readonly class Analyser
 
                 $primaryLayer = $classPrimaryLayerMap[$dependency] ?? null;
 
+                // Same primary layer is always allowed, including PSR-4 scan scopes.
+                if ($primaryLayer === $classNode->layer) {
+                    continue;
+                }
+
                 if ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
                     // Scanned dep in a specific layer (not a PSR4 catch-all): keep every
                     // layer collected at scan time, including path-based ones.
@@ -359,14 +360,6 @@ final readonly class Analyser
 
                 if ($depLayers === []) {
                     // External / unregistered dependency — not restricted.
-                    continue;
-                }
-
-                // Same primary layer is always allowed. This check is not redundant
-                // with the loop below: for a dep whose primary layer is a PSR-4
-                // catch-all, $depLayers is re-resolved without its file path and
-                // therefore need not contain the primary layer.
-                if ($primaryLayer === $classNode->layer) {
                     continue;
                 }
 
@@ -385,7 +378,7 @@ final readonly class Analyser
 
                 $violatingLayer = $primaryLayer ?? $depLayers[0];
 
-                $rulesetViolationCollection->add(new RuleViolation(
+                $ruleViolationCollection->add(new RuleViolation(
                     message:   sprintf(
                         '%s [%s] in layer [%s] must not depend on [%s] which belongs to layer [%s]',
                         $classNode->getType(),
@@ -402,8 +395,6 @@ final readonly class Analyser
                 ));
             }
         }
-
-        $ruleViolationCollection->merge($rulesetViolationCollection);
 
         return $ruleViolationCollection;
     }
@@ -490,7 +481,8 @@ final readonly class Analyser
      * instead of in_array()/array_intersect() scans.
      *
      * `+LayerName` means: include `LayerName` itself and all layers that `LayerName` is allowed to depend on.
-     * References to unknown layers expand to nothing. Circular references are skipped.
+     * Unknown layers have no further dependencies. Each reference is expanded once per layer,
+     * so shared references and cycles do not repeat work.
      *
      * @param array<string, list<string>> $ruleset
      * @return array<string, array<string, true>>
@@ -500,48 +492,42 @@ final readonly class Analyser
         $allowedLayerMaps = [];
 
         foreach ($ruleset as $layer => $allowedLayers) {
-            $resolving                = [$layer => true];
-            $allowedLayerMaps[$layer] = array_fill_keys(
-                $this->expandRulesetLayer($allowedLayers, $ruleset, $resolving),
-                true
-            );
+            $expandedLayers           = [$layer => true];
+            $allowedLayerMaps[$layer] = $this->expandAllowedLayers($allowedLayers, $ruleset, $expandedLayers);
         }
 
         return $allowedLayerMaps;
     }
 
     /**
-     * @param list<string>                $allowedLayers
+     * @param list<string> $allowedLayers
      * @param array<string, list<string>> $ruleset
-     * @param array<string, true>         $resolving  Layers currently being expanded (circular-reference guard).
-     * @return list<string>
+     * @param array<string, true> $expandedLayers Shared across branches to expand each reference only once.
+     * @return array<string, true>
      */
-    private function expandRulesetLayer(array $allowedLayers, array $ruleset, array $resolving): array
+    private function expandAllowedLayers(array $allowedLayers, array $ruleset, array &$expandedLayers): array
     {
-        $expanded = [];
+        $allowedLayerMap = [];
 
         foreach ($allowedLayers as $allowedLayer) {
             if (! str_starts_with($allowedLayer, '+')) {
-                $expanded[] = $allowedLayer;
+                $allowedLayerMap[$allowedLayer] = true;
                 continue;
             }
 
             $referencedLayer = substr($allowedLayer, 1);
 
-            if (isset($resolving[$referencedLayer])) {
+            if (isset($expandedLayers[$referencedLayer])) {
                 continue;
             }
 
-            // Include the referenced layer itself, then recursively its allowed layers.
-            $expanded[]        = $referencedLayer;
-            $referencedAllowed = $ruleset[$referencedLayer] ?? [];
-            $expanded          = array_merge(
-                $expanded,
-                $this->expandRulesetLayer($referencedAllowed, $ruleset, $resolving + [$referencedLayer => true])
-            );
+            $expandedLayers[$referencedLayer]  = true;
+            $allowedLayerMap[$referencedLayer] = true;
+
+            $allowedLayerMap += $this->expandAllowedLayers($ruleset[$referencedLayer] ?? [], $ruleset, $expandedLayers);
         }
 
-        return array_values(array_unique($expanded));
+        return $allowedLayerMap;
     }
 
     /**
