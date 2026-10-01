@@ -65,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 11;
+    public const FORMAT_VERSION = 13;
 
     private readonly string $cacheDirectory;
 
@@ -669,7 +669,10 @@ final class AnalysisResultCache
      */
     private function functionNodeToArray(FunctionNode $functionNode): array
     {
-        return ['functionName' => $functionNode->functionName] + $this->functionLikeBodyToArray(
+        return [
+            'functionName'  => $functionNode->functionName,
+            'isConditional' => $functionNode->isConditional,
+        ] + $this->functionLikeBodyToArray(
             $functionNode->line,
             $functionNode->layer,
             $functionNode->hasReturnType,
@@ -755,10 +758,11 @@ final class AnalysisResultCache
                 return null;
             }
 
-            $functionName = $rawNode['functionName'] ?? null;
-            $body         = $this->functionLikeBodyFromArray($rawNode, $file);
+            $functionName  = $rawNode['functionName'] ?? null;
+            $isConditional = $rawNode['isConditional'] ?? null;
+            $body          = $this->functionLikeBodyFromArray($rawNode, $file);
 
-            if (! is_string($functionName) || $body === null) {
+            if (! is_string($functionName) || ! is_bool($isConditional) || $body === null) {
                 return null;
             }
 
@@ -776,6 +780,7 @@ final class AnalysisResultCache
                 superglobals:         $body['superglobals'],
                 languageConstructs:   $body['languageConstructs'],
                 layers:               $body['layers'],
+                isConditional:        $isConditional,
             );
         }
 
@@ -962,20 +967,21 @@ final class AnalysisResultCache
         ];
 
         $lists = [
-            'dependencies'       => $classNode->dependencies,
-            'implements'         => array_values($classNode->implements),
-            'interfaceExtends'   => array_values($classNode->interfaceExtends),
-            'parentClasses'      => $classNode->parentClasses,
-            'parentInterfaces'   => $classNode->parentInterfaces,
-            'traits'             => array_values($classNode->traits),
-            'methods'            => array_map($this->methodNodeToArray(...), $classNode->methods),
-            'constants'          => array_map($this->constantNodeToArray(...), $classNode->constants),
-            'properties'         => array_map($this->propertyNodeToArray(...), $classNode->properties),
-            'enumCases'          => array_map($this->enumCaseNodeToArray(...), $classNode->enumCases),
-            'functionCalls'      => array_values($classNode->functionCalls),
-            'superglobals'       => array_values($classNode->superglobals),
-            'languageConstructs' => array_values($classNode->languageConstructs),
-            'layers'             => $classNode->layers,
+            'dependencies'         => $classNode->dependencies,
+            'nonClassDependencies' => $classNode->nonClassDependencies,
+            'implements'           => array_values($classNode->implements),
+            'interfaceExtends'     => array_values($classNode->interfaceExtends),
+            'parentClasses'        => $classNode->parentClasses,
+            'parentInterfaces'     => $classNode->parentInterfaces,
+            'traits'               => array_values($classNode->traits),
+            'methods'              => array_map($this->methodNodeToArray(...), $classNode->methods),
+            'constants'            => array_map($this->constantNodeToArray(...), $classNode->constants),
+            'properties'           => array_map($this->propertyNodeToArray(...), $classNode->properties),
+            'enumCases'            => array_map($this->enumCaseNodeToArray(...), $classNode->enumCases),
+            'functionCalls'        => array_values($classNode->functionCalls),
+            'superglobals'         => array_values($classNode->superglobals),
+            'languageConstructs'   => array_values($classNode->languageConstructs),
+            'layers'               => $classNode->layers,
         ];
 
         foreach ($lists as $key => $list) {
@@ -992,27 +998,28 @@ final class AnalysisResultCache
      */
     private function classNodeFromArray(array $node, string $file): ?ClassNode
     {
-        $className          = $node['className'] ?? null;
-        $line               = $node['line'] ?? null;
-        $layer              = $node['layer'] ?? null;
-        $extends            = $node['extends'] ?? null;
-        $isAbstract         = $node['isAbstract'] ?? null;
-        $isFinal            = $node['isFinal'] ?? null;
-        $isInterface        = $node['isInterface'] ?? null;
-        $isTrait            = $node['isTrait'] ?? null;
-        $isEnum             = $node['isEnum'] ?? null;
-        $isReadonly         = $node['isReadonly'] ?? null;
-        $dependencies       = $node['dependencies'] ?? [];
-        $implements         = $node['implements'] ?? [];
-        $interfaceExtends   = $node['interfaceExtends'] ?? [];
-        $parentClasses      = $node['parentClasses'] ?? [];
-        $parentInterfaces   = $node['parentInterfaces'] ?? [];
-        $traits             = $node['traits'] ?? [];
-        $enumBackingType    = $node['enumBackingType'] ?? null;
-        $functionCalls      = $node['functionCalls'] ?? [];
-        $superglobals       = $node['superglobals'] ?? [];
-        $languageConstructs = $node['languageConstructs'] ?? [];
-        $layers             = $node['layers'] ?? [];
+        $className            = $node['className'] ?? null;
+        $line                 = $node['line'] ?? null;
+        $layer                = $node['layer'] ?? null;
+        $extends              = $node['extends'] ?? null;
+        $isAbstract           = $node['isAbstract'] ?? null;
+        $isFinal              = $node['isFinal'] ?? null;
+        $isInterface          = $node['isInterface'] ?? null;
+        $isTrait              = $node['isTrait'] ?? null;
+        $isEnum               = $node['isEnum'] ?? null;
+        $isReadonly           = $node['isReadonly'] ?? null;
+        $dependencies         = $node['dependencies'] ?? [];
+        $nonClassDependencies = $node['nonClassDependencies'] ?? [];
+        $implements           = $node['implements'] ?? [];
+        $interfaceExtends     = $node['interfaceExtends'] ?? [];
+        $parentClasses        = $node['parentClasses'] ?? [];
+        $parentInterfaces     = $node['parentInterfaces'] ?? [];
+        $traits               = $node['traits'] ?? [];
+        $enumBackingType      = $node['enumBackingType'] ?? null;
+        $functionCalls        = $node['functionCalls'] ?? [];
+        $superglobals         = $node['superglobals'] ?? [];
+        $languageConstructs   = $node['languageConstructs'] ?? [];
+        $layers               = $node['layers'] ?? [];
 
         if (
             ! is_string($className)
@@ -1026,6 +1033,7 @@ final class AnalysisResultCache
             || ! is_bool($isEnum)
             || ! is_bool($isReadonly)
             || ! $this->isStringArray($dependencies)
+            || ! $this->isStringArray($nonClassDependencies)
             || ! $this->isStringArray($implements)
             || ! $this->isStringArray($interfaceExtends)
             || ! $this->isStringArray($parentClasses)
@@ -1081,6 +1089,7 @@ final class AnalysisResultCache
             parentInterfaces:   array_values($parentInterfaces),
             enumCases:          $enumCases,
             enumBackingType:    $enumBackingType,
+            nonClassDependencies: array_values($nonClassDependencies),
         );
     }
 

@@ -79,7 +79,7 @@ final class AnonymousClassNode
         public readonly array $methods = [],
         public readonly array $constants = [],
         public readonly array $properties = [],
-        public readonly array $functionCalls = [],
+        public array $functionCalls = [],
         public readonly array $superglobals = [],
         public readonly array $languageConstructs = [],
     ) {

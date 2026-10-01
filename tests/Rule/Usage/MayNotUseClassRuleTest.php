@@ -15,13 +15,17 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MayNotUseClassRule::class)]
 final class MayNotUseClassRuleTest extends TestCase
 {
-    /** @param list<string> $dependencies */
+    /**
+     * @param list<string> $dependencies
+     * @param list<string> $nonClassDependencies
+     */
     private function makeNode(
         array $dependencies,
         string $layer = 'Domain',
         bool $isInterface = false,
         bool $isTrait = false,
         bool $isEnum = false,
+        array $nonClassDependencies = [],
     ): ClassNode {
         return new ClassNode(
             className:    'App\\Domain\\OrderValueObject',
@@ -36,6 +40,7 @@ final class MayNotUseClassRuleTest extends TestCase
             isTrait:      $isTrait,
             dependencies: $dependencies,
             isEnum:       $isEnum,
+            nonClassDependencies: $nonClassDependencies,
         );
     }
 
@@ -54,6 +59,20 @@ final class MayNotUseClassRuleTest extends TestCase
             forbiddenClass: 'Vendor\\ForbiddenService'
         );
         $classNode          = $this->makeNode(['Vendor\\ForbiddenServiceExtra']);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseClassRule->evaluate($classNode));
+    }
+
+    public function testPassesWhenForbiddenNameIsOnlyAFunctionOrConstant(): void
+    {
+        $mayNotUseClassRule = new MayNotUseClassRule(
+            layer: 'Domain',
+            forbiddenClass: 'Vendor\\ForbiddenService'
+        );
+        $classNode          = $this->makeNode(
+            dependencies:         ['Vendor\\ForbiddenService'],
+            nonClassDependencies: ['Vendor\\ForbiddenService'],
+        );
 
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseClassRule->evaluate($classNode));
     }

@@ -847,6 +847,7 @@ final class AnalysisResultCacheTest extends TestCase
                 superglobals:         ['$_GET'],
                 languageConstructs:   ['echo'],
                 layers:               ['Source', 'Support'],
+                isConditional:        true,
             ),
         ];
         $anonymousFunctionNodes = [
@@ -1005,6 +1006,7 @@ final class AnalysisResultCacheTest extends TestCase
     {
         $validFunction = [
             'functionName'         => 'App\\format',
+            'isConditional'        => false,
             'file'                 => '/src/helpers.php',
             'line'                 => 1,
             'layer'                => null,
@@ -1030,6 +1032,9 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'function nodes not an array' => [['functionNodes' => 'invalid']];
         yield 'function node entry not an array' => [['functionNodes' => ['invalid']]];
         yield 'function node without name' => [['functionNodes' => [['functionName' => 1] + $validFunction]]];
+        yield 'function node with invalid conditional flag' => [
+            ['functionNodes' => [['isConditional' => 1] + $validFunction]],
+        ];
         yield 'function node with invalid line' => [['functionNodes' => [['line' => '1'] + $validFunction]]];
         yield 'function node with invalid layer' => [['functionNodes' => [['layer' => 1] + $validFunction]]];
         yield 'function node with invalid dependencies' => [

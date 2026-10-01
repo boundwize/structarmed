@@ -77,6 +77,7 @@ use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
+use function array_diff_key;
 use function array_intersect_key;
 use function array_keys;
 use function array_pop;
@@ -138,6 +139,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * a function, it does not use it, so the string is not a reference.
      */
     private const FUNCTION_EXISTS_CHECK_ATTRIBUTE = 'structarmedFunctionExistsCheck';
+
+    /**
+     * Marks the fully-qualified name of a function call or constant fetch: it
+     * is still a dependency, but not a use of a class of that name.
+     */
+    private const NON_CLASS_NAME_ATTRIBUTE = 'structarmedNonClassName';
 
     /**
      * Method names of the ReflectionClass object-construction APIs. Calling
@@ -288,11 +295,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * Prefix of a function fallback marker, `?<namespaced function>`, recorded
-     * as a file reference for an unqualified call in a namespace whose
-     * function is not declared in the same file. PHP calls the namespaced
-     * function when it exists and the global one otherwise, which is only
-     * known once every function has been collected. The `?` cannot occur in a
-     * name, so a marker never collides with a real reference.
+     * as a file reference and a node's function call for an unqualified call
+     * in a namespace whose function is not declared in the same file. PHP
+     * calls the namespaced function when it exists and the global one
+     * otherwise, which is only known once every function has been collected.
+     * The `?` cannot occur in a name, so a marker never collides with a real
+     * reference.
      *
      * @see parseFunctionFallbackMarker()
      */
@@ -303,6 +311,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /** @var array<string, string> Global functions the current file calls by resolved name, keyed lower-cased */
     private array $currentFileGlobalFunctionCalls = [];
+
+    /** @var array<string, string> Resolved unqualified calls, keyed by their namespaced spelling */
+    private array $resolvedFunctionNames = [];
 
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
@@ -349,6 +360,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /** @var array<string, true> */
     private array $currentNamespaceUses = [];
+
+    /**
+     * The class imports among $currentNamespaceUses: not `use function` or
+     * `use const`.
+     *
+     * @var array<string, true>
+     */
+    private array $currentNamespaceClassUses = [];
 
     /**
      * Each class-like left in the current file with the facts collected
@@ -447,10 +466,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFileReferences             = [];
         $this->currentFileFallbackNames          = [];
         $this->currentFileGlobalFunctionCalls    = [];
+        $this->resolvedFunctionNames             = [];
         $this->currentFileInstantiations         = [];
         $this->nonCanonicalKeywordConstants      = [];
         $this->numericLiterals                   = [];
         $this->currentNamespaceUses              = [];
+        $this->currentNamespaceClassUses         = [];
         $this->fileClassLikes                    = [];
         $this->fileFunctions                     = [];
         $this->activeClassLikeAnalyses           = [];
@@ -620,14 +641,21 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // single instanceof.
         if ($node instanceof Stmt) {
             if ($node instanceof Namespace_) {
-                $this->currentNamespaceUses = [];
+                $this->currentNamespaceUses      = [];
+                $this->currentNamespaceClassUses = [];
 
                 return null;
             }
 
             if ($node instanceof Use_) {
                 foreach ($node->uses as $use) {
-                    $this->currentNamespaceUses[$use->name->toString()] = true;
+                    $name = $use->name->toString();
+
+                    $this->currentNamespaceUses[$name] = true;
+
+                    if ($node->type === Use_::TYPE_NORMAL) {
+                        $this->currentNamespaceClassUses[$name] = true;
+                    }
                 }
 
                 return null;
@@ -637,7 +665,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $prefix = $node->prefix->toString();
 
                 foreach ($node->uses as $use) {
-                    $this->currentNamespaceUses[$prefix . '\\' . $use->name->toString()] = true;
+                    $name = $prefix . '\\' . $use->name->toString();
+
+                    $this->currentNamespaceUses[$name] = true;
+
+                    // A typed group (`use function A\{b, c}`) types the group,
+                    // a mixed one (`use A\{B, function c}`) each item.
+                    $type = $node->type === Use_::TYPE_UNKNOWN ? $use->type : $node->type;
+
+                    if ($type === Use_::TYPE_NORMAL) {
+                        $this->currentNamespaceClassUses[$name] = true;
+                    }
                 }
 
                 return null;
@@ -852,7 +890,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $classLikeAnalysis = new ClassLikeAnalysis($classLike instanceof Interface_);
 
         if ($classLike->name instanceof Identifier) {
-            $classLikeAnalysis->dependencies = $this->currentNamespaceUses;
+            $classLikeAnalysis->dependencies      = $this->currentNamespaceUses;
+            $classLikeAnalysis->classDependencies = $this->currentNamespaceClassUses;
         }
 
         $this->activeClassLikeAnalyses[] = $classLikeAnalysis;
@@ -1129,12 +1168,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $this->currentFileReferences[$name] = true;
             }
 
-            $this->addDependency($name);
+            $this->addDependency($name, ! $node->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE));
 
             return;
         }
 
+        // Entered before its name, so the FullyQualified branch above sees
+        // the mark.
         if ($node instanceof ConstFetch) {
+            $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
             $this->collectKeywordConstant($node->name);
 
             return;
@@ -1194,6 +1236,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($node instanceof FuncCall) {
             if ($node->name instanceof Name) {
+                $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
+
                 $functionName = $node->name->toLowerString();
 
                 // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
@@ -1461,10 +1505,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         return str_starts_with($name, '\\') ? substr($name, 1) : $name;
     }
 
-    private function addDependency(string $dependency): void
+    private function addDependency(string $dependency, bool $isClassName): void
     {
         foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
             $activeClassLikeAnalysis->dependencies[$dependency] = true;
+
+            if ($isClassName) {
+                $activeClassLikeAnalysis->classDependencies[$dependency] = true;
+            }
         }
 
         $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
@@ -1568,6 +1616,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             enumBackingType:    $classLike instanceof Enum_ && $classLike->scalarType instanceof Identifier
                                     ? $classLike->scalarType->toLowerString()
                                     : null,
+            nonClassDependencies: $analysis['nonClassDependencies'],
         );
     }
 
@@ -1637,6 +1686,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 superglobals:         $superglobals,
                 languageConstructs:   $languageConstructs,
                 layers:               $layers,
+                isConditional:        ! isset($this->fileFunctions[strtolower($functionName)]),
             );
 
             return;
@@ -1709,6 +1759,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /**
      * @return array{
      *     dependencies: list<string>,
+     *     nonClassDependencies: list<string>,
      *     functionCalls: string[],
      *     superglobals: string[],
      *     languageConstructs: string[],
@@ -1728,15 +1779,18 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         return [
-            'dependencies'       => array_keys($classLikeAnalysis->dependencies),
-            'functionCalls'      => array_values(array_unique($functionCalls)),
-            'superglobals'       => array_keys($classLikeAnalysis->superglobals),
-            'languageConstructs' => array_keys($classLikeAnalysis->languageConstructs),
-            'traits'             => $classLikeAnalysis->traits,
-            'constants'          => $classLikeAnalysis->constants,
-            'properties'         => $classLikeAnalysis->properties,
-            'methods'            => $classLikeAnalysis->methods,
-            'enumCases'          => $classLikeAnalysis->enumCases,
+            'dependencies'         => array_keys($classLikeAnalysis->dependencies),
+            'nonClassDependencies' => array_keys(
+                array_diff_key($classLikeAnalysis->dependencies, $classLikeAnalysis->classDependencies)
+            ),
+            'functionCalls'        => array_values(array_unique($functionCalls)),
+            'superglobals'         => array_keys($classLikeAnalysis->superglobals),
+            'languageConstructs'   => array_keys($classLikeAnalysis->languageConstructs),
+            'traits'               => $classLikeAnalysis->traits,
+            'constants'            => $classLikeAnalysis->constants,
+            'properties'           => $classLikeAnalysis->properties,
+            'methods'              => $classLikeAnalysis->methods,
+            'enumCases'            => $classLikeAnalysis->enumCases,
         ];
     }
 
@@ -1757,13 +1811,22 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         if ($namespacedName instanceof Name) {
             $namespacedNameString = $namespacedName->toString();
 
+            // A call may be collected by its closure and enclosing scopes,
+            // and repeated throughout the file. Resolve each spelling once.
+            if (isset($this->resolvedFunctionNames[$namespacedNameString])) {
+                return $this->resolvedFunctionNames[$namespacedNameString];
+            }
+
             if (isset($this->fileFunctions[strtolower($namespacedNameString)])) {
-                return $namespacedNameString;
+                return $this->resolvedFunctionNames[$namespacedNameString] = $namespacedNameString;
             }
 
             // Declared in another file or not at all: which function PHP
             // calls is resolved once every function is known.
             $this->addFunctionFallback($name, $namespacedName);
+
+            $functionName = $this->resolvedFunctionNames[$namespacedNameString]
+                = self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedNameString;
         }
 
         return $functionName;

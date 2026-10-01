@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\Analyser;
 use Boundwize\StructArmed\Analyser\AnalyserOptions;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
+use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
@@ -29,6 +30,7 @@ use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
 use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
+use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\AnonymousClassMayNotHaveEmptyParenthesesRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
@@ -1285,6 +1287,457 @@ final class AnalyserTest extends TestCase
             'Class [App\Service] must not call function [strlen()]',
             $callViolations[0]->message,
         );
+    }
+
+    public function testConditionalNamespacedFunctionDoesNotShadowGlobalFallback(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/global.php'        => <<<'PHP'
+                <?php
+
+                function helper(): void {}
+                function inner_helper(): void {}
+                PHP,
+            'src/App/functions.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                if (false) {
+                    function helper(): void {}
+                }
+
+                helper();
+                PHP,
+            'src/App/inner.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                if (false) {
+                    function inner_helper(): void {}
+
+                    inner_helper();
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $violations = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions)
+                ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+            // App\helper only exists once its block has run, so helper() may
+            // fall back to the global helper(): both count as used.
+            //
+            // inner_helper() runs right after App\inner_helper is declared, so
+            // the global inner_helper() is never reached. Telling the two
+            // apart needs control flow, so it is kept used too: a missed
+            // report is safer than --fix deleting a live function.
+            $this->assertSame([], $this->violationClassNames($violations));
+        }
+    }
+
+    public function testMayNotCallFunctionRuleResolvesUnqualifiedCallToFunctionDeclaredInAnotherFile(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/App/helpers.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                function helper(): void {}
+
+                if (! function_exists('App\maybe')) {
+                    function maybe(): void {}
+                }
+                PHP,
+            'src/App/Service.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Service
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        maybe();
+                    }
+                }
+                PHP,
+            'src/App/Explicit.php'    => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Explicit
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        \helper();
+                    }
+                }
+                PHP,
+            'src/App/Callers.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class NamespacedCaller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                    }
+                }
+
+                final class GlobalCaller
+                {
+                    public function run(): void
+                    {
+                        \helper();
+                    }
+                }
+                PHP,
+            'src/App/NotDeclared.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class NotDeclared
+                {
+                    public function run(): int
+                    {
+                        return strlen('x');
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule(
+                'source.no_namespaced_helper',
+                new MayNotCallFunctionRule(layer: 'Source', function: 'App\helper')
+            )
+            ->rule('source.no_global_helper', new MayNotCallFunctionRule(layer: 'Source', function: 'helper'))
+            ->rule('source.no_namespaced_maybe', new MayNotCallFunctionRule(layer: 'Source', function: 'App\maybe'))
+            ->rule('source.no_global_maybe', new MayNotCallFunctionRule(layer: 'Source', function: 'maybe'))
+            ->rule('source.no_strlen', new MayNotCallFunctionRule(layer: 'Source', function: 'strlen'));
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $ruleViolationCollection = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions);
+
+            // helper() reaches App\helper declared in helpers.php, never the
+            // global helper(); \helper() keeps its global name, beside it in
+            // one class or in another class of the same file. App\maybe only
+            // exists once its block has run, so maybe() may reach either.
+            // strlen() has no App\strlen to reach.
+            $this->assertSame(
+                ['App\Explicit', 'App\NamespacedCaller', 'App\Service'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_namespaced_helper'))
+            );
+            $this->assertSame(
+                ['App\Explicit', 'App\GlobalCaller'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_global_helper'))
+            );
+            $this->assertSame(
+                ['App\Service'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_namespaced_maybe'))
+            );
+            $this->assertSame(
+                ['App\Service'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_global_maybe'))
+            );
+            $this->assertSame(
+                ['App\NotDeclared'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_strlen'))
+            );
+        }
+    }
+
+    public function testMayNotUseClassRuleIgnoresFunctionAndConstantOfTheSameName(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/Vendor/functions.php'  => <<<'PHP'
+                <?php
+
+                namespace Vendor;
+
+                function ForbiddenService(): void {}
+
+                const ForbiddenConstant = 1;
+                PHP,
+            'src/App/FunctionCall.php'  => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use function Vendor\ForbiddenService as forbidden;
+                use Vendor\{function ForbiddenService as alsoForbidden};
+
+                final class FunctionCall
+                {
+                    public function run(): void
+                    {
+                        \Vendor\ForbiddenService();
+                        forbidden();
+                        alsoForbidden();
+                    }
+                }
+                PHP,
+            'src/App/ConstantFetch.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use const Vendor\ForbiddenConstant;
+
+                final class ConstantFetch
+                {
+                    public function run(): int
+                    {
+                        return \Vendor\ForbiddenConstant + ForbiddenConstant;
+                    }
+                }
+                PHP,
+            'src/App/Both.php'          => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Both
+                {
+                    public function run(): void
+                    {
+                        \Vendor\ForbiddenService();
+                    }
+
+                    public function create(): object
+                    {
+                        return new \Vendor\ForbiddenService();
+                    }
+                }
+                PHP,
+            'src/App/BothImported.php'  => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use function Vendor\ForbiddenService;
+                use Vendor\ForbiddenService;
+
+                final class BothImported
+                {
+                    public function run(): void
+                    {
+                        ForbiddenService();
+                        new ForbiddenService();
+                    }
+                }
+                PHP,
+            'src/App/Imported.php'      => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use Vendor\ForbiddenConstant;
+
+                final class Imported
+                {
+                    public function run(): string
+                    {
+                        return ForbiddenConstant::class;
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/App/')
+            ->rule(
+                'source.no_service_class',
+                new MayNotUseClassRule(layer: 'Source', forbiddenClass: 'Vendor\ForbiddenService')
+            )
+            ->rule(
+                'source.no_constant_class',
+                new MayNotUseClassRule(layer: 'Source', forbiddenClass: 'Vendor\ForbiddenConstant')
+            )
+            ->rule(
+                'source.no_service_function',
+                new MayNotCallFunctionRule(layer: 'Source', function: 'Vendor\ForbiddenService')
+            );
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $ruleViolationCollection = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions);
+
+            // Only `new` and a class import use a class; a function call, a
+            // constant fetch, and their `use function`/`use const` imports
+            // do not, even when a class of the same name is used beside them.
+            $this->assertSame(
+                ['App\Both', 'App\BothImported'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_service_class'))
+            );
+            $this->assertSame(
+                ['App\Imported'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_constant_class'))
+            );
+            $this->assertSame(
+                ['App\Both', 'App\BothImported', 'App\FunctionCall'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_service_function'))
+            );
+        }
+    }
+
+    public function testResolvedFunctionCallsKeepOrderAndRemoveDuplicatesAcrossNodeKinds(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/helpers.php' => <<<'PHP'
+                <?php
+                namespace App;
+                function helper(): void {}
+                if (false) { function maybe(): void {} }
+                PHP,
+            'src/Callers.php' => str_replace('CALLS', <<<'PHP'
+                \before();
+                \maybe();
+                maybe();
+                helper();
+                \App\helper();
+                \after();
+                PHP, <<<'PHP'
+                <?php
+                namespace App;
+                final class Caller { public function run(): void { CALLS } }
+                function caller(): void { CALLS }
+                $object = new class { public function run(): void { CALLS } };
+                $closure = static function (): void { CALLS };
+                PHP),
+        ]);
+
+        $rule = new class implements
+            RuleInterface,
+            FunctionRuleInterface,
+            AnonymousClassRuleInterface,
+            AnonymousFunctionRuleInterface
+        {
+            /** @var list<list<string>> */
+            public array $calls = [];
+
+            public function appliesTo(
+                ClassNode|FunctionNode|AnonymousClassNode|AnonymousFunctionNode $node
+            ): bool {
+                return $node->functionCalls !== [];
+            }
+
+            public function evaluate(
+                ClassNode|FunctionNode|AnonymousClassNode|AnonymousFunctionNode $node
+            ): ?RuleViolation {
+                $this->calls[] = array_values($node->functionCalls);
+
+                return null;
+            }
+        };
+
+        $architecture        = Architecture::define()->layer('Source', 'src/')->rule('calls', $rule);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+        $expected            = ['before', 'maybe', 'App\maybe', 'App\helper', 'after'];
+
+        foreach (
+            [
+                [null, AnalyserOptions::sequential()],
+                [null, AnalyserOptions::parallel(2)],
+                [$analysisResultCache, AnalyserOptions::sequential()],
+                [$analysisResultCache, AnalyserOptions::sequential()],
+            ] as [$cache, $options]
+        ) {
+            $rule->calls = [];
+            (new Analyser($basePath, $cache, 'config'))->analyse($architecture, [], null, $options);
+
+            $this->assertSame([$expected, $expected, $expected, $expected], $rule->calls);
+        }
+    }
+
+    public function testCachedFunctionCallsAreResolvedAgainWhenDeclarationsChange(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Caller.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Caller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        helper();
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('namespaced', new MayNotCallFunctionRule('Source', 'App\helper'))
+            ->rule('global', new MayNotCallFunctionRule('Source', 'helper'));
+
+        $declarations = [
+            ['', 0, 1],
+            ['function helper(): void {}', 1, 0],
+            ['if (false) { function helper(): void {} }', 1, 1],
+            ['', 0, 1],
+        ];
+
+        foreach ($declarations as [$declaration, $namespacedCount, $globalCount]) {
+            file_put_contents($basePath . '/src/helpers.php', '<?php namespace App; ' . $declaration);
+
+            $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+            $analyser            = new Analyser($basePath, $analysisResultCache, 'config');
+
+            // Caller.php stays cached while helpers.php changes. Repeating
+            // the run also covers a fully warm cache for each declaration.
+            for ($run = 0; $run < 2; $run++) {
+                $violations = $analyser->analyse($architecture, [], null, AnalyserOptions::sequential());
+
+                $this->assertCount($namespacedCount, $violations->forRule('namespaced'));
+                $this->assertCount($globalCount, $violations->forRule('global'));
+            }
+        }
     }
 
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void

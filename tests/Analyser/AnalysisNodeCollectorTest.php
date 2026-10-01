@@ -143,6 +143,13 @@ PHP);
 
         $this->assertSame(['app\\helper' => true], $analysisNodeCollector->getFileFunctions());
 
+        // The conditional function only exists once its block has run.
+        $functionNodes = $analysisNodeCollector->getFunctionNodes();
+
+        $this->assertCount(2, $functionNodes);
+        $this->assertFalse($functionNodes[0]->isConditional);
+        $this->assertTrue($functionNodes[1]->isConditional);
+
         $analysisNodeCollector->setCurrentFile('/fake/path/Bar.php');
 
         $this->assertSame([], $analysisNodeCollector->getFileFunctions());
@@ -348,19 +355,93 @@ PHP);
             }
             PHP);
 
-        // helper() is not declared in this file, so it is a fallback marker
-        // while the call keeps its global name; the same-file and
-        // fully-qualified calls resolve exactly. The marker stands for this
-        // file's helper() calls, so the fully-qualified \helper() is also
-        // referenced by name.
+        // helper() is not declared in this file, so it is a fallback marker,
+        // as a file reference and as the call itself, until every function is
+        // known; the same-file and fully-qualified calls resolve exactly. The
+        // file marker stands for this file's helper() calls, so the
+        // fully-qualified \helper() is also referenced by name.
         $this->assertSame(
             ['/fake/path/Foo.php' => ['?App\helper', 'helper']],
             $analysisNodeCollector->getFileReferences()
         );
         $this->assertSame(
-            ['App\local_helper', 'helper', 'Other\qualified'],
+            ['App\local_helper', '?App\helper', 'Other\qualified'],
             $analysisNodeCollector->getClassNodes()[0]->functionCalls
         );
+    }
+
+    public function testRepeatedFunctionCallsKeepTheirNamespaceAndSpelling(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+            <?php
+
+            namespace App {
+                function helper(): void {}
+
+                final class LocalCaller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        helper();
+                        HELPER();
+                        \helper();
+                    }
+                }
+            }
+
+            namespace Other {
+                final class ExternalCaller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        helper();
+                        HELPER();
+                        \helper();
+                    }
+                }
+            }
+            PHP);
+
+        $this->assertSame(['App\helper', 'App\HELPER', 'helper'], $nodes[0]->functionCalls);
+        $this->assertSame(['?Other\helper', '?Other\HELPER', 'helper'], $nodes[1]->functionCalls);
+    }
+
+    public function testFunctionCallResolutionDoesNotLeakBetweenFiles(): void
+    {
+        $analysisNodeCollector = new AnalysisNodeCollector(new NamespaceLayerResolver([], self::BASE_PATH));
+        $parser                = (new ParserFactory())->createForNewestSupportedVersion();
+        $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
+
+        // A local declaration resolves directly; the following files need
+        // their own fallback markers and global references for the same call.
+        foreach (['function helper(): void {}', '', ''] as $index => $declaration) {
+            $ast = $parser->parse('<?php namespace App; ' . $declaration . <<<'PHP'
+                final class Caller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        helper();
+                        \helper();
+                    }
+                }
+                PHP);
+
+            $analysisNodeCollector->setCurrentFile('/fake/path/Caller' . $index . '.php', $parser->getTokens());
+            $nodeTraverser->traverse($ast ?? []);
+        }
+
+        $nodes = $analysisNodeCollector->getClassNodes();
+
+        $this->assertSame(['App\helper', 'helper'], $nodes[0]->functionCalls);
+        $this->assertSame(['?App\helper', 'helper'], $nodes[1]->functionCalls);
+        $this->assertSame(['?App\helper', 'helper'], $nodes[2]->functionCalls);
+        $this->assertSame([
+            '/fake/path/Caller1.php' => ['?App\helper', 'helper'],
+            '/fake/path/Caller2.php' => ['?App\helper', 'helper'],
+        ], $analysisNodeCollector->getFileReferences());
     }
 
     public function testDoesNotCollectNonClassNameShapedStringValues(): void
@@ -902,7 +983,7 @@ PHP);
         $this->assertSame(['count', 'clock'], array_column($anonymousClassNode->properties, 'name'));
         $this->assertSame(['__construct', '__toString'], array_column($anonymousClassNode->methods, 'name'));
         $this->assertSame(1, $anonymousClassNode->constructorParamCount());
-        $this->assertSame(['strtoupper'], $anonymousClassNode->functionCalls);
+        $this->assertSame(['?App\strtoupper'], $anonymousClassNode->functionCalls);
         $this->assertSame(['$_GET'], $anonymousClassNode->superglobals);
         $this->assertSame(['isset', 'exit'], $anonymousClassNode->languageConstructs);
         $this->assertTrue($anonymousClassNode->dependsOn('Stringable'));
@@ -921,7 +1002,7 @@ PHP);
         $this->assertSame([], $classNodes[0]->traits);
         $this->assertTrue($classNodes[0]->dependsOn('App\Other'));
         $this->assertTrue($classNodes[0]->dependsOn('App\Support\Unused'));
-        $this->assertSame(['strtoupper'], $classNodes[0]->functionCalls);
+        $this->assertSame(['?App\strtoupper'], $classNodes[0]->functionCalls);
         $this->assertSame(['$_GET'], $classNodes[0]->superglobals);
         $this->assertSame(['isset', 'exit'], $classNodes[0]->languageConstructs);
     }
@@ -1407,7 +1488,7 @@ PHP;
         $this->assertTrue($classNode->callsFunction('App\Domain\Dangerous'));
     }
 
-    public function testKeepsCallUnqualifiedWhenNamespacedFunctionIsDeclaredInsideAnotherFunction(): void
+    public function testCollectsFallbackMarkerWhenNamespacedFunctionIsDeclaredInsideAnotherFunction(): void
     {
         $code      = <<<'PHP'
 <?php
@@ -1432,11 +1513,12 @@ PHP;
         $classNode = $this->collect($code);
 
         // App\strlen only exists once boot() has run: until then strlen()
-        // falls back to the global function, so the call stays unqualified.
-        $this->assertSame(['strlen'], $classNode->functionCalls);
+        // falls back to the global function, so the call stays a fallback
+        // marker.
+        $this->assertSame(['?App\strlen'], $classNode->functionCalls);
     }
 
-    public function testKeepsCallUnqualifiedWhenNamespacedFunctionIsDeclaredConditionally(): void
+    public function testCollectsFallbackMarkerWhenNamespacedFunctionIsDeclaredConditionally(): void
     {
         $code      = <<<'PHP_WRAP'
         <?php
@@ -1459,7 +1541,7 @@ PHP;
         PHP_WRAP;
         $classNode = $this->collect($code);
 
-        $this->assertSame(['strlen'], $classNode->functionCalls);
+        $this->assertSame(['?App\strlen'], $classNode->functionCalls);
     }
 
     public function testResolvesSameNamespaceFunctionCallDeclaredInsideDeclareBlock(): void
@@ -1509,14 +1591,13 @@ PHP;
         $this->assertNotContains('App\Foo\strlen', $classNode->functionCalls);
     }
 
-    public function testKeepsNativeFunctionCallsUnqualifiedInsideNamespace(): void
+    public function testCollectsNativeFunctionCallInsideNamespaceAsFallbackMarker(): void
     {
         $classNode = $this->collect(
             '<?php namespace App\Support; class Foo { public function bar(): int { return strlen("x"); } }'
         );
 
-        $this->assertContains('strlen', $classNode->functionCalls);
-        $this->assertNotContains('App\Support\strlen', $classNode->functionCalls);
+        $this->assertSame(['?App\Support\strlen'], $classNode->functionCalls);
     }
 
     public function testCollectsDeclaredNamespacedFunctionCalls(): void
@@ -1538,14 +1619,13 @@ PHP;
         $this->assertContains('App\Support\debug', $classNode->functionCalls);
     }
 
-    public function testKeepsUnresolvedFunctionCallsAsWrittenInsideNamespace(): void
+    public function testCollectsUnresolvedFunctionCallInsideNamespaceAsFallbackMarker(): void
     {
         $classNode = $this->collect(
             '<?php namespace App\Support; class Foo { public function bar(): void { missing_function("x"); } }'
         );
 
-        $this->assertContains('missing_function', $classNode->functionCalls);
-        $this->assertNotContains('App\Support\missing_function', $classNode->functionCalls);
+        $this->assertSame(['?App\Support\missing_function'], $classNode->functionCalls);
     }
 
     public function testResolvesNamespacedFunctionCallWhenNameShadowsInternalFunction(): void

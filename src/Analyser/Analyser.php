@@ -39,6 +39,7 @@ use function array_keys;
 use function array_merge;
 use function array_unique;
 use function array_values;
+use function count;
 use function gc_disable;
 use function gc_enable;
 use function gc_enabled;
@@ -46,6 +47,7 @@ use function getcwd;
 use function is_dir;
 use function is_file;
 use function sprintf;
+use function str_contains;
 use function str_starts_with;
 use function strcasecmp;
 use function strrchr;
@@ -222,6 +224,16 @@ final readonly class Analyser
         );
         $classNodes       = $extractionResult->classNodes;
         $classNodes       = $this->withRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
+
+        $this->resolveFunctionFallbackCalls(
+            [
+                $classNodes,
+                $extractionResult->functionNodes,
+                $extractionResult->anonymousFunctionNodes,
+                $extractionResult->anonymousClassNodes,
+            ],
+            $extractionResult->functionNodes,
+        );
 
         if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
             $this->markClassLikeUsage(
@@ -967,14 +979,101 @@ final readonly class Analyser
     }
 
     /**
+     * Resolve each node's fallback markers, its unqualified calls in a
+     * namespace to a function not declared in the same file: PHP calls the
+     * namespaced function when it is declared and the global one otherwise. A
+     * conditionally declared namespaced function may not exist when the call
+     * runs, so it keeps both.
+     *
+     * @param list<list<ClassNode>|list<FunctionNode>|list<AnonymousFunctionNode>|list<AnonymousClassNode>> $nodeGroups
+     * @param list<FunctionNode> $functionNodes
+     */
+    private function resolveFunctionFallbackCalls(array $nodeGroups, array $functionNodes): void
+    {
+        // Namespaced function name => whether it is declared unconditionally.
+        $declared = [];
+
+        foreach ($functionNodes as $functionNode) {
+            if (str_contains($functionNode->functionName, '\\')) {
+                $functionNameKey            = strtolower($functionNode->functionName);
+                $declared[$functionNameKey] = ($declared[$functionNameKey] ?? false) || ! $functionNode->isConditional;
+            }
+        }
+
+        // The same marker appears in many nodes, including closures and
+        // their enclosing scopes. Share its resolution for this run only.
+        $resolvedCalls = [];
+
+        foreach ($nodeGroups as $nodeGroup) {
+            foreach ($nodeGroup as $node) {
+                $functionCalls = $this->resolveNodeFunctionCalls($node->functionCalls, $declared, $resolvedCalls);
+
+                if ($functionCalls !== null) {
+                    $node->setFunctionCalls($functionCalls);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param string[] $functionCalls
+     * @param array<string, bool> $declared
+     * @param array<string, list<string>> $resolvedCalls
+     * @return list<string>|null Null when no call needs resolving.
+     */
+    private function resolveNodeFunctionCalls(array $functionCalls, array $declared, array &$resolvedCalls): ?array
+    {
+        $calls         = [];
+        $hasFallback   = false;
+        $hasSingleCall = count($functionCalls) === 1;
+
+        foreach ($functionCalls as $functionCall) {
+            if (! isset($resolvedCalls[$functionCall])) {
+                $namespacedName = AnalysisNodeCollector::parseFunctionFallbackMarker($functionCall);
+
+                if ($namespacedName === null) {
+                    $calls[$functionCall] = true;
+
+                    continue;
+                }
+
+                $isUnconditional              = $declared[strtolower($namespacedName)] ?? null;
+                $resolvedCalls[$functionCall] = [];
+
+                if ($isUnconditional !== null) {
+                    $resolvedCalls[$functionCall][] = $namespacedName;
+                }
+
+                if ($isUnconditional !== true) {
+                    $resolvedCalls[$functionCall][] = substr((string) strrchr($namespacedName, '\\'), 1);
+                }
+            }
+
+            // Single-call scopes can share the resolved list directly.
+            if ($hasSingleCall) {
+                return $resolvedCalls[$functionCall];
+            }
+
+            $hasFallback = true;
+
+            foreach ($resolvedCalls[$functionCall] as $resolvedCall) {
+                $calls[$resolvedCall] = true;
+            }
+        }
+
+        return $hasFallback ? array_keys($calls) : null;
+    }
+
+    /**
      * Flag each named function referenced from another scanned scope: a call
      * (including a first-class callable) or a function-name string such as a
      * callable 'App\helper'. A function calling itself is not a usage.
      *
-     * An unqualified call in a namespace to a function declared in another
-     * file is a fallback marker, which stands for that file's calls of the
-     * short name: it uses the namespaced function when declared and the
-     * global one otherwise, never a same-named function elsewhere.
+     * Node calls are already resolved by resolveFunctionFallbackCalls(). A
+     * fallback marker in the file references stands for an unqualified call
+     * in a namespace: it uses the namespaced function and, unless that is
+     * declared unconditionally, the global one too, never a same-named
+     * function elsewhere.
      *
      * Calls made in closures are already merged into their enclosing
      * function-like or class-like, so only top-level closures are read.
@@ -983,11 +1082,11 @@ final readonly class Analyser
      */
     private function markFunctionUsage(array $classNodes, ExtractionResult $extractionResult): void
     {
-        $fileCalls = [];
+        $used = [];
 
         foreach ([...$classNodes, ...$extractionResult->anonymousClassNodes] as $classLikeNode) {
             foreach ($classLikeNode->functionCalls as $functionCall) {
-                $fileCalls[$classLikeNode->file][strtolower($functionCall)] = true;
+                $used[strtolower($functionCall)] = true;
             }
         }
 
@@ -1001,52 +1100,51 @@ final readonly class Analyser
             }
 
             foreach ($anonymousFunctionNode->functionCalls as $functionCall) {
-                $fileCalls[$anonymousFunctionNode->file][strtolower($functionCall)] = true;
+                $used[strtolower($functionCall)] = true;
             }
         }
 
         $declared = [];
 
         foreach ($extractionResult->functionNodes as $functionNode) {
-            $declared[strtolower($functionNode->functionName)] = true;
+            if (! $functionNode->isConditional) {
+                $declared[strtolower($functionNode->functionName)] = true;
+            }
 
             foreach ($functionNode->functionCalls as $functionCall) {
                 if (strcasecmp($functionCall, $functionNode->functionName) !== 0) {
-                    $fileCalls[$functionNode->file][strtolower($functionCall)] = true;
+                    $used[strtolower($functionCall)] = true;
                 }
             }
         }
 
-        $referenced = [];
-
-        foreach ($extractionResult->fileReferences as $file => $references) {
+        foreach ($extractionResult->fileReferences as $references) {
             foreach ($references as $reference) {
-                $namespacedName = AnalysisNodeCollector::parseFunctionFallbackMarker($reference);
+                $referenceKey = strtolower($reference);
 
-                if ($namespacedName === null) {
-                    $referenced[strtolower($reference)] = true;
-
+                if (isset($used[$referenceKey])) {
                     continue;
                 }
 
-                $namespacedNameKey = strtolower($namespacedName);
-                $globalNameKey     = substr((string) strrchr($namespacedNameKey, '\\'), 1);
+                // Remember markers too, so repeated file references only
+                // resolve their namespace/global fallback once per run.
+                $used[$referenceKey] = true;
+                $namespacedName      = AnalysisNodeCollector::parseFunctionFallbackMarker($referenceKey);
 
-                $referenced[isset($declared[$namespacedNameKey]) ? $namespacedNameKey : $globalNameKey] = true;
-                unset($fileCalls[$file][$globalNameKey]);
+                if ($namespacedName === null) {
+                    continue;
+                }
+
+                $used[$namespacedName] = true;
+
+                if (! isset($declared[$namespacedName])) {
+                    $used[substr((string) strrchr($namespacedName, '\\'), 1)] = true;
+                }
             }
         }
 
-        $called = [];
-
-        foreach ($fileCalls as $fileCall) {
-            $called += $fileCall;
-        }
-
         foreach ($extractionResult->functionNodes as $functionNode) {
-            $functionNameKey = strtolower($functionNode->functionName);
-
-            if (isset($called[$functionNameKey]) || isset($referenced[$functionNameKey])) {
+            if (isset($used[strtolower($functionNode->functionName)])) {
                 $functionNode->setReferenced(true);
             }
         }

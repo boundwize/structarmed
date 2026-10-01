@@ -201,6 +201,28 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->usesLanguageConstruct('eval'));
     }
 
+    public function testSetFunctionCallsReplacesFunctionCalls(): void
+    {
+        $classNode = new ClassNode(
+            className:     'App\\Service',
+            file:          '/src/Service.php',
+            line:          5,
+            layer:         'Source',
+            extends:       null,
+            isAbstract:    false,
+            isFinal:       true,
+            isInterface:   false,
+            isReadonly:    false,
+            functionCalls: ['?App\\helper'],
+        );
+
+        $classNode->setFunctionCalls(['App\\helper']);
+
+        $this->assertSame(['App\\helper'], $classNode->functionCalls);
+        $this->assertTrue($classNode->callsFunction('App\\helper'));
+        $this->assertFalse($classNode->callsFunction('helper'));
+    }
+
     public function testUsesLanguageConstructResolvesExitDieAliases(): void
     {
         $usesExit = new ClassNode(
@@ -435,6 +457,28 @@ final class ClassNodeTest extends TestCase
 
         $this->assertTrue($classNode->dependsOn(DateTimeImmutable::class));
         $this->assertFalse($classNode->dependsOn(DateTime::class));
+    }
+
+    public function testUsesClassIgnoresDependencyOnlyUsedAsFunctionOrConstant(): void
+    {
+        $classNode = new ClassNode(
+            className:            'App\\Domain\\OrderService',
+            file:                 '/src/OrderService.php',
+            line:                 5,
+            layer:                'Domain',
+            extends:              null,
+            isAbstract:           false,
+            isFinal:              false,
+            isInterface:          false,
+            isReadonly:           false,
+            dependencies:         [DateTimeImmutable::class, 'Vendor\\helper'],
+            nonClassDependencies: ['Vendor\\helper'],
+        );
+
+        $this->assertTrue($classNode->usesClass(DateTimeImmutable::class));
+        $this->assertFalse($classNode->usesClass('Vendor\\helper'));
+        $this->assertFalse($classNode->usesClass(DateTime::class));
+        $this->assertTrue($classNode->dependsOn('Vendor\\helper'));
     }
 
     public function testDependsOnDoesNotMatchNamespacePrefix(): void

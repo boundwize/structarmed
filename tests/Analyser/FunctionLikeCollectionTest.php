@@ -158,7 +158,7 @@ final class FunctionLikeCollectionTest extends TestCase
         )->getFunctionNodes()[1];
 
         $this->assertSame('App\Domain\handle', $functionNode->functionName);
-        $this->assertSame(['App\Domain\local', 'strlen'], $functionNode->functionCalls);
+        $this->assertSame(['App\Domain\local', '?App\Domain\strlen'], $functionNode->functionCalls);
         $this->assertSame(['$_GET'], $functionNode->superglobals);
         $this->assertSame(['echo', 'exit'], $functionNode->languageConstructs);
         $this->assertTrue($functionNode->callsFunction('App\Domain\local'));
@@ -279,8 +279,8 @@ final class FunctionLikeCollectionTest extends TestCase
         $this->assertSame(['App\Infrastructure\Mailer'], $anonymousFunctionNode->dependencies);
         $this->assertSame(['App\Infrastructure\Mailer'], $classNode->dependencies);
 
-        $this->assertSame(['strlen'], $anonymousFunctionNode->functionCalls);
-        $this->assertSame(['strlen'], $classNode->functionCalls);
+        $this->assertSame(['?App\Domain\strlen'], $anonymousFunctionNode->functionCalls);
+        $this->assertSame(['?App\Domain\strlen'], $classNode->functionCalls);
         $this->assertSame(['exit'], $anonymousFunctionNode->languageConstructs);
         $this->assertSame(['exit'], $classNode->languageConstructs);
     }
