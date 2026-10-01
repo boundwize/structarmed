@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
-use function in_array;
 use function preg_match;
+use function strcasecmp;
 use function strrpos;
 use function substr;
 
@@ -80,7 +80,17 @@ final class ClassNode
      */
     public function usesClass(string $class): bool
     {
-        return $this->dependsOn($class) && ! in_array($class, $this->nonClassDependencies, true);
+        if (! $this->dependsOn($class, isCaseSensitive: false)) {
+            return false;
+        }
+
+        foreach ($this->nonClassDependencies as $nonClassDependency) {
+            if (strcasecmp($nonClassDependency, $class) === 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function isBackedEnum(): bool
