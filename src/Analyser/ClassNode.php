@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
+use function in_array;
 use function preg_match;
 use function strrpos;
 use function substr;
@@ -35,6 +36,7 @@ final class ClassNode
      * @param list<string>   $parentInterfaces    Direct and transitive implemented or extended interface names
      * @param EnumCaseNode[] $enumCases           Cases of this enum
      * @param string|null    $enumBackingType     Backing type for a backed enum, null otherwise
+     * @param list<string>   $nonClassDependencies Dependencies only ever used as a function or constant name
      */
     public function __construct(
         public readonly string $className,
@@ -67,8 +69,18 @@ final class ClassNode
         public bool $isInstantiated = false,
         public readonly array $enumCases = [],
         public readonly ?string $enumBackingType = null,
+        public readonly array $nonClassDependencies = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
+    }
+
+    /**
+     * Whether the class depends on $class as a class-like: a function or
+     * constant of the same name does not count.
+     */
+    public function usesClass(string $class): bool
+    {
+        return $this->dependsOn($class) && ! in_array($class, $this->nonClassDependencies, true);
     }
 
     public function isBackedEnum(): bool

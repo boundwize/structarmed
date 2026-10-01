@@ -1481,6 +1481,149 @@ final class AnalyserTest extends TestCase
         }
     }
 
+    public function testMayNotUseClassRuleIgnoresFunctionAndConstantOfTheSameName(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/Vendor/functions.php'  => <<<'PHP'
+                <?php
+
+                namespace Vendor;
+
+                function ForbiddenService(): void {}
+
+                const ForbiddenConstant = 1;
+                PHP,
+            'src/App/FunctionCall.php'  => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use function Vendor\ForbiddenService as forbidden;
+                use Vendor\{function ForbiddenService as alsoForbidden};
+
+                final class FunctionCall
+                {
+                    public function run(): void
+                    {
+                        \Vendor\ForbiddenService();
+                        forbidden();
+                        alsoForbidden();
+                    }
+                }
+                PHP,
+            'src/App/ConstantFetch.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use const Vendor\ForbiddenConstant;
+
+                final class ConstantFetch
+                {
+                    public function run(): int
+                    {
+                        return \Vendor\ForbiddenConstant + ForbiddenConstant;
+                    }
+                }
+                PHP,
+            'src/App/Both.php'          => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Both
+                {
+                    public function run(): void
+                    {
+                        \Vendor\ForbiddenService();
+                    }
+
+                    public function create(): object
+                    {
+                        return new \Vendor\ForbiddenService();
+                    }
+                }
+                PHP,
+            'src/App/BothImported.php'  => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use function Vendor\ForbiddenService;
+                use Vendor\ForbiddenService;
+
+                final class BothImported
+                {
+                    public function run(): void
+                    {
+                        ForbiddenService();
+                        new ForbiddenService();
+                    }
+                }
+                PHP,
+            'src/App/Imported.php'      => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                use Vendor\ForbiddenConstant;
+
+                final class Imported
+                {
+                    public function run(): string
+                    {
+                        return ForbiddenConstant::class;
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/App/')
+            ->rule(
+                'source.no_service_class',
+                new MayNotUseClassRule(layer: 'Source', forbiddenClass: 'Vendor\ForbiddenService')
+            )
+            ->rule(
+                'source.no_constant_class',
+                new MayNotUseClassRule(layer: 'Source', forbiddenClass: 'Vendor\ForbiddenConstant')
+            )
+            ->rule(
+                'source.no_service_function',
+                new MayNotCallFunctionRule(layer: 'Source', function: 'Vendor\ForbiddenService')
+            );
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $ruleViolationCollection = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions);
+
+            // Only `new` and a class import use a class; a function call, a
+            // constant fetch, and their `use function`/`use const` imports
+            // do not, even when a class of the same name is used beside them.
+            $this->assertSame(
+                ['App\Both', 'App\BothImported'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_service_class'))
+            );
+            $this->assertSame(
+                ['App\Imported'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_constant_class'))
+            );
+            $this->assertSame(
+                ['App\Both', 'App\BothImported', 'App\FunctionCall'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_service_function'))
+            );
+        }
+    }
+
     public function testResolvedFunctionCallsKeepOrderAndRemoveDuplicatesAcrossNodeKinds(): void
     {
         $basePath = $this->makeTempProject([

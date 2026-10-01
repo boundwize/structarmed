@@ -17,6 +17,14 @@ final class ClassLikeAnalysis
     /** @var array<string, true> */
     public array $dependencies = [];
 
+    /**
+     * The dependencies used as a class-like name: not only as a function
+     * call or constant fetch name, nor only by `use function`/`use const`.
+     *
+     * @var array<string, true>
+     */
+    public array $classDependencies = [];
+
     /** @var list<Name> */
     public array $functionCallNames = [];
 
