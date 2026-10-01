@@ -16,7 +16,7 @@ use function array_filter;
  * body of a method is counted on its class: a rule that only inspects the
  * enclosing node keeps seeing everything the anonymous function does.
  */
-final readonly class AnonymousFunctionNode
+final class AnonymousFunctionNode
 {
     use NodeQueryTrait;
 
@@ -27,7 +27,7 @@ final readonly class AnonymousFunctionNode
     public const FILE_SCOPE = 'file scope';
 
     /** @var list<string> */
-    public array $layers;
+    public readonly array $layers;
 
     /**
      * @param string|null  $enclosingClassName    Innermost named class-like this anonymous function is declared in
@@ -43,24 +43,24 @@ final readonly class AnonymousFunctionNode
      *                                            such an anonymous function cannot be declared static
      */
     public function __construct(
-        public string $file,
-        public int $line,
-        public ?string $layer,
-        public bool $isArrowFunction = false,
-        public bool $isStatic = false,
-        public ?string $enclosingClassName = null,
-        public ?string $enclosingFunctionName = null,
-        public bool $usesThis = false,
-        public bool $hasReturnType = false,
-        public int $paramCount = 0,
-        public int $cyclomaticComplexity = 1,
-        public int $lineCount = 0,
-        public array $dependencies = [],
+        public readonly string $file,
+        public readonly int $line,
+        public readonly ?string $layer,
+        public readonly bool $isArrowFunction = false,
+        public readonly bool $isStatic = false,
+        public readonly ?string $enclosingClassName = null,
+        public readonly ?string $enclosingFunctionName = null,
+        public readonly bool $usesThis = false,
+        public readonly bool $hasReturnType = false,
+        public readonly int $paramCount = 0,
+        public readonly int $cyclomaticComplexity = 1,
+        public readonly int $lineCount = 0,
+        public readonly array $dependencies = [],
         public array $functionCalls = [],
-        public array $superglobals = [],
-        public array $languageConstructs = [],
+        public readonly array $superglobals = [],
+        public readonly array $languageConstructs = [],
         array $layers = [],
-        public bool $requiresObjectBinding = false,
+        public readonly bool $requiresObjectBinding = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }

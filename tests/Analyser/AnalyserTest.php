@@ -1349,6 +1349,136 @@ final class AnalyserTest extends TestCase
         }
     }
 
+    public function testMayNotCallFunctionRuleResolvesUnqualifiedCallToFunctionDeclaredInAnotherFile(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/App/helpers.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                function helper(): void {}
+
+                if (! function_exists('App\maybe')) {
+                    function maybe(): void {}
+                }
+                PHP,
+            'src/App/Service.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Service
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        maybe();
+                    }
+                }
+                PHP,
+            'src/App/Explicit.php'    => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Explicit
+                {
+                    public function run(): void
+                    {
+                        helper();
+                        \helper();
+                    }
+                }
+                PHP,
+            'src/App/Callers.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class NamespacedCaller
+                {
+                    public function run(): void
+                    {
+                        helper();
+                    }
+                }
+
+                final class GlobalCaller
+                {
+                    public function run(): void
+                    {
+                        \helper();
+                    }
+                }
+                PHP,
+            'src/App/NotDeclared.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class NotDeclared
+                {
+                    public function run(): int
+                    {
+                        return strlen('x');
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule(
+                'source.no_namespaced_helper',
+                new MayNotCallFunctionRule(layer: 'Source', function: 'App\helper')
+            )
+            ->rule('source.no_global_helper', new MayNotCallFunctionRule(layer: 'Source', function: 'helper'))
+            ->rule('source.no_namespaced_maybe', new MayNotCallFunctionRule(layer: 'Source', function: 'App\maybe'))
+            ->rule('source.no_global_maybe', new MayNotCallFunctionRule(layer: 'Source', function: 'maybe'))
+            ->rule('source.no_strlen', new MayNotCallFunctionRule(layer: 'Source', function: 'strlen'));
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $ruleViolationCollection = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions);
+
+            // helper() reaches App\helper declared in helpers.php, never the
+            // global helper(); \helper() keeps its global name, beside it in
+            // one class or in another class of the same file. App\maybe only
+            // exists once its block has run, so maybe() may reach either.
+            // strlen() has no App\strlen to reach.
+            $this->assertSame(
+                ['App\Explicit', 'App\NamespacedCaller', 'App\Service'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_namespaced_helper'))
+            );
+            $this->assertSame(
+                ['App\Explicit', 'App\GlobalCaller'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_global_helper'))
+            );
+            $this->assertSame(
+                ['App\Service'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_namespaced_maybe'))
+            );
+            $this->assertSame(
+                ['App\Service'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_global_maybe'))
+            );
+            $this->assertSame(
+                ['App\NotDeclared'],
+                $this->violationClassNames($ruleViolationCollection->forRule('source.no_strlen'))
+            );
+        }
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedAsDependencies(): void
     {
         $checker = '<?php namespace App;' . "\n"
