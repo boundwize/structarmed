@@ -428,6 +428,24 @@ PHP);
         $this->assertNull(AnalysisNodeCollector::parseDeferredInstantiationMarker('other@App\\Factory'));
     }
 
+    public function testParsesFunctionFallbackMarker(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            helper();
+            PHP);
+
+        [$marker] = $analysisNodeCollector->getFileReferences()['/fake/path/Foo.php'];
+
+        // The collected marker carries the namespaced name; a plain reference
+        // is not a marker.
+        $this->assertSame('App\helper', AnalysisNodeCollector::parseFunctionFallbackMarker($marker));
+        $this->assertNull(AnalysisNodeCollector::parseFunctionFallbackMarker('App\helper'));
+    }
+
     public function testDoesNotRecordStringWithMarkerSeparatorAsInstantiation(): void
     {
         $code = '<?php namespace App;' . "\n"
