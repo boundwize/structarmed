@@ -459,6 +459,28 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->dependsOn(DateTime::class));
     }
 
+    public function testUsesClassIgnoresDependencyOnlyUsedAsFunctionOrConstant(): void
+    {
+        $classNode = new ClassNode(
+            className:            'App\\Domain\\OrderService',
+            file:                 '/src/OrderService.php',
+            line:                 5,
+            layer:                'Domain',
+            extends:              null,
+            isAbstract:           false,
+            isFinal:              false,
+            isInterface:          false,
+            isReadonly:           false,
+            dependencies:         [DateTimeImmutable::class, 'Vendor\\helper'],
+            nonClassDependencies: ['Vendor\\helper'],
+        );
+
+        $this->assertTrue($classNode->usesClass(DateTimeImmutable::class));
+        $this->assertFalse($classNode->usesClass('Vendor\\helper'));
+        $this->assertFalse($classNode->usesClass(DateTime::class));
+        $this->assertTrue($classNode->dependsOn('Vendor\\helper'));
+    }
+
     public function testDependsOnDoesNotMatchNamespacePrefix(): void
     {
         $classNode = new ClassNode(

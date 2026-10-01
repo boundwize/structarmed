@@ -1825,7 +1825,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // calls is resolved once every function is known.
             $this->addFunctionFallback($name, $namespacedName);
 
-            return $this->resolvedFunctionNames[$namespacedNameString]
+            $functionName = $this->resolvedFunctionNames[$namespacedNameString]
                 = self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedNameString;
         }
 
