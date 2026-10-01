@@ -201,6 +201,28 @@ final class ClassNodeTest extends TestCase
         $this->assertFalse($classNode->usesLanguageConstruct('eval'));
     }
 
+    public function testSetFunctionCallsReplacesFunctionCalls(): void
+    {
+        $classNode = new ClassNode(
+            className:     'App\\Service',
+            file:          '/src/Service.php',
+            line:          5,
+            layer:         'Source',
+            extends:       null,
+            isAbstract:    false,
+            isFinal:       true,
+            isInterface:   false,
+            isReadonly:    false,
+            functionCalls: ['?App\\helper'],
+        );
+
+        $classNode->setFunctionCalls(['App\\helper']);
+
+        $this->assertSame(['App\\helper'], $classNode->functionCalls);
+        $this->assertTrue($classNode->callsFunction('App\\helper'));
+        $this->assertFalse($classNode->callsFunction('helper'));
+    }
+
     public function testUsesLanguageConstructResolvesExitDieAliases(): void
     {
         $usesExit = new ClassNode(
