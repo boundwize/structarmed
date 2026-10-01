@@ -75,7 +75,7 @@ final class ClassNode
     }
 
     /**
-     * Whether the class depends on $class as a class-like: a function or
+     * Whether the class depends on $dependency as a class-like: a function or
      * constant of the same name does not count.
      */
     public function usesClass(string $dependency): bool
