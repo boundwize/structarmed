@@ -31,14 +31,14 @@ trait NodeQueryTrait
         return in_array($layer, $this->layers, true);
     }
 
-    public function dependsOn(string $class, bool $isCaseSensitive = true): bool
+    public function dependsOn(string $dependency, bool $isCaseSensitive = true): bool
     {
         if ($isCaseSensitive) {
-            return in_array($class, $this->dependencies, true);
+            return in_array($dependency, $this->dependencies, true);
         }
 
-        foreach ($this->dependencies as $dependency) {
-            if (strcasecmp($dependency, $class) === 0) {
+        foreach ($this->dependencies as $existingDependency) {
+            if (strcasecmp($existingDependency, $dependency) === 0) {
                 return true;
             }
         }
