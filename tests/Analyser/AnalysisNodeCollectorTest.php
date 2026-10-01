@@ -337,13 +337,24 @@ PHP);
                     \Other\qualified();
                 }
             }
+
+            final class GlobalCaller
+            {
+                public function run(): void
+                {
+                    \helper();
+                    \strlen('');
+                }
+            }
             PHP);
 
         // helper() is not declared in this file, so it is a fallback marker
         // while the call keeps its global name; the same-file and
-        // fully-qualified calls resolve exactly.
+        // fully-qualified calls resolve exactly. The marker stands for this
+        // file's helper() calls, so the fully-qualified \helper() is also
+        // referenced by name.
         $this->assertSame(
-            ['/fake/path/Foo.php' => ['?App\helper']],
+            ['/fake/path/Foo.php' => ['?App\helper', 'helper']],
             $analysisNodeCollector->getFileReferences()
         );
         $this->assertSame(

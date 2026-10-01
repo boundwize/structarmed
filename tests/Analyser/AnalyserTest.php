@@ -1142,6 +1142,7 @@ final class AnalyserTest extends TestCase
                 namespace A;
 
                 function helper(): void {}
+                function explicit_helper(): void {}
 
                 function recursive(int $depth): void
                 {
@@ -1164,6 +1165,7 @@ final class AnalyserTest extends TestCase
 
                 function helper(): void {}
                 function fallback_helper(): void {}
+                function explicit_helper(): void {}
                 PHP,
             'src/A/boot.php'    => <<<'PHP'
                 <?php
@@ -1185,6 +1187,8 @@ final class AnalyserTest extends TestCase
                     {
                         helper();
                         fallback_helper();
+                        explicit_helper();
+                        \explicit_helper();
                         \B\qualified();
                         imported();
                     }
@@ -1213,8 +1217,9 @@ final class AnalyserTest extends TestCase
             // from another file, so PHP never falls back to the global helper()
             // nor reaches B\helper; fallback_helper() reaches the global
             // function as A\fallback_helper is not declared. The
-            // fully-qualified and imported calls keep theirs, and a self-call
-            // is no usage.
+            // fully-qualified and imported calls keep theirs, even beside an
+            // unqualified call of the same short name, and a self-call is no
+            // usage.
             $this->assertSame(
                 ['A\recursive', 'B\helper', 'helper'],
                 $this->violationClassNames($violations)

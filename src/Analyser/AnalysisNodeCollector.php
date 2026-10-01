@@ -77,6 +77,7 @@ use PhpParser\Node\Stmt\While_;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
+use function array_intersect_key;
 use function array_keys;
 use function array_pop;
 use function array_push;
@@ -89,6 +90,7 @@ use function is_finite;
 use function is_int;
 use function is_string;
 use function preg_match;
+use function str_contains;
 use function str_starts_with;
 use function strcasecmp;
 use function strlen;
@@ -296,6 +298,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private const FUNCTION_FALLBACK_MARKER_PREFIX = '?';
 
+    /** @var array<string, true> Lower-cased short names of the current file's fallback markers */
+    private array $currentFileFallbackNames = [];
+
+    /** @var array<string, string> Global functions the current file calls by resolved name, keyed lower-cased */
+    private array $currentFileGlobalFunctionCalls = [];
+
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
 
@@ -437,6 +445,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFile                       = $file;
         $this->currentTokens                     = $tokens;
         $this->currentFileReferences             = [];
+        $this->currentFileFallbackNames          = [];
+        $this->currentFileGlobalFunctionCalls    = [];
         $this->currentFileInstantiations         = [];
         $this->nonCanonicalKeywordConstants      = [];
         $this->numericLiterals                   = [];
@@ -794,6 +804,21 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $this->collectFunctionLike($fileFunctionLikeAnalysis);
         }
 
+        // A fallback marker stands for this file's calls of its short name, so
+        // a global function also called by resolved name here is referenced
+        // by name.
+        $globalFunctionCalls = array_intersect_key(
+            $this->currentFileGlobalFunctionCalls,
+            $this->currentFileFallbackNames
+        );
+
+        foreach ($globalFunctionCalls as $globalFunctionCall) {
+            $this->currentFileReferences[$globalFunctionCall] = true;
+        }
+
+        $this->currentFileFallbackNames       = [];
+        $this->currentFileGlobalFunctionCalls = [];
+
         if ($this->currentFileReferences !== []) {
             $this->fileReferences[$this->currentFile] = array_keys($this->currentFileReferences);
             $this->currentFileReferences              = [];
@@ -1139,9 +1164,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $namespacedName = $node->name->getAttribute('namespacedName');
 
                 if ($namespacedName instanceof Name) {
-                    $fallbackMarker = self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedName->toString();
-
-                    $this->currentFileReferences[$fallbackMarker] = true;
+                    $this->addFunctionFallback($node->name, $namespacedName);
                 }
             }
 
@@ -1722,6 +1745,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $functionName = $name->toString();
 
         if ($name instanceof FullyQualified) {
+            if (! str_contains($functionName, '\\')) {
+                $this->currentFileGlobalFunctionCalls[$name->toLowerString()] = $functionName;
+            }
+
             return $functionName;
         }
 
@@ -1736,10 +1763,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             // Declared in another file or not at all: which function PHP
             // calls is resolved once every function is known.
-            $this->currentFileReferences[self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedNameString] = true;
+            $this->addFunctionFallback($name, $namespacedName);
         }
 
         return $functionName;
+    }
+
+    private function addFunctionFallback(Name $name, Name $namespacedName): void
+    {
+        $this->currentFileReferences[self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedName->toString()] = true;
+        $this->currentFileFallbackNames[$name->toLowerString()]                                           = true;
     }
 
     /**
