@@ -32,6 +32,7 @@ use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
 use Boundwize\StructArmed\Util\Path;
 
+use function array_change_key_case;
 use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
@@ -1080,7 +1081,7 @@ final readonly class Analyser
 
         foreach ([...$classNodes, ...$extractionResult->anonymousClassNodes] as $classLikeNode) {
             foreach ($classLikeNode->functionCalls as $functionCall) {
-                $used[strtolower($functionCall)] = true;
+                $used[$functionCall] = true;
             }
         }
 
@@ -1094,7 +1095,7 @@ final readonly class Analyser
             }
 
             foreach ($anonymousFunctionNode->functionCalls as $functionCall) {
-                $used[strtolower($functionCall)] = true;
+                $used[$functionCall] = true;
             }
         }
 
@@ -1107,10 +1108,13 @@ final readonly class Analyser
 
             foreach ($functionNode->functionCalls as $functionCall) {
                 if (strcasecmp($functionCall, $functionNode->functionName) !== 0) {
-                    $used[strtolower($functionCall)] = true;
+                    $used[$functionCall] = true;
                 }
             }
         }
+
+        // Deduplicate call spellings across scopes before normalizing their case.
+        $used = array_change_key_case($used);
 
         foreach ($extractionResult->fileReferences as $references) {
             foreach ($references as $reference) {
