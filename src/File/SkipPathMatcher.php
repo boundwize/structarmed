@@ -49,7 +49,12 @@ final class SkipPathMatcher
      */
     private readonly array $pathPrefixesWithSlash;
 
-    /** @var list<string> */
+    /**
+     * Glob patterns with "/*" appended, matched against "$path/" so a single
+     * fnmatch() covers both the exact path and its descendants.
+     *
+     * @var list<string>
+     */
     private readonly array $patterns;
 
     private readonly bool $hasMatchers;
@@ -85,7 +90,8 @@ final class SkipPathMatcher
             $normalisedSkipPath = Path::normalise($skipPath);
 
             if (strpbrk($skipPath, '*?[') !== false) {
-                $patterns[] = $normalisedSkipPath;
+                // Without FNM_PATHNAME, the appended wildcard also matches nested descendants.
+                $patterns[] = $normalisedSkipPath . '/*';
 
                 continue;
             }
@@ -135,22 +141,16 @@ final class SkipPathMatcher
             return false;
         }
 
-        $relativePath = str_starts_with($normalisedPath, $this->normalisedBasePathWithSlash)
-            ? substr($normalisedPath, strlen($this->normalisedBasePathWithSlash))
-            : $normalisedPath;
+        $relativePathWithSlash = str_starts_with($pathWithSlash, $this->normalisedBasePathWithSlash)
+            ? substr($pathWithSlash, strlen($this->normalisedBasePathWithSlash))
+            : $pathWithSlash;
 
         foreach ($this->patterns as $pattern) {
-            if ($this->matchesPattern($pattern, $normalisedPath) || $this->matchesPattern($pattern, $relativePath)) {
+            if (fnmatch($pattern, $pathWithSlash) || fnmatch($pattern, $relativePathWithSlash)) {
                 return true;
             }
         }
 
         return false;
-    }
-
-    private function matchesPattern(string $pattern, string $path): bool
-    {
-        // Without FNM_PATHNAME, the appended wildcard also matches nested descendants.
-        return fnmatch($pattern, $path) || fnmatch($pattern . '/*', $path);
     }
 }
