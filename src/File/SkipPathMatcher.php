@@ -7,11 +7,11 @@ namespace Boundwize\StructArmed\File;
 use Boundwize\StructArmed\Util\Path;
 
 use function array_unique;
-use function array_values;
 use function fnmatch;
 use function implode;
 use function realpath;
 use function sort;
+use function str_ends_with;
 use function str_starts_with;
 use function strlen;
 use function strpbrk;
@@ -49,7 +49,12 @@ final class SkipPathMatcher
      */
     private readonly array $pathPrefixesWithSlash;
 
-    /** @var list<string> */
+    /**
+     * Glob patterns, each followed by its "/*" descendant pattern unless the
+     * pattern already ends with "*", which then matches "/..." too.
+     *
+     * @var list<string>
+     */
     private readonly array $patterns;
 
     private readonly bool $hasMatchers;
@@ -106,8 +111,18 @@ final class SkipPathMatcher
             $pathPrefixesWithSlash[] = $pathPrefix . '/';
         }
 
+        $patternsWithDescendants = [];
+        foreach (array_unique($patterns) as $pattern) {
+            $patternsWithDescendants[] = $pattern;
+
+            // Without FNM_PATHNAME, the appended wildcard also matches nested descendants.
+            if (! str_ends_with($pattern, '*')) {
+                $patternsWithDescendants[] = $pattern . '/*';
+            }
+        }
+
         $this->pathPrefixesWithSlash = $pathPrefixesWithSlash;
-        $this->patterns              = array_values(array_unique($patterns));
+        $this->patterns              = $patternsWithDescendants;
         $this->hasMatchers           = $pathPrefixesWithSlash !== [] || $this->patterns !== [];
     }
 
@@ -140,17 +155,11 @@ final class SkipPathMatcher
             : $normalisedPath;
 
         foreach ($this->patterns as $pattern) {
-            if ($this->matchesPattern($pattern, $normalisedPath) || $this->matchesPattern($pattern, $relativePath)) {
+            if (fnmatch($pattern, $normalisedPath) || fnmatch($pattern, $relativePath)) {
                 return true;
             }
         }
 
         return false;
-    }
-
-    private function matchesPattern(string $pattern, string $path): bool
-    {
-        // Without FNM_PATHNAME, the appended wildcard also matches nested descendants.
-        return fnmatch($pattern, $path) || fnmatch($pattern . '/*', $path);
     }
 }
