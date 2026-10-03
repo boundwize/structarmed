@@ -72,6 +72,16 @@ final class SkipPathMatcherTest extends TestCase
         }
     }
 
+    public function testTrailingWildcardGlobSkipsDescendants(): void
+    {
+        $skipPathMatcher = SkipPathMatcher::compile('/project', ['*tests*', 'build*']);
+
+        $this->assertTrue($skipPathMatcher->isSkipped('/project/tests/Foo.php'));
+        $this->assertTrue($skipPathMatcher->isSkipped('/project/src/unittests/Nested/Foo.php'));
+        $this->assertTrue($skipPathMatcher->isSkipped('/project/build-cache/Nested/Foo.php'));
+        $this->assertFalse($skipPathMatcher->isSkipped('/project/src/Foo.php'));
+    }
+
     public function testLeadingSlashSkipPathMatchesOnlyTheAbsoluteLocation(): void
     {
         $skipPathMatcher = SkipPathMatcher::compile('/project', ['/vendor']);
