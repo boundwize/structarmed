@@ -7,11 +7,11 @@ namespace Boundwize\StructArmed\File;
 use Boundwize\StructArmed\Util\Path;
 
 use function array_unique;
+use function array_values;
 use function fnmatch;
 use function implode;
 use function realpath;
 use function sort;
-use function str_ends_with;
 use function str_starts_with;
 use function strlen;
 use function strpbrk;
@@ -50,8 +50,8 @@ final class SkipPathMatcher
     private readonly array $pathPrefixesWithSlash;
 
     /**
-     * Glob patterns, each followed by its "/*" descendant pattern unless the
-     * pattern already ends with "*", which then matches "/..." too.
+     * Glob patterns with "/*" appended, matched against "$path/" so a single
+     * fnmatch() covers both the exact path and its descendants.
      *
      * @var list<string>
      */
@@ -90,7 +90,8 @@ final class SkipPathMatcher
             $normalisedSkipPath = Path::normalise($skipPath);
 
             if (strpbrk($skipPath, '*?[') !== false) {
-                $patterns[] = $normalisedSkipPath;
+                // Without FNM_PATHNAME, the appended wildcard also matches nested descendants.
+                $patterns[] = $normalisedSkipPath . '/*';
 
                 continue;
             }
@@ -111,18 +112,8 @@ final class SkipPathMatcher
             $pathPrefixesWithSlash[] = $pathPrefix . '/';
         }
 
-        $patternsWithDescendants = [];
-        foreach (array_unique($patterns) as $pattern) {
-            $patternsWithDescendants[] = $pattern;
-
-            // Without FNM_PATHNAME, the appended wildcard also matches nested descendants.
-            if (! str_ends_with($pattern, '*')) {
-                $patternsWithDescendants[] = $pattern . '/*';
-            }
-        }
-
         $this->pathPrefixesWithSlash = $pathPrefixesWithSlash;
-        $this->patterns              = $patternsWithDescendants;
+        $this->patterns              = array_values(array_unique($patterns));
         $this->hasMatchers           = $pathPrefixesWithSlash !== [] || $this->patterns !== [];
     }
 
@@ -150,12 +141,12 @@ final class SkipPathMatcher
             return false;
         }
 
-        $relativePath = str_starts_with($normalisedPath, $this->normalisedBasePathWithSlash)
-            ? substr($normalisedPath, strlen($this->normalisedBasePathWithSlash))
-            : $normalisedPath;
+        $relativePathWithSlash = str_starts_with($pathWithSlash, $this->normalisedBasePathWithSlash)
+            ? substr($pathWithSlash, strlen($this->normalisedBasePathWithSlash))
+            : $pathWithSlash;
 
         foreach ($this->patterns as $pattern) {
-            if (fnmatch($pattern, $normalisedPath) || fnmatch($pattern, $relativePath)) {
+            if (fnmatch($pattern, $pathWithSlash) || fnmatch($pattern, $relativePathWithSlash)) {
                 return true;
             }
         }
