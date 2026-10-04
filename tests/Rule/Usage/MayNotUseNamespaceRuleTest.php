@@ -100,6 +100,22 @@ final class MayNotUseNamespaceRuleTest extends TestCase
         $this->assertInstanceOf(RuleViolation::class, $mayNotUseNamespaceRule->evaluate($classNode));
     }
 
+    public function testViolatesWhenDepIsInForbiddenNamespaceWithDifferentCase(): void
+    {
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'App');
+        $classNode              = $this->makeNode(['app\\B']);
+
+        $this->assertInstanceOf(RuleViolation::class, $mayNotUseNamespaceRule->evaluate($classNode));
+    }
+
+    public function testPassesWhenDepIsTheForbiddenNamespaceItself(): void
+    {
+        $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'App');
+        $classNode              = $this->makeNode(['App']);
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseNamespaceRule->evaluate($classNode));
+    }
+
     public function testPassesWhenDepOnlySharesNamespacePrefix(): void
     {
         $mayNotUseNamespaceRule = new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM');
