@@ -6,8 +6,9 @@ namespace Boundwize\StructArmed\Analyser;
 
 use function in_array;
 use function rtrim;
-use function str_starts_with;
 use function strcasecmp;
+use function strlen;
+use function strncasecmp;
 
 /**
  * Query helpers shared by {@see ClassNode}, {@see AnonymousClassNode},
@@ -48,10 +49,13 @@ trait NodeQueryTrait
 
     public function dependsOnNamespace(string $namespace): bool
     {
-        $prefix = rtrim($namespace, '\\') . '\\';
+        $prefix       = rtrim($namespace, '\\') . '\\';
+        $prefixLength = strlen($prefix);
 
+        // namespace names are case-insensitive; only the prefix is compared,
+        // so a case-sensitive constant name after it is left untouched
         foreach ($this->dependencies as $dependency) {
-            if (str_starts_with($dependency, $prefix)) {
+            if (strncasecmp($dependency, $prefix, $prefixLength) === 0) {
                 return true;
             }
         }
