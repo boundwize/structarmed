@@ -342,31 +342,32 @@ final class AnalysisResultCache
      */
     public function storeExtractionResult(array $files, string $namespace, ExtractionResult $extractionResult): void
     {
-        $classNodesByFile             = array_fill_keys($files, []);
-        $anonymousClassNodesByFile    = $classNodesByFile;
-        $functionNodesByFile          = $classNodesByFile;
-        $anonymousFunctionNodesByFile = $classNodesByFile;
+        $fileSet                      = array_fill_keys($files, true);
+        $classNodesByFile             = [];
+        $anonymousClassNodesByFile    = [];
+        $functionNodesByFile          = [];
+        $anonymousFunctionNodesByFile = [];
 
         foreach ($extractionResult->classNodes as $classNode) {
-            if (isset($classNodesByFile[$classNode->file])) {
+            if (isset($fileSet[$classNode->file])) {
                 $classNodesByFile[$classNode->file][] = $classNode;
             }
         }
 
         foreach ($extractionResult->anonymousClassNodes as $anonymousClassNode) {
-            if (isset($anonymousClassNodesByFile[$anonymousClassNode->file])) {
+            if (isset($fileSet[$anonymousClassNode->file])) {
                 $anonymousClassNodesByFile[$anonymousClassNode->file][] = $anonymousClassNode;
             }
         }
 
         foreach ($extractionResult->functionNodes as $functionNode) {
-            if (isset($functionNodesByFile[$functionNode->file])) {
+            if (isset($fileSet[$functionNode->file])) {
                 $functionNodesByFile[$functionNode->file][] = $functionNode;
             }
         }
 
         foreach ($extractionResult->anonymousFunctionNodes as $anonymousFunctionNode) {
-            if (isset($anonymousFunctionNodesByFile[$anonymousFunctionNode->file])) {
+            if (isset($fileSet[$anonymousFunctionNode->file])) {
                 $anonymousFunctionNodesByFile[$anonymousFunctionNode->file][] = $anonymousFunctionNode;
             }
         }
@@ -375,13 +376,13 @@ final class AnalysisResultCache
             $this->storeAnalysisNodes(
                 $file,
                 $namespace,
-                $classNodesByFile[$file],
+                $classNodesByFile[$file] ?? [],
                 $extractionResult->fileAnalyses[$file] ?? null,
-                $anonymousClassNodesByFile[$file],
+                $anonymousClassNodesByFile[$file] ?? [],
                 $extractionResult->fileReferences[$file] ?? [],
                 $extractionResult->fileInstantiations[$file] ?? [],
-                $functionNodesByFile[$file],
-                $anonymousFunctionNodesByFile[$file],
+                $functionNodesByFile[$file] ?? [],
+                $anonymousFunctionNodesByFile[$file] ?? [],
             );
         }
     }
