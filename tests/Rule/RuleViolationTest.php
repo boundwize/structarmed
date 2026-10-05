@@ -162,6 +162,7 @@ final class RuleViolationTest extends TestCase
         $this->assertTrue($collection->hasViolations());
         $this->assertCount(2, $collection);
         $this->assertSame([$app], $collection->forRule('app.rule'));
+        $this->assertSame([$ruleViolation->toArray(), $app->toArray()], $collection->toArray());
         $this->assertSame([$ruleViolation, $app], iterator_to_array($collection));
     }
 

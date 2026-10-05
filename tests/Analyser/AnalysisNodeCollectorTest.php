@@ -2349,6 +2349,66 @@ PHP;
         $this->assertContains('App\Infrastructure\Config\FEATURE_ENABLED', $classNode->dependencies);
     }
 
+    public function testCollectsConstantFetchesApartFromDependencies(): void
+    {
+        $classNode = $this->collect(
+            <<<'PHP_WRAP'
+            <?php
+
+            namespace App\Domain;
+
+            use const App\Infrastructure\Config\FEATURE_ENABLED;
+
+            class Foo
+            {
+                public const SEPARATOR = PHP_EOL;
+
+                public function bar(?int $limit = null): bool
+                {
+                    new \STDIN();
+                    \STDOUT();
+
+                    return $limit === \PHP_INT_MAX || FEATURE_ENABLED || true || false;
+                }
+            }
+            PHP_WRAP
+        );
+
+        // An unqualified fetch in a namespace is the namespaced constant when
+        // it exists and the global one otherwise, so both are collected; true,
+        // false, and null are keywords, and a class-like or function named
+        // like a constant is not a fetch.
+        $this->assertSame(
+            ['App\Domain\PHP_EOL', 'PHP_EOL', 'PHP_INT_MAX', 'App\Infrastructure\Config\FEATURE_ENABLED'],
+            $classNode->constantFetches
+        );
+        $this->assertNotContains('PHP_EOL', $classNode->dependencies);
+    }
+
+    public function testCollectsUnqualifiedConstantFetchOfSameNamespaceConstant(): void
+    {
+        $classNode = $this->collect(
+            <<<'PHP'
+            <?php
+
+            namespace Vendor\Config;
+
+            const DEBUG = true;
+
+            class Foo
+            {
+                public function run(): bool
+                {
+                    return DEBUG;
+                }
+            }
+            PHP
+        );
+
+        $this->assertTrue($classNode->usesConstant('Vendor\Config\DEBUG'));
+        $this->assertTrue($classNode->usesConstant('DEBUG'));
+    }
+
     public function testCollectsFullyQualifiedDependencies(): void
     {
         $classNode = $this->collect('<?php class Foo { public function bar(): void { new \DateTimeImmutable(); } }');

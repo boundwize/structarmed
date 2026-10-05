@@ -323,6 +323,7 @@ final class PresetTest extends TestCase
         );
         $this->assertArrayHasKey('ddd.safety.domain_no_dd', $rules);
         $this->assertArrayHasKey('ddd.safety.application_no_exit', $rules);
+        $this->assertArrayHasKey('ddd.safety.domain_no_stderr', $rules);
     }
 
     public function testDddPresetCanSkipOptionalFinalRules(): void

@@ -1176,8 +1176,26 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // Entered before its name, so the FullyQualified branch above sees
         // the mark.
         if ($node instanceof ConstFetch) {
-            $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
-            $this->collectKeywordConstant($node->name);
+            $name = $node->name;
+            $name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
+            $this->collectKeywordConstant($name);
+
+            if ($this->activeClassLikeAnalyses !== [] && ! isset(self::KEYWORD_CONSTANTS[$name->toLowerString()])) {
+                // An unqualified fetch in a namespace is not a FullyQualified
+                // node: PHP fetches the namespaced constant when it exists and
+                // the global one otherwise, which is not known here, so both
+                // candidates are recorded.
+                $namespacedName = $name->getAttribute('namespacedName');
+                $constant       = $name->toString();
+
+                foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
+                    if ($namespacedName instanceof Name) {
+                        $activeClassLikeAnalysis->constantFetches[$namespacedName->toString()] = true;
+                    }
+
+                    $activeClassLikeAnalysis->constantFetches[$constant] = true;
+                }
+            }
 
             return;
         }
@@ -1617,6 +1635,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                                     ? $classLike->scalarType->toLowerString()
                                     : null,
             nonClassDependencies: $analysis['nonClassDependencies'],
+            constantFetches:    $analysis['constantFetches'],
         );
     }
 
@@ -1760,6 +1779,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * @return array{
      *     dependencies: list<string>,
      *     nonClassDependencies: list<string>,
+     *     constantFetches: list<string>,
      *     functionCalls: string[],
      *     superglobals: string[],
      *     languageConstructs: string[],
@@ -1787,6 +1807,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     strcasecmp(...)
                 )
             ),
+            'constantFetches'      => array_keys($classLikeAnalysis->constantFetches),
             'functionCalls'        => array_values(array_unique($functionCalls)),
             'superglobals'         => array_keys($classLikeAnalysis->superglobals),
             'languageConstructs'   => array_keys($classLikeAnalysis->languageConstructs),
