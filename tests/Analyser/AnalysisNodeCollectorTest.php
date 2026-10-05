@@ -2349,6 +2349,32 @@ PHP;
         $this->assertContains('App\Infrastructure\Config\FEATURE_ENABLED', $classNode->dependencies);
     }
 
+    public function testCollectsUnqualifiedNamespacedConstantUsageAsGlobalDependency(): void
+    {
+        $classNode = $this->collect(
+            <<<'PHP_WRAP'
+            <?php
+
+            namespace App\Domain;
+
+            class Foo
+            {
+                public const SEPARATOR = PHP_EOL;
+
+                public function bar(?int $limit = null): bool
+                {
+                    return $limit === PHP_INT_MAX || true || false;
+                }
+            }
+            PHP_WRAP
+        );
+
+        // PHP falls back to the global constant, so the global name is the
+        // dependency; true, false, and null are keywords, not dependencies.
+        $this->assertSame(['PHP_EOL', 'PHP_INT_MAX'], $classNode->dependencies);
+        $this->assertSame(['PHP_EOL', 'PHP_INT_MAX'], $classNode->nonClassDependencies);
+    }
+
     public function testCollectsFullyQualifiedDependencies(): void
     {
         $classNode = $this->collect('<?php class Foo { public function bar(): void { new \DateTimeImmutable(); } }');

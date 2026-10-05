@@ -1176,8 +1176,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // Entered before its name, so the FullyQualified branch above sees
         // the mark.
         if ($node instanceof ConstFetch) {
-            $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
-            $this->collectKeywordConstant($node->name);
+            $name = $node->name;
+            $name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
+            $this->collectKeywordConstant($name);
+
+            // An unqualified fetch in a namespace is not a FullyQualified
+            // node: PHP falls back to the global constant, so the global name
+            // is recorded as the dependency.
+            if (! $name instanceof FullyQualified && ! isset(self::KEYWORD_CONSTANTS[$name->toLowerString()])) {
+                $this->addDependency($name->toString(), false);
+            }
 
             return;
         }

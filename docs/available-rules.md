@@ -169,6 +169,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Usage`.
 |---|---|---|
 | `MayNotCallFunctionRule` | `new MayNotCallFunctionRule(layer: 'Domain', function: 'header')` | Classes in a layer do not call a forbidden function. |
 | `MayNotUseClassRule` | `new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class)` | Classes in a layer do not depend on a forbidden class. |
+| `MayNotUseConstantRule` | `new MayNotUseConstantRule(layer: 'Domain', constant: 'PHP_EOL')` | Classes in a layer do not use a forbidden constant. |
 | `MayNotUseLanguageConstructRule` | `new MayNotUseLanguageConstructRule(layer: 'Domain', construct: 'echo')` | Classes in a layer do not use a forbidden language construct. |
 | `MayNotUseNamespaceRule` | `new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM\\')` | Classes in a layer do not depend on a forbidden namespace. |
 | `MayNotUseSuperglobalsRule` | `new MayNotUseSuperglobalsRule(layer: 'Controller')` | Classes in a layer do not access superglobals directly. |
