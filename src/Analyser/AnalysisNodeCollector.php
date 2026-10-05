@@ -1182,12 +1182,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             if ($this->activeClassLikeAnalyses !== [] && ! isset(self::KEYWORD_CONSTANTS[$name->toLowerString()])) {
                 // An unqualified fetch in a namespace is not a FullyQualified
-                // node and keeps its short name: it is recorded as the global
-                // constant PHP falls back to, as whether a namespaced constant
-                // of that name exists is not known here.
-                $constant = $name->toString();
+                // node: PHP fetches the namespaced constant when it exists and
+                // the global one otherwise, which is not known here, so both
+                // candidates are recorded.
+                $namespacedName = $name->getAttribute('namespacedName');
+                $constant       = $name->toString();
 
                 foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
+                    if ($namespacedName instanceof Name) {
+                        $activeClassLikeAnalysis->constantFetches[$namespacedName->toString()] = true;
+                    }
+
                     $activeClassLikeAnalysis->constantFetches[$constant] = true;
                 }
             }
