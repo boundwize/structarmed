@@ -25,7 +25,7 @@ final readonly class MayNotUseConstantRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if (! $classNode->dependsOn($this->constant)) {
+        if (! $classNode->usesConstant($this->constant)) {
             return null;
         }
 

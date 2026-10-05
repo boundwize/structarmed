@@ -1180,11 +1180,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
             $this->collectKeywordConstant($name);
 
-            // An unqualified fetch in a namespace is not a FullyQualified
-            // node: PHP falls back to the global constant, so the global name
-            // is recorded as the dependency.
-            if (! $name instanceof FullyQualified && ! isset(self::KEYWORD_CONSTANTS[$name->toLowerString()])) {
-                $this->addDependency($name->toString(), false);
+            if ($this->activeClassLikeAnalyses !== [] && ! isset(self::KEYWORD_CONSTANTS[$name->toLowerString()])) {
+                // An unqualified fetch in a namespace is not a FullyQualified
+                // node and keeps its short name: it is recorded as the global
+                // constant PHP falls back to, as whether a namespaced constant
+                // of that name exists is not known here.
+                $constant = $name->toString();
+
+                foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
+                    $activeClassLikeAnalysis->constantFetches[$constant] = true;
+                }
             }
 
             return;
@@ -1625,6 +1630,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                                     ? $classLike->scalarType->toLowerString()
                                     : null,
             nonClassDependencies: $analysis['nonClassDependencies'],
+            constantFetches:    $analysis['constantFetches'],
         );
     }
 
@@ -1768,6 +1774,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * @return array{
      *     dependencies: list<string>,
      *     nonClassDependencies: list<string>,
+     *     constantFetches: list<string>,
      *     functionCalls: string[],
      *     superglobals: string[],
      *     languageConstructs: string[],
@@ -1795,6 +1802,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     strcasecmp(...)
                 )
             ),
+            'constantFetches'      => array_keys($classLikeAnalysis->constantFetches),
             'functionCalls'        => array_values(array_unique($functionCalls)),
             'superglobals'         => array_keys($classLikeAnalysis->superglobals),
             'languageConstructs'   => array_keys($classLikeAnalysis->languageConstructs),

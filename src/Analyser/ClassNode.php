@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
+use function in_array;
 use function preg_match;
 use function strcasecmp;
+use function strncasecmp;
 use function strrpos;
 use function substr;
 
@@ -37,6 +39,7 @@ final class ClassNode
      * @param EnumCaseNode[] $enumCases           Cases of this enum
      * @param string|null    $enumBackingType     Backing type for a backed enum, null otherwise
      * @param list<string>   $nonClassDependencies Dependencies only ever used as a function or constant name
+     * @param list<string>   $constantFetches     Global and namespaced constants fetched within this class
      */
     public function __construct(
         public readonly string $className,
@@ -70,6 +73,7 @@ final class ClassNode
         public readonly array $enumCases = [],
         public readonly ?string $enumBackingType = null,
         public readonly array $nonClassDependencies = [],
+        public readonly array $constantFetches = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }
@@ -91,6 +95,36 @@ final class ClassNode
         }
 
         return true;
+    }
+
+    /**
+     * Whether the class fetches the constant $constant: a class-like or
+     * function of the same name does not count.
+     */
+    public function usesConstant(string $constant): bool
+    {
+        $separatorPosition = strrpos($constant, '\\');
+
+        // a constant name is case-sensitive
+        if ($separatorPosition === false) {
+            return in_array($constant, $this->constantFetches, true);
+        }
+
+        $namespaceLength = $separatorPosition + 1;
+        $name            = substr($constant, $namespaceLength);
+
+        // namespace names are case-insensitive; only the namespace is
+        // compared that way, the constant name after it stays case-sensitive
+        foreach ($this->constantFetches as $constantFetch) {
+            if (
+                strncasecmp($constantFetch, $constant, $namespaceLength) === 0
+                && substr($constantFetch, $namespaceLength) === $name
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function isBackedEnum(): bool

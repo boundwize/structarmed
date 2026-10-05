@@ -2349,7 +2349,7 @@ PHP;
         $this->assertContains('App\Infrastructure\Config\FEATURE_ENABLED', $classNode->dependencies);
     }
 
-    public function testCollectsUnqualifiedNamespacedConstantUsageAsGlobalDependency(): void
+    public function testCollectsConstantFetchesApartFromDependencies(): void
     {
         $classNode = $this->collect(
             <<<'PHP_WRAP'
@@ -2357,22 +2357,31 @@ PHP;
 
             namespace App\Domain;
 
+            use const App\Infrastructure\Config\FEATURE_ENABLED;
+
             class Foo
             {
                 public const SEPARATOR = PHP_EOL;
 
                 public function bar(?int $limit = null): bool
                 {
-                    return $limit === PHP_INT_MAX || true || false;
+                    new \STDIN();
+                    \STDOUT();
+
+                    return $limit === \PHP_INT_MAX || FEATURE_ENABLED || true || false;
                 }
             }
             PHP_WRAP
         );
 
-        // PHP falls back to the global constant, so the global name is the
-        // dependency; true, false, and null are keywords, not dependencies.
-        $this->assertSame(['PHP_EOL', 'PHP_INT_MAX'], $classNode->dependencies);
-        $this->assertSame(['PHP_EOL', 'PHP_INT_MAX'], $classNode->nonClassDependencies);
+        // An unqualified fetch in a namespace keeps its short name, the global
+        // constant PHP falls back to; true, false, and null are keywords, and
+        // a class-like or function named like a constant is not a fetch.
+        $this->assertSame(
+            ['PHP_EOL', 'PHP_INT_MAX', 'App\Infrastructure\Config\FEATURE_ENABLED'],
+            $classNode->constantFetches
+        );
+        $this->assertNotContains('PHP_EOL', $classNode->dependencies);
     }
 
     public function testCollectsFullyQualifiedDependencies(): void

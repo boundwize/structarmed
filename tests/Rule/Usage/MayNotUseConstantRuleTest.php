@@ -14,33 +14,33 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MayNotUseConstantRule::class)]
 final class MayNotUseConstantRuleTest extends TestCase
 {
-    /** @param list<string> $dependencies */
+    /** @param list<string> $constantFetches */
     private function makeNode(
-        array $dependencies,
+        array $constantFetches,
         string $layer = 'Domain',
         bool $isTrait = false,
         bool $isEnum = false,
     ): ClassNode {
         return new ClassNode(
-            className:    'App\\Domain\\OrderService',
-            file:         '/fake.php',
-            line:         1,
-            layer:        $layer,
-            extends:      null,
-            isAbstract:   false,
-            isFinal:      true,
-            isInterface:  false,
-            isReadonly:   false,
-            isTrait:      $isTrait,
-            dependencies: $dependencies,
-            isEnum:       $isEnum,
+            className:       'App\\Domain\\OrderService',
+            file:            '/fake.php',
+            line:            1,
+            layer:           $layer,
+            extends:         null,
+            isAbstract:      false,
+            isFinal:         true,
+            isInterface:     false,
+            isReadonly:      false,
+            isTrait:         $isTrait,
+            isEnum:          $isEnum,
+            constantFetches: $constantFetches,
         );
     }
 
     public function testPassesWhenForbiddenConstantNotUsed(): void
     {
         $mayNotUseConstantRule = new MayNotUseConstantRule(layer: 'Domain', constant: 'PHP_EOL');
-        $classNode             = $this->makeNode(['PHP_INT_MAX', 'App\\Domain\\Order']);
+        $classNode             = $this->makeNode(['PHP_INT_MAX']);
 
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseConstantRule->evaluate($classNode));
     }
@@ -86,12 +86,38 @@ final class MayNotUseConstantRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseConstantRule->evaluate($classNode));
     }
 
-    public function testViolatesForNamespacedConstant(): void
+    public function testNamespaceComparisonIsCaseInsensitive(): void
     {
         $mayNotUseConstantRule = new MayNotUseConstantRule(layer: 'Domain', constant: 'Vendor\\Config\\DEBUG');
-        $classNode             = $this->makeNode(['Vendor\\Config\\DEBUG']);
 
-        $this->assertInstanceOf(RuleViolation::class, $mayNotUseConstantRule->evaluate($classNode));
+        $this->assertInstanceOf(
+            RuleViolation::class,
+            $mayNotUseConstantRule->evaluate($this->makeNode(['vendor\\config\\DEBUG']))
+        );
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $mayNotUseConstantRule->evaluate($this->makeNode(['Vendor\\Config\\debug']))
+        );
+    }
+
+    public function testPassesWhenOnlyAClassOrFunctionOfThatNameIsUsed(): void
+    {
+        $mayNotUseConstantRule = new MayNotUseConstantRule(layer: 'Domain', constant: 'STDIN');
+        $classNode             = new ClassNode(
+            className:     'App\\Domain\\OrderService',
+            file:          '/fake.php',
+            line:          1,
+            layer:         'Domain',
+            extends:       null,
+            isAbstract:    false,
+            isFinal:       true,
+            isInterface:   false,
+            isReadonly:    false,
+            dependencies:  ['STDIN'],
+            functionCalls: ['STDIN'],
+        );
+
+        $this->assertNotInstanceOf(RuleViolation::class, $mayNotUseConstantRule->evaluate($classNode));
     }
 
     public function testDoesNotApplyToWrongLayer(): void
