@@ -56,6 +56,7 @@ final readonly class AnalyseCommand
         '--report'            => 'report',
         '--config'            => 'config',
         '--basepath'          => 'basepath',
+        '-d'                  => 'basepath',
         '--generate-baseline' => 'generate-baseline',
     ];
 

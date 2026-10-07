@@ -22,6 +22,7 @@ final readonly class ClearCacheCommand
     private const VALUE_OPTIONS = [
         '--config'   => 'config',
         '--basepath' => 'basepath',
+        '-d'         => 'basepath',
     ];
 
     /**

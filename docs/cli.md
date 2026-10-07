@@ -66,6 +66,12 @@ cd tools/structarmed
 vendor/bin/structarmed analyse --basepath=../../
 ```
 
+`-d` is a short alias for `--basepath`:
+
+```bash
+vendor/bin/structarmed analyse -d ../../
+```
+
 Everything relative to the project root now resolves against the base path: layer paths such as `->layer('Config', 'src/ConfigProvider.php')`, scan paths given on the command line, the `composer.json` read by the composer rules and PSR-4 layers, the cache directory, and baseline paths. The config file is discovered in the current directory first, then in the base path; `--config` keeps pointing to a path relative to the current directory.
 
 `--clear-cache` accepts the same option, so the cache of a project analysed through `--basepath` is cleared with:

@@ -537,7 +537,7 @@ PHP);
             rename($toolsPath . '/structarmed.php', $basePath . '/structarmed.php');
 
             [$fallbackExitCode, $fallbackOutput] = $this->runApplication(
-                ['structarmed', 'analyse', '--basepath', '../../', '--no-progress'],
+                ['structarmed', 'analyse', '-d', '../../', '--no-progress'],
                 $toolsPath
             );
 
