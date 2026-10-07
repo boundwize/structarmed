@@ -121,7 +121,7 @@ return Architecture::define()
 PHP);
 
             [$exitCode, $output] = $this->runApplication(
-                ['structarmed', '--clear-cache', '--basepath=../../'],
+                ['structarmed', '--basepath=../../', '--clear-cache'],
                 $toolsPath
             );
 

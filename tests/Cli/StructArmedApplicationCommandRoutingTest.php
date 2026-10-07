@@ -90,6 +90,17 @@ final class StructArmedApplicationCommandRoutingTest extends TestCase
         $this->assertStringContainsString('Error: base path [missing] not found.', $output);
     }
 
+    public function testApplicationAcceptsOptionsBeforeClearCacheCommand(): void
+    {
+        [$exitCode, $output] = $this->runApplication(
+            ['structarmed', '--basepath=missing', '--clear-cache'],
+            self::BASE_PATH
+        );
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Error: base path [missing] not found.', $output);
+    }
+
     public function testInitCommandRejectsUnknownOption(): void
     {
         [$exitCode, $output] = $this->runApplication(['structarmed', 'init', '--bad-option'], self::BASE_PATH);

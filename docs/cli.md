@@ -71,8 +71,10 @@ Everything relative to the project root now resolves against the base path: laye
 `--clear-cache` accepts the same option, so the cache of a project analysed through `--basepath` is cleared with:
 
 ```bash
-vendor/bin/structarmed --clear-cache --basepath=../../
+vendor/bin/structarmed --basepath=../../ --clear-cache
 ```
+
+Options may be given before or after the command.
 
 ## Auto-Fix Violations
 
