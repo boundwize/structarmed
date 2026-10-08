@@ -20,6 +20,11 @@ jobs:
           - operating-system: ubuntu-latest
             php-versions: "8.2"
             coverage: pcov
+        exclude:
+          # Temporarily disabled: GitHub Actions macOS runners currently fail
+          # to set up PHP 8.5. Re-enable once the runner image is fixed.
+          - operating-system: macos-latest
+            php-versions: "8.5"
 
     steps:
       - name: Checkout
