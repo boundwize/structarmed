@@ -32,6 +32,7 @@ use function ob_start;
 use function preg_replace;
 use function random_bytes;
 use function realpath;
+use function rename;
 use function rmdir;
 use function serialize;
 use function str_replace;
@@ -87,6 +88,41 @@ PHP);
             [$exitCode, $output] = $this->runApplication(
                 ['structarmed', '--clear-cache', '--config=' . $basePath . '/structarmed-custom.php'],
                 $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('StructArmed cache cleared.', $output);
+            $this->assertDirectoryDoesNotExist($cacheDirectory);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testApplicationClearsConfiguredCacheFromBasePathOption(): void
+    {
+        $basePath       = (string) realpath($this->createProjectDirectory());
+        $toolsPath      = $basePath . '/tools/structarmed';
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        try {
+            mkdir($toolsPath, 0777, true);
+            mkdir($cacheDirectory, 0777, true);
+
+            file_put_contents($cacheDirectory . '/key.json', '{}');
+            file_put_contents($toolsPath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed');
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', '--basepath=../../', '--clear-cache'],
+                $toolsPath
             );
 
             $this->assertSame(0, $exitCode, $output);
@@ -421,6 +457,92 @@ JSON);
 
             $this->assertSame(1, $secondExitCode, $secondOutput);
             $this->assertStringContainsString('Class [App\Foo] must be declared final', $secondOutput);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandResolvesProjectPathsAgainstBasePathOption(): void
+    {
+        $basePath  = (string) realpath($this->createTempDirectory());
+        $toolsPath = $basePath . '/tools/structarmed';
+
+        mkdir($toolsPath, 0777, true);
+        mkdir($basePath . '/src/Exception', 0777, true);
+        file_put_contents($basePath . '/src/ConfigProvider.php', <<<'PHP'
+<?php
+
+namespace App;
+
+class ConfigProvider
+{
+}
+PHP);
+        file_put_contents($basePath . '/src/Exception/NotFound.php', <<<'PHP'
+<?php
+
+namespace App\Exception;
+
+class NotFound
+{
+}
+PHP);
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/",
+            "Missing\\": "missing/"
+        }
+    }
+}
+JSON);
+        file_put_contents($toolsPath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4DirectoryExistsRule;
+
+return Architecture::define()
+    ->layer('Config', 'src/ConfigProvider.php')
+    ->layer('Exception', 'src/Exception')
+    ->rule('config.must_be_final', new MustBeFinalRule('Config'))
+    ->rule('exception.must_be_final', new MustBeFinalRule('Exception'))
+    ->rule('composer.psr4_directory_exists', new Psr4DirectoryExistsRule());
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', 'analyse', '--basepath=../../', '--no-progress'],
+                $toolsPath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('Class [App\ConfigProvider] must be declared final', $output);
+            $this->assertStringContainsString('Class [App\Exception\NotFound] must be declared final', $output);
+            $this->assertStringContainsString('declared in composer.json do not exist on disk', $output);
+            $this->assertStringContainsString(
+                $this->normalisePath($basePath . '/src/ConfigProvider.php'),
+                $this->normalisePath($output)
+            );
+            $this->assertStringContainsString(
+                $this->normalisePath($basePath . '/src/Exception/NotFound.php'),
+                $this->normalisePath($output)
+            );
+
+            // Without a config next to the tool, discovery falls back to the base path.
+            rename($toolsPath . '/structarmed.php', $basePath . '/structarmed.php');
+
+            [$fallbackExitCode, $fallbackOutput] = $this->runApplication(
+                ['structarmed', 'analyse', '-d', '../../', '--no-progress'],
+                $toolsPath
+            );
+
+            $this->assertSame(1, $fallbackExitCode, $fallbackOutput);
+            $this->assertStringContainsString('Class [App\ConfigProvider] must be declared final', $fallbackOutput);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -1807,6 +1929,10 @@ PHP;
             unlink($basePath . '/structarmed-custom.php');
         }
 
+        if (file_exists($basePath . '/tools/structarmed/structarmed.php')) {
+            unlink($basePath . '/tools/structarmed/structarmed.php');
+        }
+
         if (file_exists($basePath . '/structarmed-baseline.php')) {
             unlink($basePath . '/structarmed-baseline.php');
         }
@@ -1825,6 +1951,14 @@ PHP;
 
         foreach (glob($basePath . '/src/*.php') ?: [] as $sourceFile) {
             unlink($sourceFile);
+        }
+
+        foreach (glob($basePath . '/src/Exception/*.php') ?: [] as $sourceFile) {
+            unlink($sourceFile);
+        }
+
+        if (is_dir($basePath . '/src/Exception')) {
+            rmdir($basePath . '/src/Exception');
         }
 
         if (is_dir($basePath . '/src/Domain')) {
@@ -1849,6 +1983,14 @@ PHP;
 
         if (is_dir($basePath . '/nested')) {
             rmdir($basePath . '/nested');
+        }
+
+        if (is_dir($basePath . '/tools/structarmed')) {
+            rmdir($basePath . '/tools/structarmed');
+        }
+
+        if (is_dir($basePath . '/tools')) {
+            rmdir($basePath . '/tools');
         }
 
         if (is_dir($basePath)) {

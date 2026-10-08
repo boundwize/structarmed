@@ -42,6 +42,7 @@ use const PHP_EOL;
  * @phpstan-type CommandOptions array{
  *     report?: string,
  *     config?: string,
+ *     basepath?: string,
  *     generate-baseline?: string,
  *     no-progress?: true,
  *     clear-cache?: true,
@@ -54,6 +55,8 @@ final readonly class AnalyseCommand
     private const VALUE_OPTIONS = [
         '--report'            => 'report',
         '--config'            => 'config',
+        '--basepath'          => 'basepath',
+        '-d'                  => 'basepath',
         '--generate-baseline' => 'generate-baseline',
     ];
 
@@ -98,6 +101,18 @@ final readonly class AnalyseCommand
             return 1;
         }
 
+        $workingDirectory = $basePath;
+
+        if (isset($options['basepath'])) {
+            $basePath = Path::normalise(Path::resolve($options['basepath'], $workingDirectory), canonicalise: true);
+
+            if (! is_dir($basePath)) {
+                echo sprintf("Error: base path [%s] not found.\n", $options['basepath']);
+
+                return 1;
+            }
+        }
+
         foreach ($scanPaths as $scanPath) {
             $fullScanPath = Path::resolve($scanPath, $basePath);
 
@@ -123,7 +138,7 @@ final readonly class AnalyseCommand
         }
 
         try {
-            $configFile   = $options['config'] ?? ConfigLoader::discover($basePath);
+            $configFile   = $options['config'] ?? ConfigLoader::discover($workingDirectory, $basePath);
             $architecture = ConfigLoader::load($configFile);
         } catch (RuntimeException $runtimeException) {
             return $this->reportError($runtimeException);

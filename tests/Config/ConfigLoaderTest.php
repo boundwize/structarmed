@@ -53,6 +53,15 @@ final class ConfigLoaderTest extends TestCase
         $this->assertSame($basePath . '/structarmed.dist.php', ConfigLoader::discover($basePath));
     }
 
+    public function testDiscoverFallsBackToNextBasePath(): void
+    {
+        $workingDirectory = $this->makeTempDir();
+        $basePath         = $this->makeTempDir();
+        touch($basePath . '/structarmed.php');
+
+        $this->assertSame($basePath . '/structarmed.php', ConfigLoader::discover($workingDirectory, $basePath));
+    }
+
     private function writeTempConfig(string $body): string
     {
         $path = $this->makeTemporaryFile('structarmed-config');
