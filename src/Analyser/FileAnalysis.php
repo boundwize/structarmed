@@ -6,6 +6,8 @@ namespace Boundwize\StructArmed\Analyser;
 
 final readonly class FileAnalysis
 {
+    use PropertyUnserializeTrait;
+
     /**
      * @param list<array{int, string}> $nonCanonicalKeywordConstants `true`, `false`, and `null`
      *                                                               fetches not spelled in lowercase,

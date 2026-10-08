@@ -18,6 +18,7 @@ final class FunctionNode
 {
     use NameQueryTrait;
     use NodeQueryTrait;
+    use PropertyUnserializeTrait;
 
     /** @var list<string> */
     public readonly array $layers;

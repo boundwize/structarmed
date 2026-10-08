@@ -17,6 +17,7 @@ final class ClassNode
     use MemberQueryTrait;
     use NameQueryTrait;
     use NodeQueryTrait;
+    use PropertyUnserializeTrait;
     use RecursiveParentsTrait;
 
     /** @var list<string> */

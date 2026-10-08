@@ -19,6 +19,7 @@ use function array_filter;
 final class AnonymousFunctionNode
 {
     use NodeQueryTrait;
+    use PropertyUnserializeTrait;
 
     /**
      * Scope label reported by {@see enclosingScopeName()} for an anonymous
