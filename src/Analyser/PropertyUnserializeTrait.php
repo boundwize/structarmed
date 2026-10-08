@@ -5,14 +5,10 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 /**
- * Assigns unserialized data straight into the declared properties.
- *
- * Without __unserialize(), unserialize() writes every property through the
- * object's property hash table, which it builds and then keeps for the
- * object's lifetime: about 1.7 KB for a ten-property node against 350 bytes
- * for the declared slots alone. The analysis-node graph crosses from the
- * parallel workers to the coordinator through serialize(), so on a large
- * project that table costs the coordinator more than the graph itself.
+ * Without __unserialize(), unserialize() builds a property hash table on every
+ * object and keeps it, which roughly doubles what a node graph costs. Worker
+ * results reach the coordinator through serialize(), so on a large project
+ * this halves what the coordinator holds.
  */
 trait PropertyUnserializeTrait
 {
