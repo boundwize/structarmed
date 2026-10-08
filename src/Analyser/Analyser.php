@@ -223,17 +223,22 @@ final readonly class Analyser
             $layerExcludePaths,
         );
         $classNodes       = $extractionResult->classNodes;
-        $classNodes       = $this->withRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
 
-        $this->resolveFunctionFallbackCalls(
-            [
-                $classNodes,
+        // Node rules may query inheritance and resolved function calls.
+        // Declarative ruleset checks use separate dependency resolution.
+        if ($nodeRules !== []) {
+            $classNodes = $this->withRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
+
+            $this->resolveFunctionFallbackCalls(
+                [
+                    $classNodes,
+                    $extractionResult->functionNodes,
+                    $extractionResult->anonymousFunctionNodes,
+                    $extractionResult->anonymousClassNodes,
+                ],
                 $extractionResult->functionNodes,
-                $extractionResult->anonymousFunctionNodes,
-                $extractionResult->anonymousClassNodes,
-            ],
-            $extractionResult->functionNodes,
-        );
+            );
+        }
 
         if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
             $this->markClassLikeUsage(
