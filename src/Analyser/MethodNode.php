@@ -8,6 +8,8 @@ use function strcasecmp;
 
 final readonly class MethodNode
 {
+    use PropertyUnserializeTrait;
+
     public function __construct(
         public string $name,
         public string $visibility, // public, protected, private

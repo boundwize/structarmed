@@ -6,6 +6,8 @@ namespace Boundwize\StructArmed\Analyser;
 
 final readonly class EnumCaseNode
 {
+    use PropertyUnserializeTrait;
+
     /**
      * @param int|string|null $value Statically resolved backing value of the case. Null for
      *                               a pure enum case, and also for a backed case whose value

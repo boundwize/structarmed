@@ -32,6 +32,7 @@ final class AnonymousClassNode
 {
     use MemberQueryTrait;
     use NodeQueryTrait;
+    use PropertyUnserializeTrait;
     use RecursiveParentsTrait;
 
     /**
