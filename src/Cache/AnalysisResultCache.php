@@ -65,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 14;
+    public const FORMAT_VERSION = 15;
 
     private readonly string $cacheDirectory;
 
@@ -297,7 +297,7 @@ final class AnalysisResultCache
     {
         $payload = $this->read($this->analysisNodesKey($file, $namespace));
 
-        if ($payload === null || ($payload['metadata'] ?? null) !== $this->fileMetadata($file, $namespace)) {
+        if ($payload === null || ($payload['metadata'] ?? null) !== $this->fileHashProvider->hash($file)) {
             return null;
         }
 
@@ -409,8 +409,10 @@ final class AnalysisResultCache
     ): void {
         $this->ensureCacheInitialised();
 
+        // The namespace is already part of the file name, so the payload
+        // only carries the content hash it was built from.
         $payload = [
-            'metadata' => $this->fileMetadata($file, $namespace),
+            'metadata' => $this->fileHashProvider->hash($file),
             'nodes'    => array_map($this->classNodeToArray(...), $classNodes),
         ];
 
@@ -1481,16 +1483,5 @@ final class AnalysisResultCache
     private function analysisNodesKey(string $file, string $namespace): string
     {
         return 'analysis-nodes-' . hash('xxh128', $namespace . "\0" . $file);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function fileMetadata(string $file, string $namespace): array
-    {
-        return [
-            'namespace' => $namespace,
-            'hash'      => $this->fileHashProvider->hash($file),
-        ];
     }
 }

@@ -1369,10 +1369,7 @@ final class AnalysisResultCacheTest extends TestCase
 
         try {
             $this->writeCachePayload($cacheDirectory, [
-                'metadata' => [
-                    'namespace' => 'config',
-                    'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
-                ],
+                'metadata' => hash('xxh128', (string) file_get_contents($sourceFile)),
                 'nodes'    => [
                     [
                         'className'          => Foo::class,
@@ -2672,10 +2669,7 @@ final class AnalysisResultCacheTest extends TestCase
             $cacheFile = $this->firstJsonFile($cacheDirectory);
 
             $this->writeCachePayload($cacheDirectory, [
-                'metadata' => [
-                    'namespace' => 'config',
-                    'hash'      => hash('xxh128', (string) file_get_contents($sourceFile)),
-                ],
+                'metadata' => hash('xxh128', (string) file_get_contents($sourceFile)),
                 ...$payloadOverride,
             ], $cacheFile);
 
