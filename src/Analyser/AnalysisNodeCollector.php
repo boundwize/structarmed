@@ -437,8 +437,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $fileFunctionLikeAnalyses = [];
 
+    /**
+     * @param bool $withFileAnalysis Whether to record the facts only file-analysis
+     *                               rules read ({@see getNonCanonicalKeywordConstants()},
+     *                               {@see getNumericLiterals()}); an architecture-only
+     *                               run never reads them
+     */
     public function __construct(
-        private readonly LayerResolverInterface $layerResolver
+        private readonly LayerResolverInterface $layerResolver,
+        private readonly bool $withFileAnalysis = true,
     ) {
         $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): string {
             if (
@@ -1116,6 +1123,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function collectNodeAnalysis(Node $node): void
     {
         if ($node instanceof Int_ || $node instanceof Float_) {
+            if (! $this->withFileAnalysis) {
+                return;
+            }
+
             $rawValue = $node->getAttribute('rawValue');
 
             // Parser-created scalar nodes always carry rawValue. Programmatic
@@ -1178,7 +1189,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         if ($node instanceof ConstFetch) {
             $name = $node->name;
             $name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
-            $this->collectKeywordConstant($name);
+
+            if ($this->withFileAnalysis) {
+                $this->collectKeywordConstant($name);
+            }
 
             if ($this->activeClassLikeAnalyses !== [] && ! isset(self::KEYWORD_CONSTANTS[$name->toLowerString()])) {
                 // An unqualified fetch in a namespace is not a FullyQualified

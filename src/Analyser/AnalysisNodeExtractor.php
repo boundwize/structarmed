@@ -52,7 +52,7 @@ final readonly class AnalysisNodeExtractor
 
         $progressHandler?->start(count($filesToParse));
 
-        $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver);
+        $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver, $withFileAnalysis);
         $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $fileAnalyses          = [];
 
@@ -67,13 +67,13 @@ final readonly class AnalysisNodeExtractor
                     $analysisNodeCollector->setCurrentFile($fileToParse, $this->fileAnalysisProvider->tokens());
                     $resolvedAst = $nodeTraverser->traverse($ast);
 
-                    $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();
-                    $numericLiterals              = $analysisNodeCollector->getNumericLiterals();
-                    $fileFunctions                = $analysisNodeCollector->getFileFunctions();
-
                     // The same traversal ran NameResolver, so the file analysis
                     // reuses its AST instead of resolving names in a second walk.
                     if ($withFileAnalysis) {
+                        $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();
+                        $numericLiterals              = $analysisNodeCollector->getNumericLiterals();
+                        $fileFunctions                = $analysisNodeCollector->getFileFunctions();
+
                         $this->fileAnalysisProvider->replaceResolvedAst($fileToParse, $resolvedAst);
                     }
                 }

@@ -123,6 +123,31 @@ PHP);
         $this->assertSame([], $analysisNodeCollector->getNumericLiterals());
     }
 
+    public function testSkipsFileAnalysisFactsWhenDisabledButStillCollectsClassDependencies(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+namespace App;
+
+final class Foo
+{
+    public function bar(): int
+    {
+        return TRUE ? 10000 : \M_PI + 1.5;
+    }
+}
+PHP, withFileAnalysis: false);
+
+        $this->assertSame([], $analysisNodeCollector->getNonCanonicalKeywordConstants());
+        $this->assertSame([], $analysisNodeCollector->getNumericLiterals());
+
+        $classNodes = $analysisNodeCollector->getClassNodes();
+
+        $this->assertCount(1, $classNodes);
+        $this->assertTrue($classNodes[0]->usesConstant('M_PI'));
+    }
+
     public function testExposesUnconditionallyDeclaredFunctionsOfTheFileTraversedLast(): void
     {
         $analysisNodeCollector = $this->makeCollector(<<<'PHP'
@@ -175,10 +200,10 @@ PHP);
         return $this->makeCollector($code)->getAnonymousClassNodes();
     }
 
-    private function makeCollector(string $code): AnalysisNodeCollector
+    private function makeCollector(string $code, bool $withFileAnalysis = true): AnalysisNodeCollector
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
-        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver, $withFileAnalysis);
         $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
         $ast                    = $parser->parse($code);
 
