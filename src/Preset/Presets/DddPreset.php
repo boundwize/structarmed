@@ -17,6 +17,7 @@ use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MustHaveReturnTypeRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseConstantRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseLanguageConstructRule;
 use DateTime;
 use Exception;
@@ -269,6 +270,13 @@ final readonly class DddPreset implements PresetInterface
             self::DOMAIN_NO_JSON_SERIALIZABLE,
             new MayNotImplementInterfaceRule(layer: 'Domain', interface: JsonSerializable::class)
         );
+
+        foreach (['STDIN', 'STDOUT', 'STDERR'] as $constant) {
+            $architecture->rule(
+                sprintf('ddd.safety.domain_no_%s', strtolower($constant)),
+                new MayNotUseConstantRule(layer: 'Domain', constant: $constant)
+            );
+        }
 
         foreach (['Domain', 'Application'] as $layer) {
             $architecture->rule(

@@ -2945,6 +2945,7 @@ final class AnalysisResultCacheTest extends TestCase
             ],
             functionCalls: ['sprintf'],
             superglobals:  ['_SERVER'],
+            constantFetches: ['PHP_EOL'],
         );
     }
 

@@ -522,6 +522,32 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->dependsOn('Vendor\\helper'));
     }
 
+    public function testUsesConstantMatchesNamespaceCaseInsensitivelyAndNameCaseSensitively(): void
+    {
+        $classNode = new ClassNode(
+            className:       'App\\Domain\\OrderService',
+            file:            '/src/OrderService.php',
+            line:            5,
+            layer:           'Domain',
+            extends:         null,
+            isAbstract:      false,
+            isFinal:         false,
+            isInterface:     false,
+            isReadonly:      false,
+            dependencies:    ['STDOUT'],
+            constantFetches: ['STDIN', 'Vendor\\Config\\DEBUG'],
+        );
+
+        $this->assertTrue($classNode->usesConstant('STDIN'));
+        $this->assertFalse($classNode->usesConstant('stdin'));
+        $this->assertTrue($classNode->usesConstant('vendor\\config\\DEBUG'));
+        $this->assertFalse($classNode->usesConstant('Vendor\\Config\\debug'));
+        $this->assertFalse($classNode->usesConstant('Vendor\\DEBUG'));
+        $this->assertFalse($classNode->usesConstant('DEBUG'));
+        // a dependency of that name is a class-like or function, not a fetch
+        $this->assertFalse($classNode->usesConstant('STDOUT'));
+    }
+
     public function testDependsOnDoesNotMatchNamespacePrefix(): void
     {
         $classNode = new ClassNode(

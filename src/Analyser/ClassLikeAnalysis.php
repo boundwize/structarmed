@@ -25,6 +25,14 @@ final class ClassLikeAnalysis
      */
     public array $classDependencies = [];
 
+    /**
+     * The constants fetched by name, kept apart from the dependencies: a
+     * class-like or function of the same name is not a constant fetch.
+     *
+     * @var array<string, true>
+     */
+    public array $constantFetches = [];
+
     /** @var list<Name> */
     public array $functionCallNames = [];
 

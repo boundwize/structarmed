@@ -169,11 +169,14 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Usage`.
 |---|---|---|
 | `MayNotCallFunctionRule` | `new MayNotCallFunctionRule(layer: 'Domain', function: 'header')` | Classes in a layer do not call a forbidden function. |
 | `MayNotUseClassRule` | `new MayNotUseClassRule(layer: 'Domain', forbiddenClass: DateTime::class)` | Classes in a layer do not depend on a forbidden class. |
+| `MayNotUseConstantRule` | `new MayNotUseConstantRule(layer: 'Domain', constant: 'PHP_EOL')` | Classes in a layer do not use a forbidden constant. |
 | `MayNotUseLanguageConstructRule` | `new MayNotUseLanguageConstructRule(layer: 'Domain', construct: 'echo')` | Classes in a layer do not use a forbidden language construct. |
 | `MayNotUseNamespaceRule` | `new MayNotUseNamespaceRule(layer: 'Domain', forbiddenNamespace: 'Doctrine\\ORM\\')` | Classes in a layer do not depend on a forbidden namespace. |
 | `MayNotUseSuperglobalsRule` | `new MayNotUseSuperglobalsRule(layer: 'Controller')` | Classes in a layer do not access superglobals directly. |
 {: .rule-table }
 
 `MayNotUseClassRule` and `MayNotUseNamespaceRule` also accept `classNamePattern` when only matching classes should be checked.
+
+`MayNotUseConstantRule` takes a global or namespaced constant name, such as `'PHP_EOL'` or `'Vendor\\Config\\DEBUG'`. An unqualified constant inside a namespace counts as both the constant of that namespace and the global constant of that name, as PHP only resolves it at runtime.
 
 `MayNotUseLanguageConstructRule` accepts one of the following `construct` names: `echo`, `print`, `eval`, `isset`, `empty`, `unset`, `list`, `exit`, `die`, `include`, `include_once`, `require`, `require_once`. `die` is a pure alias of `exit`, so banning either spelling catches both. The `include` / `include_once` / `require` / `require_once` constructs are distinct and are matched exactly.

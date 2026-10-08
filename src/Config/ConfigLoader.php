@@ -35,16 +35,22 @@ final class ConfigLoader
         return $architecture;
     }
 
-    public static function discover(string $basePath): string
+    /**
+     * Searches the base paths in order, so the CLI's working directory wins over
+     * a --basepath project root that also holds a config file.
+     */
+    public static function discover(string ...$basePaths): string
     {
-        $candidates = [
-            $basePath . '/structarmed.php',
-            $basePath . '/structarmed.dist.php',
-        ];
+        foreach ($basePaths as $basePath) {
+            $candidates = [
+                $basePath . '/structarmed.php',
+                $basePath . '/structarmed.dist.php',
+            ];
 
-        foreach ($candidates as $candidate) {
-            if (file_exists($candidate)) {
-                return $candidate;
+            foreach ($candidates as $candidate) {
+                if (file_exists($candidate)) {
+                    return $candidate;
+                }
             }
         }
 

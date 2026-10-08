@@ -65,7 +65,7 @@ final class AnalysisResultCache
      * their shape or naming changes: it is recorded in the metadata marker,
      * so a cache written by an older format is cleared on its next use.
      */
-    public const FORMAT_VERSION = 13;
+    public const FORMAT_VERSION = 14;
 
     private readonly string $cacheDirectory;
 
@@ -970,6 +970,7 @@ final class AnalysisResultCache
         $lists = [
             'dependencies'         => $classNode->dependencies,
             'nonClassDependencies' => $classNode->nonClassDependencies,
+            'constantFetches'      => $classNode->constantFetches,
             'implements'           => array_values($classNode->implements),
             'interfaceExtends'     => array_values($classNode->interfaceExtends),
             'parentClasses'        => $classNode->parentClasses,
@@ -1011,6 +1012,7 @@ final class AnalysisResultCache
         $isReadonly           = $node['isReadonly'] ?? null;
         $dependencies         = $node['dependencies'] ?? [];
         $nonClassDependencies = $node['nonClassDependencies'] ?? [];
+        $constantFetches      = $node['constantFetches'] ?? [];
         $implements           = $node['implements'] ?? [];
         $interfaceExtends     = $node['interfaceExtends'] ?? [];
         $parentClasses        = $node['parentClasses'] ?? [];
@@ -1035,6 +1037,7 @@ final class AnalysisResultCache
             || ! is_bool($isReadonly)
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($nonClassDependencies)
+            || ! $this->isStringArray($constantFetches)
             || ! $this->isStringArray($implements)
             || ! $this->isStringArray($interfaceExtends)
             || ! $this->isStringArray($parentClasses)
@@ -1091,6 +1094,7 @@ final class AnalysisResultCache
             enumCases:          $enumCases,
             enumBackingType:    $enumBackingType,
             nonClassDependencies: array_values($nonClassDependencies),
+            constantFetches:    array_values($constantFetches),
         );
     }
 

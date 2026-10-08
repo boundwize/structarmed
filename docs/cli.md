@@ -46,6 +46,42 @@ vendor/bin/structarmed analyse --config=path/to/structarmed.php
 vendor/bin/structarmed analyze --config=path/to/structarmed.php
 ```
 
+## Base Path
+
+The project root defaults to the directory the command runs in. Pass `--basepath` when StructArmed is installed somewhere else, for example in a `tools/structarmed` directory with its own `composer.json`:
+
+```text
+composer.json
+src/
+tests/
+tools/
+└── structarmed/
+    ├── composer.json
+    ├── structarmed.php
+    └── vendor/
+```
+
+```bash
+cd tools/structarmed
+vendor/bin/structarmed analyse --basepath=../../
+```
+
+`-d` is a short alias for `--basepath`:
+
+```bash
+vendor/bin/structarmed analyse -d ../../
+```
+
+Everything relative to the project root now resolves against the base path: layer paths such as `->layer('Config', 'src/ConfigProvider.php')`, scan paths given on the command line, the `composer.json` read by the composer rules and PSR-4 layers, the cache directory, and baseline paths. The config file is discovered in the current directory first, then in the base path; `--config` keeps pointing to a path relative to the current directory.
+
+`--clear-cache` accepts the same option, so the cache of a project analysed through `--basepath` is cleared with:
+
+```bash
+vendor/bin/structarmed --basepath=../../ --clear-cache
+```
+
+Options may be given before or after the command.
+
 ## Auto-Fix Violations
 
 Use `--fix` to automatically apply fixes for violations produced by rules that implement `Boundwize\StructArmed\Rule\FixableInterface`.
