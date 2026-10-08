@@ -12,6 +12,7 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
 
 use function array_push;
+use function array_slice;
 use function count;
 
 /**
@@ -55,6 +56,7 @@ final readonly class AnalysisNodeExtractor
         $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver, $withFileAnalysis);
         $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $fileAnalyses          = [];
+        $storedCounts          = [0, 0, 0, 0];
 
         foreach ($filesToParse as $fileToParse) {
             try {
@@ -95,6 +97,18 @@ final readonly class AnalysisNodeExtractor
 
                 $progressHandler?->advance($fileToParse);
             }
+
+            // Stored as soon as the file is done: a worker that writes its
+            // whole bucket at the end collides with the others on the file
+            // system, since file creation hardly runs in parallel.
+            if ($this->analysisResultCache instanceof AnalysisResultCache) {
+                $storedCounts = $this->storeFileNodes(
+                    $analysisNodeCollector,
+                    $fileToParse,
+                    $fileAnalyses[$fileToParse] ?? null,
+                    $storedCounts,
+                );
+            }
         }
 
         $extractionResult = new ExtractionResult(
@@ -107,13 +121,48 @@ final readonly class AnalysisNodeExtractor
             $analysisNodeCollector->getAnonymousFunctionNodes(),
         );
 
-        $this->analysisResultCache?->storeExtractionResult(
-            $filesToParse,
+        return $cachedResult->merge($extractionResult);
+    }
+
+    /**
+     * Stores the nodes the collector appended for $file: every node of a file
+     * is appended while that file is traversed, so they are the tail of each
+     * list past the counts stored so far.
+     *
+     * @param array{int, int, int, int} $storedCounts
+     * @return array{int, int, int, int}
+     */
+    private function storeFileNodes(
+        AnalysisNodeCollector $analysisNodeCollector,
+        string $file,
+        ?FileAnalysis $fileAnalysis,
+        array $storedCounts,
+    ): array {
+        [$classNodeCount, $anonymousClassNodeCount, $functionNodeCount, $anonymousFunctionNodeCount] = $storedCounts;
+
+        $classNodes             = $analysisNodeCollector->getClassNodes();
+        $anonymousClassNodes    = $analysisNodeCollector->getAnonymousClassNodes();
+        $functionNodes          = $analysisNodeCollector->getFunctionNodes();
+        $anonymousFunctionNodes = $analysisNodeCollector->getAnonymousFunctionNodes();
+
+        $this->analysisResultCache?->storeAnalysisNodes(
+            $file,
             $this->analysisNodeCacheNamespace,
-            $extractionResult
+            array_slice($classNodes, $classNodeCount),
+            $fileAnalysis,
+            array_slice($anonymousClassNodes, $anonymousClassNodeCount),
+            $analysisNodeCollector->getFileReferences()[$file] ?? [],
+            $analysisNodeCollector->getFileInstantiations()[$file] ?? [],
+            array_slice($functionNodes, $functionNodeCount),
+            array_slice($anonymousFunctionNodes, $anonymousFunctionNodeCount),
         );
 
-        return $cachedResult->merge($extractionResult);
+        return [
+            count($classNodes),
+            count($anonymousClassNodes),
+            count($functionNodes),
+            count($anonymousFunctionNodes),
+        ];
     }
 
     /**
