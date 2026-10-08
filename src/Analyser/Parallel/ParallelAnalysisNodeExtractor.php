@@ -20,6 +20,7 @@ use function array_key_exists;
 use function array_pop;
 use function array_push;
 use function array_search;
+use function array_sum;
 use function arsort;
 use function count;
 use function dirname;
@@ -326,6 +327,9 @@ final readonly class ParallelAnalysisNodeExtractor
      * This minimises the gap between the slowest and fastest worker (makespan), giving near-optimal balance
      * even when one file is much larger than the rest.
      *
+     * The first bucket takes the largest files up to an even share of the bytes before LPT starts, so
+     * one worker pays the memory peak of parsing them instead of every worker getting one of them.
+     *
      * @param list<string> $files
      * @param positive-int $workerCount
      * @return list<list<string>>
@@ -342,8 +346,15 @@ final readonly class ParallelAnalysisNodeExtractor
         $buckets     = array_fill(0, $workerCount, []);
         $bucketSizes = array_fill(0, $workerCount, 0);
 
+        // The largest files fill one worker up to an even byte share first, so
+        // only that worker pays their AST peaks; the rest are balanced by LPT.
+        $share = array_sum($fileSizes) / $workerCount;
+
         foreach ($fileSizes as $file => $fileSize) {
-            $minIdx                = (int) array_search(min($bucketSizes), $bucketSizes, true);
+            $minIdx = $workerCount > 1 && $bucketSizes[0] < $share
+                ? 0
+                : (int) array_search(min($bucketSizes), $bucketSizes, true);
+
             $buckets[$minIdx][]    = $file;
             $bucketSizes[$minIdx] += $fileSize;
         }
