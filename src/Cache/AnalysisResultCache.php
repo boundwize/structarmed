@@ -155,7 +155,8 @@ final class AnalysisResultCache
                 continue;
             }
 
-            unlink($path);
+            // removing dir will cause warning in case there is a directory with .json suffix
+            @unlink($path);
         }
 
         // keep not empty directory
