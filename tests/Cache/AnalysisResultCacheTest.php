@@ -354,7 +354,7 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testClearRemovesEmptyCacheSubdirectories(): void
+    public function testClearPreservesEmptyCacheSubdirectories(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
@@ -364,8 +364,55 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             $analysisResultCache->clear();
 
-            $this->assertDirectoryDoesNotExist($cacheDirectory);
+            $this->assertDirectoryExists($cacheDirectory);
+            $this->assertDirectoryExists($cacheDirectory . '/nested');
         } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClearRemovesJsonFilesAndPreservesOtherFiles(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $retainedFile        = $cacheDirectory . '/key.json.bak';
+
+        file_put_contents($retainedFile, 'Retained contents');
+
+        try {
+            $analysisResultCache->store('key', [], new RuleViolationCollection());
+
+            $analysisResultCache->clear();
+
+            $this->assertFileDoesNotExist($cacheDirectory . '/key.json');
+            $this->assertFileDoesNotExist($cacheDirectory . '/_metadata.json');
+            $this->assertDirectoryExists($cacheDirectory);
+            $this->assertSame('Retained contents', file_get_contents($retainedFile));
+        } finally {
+            unlink($retainedFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClearPreservesPopulatedCacheSubdirectories(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $nestedFile          = $cacheDirectory . '/nested/key.json';
+
+        mkdir($cacheDirectory . '/nested');
+        file_put_contents($nestedFile, '{}');
+
+        try {
+            $analysisResultCache->store('key', [], new RuleViolationCollection());
+
+            $analysisResultCache->clear();
+
+            $this->assertFileDoesNotExist($cacheDirectory . '/key.json');
+            $this->assertFileDoesNotExist($cacheDirectory . '/_metadata.json');
+            $this->assertSame('{}', file_get_contents($nestedFile));
+        } finally {
+            unlink($nestedFile);
             $this->removeTempDirectory($cacheDirectory);
         }
     }

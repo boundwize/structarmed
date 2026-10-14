@@ -149,15 +149,16 @@ final class AnalysisResultCache
         }
 
         foreach (glob($this->cacheDirectory . '/*', GLOB_NOSORT) ?: [] as $path) {
-            if (is_dir($path)) {
-                rmdir($path);
+            // small guard to only delete JSON files
+            if (! str_ends_with($path, '.json')) {
                 continue;
             }
 
             unlink($path);
         }
 
-        rmdir($this->cacheDirectory);
+        // keep not empty directory
+        @rmdir($this->cacheDirectory);
     }
 
     public function getCacheDirectory(): string
