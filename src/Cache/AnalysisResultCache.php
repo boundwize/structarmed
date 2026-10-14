@@ -41,6 +41,7 @@ use function mkdir;
 use function rmdir;
 use function rtrim;
 use function sprintf;
+use function str_ends_with;
 use function unlink;
 
 use const GLOB_NOSORT;
