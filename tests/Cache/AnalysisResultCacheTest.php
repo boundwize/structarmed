@@ -337,7 +337,7 @@ final class AnalysisResultCacheTest extends TestCase
         );
 
         try {
-            $staleCache->store('key', ['configHash' => 'old'], new RuleViolationCollection());
+            $staleCache->store(hash('xxh128', 'key'), ['configHash' => 'old'], new RuleViolationCollection());
 
             $this->assertTrue($analysisResultCache->shouldInvalidate());
 
@@ -354,16 +354,36 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
-    public function testClearRemovesEmptyCacheSubdirectories(): void
+    public function testClearKeepsEntriesItDidNotCreate(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
         $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
 
         mkdir($cacheDirectory . '/nested');
+        file_put_contents($cacheDirectory . '/foreign.json', '{}');
 
         try {
             $analysisResultCache->clear();
 
+            $this->assertDirectoryExists($cacheDirectory . '/nested');
+            $this->assertFileExists($cacheDirectory . '/foreign.json');
+        } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testClearRemovesLegacyClassNodesCacheFiles(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $legacyFile          = $cacheDirectory . '/class-nodes-' . hash('xxh128', 'legacy') . '.json';
+
+        file_put_contents($legacyFile, '{}');
+
+        try {
+            $analysisResultCache->clear();
+
+            $this->assertFileDoesNotExist($legacyFile);
             $this->assertDirectoryDoesNotExist($cacheDirectory);
         } finally {
             $this->removeTempDirectory($cacheDirectory);

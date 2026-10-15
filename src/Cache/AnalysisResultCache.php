@@ -23,6 +23,7 @@ use function array_is_list;
 use function array_keys;
 use function array_map;
 use function array_values;
+use function basename;
 use function count;
 use function file_exists;
 use function file_get_contents;
@@ -38,6 +39,7 @@ use function is_string;
 use function json_decode;
 use function json_encode;
 use function mkdir;
+use function preg_match;
 use function rmdir;
 use function rtrim;
 use function sprintf;
@@ -149,15 +151,26 @@ final class AnalysisResultCache
         }
 
         foreach (glob($this->cacheDirectory . '/*', GLOB_NOSORT) ?: [] as $path) {
-            if (is_dir($path)) {
-                rmdir($path);
-                continue;
-            }
+            $filename = basename($path);
 
-            unlink($path);
+            /**
+             * Cache file names:
+             *
+             * - _metadata.json
+             * - 8679959e514dd177bc6fd1830ee55b48.json ( 32 chars hash)
+             * - class-nodes-0a489b7052209b1aa6ce9a7c07ce0627.json (pre 0.17.0 - will be cleaned up in the future)
+             * - analysis-nodes-0a489b7052209b1aa6ce9a7c07ce0627.json (0.17.0+ )
+             */
+            if (
+                $filename === self::METADATA_FILE
+                || preg_match('/^(?:analysis-nodes-|class-nodes-)?[a-f0-9]{32}\.json$/', $filename) === 1
+            ) {
+                @unlink($path);
+            }
         }
 
-        rmdir($this->cacheDirectory);
+        // keep directory if not empty
+        @rmdir($this->cacheDirectory);
     }
 
     public function getCacheDirectory(): string

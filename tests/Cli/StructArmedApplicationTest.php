@@ -23,6 +23,7 @@ use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
 use function glob;
+use function hash;
 use function is_dir;
 use function json_decode;
 use function mkdir;
@@ -73,7 +74,7 @@ final class StructArmedApplicationTest extends TestCase
             mkdir($basePath . '/var/cache');
             mkdir($cacheDirectory);
 
-            file_put_contents($cacheDirectory . '/key.json', '{}');
+            file_put_contents($cacheDirectory . '/' . hash('xxh128', 'key') . '.json', '{}');
             file_put_contents($basePath . '/structarmed-custom.php', <<<'PHP'
 <?php
 
@@ -108,7 +109,7 @@ PHP);
             mkdir($toolsPath, 0777, true);
             mkdir($cacheDirectory, 0777, true);
 
-            file_put_contents($cacheDirectory . '/key.json', '{}');
+            file_put_contents($cacheDirectory . '/' . hash('xxh128', 'key') . '.json', '{}');
             file_put_contents($toolsPath . '/structarmed.php', <<<'PHP'
 <?php
 
@@ -143,7 +144,7 @@ PHP);
             mkdir($basePath . '/var/cache');
             mkdir($cacheDirectory);
 
-            file_put_contents($cacheDirectory . '/key.json', '{}');
+            file_put_contents($cacheDirectory . '/' . hash('xxh128', 'key') . '.json', '{}');
             file_put_contents($basePath . '/structarmed-custom.php', <<<'PHP'
 <?php
 
