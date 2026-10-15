@@ -43,6 +43,7 @@ use function preg_match;
 use function rmdir;
 use function rtrim;
 use function sprintf;
+use function str_starts_with;
 use function unlink;
 
 use const GLOB_NOSORT;
@@ -153,17 +154,21 @@ final class AnalysisResultCache
         foreach (glob($this->cacheDirectory . '/*', GLOB_NOSORT) ?: [] as $path) {
             $filename = basename($path);
 
-            /**
-             * Cache file names:
-             *
-             * - _metadata.json
-             * - 8679959e514dd177bc6fd1830ee55b48.json ( 32 chars hash)
-             * - class-nodes-0a489b7052209b1aa6ce9a7c07ce0627.json (pre 0.17.0 - will be cleaned up in the future)
-             * - analysis-nodes-0a489b7052209b1aa6ce9a7c07ce0627.json (0.17.0+ )
-             */
             if (
+                /**
+                 * Cache file names:
+                 *
+                 * - _metadata.json
+                 * - 8679959e514dd177bc6fd1830ee55b48.json ( 32 chars hash)
+                 * - class-nodes-0a489b7052209b1aa6ce9a7c07ce0627.json (pre 0.17.0 - will be cleaned up in the future)
+                 * - analysis-nodes-0a489b7052209b1aa6ce9a7c07ce0627.json (0.17.0+ )
+                 */
                 $filename === self::METADATA_FILE
-                || preg_match('/^(?:analysis-nodes-|class-nodes-)?[a-f0-9]{32}\.json$/', $filename) === 1
+                    || preg_match('/^(?:analysis-nodes-|class-nodes-)?[a-f0-9]{32}\.json$/', $filename) === 1
+
+                    // left over worker temporary file names
+                    // may happen on CTRL + C
+                    || str_starts_with($filename, 'structarmed-worker-')
             ) {
                 @unlink($path);
             }
