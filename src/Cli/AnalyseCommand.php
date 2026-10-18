@@ -45,6 +45,7 @@ use const PHP_EOL;
  *     generate-baseline?: string,
  *     no-progress?: true,
  *     clear-cache?: true,
+ *     no-cache?: true,
  *     disable-parallel?: true,
  *     fix?: true
  * }
@@ -62,6 +63,7 @@ final readonly class AnalyseCommand
     private const FLAG_OPTIONS = [
         '--no-progress'      => 'no-progress',
         '--clear-cache'      => 'clear-cache',
+        '--no-cache'         => 'no-cache',
         '--disable-parallel' => 'disable-parallel',
         '--fix'              => 'fix',
     ];
@@ -96,6 +98,12 @@ final readonly class AnalyseCommand
         if (! in_array($reportType, ['console', 'json', 'github'], true)) {
             echo sprintf("Invalid report type: %s\n\n", $reportType);
             echo Usage::render();
+
+            return 1;
+        }
+
+        if (isset($options['no-cache'], $options['clear-cache'])) {
+            echo "Error: --no-cache and --clear-cache cannot be used together.\n";
 
             return 1;
         }
@@ -146,34 +154,51 @@ final readonly class AnalyseCommand
         $start                        = microtime(true);
         $fileHashProvider             = new FileHashProvider();
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
-        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
-        $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
-        $analysisResultCache          = new AnalysisResultCache(
-            $basePath,
-            $fileHashProvider,
-            $architecture->getCacheDirectory(),
-            $configHash,
-            $composerGeneratedVersionHash
-        );
-        $analysisNodeCacheNamespace   = $analysisCacheMetadataFactory->analysisNodeCacheNamespace(
-            $basePath,
-            $configHash
-        );
-        $analyser                     = new Analyser($basePath, $analysisResultCache, $analysisNodeCacheNamespace);
+        $analysisResultCache          = null;
+        $analysisNodeCacheNamespace   = '';
 
-        if (isset($options['clear-cache']) || $analysisResultCache->shouldInvalidate()) {
-            $analysisResultCache->clear();
+        // Without the cache, no file is hashed and no cache entry is read or
+        // written, which saves that work on a one-off run over a huge codebase.
+        if (! isset($options['no-cache'])) {
+            $configHash                 = $analysisCacheMetadataFactory->fileHash($configFile);
+            $analysisResultCache        = new AnalysisResultCache(
+                $basePath,
+                $fileHashProvider,
+                $architecture->getCacheDirectory(),
+                $configHash,
+                $analysisCacheMetadataFactory->composerGeneratedVersionHash()
+            );
+            $analysisNodeCacheNamespace = $analysisCacheMetadataFactory->analysisNodeCacheNamespace(
+                $basePath,
+                $configHash
+            );
+
+            if (isset($options['clear-cache']) || $analysisResultCache->shouldInvalidate()) {
+                $analysisResultCache->clear();
+            }
         }
 
+        $analyser        = new Analyser($basePath, $analysisResultCache, $analysisNodeCacheNamespace);
         $files           = $analyser->filesForAnalysis($architecture, $scanPaths);
-        $metadata        = $analysisCacheMetadataFactory->metadata($basePath, $configFile, $scanPaths, $files);
-        $cacheKey        = $analysisCacheMetadataFactory->key($metadata);
         $progress        = $reportType === 'console' && ! isset($options['no-progress'])
             ? $this->progressHandler ?? new ConsoleProgressBar()
             : null;
         $analyserOptions = isset($options['disable-parallel']) ? AnalyserOptions::sequential() : null;
+        $metadata        = [];
+        $cacheKey        = '';
 
-        $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
+        $ruleViolationCollection = null;
+
+        if ($analysisResultCache instanceof AnalysisResultCache) {
+            $metadata                = $analysisCacheMetadataFactory->metadata(
+                $basePath,
+                $configFile,
+                $scanPaths,
+                $files
+            );
+            $cacheKey                = $analysisCacheMetadataFactory->key($metadata);
+            $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
+        }
 
         if (! $ruleViolationCollection instanceof RuleViolationCollection) {
             $ruleViolationCollection = $analyser->analyse(
@@ -183,7 +208,7 @@ final readonly class AnalyseCommand
                 $analyserOptions,
                 $files
             );
-            $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
+            $analysisResultCache?->store($cacheKey, $metadata, $ruleViolationCollection);
         }
 
         $elapsed                           = microtime(true) - $start;
@@ -215,16 +240,9 @@ final readonly class AnalyseCommand
                 }
 
                 $violationCountBeforePass = $ruleViolationCollection->count();
-                $analysisResultCache->clear();
+                $analysisResultCache?->clear();
 
                 $files                             = $analyser->filesForAnalysis($architecture, $scanPaths);
-                $metadata                          = $analysisCacheMetadataFactory->metadata(
-                    $basePath,
-                    $configFile,
-                    $scanPaths,
-                    $files
-                );
-                $cacheKey                          = $analysisCacheMetadataFactory->key($metadata);
                 $unfilteredRuleViolationCollection = $analyser->analyse(
                     $architecture,
                     $scanPaths,
@@ -232,7 +250,20 @@ final readonly class AnalyseCommand
                     $analyserOptions,
                     $files
                 );
-                $analysisResultCache->store($cacheKey, $metadata, $unfilteredRuleViolationCollection);
+
+                if ($analysisResultCache instanceof AnalysisResultCache) {
+                    $metadata = $analysisCacheMetadataFactory->metadata(
+                        $basePath,
+                        $configFile,
+                        $scanPaths,
+                        $files
+                    );
+                    $analysisResultCache->store(
+                        $analysisCacheMetadataFactory->key($metadata),
+                        $metadata,
+                        $unfilteredRuleViolationCollection
+                    );
+                }
 
                 try {
                     $ruleViolationCollection = $this->resolveRuleViolationCollection(
