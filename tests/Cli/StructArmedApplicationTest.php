@@ -658,6 +658,45 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandWithNoCacheOptionDoesNotWriteCache(): void
+    {
+        $basePath       = $this->createProjectDirectoryWithViolation();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('1 violation(s) found', $output);
+            $this->assertDirectoryDoesNotExist($cacheDirectory);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandRendersJsonReport(): void
     {
         $basePath = $this->createProjectDirectory();
@@ -721,6 +760,35 @@ PHP);
                 "/1 violation has been fixed\\.\\R\\RStructArmed/",
                 $this->withoutAnsi($output)
             );
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertStringContainsString(
+                '    public function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandFixesFixableViolationsWithNoCacheOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('1 violation has been fixed.', $this->withoutAnsi($output));
             $this->assertStringContainsString('No violations found', $output);
             $this->assertStringContainsString(
                 '    public function handle(): void',

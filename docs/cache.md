@@ -53,3 +53,13 @@ You can also clear cache directly:
 ```bash
 vendor/bin/structarmed --clear-cache
 ```
+
+## Disabling Cache
+
+Use `--no-cache` for a one-off run, such as a CI job that starts without a cache, or the first scan of a huge codebase. StructArmed then neither hashes the analysed files nor reads or writes any cache entry, so the run skips work that only a later run would benefit from.
+
+```bash
+vendor/bin/structarmed analyse --no-cache
+```
+
+The existing cache is left untouched; clear it separately with `vendor/bin/structarmed --clear-cache`.
