@@ -102,6 +102,12 @@ final readonly class AnalyseCommand
             return 1;
         }
 
+        if (isset($options['no-cache'], $options['clear-cache'])) {
+            echo "Error: --no-cache and --clear-cache cannot be used together.\n";
+
+            return 1;
+        }
+
         $workingDirectory = $basePath;
 
         if (isset($options['basepath'])) {

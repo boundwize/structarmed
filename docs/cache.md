@@ -62,4 +62,4 @@ Use `--no-cache` for a one-off run, such as a CI job that starts without a cache
 vendor/bin/structarmed analyse --no-cache
 ```
 
-The existing cache is left untouched; clear it separately with `vendor/bin/structarmed --clear-cache`.
+The existing cache is left untouched. `--no-cache` cannot be combined with `--clear-cache`; clear the cache separately with `vendor/bin/structarmed --clear-cache`.

@@ -697,6 +697,98 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandWithNoCacheOptionKeepsExistingCache(): void
+    {
+        $basePath       = $this->createProjectDirectoryWithViolation();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+PHP);
+
+        try {
+            [$cachedExitCode, $cachedOutput] = $this->runApplication(
+                ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--no-progress'],
+                $basePath
+            );
+            $cacheContents                   = $this->directoryContents($cacheDirectory);
+
+            // A cached run would now rewrite the node cache of the changed file.
+            file_put_contents($basePath . '/src/Foo.php', '<?php namespace App; final class Foo {}');
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $cachedExitCode, $cachedOutput);
+            $this->assertNotSame([], $cacheContents);
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertSame($cacheContents, $this->directoryContents($cacheDirectory));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandRejectsNoCacheWithClearCacheOption(): void
+    {
+        $basePath       = $this->createProjectDirectory();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        try {
+            mkdir($cacheDirectory, 0777, true);
+            file_put_contents($cacheDirectory . '/_metadata.json', '{}');
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-cache',
+                    '--clear-cache',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertSame("Error: --no-cache and --clear-cache cannot be used together.\n", $output);
+            $this->assertFileExists($cacheDirectory . '/_metadata.json');
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function directoryContents(string $directory): array
+    {
+        $contents = [];
+
+        foreach (glob($directory . '/*.json') ?: [] as $file) {
+            $contents[$file] = (string) file_get_contents($file);
+        }
+
+        return $contents;
+    }
+
     public function testAnalyseCommandRendersJsonReport(): void
     {
         $basePath = $this->createProjectDirectory();
