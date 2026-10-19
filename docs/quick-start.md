@@ -110,5 +110,7 @@ return Architecture::define()
     Preset::PSR15(),
     Preset::MVC(),
     Preset::DDD(),
+    Preset::CODEQUALITY(),
+    Preset::YAGNI(),
 )
 ```
