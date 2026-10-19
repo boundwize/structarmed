@@ -56,10 +56,13 @@ vendor/bin/structarmed --clear-cache
 
 ## Disabling Cache
 
-Use `--no-cache` for a one-off run, such as a CI job that starts without a cache, or the first scan of a huge codebase. StructArmed then neither hashes the analysed files nor reads or writes any cache entry, so the run skips work that only a later run would benefit from.
+Use `--no-cache` to run analysis without caching. StructArmed skips file hashing and neither reads nor writes cache entries. Skipping this work can make analysis faster on very huge codebases.
 
 ```bash
 vendor/bin/structarmed analyse --no-cache
 ```
+
+{: .important }
+Keep in mind that every run with `--no-cache` repeats the full analysis, so similar runs will take roughly the same amount of time. With caching enabled, later runs can reuse cached results and finish faster.
 
 The existing cache is left untouched. `--no-cache` cannot be combined with `--clear-cache`; clear the cache separately with `vendor/bin/structarmed --clear-cache`.
