@@ -9,6 +9,7 @@ use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
 use Boundwize\StructArmed\Util\PhpParser\UnconditionallyDeclaredFunctions;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
+use PhpParser\Comment\Doc;
 use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
 use PhpParser\Node;
@@ -1670,6 +1671,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                                     : null,
             nonClassDependencies: $analysis['nonClassDependencies'],
             constantFetches:    $analysis['constantFetches'],
+            isApi:              $this->hasDocBlockTag($classLike, 'api'),
+            isInternal:         $this->hasDocBlockTag($classLike, 'internal'),
         );
     }
 
@@ -1808,6 +1811,18 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         return isset($classLike->namespacedName)
             ? $classLike->namespacedName->toString()
             : (string) $classLike->name;
+    }
+
+    /**
+     * Whether the docblock carries the $tag tag, e.g. `@api`; an inline
+     * `{@internal ...}` comment does not count.
+     */
+    private function hasDocBlockTag(ClassLike $classLike, string $tag): bool
+    {
+        $docComment = $classLike->getDocComment();
+
+        return $docComment instanceof Doc
+            && preg_match('/(?<!\{)@' . $tag . '\b/', $docComment->getText()) === 1;
     }
 
     /**
