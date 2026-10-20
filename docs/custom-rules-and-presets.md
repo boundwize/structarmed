@@ -121,6 +121,52 @@ return Architecture::define()
     );
 ```
 
+## Reading @api And @internal Tags In A Custom Rule
+
+Each `ClassNode` records whether the docblock of its class, interface, trait, or enum declaration carries an `@api` or `@internal` tag:
+
+| Flag | Meaning |
+| --- | --- |
+| `$classNode->isApi` | The class-like docblock has an `@api` tag |
+| `$classNode->isInternal` | The class-like docblock has an `@internal` tag |
+
+A tag followed by a description, such as `@internal only used by the analyser`, counts. Longer tag names such as `@apiVersion` do not, and neither does the phpDocumentor inline `{@internal ...}}` form, which marks part of the description as internal rather than the class-like itself. Member docblocks are not read.
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final readonly class ClassMustDeclareApiOrInternalRule implements RuleInterface
+{
+    public function appliesTo(ClassNode $classNode): bool
+    {
+        return $classNode->isInLayer('Core');
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        if ($classNode->isApi || $classNode->isInternal) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:   sprintf('%s [%s] must be annotated @api or @internal', $classNode->getType(), $classNode->className),
+            file:      $classNode->file,
+            line:      $classNode->line,
+            className: $classNode->className,
+            layer:     $classNode->layer,
+        );
+    }
+}
+```
+
 ## Reading Usage Flags In A Custom Rule
 
 Usage flags are opt-in because collecting them costs extra analysis time. Before reading a usage flag, a custom rule must declare that it needs the data by implementing the corresponding marker interface instead of the plain `Boundwize\StructArmed\Rule\RuleInterface`. Each marker extends `RuleInterface`, so no other change is needed:
