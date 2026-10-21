@@ -13,6 +13,8 @@ use function array_filter;
 use function array_map;
 use function array_values;
 use function count;
+use function strcmp;
+use function usort;
 
 /**
  * @implements IteratorAggregate<int, RuleViolation>
@@ -52,6 +54,20 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
     public function getIterator(): Traversable
     {
         return new ArrayIterator($this->violations);
+    }
+
+    /**
+     * Orders by file and line, so the result does not depend on the order in which
+     * the analysis visited files. The sort is stable: violations on the same line
+     * keep their source and rule order.
+     */
+    public function sort(): void
+    {
+        usort(
+            $this->violations,
+            static fn(RuleViolation $a, RuleViolation $b): int => strcmp($a->file, $b->file)
+                ?: $a->line <=> $b->line
+        );
     }
 
     /** @return RuleViolation[] */

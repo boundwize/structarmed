@@ -126,6 +126,56 @@ PHP, file_get_contents($basePath . '/baseline.php'));
         }
     }
 
+    public function testGenerateWritesCountForDuplicateViolations(): void
+    {
+        $basePath                = $this->createTempDirectory();
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+            <?php
+
+            $a = TRUE;
+            $b = TRUE;
+
+            PHP);
+
+        $ruleViolationCollection->add($this->keywordConstantViolation($basePath . '/src/Foo.php', 3));
+        $ruleViolationCollection->add($this->violation($basePath . '/src/Foo.php'));
+        $ruleViolationCollection->add($this->keywordConstantViolation($basePath . '/src/Foo.php', 4));
+
+        try {
+            (new Baseline())->generate($ruleViolationCollection, 'baseline.php', $basePath);
+
+            $this->assertSame(<<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                return [
+                    [
+                        'rule' => 'psr12.files.must_use_lowercase_keyword_constants',
+                        'message' => 'Keyword constant [TRUE] must use lowercase [true]',
+                        'file' => 'src/Foo.php',
+                        'class' => '',
+                        'layer' => null,
+                        'count' => 2,
+                    ],
+                    [
+                        'rule' => 'source.must_be_final',
+                        'message' => 'Foo must be final',
+                        'file' => 'src/Foo.php',
+                        'class' => 'App\Foo',
+                        'layer' => 'Source',
+                    ],
+                ];
+
+                PHP, file_get_contents($basePath . '/baseline.php'));
+        } finally {
+            $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src']);
+        }
+    }
+
     public function testGenerateNormalisesBasePathViolationToEmptyFile(): void
     {
         $basePath                = $this->createTempDirectory();
@@ -255,6 +305,115 @@ PHP);
         }
     }
 
+    public function testFilterReportsNewDuplicateViolationAddedAfterBaseline(): void
+    {
+        $basePath  = $this->createTempDirectory();
+        $file      = $basePath . '/src/Foo.php';
+        $generated = new RuleViolationCollection();
+        $generated->add($this->keywordConstantViolation($file, 3));
+
+        $current = new RuleViolationCollection();
+        $current->add($this->keywordConstantViolation($file, 3));
+        $current->add($this->keywordConstantViolation($file, 4));
+
+        $baseline = new Baseline();
+
+        try {
+            $baseline->generate($generated, 'baseline.php', $basePath);
+
+            $filtered = $baseline->filter($current, 'baseline.php', $basePath);
+
+            $this->assertCount(1, $filtered);
+
+            foreach ($filtered as $violation) {
+                $this->assertSame(4, $violation->line);
+            }
+        } finally {
+            $this->removeTempDirectory($basePath, ['baseline.php']);
+        }
+    }
+
+    public function testFilterSuppressesOnlyAsManyViolationsAsBaselineEntries(): void
+    {
+        $basePath = $this->createTempDirectory();
+        $file     = $basePath . '/src/Foo.php';
+        $baseline = new Baseline();
+
+        try {
+            foreach ($this->duplicateViolationCounts() as $description => [$entries, $matches, $expected]) {
+                $generated = new RuleViolationCollection();
+                $current   = new RuleViolationCollection();
+
+                for ($line = 1; $line <= $entries; ++$line) {
+                    $generated->add($this->keywordConstantViolation($file, $line));
+                }
+
+                for ($line = 1; $line <= $matches; ++$line) {
+                    $current->add($this->keywordConstantViolation($file, $line));
+                }
+
+                $baseline->generate($generated, 'baseline.php', $basePath);
+
+                $this->assertCount($expected, $baseline->filter($current, 'baseline.php', $basePath), $description);
+            }
+        } finally {
+            $this->removeTempDirectory($basePath, ['baseline.php']);
+        }
+    }
+
+    public function testFilterKeepsExistingDuplicateEntriesMatchingAfterEmptyLinesShiftViolations(): void
+    {
+        $basePath                = $this->createTempDirectory();
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+            <?php
+
+
+
+            $a = TRUE;
+            $b = TRUE;
+
+            PHP);
+
+        // Both identical violations moved down after empty lines were added above them.
+        $ruleViolationCollection->add($this->keywordConstantViolation($basePath . '/src/Foo.php', 5));
+        $ruleViolationCollection->add($this->keywordConstantViolation($basePath . '/src/Foo.php', 6));
+
+        try {
+            file_put_contents($basePath . '/baseline.php', <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                return [
+                    [
+                        'rule' => 'psr12.files.must_use_lowercase_keyword_constants',
+                        'message' => 'Keyword constant [TRUE] must use lowercase [true]',
+                        'file' => 'src/Foo.php',
+                        'class' => '',
+                        'layer' => null,
+                    ],
+                    [
+                        'rule' => 'psr12.files.must_use_lowercase_keyword_constants',
+                        'message' => 'Keyword constant [TRUE] must use lowercase [true]',
+                        'file' => 'src/Foo.php',
+                        'class' => '',
+                        'layer' => null,
+                    ],
+                ];
+
+                PHP);
+
+            $filtered = (new Baseline())->filter($ruleViolationCollection, 'baseline.php', $basePath);
+
+            $this->assertFalse($filtered->hasViolations());
+        } finally {
+            $this->removeTempDirectory($basePath, ['baseline.php', 'src/Foo.php', 'src']);
+        }
+    }
+
     public function testFilterRejectsMissingBaselineFile(): void
     {
         $basePath = $this->createTempDirectory();
@@ -310,6 +469,7 @@ return [
         'message' => [],
         'file' => [],
         'class' => [],
+        'count' => 'invalid',
     ],
 ];
 PHP);
@@ -505,11 +665,33 @@ PHP);
         rmdir($basePath);
     }
 
+    /**
+     * @return iterable<string, array{int, int, int}>
+     */
+    private function duplicateViolationCounts(): iterable
+    {
+        yield '1 baseline entry, 1 matching violation' => [1, 1, 0];
+        yield '1 baseline entry, 2 matching violations' => [1, 2, 1];
+        yield '2 baseline entries, 3 matching violations' => [2, 3, 1];
+        yield '2 baseline entries, 1 matching violation' => [2, 1, 0];
+    }
+
     private function violation(
         string $file,
         string $message = 'Foo must be final',
         string $className = Foo::class
     ): RuleViolation {
         return new RuleViolation($message, $file, 1, $className, 'Source', 'source.must_be_final');
+    }
+
+    private function keywordConstantViolation(string $file, int $line): RuleViolation
+    {
+        return new RuleViolation(
+            message: 'Keyword constant [TRUE] must use lowercase [true]',
+            file: $file,
+            line: $line,
+            className: '',
+            ruleKey: 'psr12.files.must_use_lowercase_keyword_constants',
+        );
     }
 }

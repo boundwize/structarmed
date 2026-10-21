@@ -13,11 +13,13 @@ use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
 use function array_keys;
+use function array_values;
 use function dirname;
 use function file_exists;
 use function file_put_contents;
 use function is_array;
 use function is_dir;
+use function is_int;
 use function is_scalar;
 use function json_encode;
 use function rtrim;
@@ -45,7 +47,13 @@ final readonly class Baseline
         $filtered            = new RuleViolationCollection();
 
         foreach ($ruleViolationCollection as $violation) {
-            if (isset($signatures[$this->signature($violation, $normalisedBasePath, $messagePathPrefixes)])) {
+            $signature = $this->signature($violation, $normalisedBasePath, $messagePathPrefixes);
+
+            // Each baseline entry suppresses one matching violation, so a new
+            // duplicate of a baselined violation is still reported.
+            if (($signatures[$signature] ?? 0) > 0) {
+                --$signatures[$signature];
+
                 continue;
             }
 
@@ -73,11 +81,12 @@ final readonly class Baseline
 
         $normalisedBasePath  = Path::normalise($basePath, canonicalise: true);
         $messagePathPrefixes = $this->messagePathPrefixes($basePath, $normalisedBasePath);
-        $violations          = [];
+        /** @var array<string, array{rule: string, message: string, file: string, class: string, layer: ?string, count?: int}> $violations */
+        $violations = [];
 
         foreach ($ruleViolationCollection as $violation) {
             $relativeFile = Path::relativeTo($violation->file, $normalisedBasePath);
-            $violations[] = [
+            $entry        = [
                 'rule'    => $violation->ruleKey,
                 'message' => $this->relativeMessagePath(
                     $violation->message,
@@ -89,13 +98,23 @@ final readonly class Baseline
                 'class'   => $violation->className,
                 'layer'   => $violation->layer,
             ];
+            $key          = (string) json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+
+            // Identical violations share one entry with a count, written only when above 1.
+            if (isset($violations[$key])) {
+                $violations[$key]['count'] = ($violations[$key]['count'] ?? 1) + 1;
+
+                continue;
+            }
+
+            $violations[$key] = $entry;
         }
 
         $header = "<?php\n\n"
             . "declare(strict_types=1);\n\n";
 
         /** @var Array_ $expr */
-        $expr = (new BuilderFactory())->val($violations);
+        $expr = (new BuilderFactory())->val(array_values($violations));
 
         $content = $header . 'return ' . $this->prettyPrintArray($expr) . ";\n";
 
@@ -121,7 +140,7 @@ final readonly class Baseline
 
     /**
      * @param list<string> $messagePathPrefixes
-     * @return array<string, true>
+     * @return array<string, positive-int>
      */
     private function loadSignatures(
         string $baselinePath,
@@ -148,7 +167,9 @@ final readonly class Baseline
                 continue;
             }
 
-            $signatures[$this->arraySignature($violation, $normalisedBasePath, $messagePathPrefixes)] = true;
+            $signature              = $this->arraySignature($violation, $normalisedBasePath, $messagePathPrefixes);
+            $count                  = $violation['count'] ?? 1;
+            $signatures[$signature] = ($signatures[$signature] ?? 0) + (is_int($count) && $count > 0 ? $count : 1);
         }
 
         return $signatures;

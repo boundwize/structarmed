@@ -408,6 +408,17 @@ final readonly class Analyser
             }
         }
 
+        // Extraction order varies with cache state and parallel workers, so sort
+        // to keep reports, the violation cache and baselines stable across runs.
+        // Each group is sorted on its own to keep ruleset violations last.
+        if ($ruleViolationCollection->hasViolations()) {
+            $ruleViolationCollection->sort();
+        }
+
+        if ($rulesetViolationCollection->hasViolations()) {
+            $rulesetViolationCollection->sort();
+        }
+
         $ruleViolationCollection->merge($rulesetViolationCollection);
 
         return $ruleViolationCollection;

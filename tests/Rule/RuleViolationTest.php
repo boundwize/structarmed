@@ -166,6 +166,23 @@ final class RuleViolationTest extends TestCase
         $this->assertSame([$ruleViolation, $app], iterator_to_array($collection));
     }
 
+    public function testCollectionSortsByFileAndLineKeepingSameLineOrder(): void
+    {
+        $otherFile  = new RuleViolation('Other file', '/src/B.php', 1, '', null, 'a.rule');
+        $laterLine  = new RuleViolation('Later line', '/src/A.php', 10, '', null, 'a.rule');
+        $sameLine1  = new RuleViolation('Same line, first', '/src/A.php', 3, '', null, 'z.rule');
+        $sameLine2  = new RuleViolation('Same line, second', '/src/A.php', 3, '', null, 'a.rule');
+        $collection = new RuleViolationCollection();
+
+        foreach ([$otherFile, $laterLine, $sameLine1, $sameLine2] as $ruleViolation) {
+            $collection->add($ruleViolation);
+        }
+
+        $collection->sort();
+
+        $this->assertSame([$sameLine1, $sameLine2, $laterLine, $otherFile], iterator_to_array($collection));
+    }
+
     private function violation(string $ruleKey, string $layer): RuleViolation
     {
         return new RuleViolation(
