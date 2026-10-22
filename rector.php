@@ -23,4 +23,4 @@ return RectorConfig::configure()
     ->withImportNames(removeUnusedImports: true)
     ->withSkip([
         MergePhpstanDocTagIntoNativeRector::class,
-    ])
+    ]);
