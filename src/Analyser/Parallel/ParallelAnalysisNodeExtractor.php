@@ -39,6 +39,7 @@ use function is_string;
 use function min;
 use function mkdir;
 use function proc_close;
+use function rmdir;
 use function serialize;
 use function sprintf;
 use function stream_set_blocking;
