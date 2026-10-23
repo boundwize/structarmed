@@ -306,6 +306,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private const FUNCTION_FALLBACK_MARKER_PREFIX = '?';
 
+    /** Resolved function references cannot collide with class-like names. */
+    private const FUNCTION_REFERENCE_PREFIX = '!';
+
     /** @var array<string, true> Lower-cased short names of the current file's fallback markers */
     private array $currentFileFallbackNames = [];
 
@@ -516,7 +519,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * References to class-likes made outside any class-like scope, per file —
-     * procedural functions and top-level statements.
+     * procedural functions and top-level statements. Function references use
+     * resolved or fallback markers so they cannot keep class-likes alive.
      *
      * @return array<string, list<string>>
      */
@@ -617,6 +621,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     {
         return str_starts_with($reference, self::FUNCTION_FALLBACK_MARKER_PREFIX)
             ? substr($reference, strlen(self::FUNCTION_FALLBACK_MARKER_PREFIX))
+            : null;
+    }
+
+    /** The resolved function name carried by a file reference, or null. */
+    public static function parseFunctionReference(string $reference): ?string
+    {
+        return str_starts_with($reference, self::FUNCTION_REFERENCE_PREFIX)
+            ? substr($reference, strlen(self::FUNCTION_REFERENCE_PREFIX))
             : null;
     }
 
@@ -858,7 +870,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         );
 
         foreach ($globalFunctionCalls as $globalFunctionCall) {
-            $this->currentFileReferences[$globalFunctionCall] = true;
+            $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $globalFunctionCall] = true;
         }
 
         $this->currentFileFallbackNames       = [];
@@ -1160,6 +1172,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 && ! isset(self::KEYWORD_CONSTANTS[strtolower($value)])
             ) {
                 $this->currentFileReferences[$value] = true;
+                // A name-shaped string can also be invoked as a callable.
+                $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
             }
 
             return;
@@ -1172,7 +1186,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 return;
             }
 
-            if ($this->activeClassLikeAnalyses === []) {
+            if ($this->activeClassLikeAnalyses === [] && ! $node->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE)) {
                 // Outside any class-like scope — procedural functions and
                 // top-level statements — a class-like reference still keeps
                 // the referenced class-like alive.
@@ -1212,6 +1226,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             return;
+        }
+
+        if ($node instanceof FuncCall && $node->name instanceof Name) {
+            $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
+
+            if ($node->name instanceof FullyQualified && $this->activeClassLikeAnalyses === []) {
+                $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $node->name->toString()] = true;
+            }
         }
 
         // Entered before its arguments, so the name string is marked before
@@ -1268,8 +1290,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($node instanceof FuncCall) {
             if ($node->name instanceof Name) {
-                $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
-
                 $functionName = $node->name->toLowerString();
 
                 // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
@@ -1681,6 +1701,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             functionCalls:         $analysis['functionCalls'],
             superglobals:          $analysis['superglobals'],
             languageConstructs:    $analysis['languageConstructs'],
+            nonClassDependencies:  $analysis['nonClassDependencies'],
         );
     }
 

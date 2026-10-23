@@ -66,10 +66,10 @@ final class AnalysisResultCache
 
     /**
      * Format version of the analysis-node payload files. Bump it whenever
-     * their shape or naming changes: it is recorded in the metadata marker,
-     * so a cache written by an older format is cleared on its next use.
+     * their shape, naming, or reference semantics change. It is recorded in
+     * the metadata marker, so older caches are cleared on their next use.
      */
-    public const FORMAT_VERSION = 15;
+    public const FORMAT_VERSION = 17;
 
     private readonly string $cacheDirectory;
 
@@ -577,16 +577,17 @@ final class AnalysisResultCache
         ];
 
         $lists = [
-            'implements'         => array_values($anonymousClassNode->implements),
-            'traits'             => array_values($anonymousClassNode->traits),
-            'layers'             => $anonymousClassNode->layers,
-            'dependencies'       => $anonymousClassNode->dependencies,
-            'methods'            => array_map($this->methodNodeToArray(...), $anonymousClassNode->methods),
-            'constants'          => array_map($this->constantNodeToArray(...), $anonymousClassNode->constants),
-            'properties'         => array_map($this->propertyNodeToArray(...), $anonymousClassNode->properties),
-            'functionCalls'      => array_values($anonymousClassNode->functionCalls),
-            'superglobals'       => array_values($anonymousClassNode->superglobals),
-            'languageConstructs' => array_values($anonymousClassNode->languageConstructs),
+            'implements'           => array_values($anonymousClassNode->implements),
+            'traits'               => array_values($anonymousClassNode->traits),
+            'layers'               => $anonymousClassNode->layers,
+            'dependencies'         => $anonymousClassNode->dependencies,
+            'nonClassDependencies' => $anonymousClassNode->nonClassDependencies,
+            'methods'              => array_map($this->methodNodeToArray(...), $anonymousClassNode->methods),
+            'constants'            => array_map($this->constantNodeToArray(...), $anonymousClassNode->constants),
+            'properties'           => array_map($this->propertyNodeToArray(...), $anonymousClassNode->properties),
+            'functionCalls'        => array_values($anonymousClassNode->functionCalls),
+            'superglobals'         => array_values($anonymousClassNode->superglobals),
+            'languageConstructs'   => array_values($anonymousClassNode->languageConstructs),
         ];
 
         foreach ($lists as $key => $list) {
@@ -629,6 +630,7 @@ final class AnalysisResultCache
             $layers                = $rawNode['layers'] ?? [];
             $isReadonly            = $rawNode['isReadonly'] ?? false;
             $dependencies          = $rawNode['dependencies'] ?? [];
+            $nonClassDependencies  = $rawNode['nonClassDependencies'] ?? [];
             $functionCalls         = $rawNode['functionCalls'] ?? [];
             $superglobals          = $rawNode['superglobals'] ?? [];
             $languageConstructs    = $rawNode['languageConstructs'] ?? [];
@@ -651,6 +653,7 @@ final class AnalysisResultCache
                 || ! $this->isStringArray($traits)
                 || ! $this->isStringArray($layers)
                 || ! $this->isStringArray($dependencies)
+                || ! $this->isStringArray($nonClassDependencies)
                 || ! $this->isStringArray($functionCalls)
                 || ! $this->isStringArray($superglobals)
                 || ! $this->isStringArray($languageConstructs)
@@ -685,6 +688,7 @@ final class AnalysisResultCache
                 functionCalls:         array_values($functionCalls),
                 superglobals:          array_values($superglobals),
                 languageConstructs:    array_values($languageConstructs),
+                nonClassDependencies:  array_values($nonClassDependencies),
             );
         }
 

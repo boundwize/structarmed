@@ -55,6 +55,7 @@ final class AnonymousClassNode
      * @param list<string>   $parentClasses         Direct and transitive parent class names
      * @param list<string>   $parentInterfaces      Direct and transitive implemented interface names
      * @param list<string>   $dependencies          Fully-qualified class, function, or constant dependencies
+     * @param list<string>   $nonClassDependencies Dependencies only used as function or constant names
      * @param MethodNode[]   $methods               Methods of this anonymous class
      * @param ConstantNode[] $constants             Constants of this anonymous class
      * @param PropertyNode[] $properties            Properties of this anonymous class
@@ -83,6 +84,7 @@ final class AnonymousClassNode
         public array $functionCalls = [],
         public readonly array $superglobals = [],
         public readonly array $languageConstructs = [],
+        public readonly array $nonClassDependencies = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }

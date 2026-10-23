@@ -825,7 +825,7 @@ final readonly class Analyser
      * marking.
      *
      * @param list<string>        $dependencies
-     * @param array<string|null>  $clauseNames  The node's own name, if any, and its extends, implements, and traits
+     * @param array<string|null>  $clauseNames  Structural names and dependencies used only as functions or constants
      * @param array<string, true> $used
      */
     private function markDependenciesUsed(array $dependencies, array $clauseNames, array &$used): void
@@ -890,6 +890,7 @@ final readonly class Analyser
                     ...$classNode->implements,
                     ...$classNode->interfaceExtends,
                     ...$classNode->traits,
+                    ...$classNode->nonClassDependencies,
                 ],
                 $used,
             );
@@ -915,7 +916,12 @@ final readonly class Analyser
 
             $this->markDependenciesUsed(
                 $anonymousClassNode->dependencies,
-                [$anonymousClassNode->extends, ...$anonymousClassNode->implements, ...$anonymousClassNode->traits],
+                [
+                    $anonymousClassNode->extends,
+                    ...$anonymousClassNode->implements,
+                    ...$anonymousClassNode->traits,
+                    ...$anonymousClassNode->nonClassDependencies,
+                ],
                 $used,
             );
         }
@@ -1134,21 +1140,26 @@ final readonly class Analyser
 
         foreach ($extractionResult->fileReferences as $references) {
             foreach ($references as $reference) {
-                $referenceKey = strtolower($reference);
+                $referenceKey      = strtolower($reference);
+                $functionReference = AnalysisNodeCollector::parseFunctionReference($referenceKey);
 
-                if (isset($used[$referenceKey])) {
+                if ($functionReference !== null) {
+                    $used[$functionReference] = true;
+
+                    continue;
+                }
+
+                $namespacedName = AnalysisNodeCollector::parseFunctionFallbackMarker($referenceKey);
+
+                // Plain names are class references. Callable-name strings
+                // also carry a function marker, collected separately.
+                if ($namespacedName === null || isset($used[$referenceKey])) {
                     continue;
                 }
 
                 // Remember markers too, so repeated file references only
                 // resolve their namespace/global fallback once per run.
-                $used[$referenceKey] = true;
-                $namespacedName      = AnalysisNodeCollector::parseFunctionFallbackMarker($referenceKey);
-
-                if ($namespacedName === null) {
-                    continue;
-                }
-
+                $used[$referenceKey]   = true;
                 $used[$namespacedName] = true;
 
                 if (! isset($declared[$namespacedName])) {

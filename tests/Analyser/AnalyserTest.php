@@ -2526,6 +2526,180 @@ final class AnalyserTest extends TestCase
         $this->assertSame('App\ConnectionPool', $violations[0]->className);
     }
 
+    public function testYagniDoesNotTreatClassTypeHintAsFunctionUsage(): void
+    {
+        $basePath     = $this->makeTempProject([
+            'src/symbols.php' => <<<'PHP'
+                <?php
+                namespace App;
+
+                interface Shared {}
+                interface Checked {}
+                interface Named {}
+                class Created {}
+                interface StringReference {}
+                function Shared(): void {}
+                function Checked(): void {}
+                function Named(): void {}
+                function Created(): void {}
+                function StringReference(): void {}
+                function guarded(): void {}
+                PHP,
+            'src/calls.php'   => <<<'PHP'
+                <?php
+                namespace App;
+
+                function consume(Shared $value): void
+                {
+                    $value instanceof Checked;
+                    echo Named::class;
+                    new Created();
+                }
+                consume();
+                $callable = '\App\StringReference';
+                $callable();
+                function_exists('App\guarded');
+                PHP,
+        ]);
+        $architecture = Architecture::define()->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $options) {
+            $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+            $analysisResultCache->clear();
+
+            foreach ([null, $analysisResultCache, $analysisResultCache] as $cache) {
+                $violations = (new Analyser($basePath, $cache, 'config'))
+                    ->analyse($architecture, [], null, $options);
+
+                $this->assertSame(
+                    ['App\Checked', 'App\Created', 'App\Named', 'App\Shared', 'App\guarded'],
+                    $this->violationClassNames($violations->forRule(YagniPreset::FUNCTION_MUST_BE_USED))
+                );
+                $this->assertSame(
+                    [],
+                    $this->violationClassNames($violations->forRule(YagniPreset::INTERFACE_MUST_BE_USED))
+                );
+            }
+        }
+    }
+
+    public function testYagniDistinguishesFunctionAndConstantReferencesFromClassLikes(): void
+    {
+        $basePath     = $this->makeTempProject([
+            'src/symbols.php' => <<<'PHP'
+                <?php
+                namespace App;
+
+                interface Direct {}
+                interface Imported {}
+                interface CallableOnly {}
+                interface InMethod {}
+                interface InAnonymous {}
+                interface MixedUse {}
+                interface InFunction {}
+                interface ConstantOnly {}
+                abstract class ClassOnly {}
+                trait TraitOnly {}
+                interface Typed {}
+                interface Checked {}
+                interface Named {}
+                interface ParentContract {}
+                interface ChildContract extends ParentContract {}
+                class Constructed {}
+                trait UsedTrait {}
+                class Consumer { use UsedTrait; }
+
+                function Direct(): void {}
+                function Imported(): void {}
+                function CallableOnly(): void {}
+                function InMethod(): void {}
+                function InAnonymous(): void {}
+                function MixedUse(): void {}
+                function InFunction(): void {}
+                function ClassOnly(): void {}
+                function TraitOnly(): void {}
+                function unused(): void {}
+                const ConstantOnly = 42;
+                PHP,
+            'src/calls.php'   => <<<'PHP'
+                <?php
+                namespace Client;
+
+                use function App\Imported as imported;
+                use const App\ConstantOnly as VALUE;
+
+                \App\Direct();
+                imported();
+                $callable = \App\CallableOnly(...);
+                \App\ClassOnly();
+                \App\TraitOnly();
+                echo \App\ConstantOnly, VALUE;
+                function invoke(\App\Typed $value): void
+                {
+                    \App\InFunction();
+                    $value instanceof \App\Checked;
+                    echo \App\Named::class;
+                    new \App\Constructed();
+                }
+                invoke();
+                new class {
+                    public function run(): void
+                    {
+                        \App\InAnonymous();
+                        \App\MixedUse();
+                        echo \App\MixedUse::class;
+                    }
+                };
+                final class Caller
+                {
+                    public function run(): void
+                    {
+                        \App\InMethod();
+                        $callable = \App\InMethod(...);
+                        echo \App\ConstantOnly;
+                    }
+                }
+                PHP,
+        ]);
+        $architecture = Architecture::define()->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $options) {
+            $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+            $analysisResultCache->clear();
+
+            foreach ([null, $analysisResultCache, $analysisResultCache] as $cache) {
+                $violations = (new Analyser($basePath, $cache, 'config'))
+                    ->analyse($architecture, [], null, $options);
+
+                $this->assertSame(
+                    [
+                        'App\CallableOnly',
+                        'App\ChildContract',
+                        'App\ConstantOnly',
+                        'App\Direct',
+                        'App\Imported',
+                        'App\InAnonymous',
+                        'App\InFunction',
+                        'App\InMethod',
+                    ],
+                    $this->violationClassNames($violations->forRule(YagniPreset::INTERFACE_MUST_BE_USED))
+                );
+                $this->assertSame(
+                    ['App\ClassOnly'],
+                    $this->violationClassNames($violations->forRule(YagniPreset::ABSTRACT_CLASS_MUST_BE_USED))
+                );
+                $this->assertSame(
+                    ['App\TraitOnly'],
+                    $this->violationClassNames($violations->forRule(YagniPreset::TRAIT_MUST_BE_USED))
+                );
+                $this->assertSame(
+                    ['App\unused'],
+                    $this->violationClassNames($violations->forRule(YagniPreset::FUNCTION_MUST_BE_USED))
+                );
+            }
+        }
+    }
+
     public function testYagniRulesDoNotFlagAbstractionsReferencedByClassNameString(): void
     {
         $checker = '<?php namespace App;' . "\n"
