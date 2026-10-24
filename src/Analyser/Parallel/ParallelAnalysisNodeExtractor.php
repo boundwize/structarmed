@@ -13,6 +13,7 @@ use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\CachePathFactory;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
+use FilesystemIterator;
 use RuntimeException;
 
 use function array_fill;
@@ -38,6 +39,7 @@ use function is_string;
 use function min;
 use function mkdir;
 use function proc_close;
+use function rmdir;
 use function serialize;
 use function sprintf;
 use function stream_set_blocking;
@@ -303,6 +305,15 @@ final readonly class ParallelAnalysisNodeExtractor
 
             if (! $anyActivity) {
                 usleep(5000);
+            }
+        }
+
+        // when --no-cache is used and no files in the cache directory yet, remove dir cache
+        // as means only for temporary file for worker needs
+        if (! $this->analysisResultCache instanceof AnalysisResultCache) {
+            $fileSystemIterator = new FilesystemIterator($cacheDirectory);
+            if (! $fileSystemIterator->valid()) {
+                rmdir($cacheDirectory);
             }
         }
 
