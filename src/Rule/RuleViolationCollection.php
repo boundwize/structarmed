@@ -9,12 +9,16 @@ use Countable;
 use IteratorAggregate;
 use Traversable;
 
+use function array_column;
 use function array_filter;
+use function array_keys;
 use function array_map;
+use function array_multisort;
 use function array_values;
 use function count;
-use function strcmp;
-use function usort;
+
+use const SORT_NUMERIC;
+use const SORT_STRING;
 
 /**
  * @implements IteratorAggregate<int, RuleViolation>
@@ -63,11 +67,12 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
      */
     public function sort(): void
     {
-        usort(
-            $this->violations,
-            static fn(RuleViolation $a, RuleViolation $b): int => strcmp($a->file, $b->file)
-                ?: $a->line <=> $b->line
-        );
+        $files    = array_column($this->violations, 'file');
+        $lines    = array_column($this->violations, 'line');
+        $position = array_keys($this->violations);
+
+        // The position column breaks ties, so the violations are never compared.
+        array_multisort($files, SORT_STRING, $lines, SORT_NUMERIC, $position, $this->violations);
     }
 
     /** @return RuleViolation[] */

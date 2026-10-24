@@ -1138,10 +1138,19 @@ final readonly class Analyser
         // Deduplicate call spellings across scopes before normalizing their case.
         $used = array_change_key_case($used);
 
+        $seenReferences = [];
+
         foreach ($extractionResult->fileReferences as $references) {
             foreach ($references as $reference) {
-                $referenceKey      = strtolower($reference);
-                $functionReference = AnalysisNodeCollector::parseFunctionReference($referenceKey);
+                // Files share most of their references, so each one is only
+                // resolved once per run.
+                if (isset($seenReferences[$reference])) {
+                    continue;
+                }
+
+                $seenReferences[$reference] = true;
+                $referenceKey               = strtolower($reference);
+                $functionReference          = AnalysisNodeCollector::parseFunctionReference($referenceKey);
 
                 if ($functionReference !== null) {
                     $used[$functionReference] = true;
@@ -1153,13 +1162,10 @@ final readonly class Analyser
 
                 // Plain names are class references. Callable-name strings
                 // also carry a function marker, collected separately.
-                if ($namespacedName === null || isset($used[$referenceKey])) {
+                if ($namespacedName === null) {
                     continue;
                 }
 
-                // Remember markers too, so repeated file references only
-                // resolve their namespace/global fallback once per run.
-                $used[$referenceKey]   = true;
                 $used[$namespacedName] = true;
 
                 if (! isset($declared[$namespacedName])) {
