@@ -228,7 +228,11 @@ final class Psr4NamespaceRuleTest extends TestCase
 
             $this->assertInstanceOf(RuleViolation::class, $violation, $relativeFile);
             $this->assertSame(
-                sprintf('Class [%s] must match PSR-4 class [%s]', $className, $expectedClassName),
+                sprintf(
+                    'Class [%s] is in a file that maps to invalid PSR-4 class name [%s]',
+                    $className,
+                    $expectedClassName
+                ),
                 $violation->message,
                 $relativeFile
             );
