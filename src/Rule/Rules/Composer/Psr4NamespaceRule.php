@@ -20,6 +20,7 @@ use function dirname;
 use function file_exists;
 use function ltrim;
 use function max;
+use function preg_match;
 use function sprintf;
 use function str_ends_with;
 use function str_replace;
@@ -29,6 +30,10 @@ use function substr;
 
 final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
 {
+    private const IDENTIFIER = '[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*';
+
+    private const CLASS_NAME_PATTERN = '/^' . self::IDENTIFIER . '(?:\\\\' . self::IDENTIFIER . ')*$/D';
+
     private ?string $projectBasePath = null;
 
     /** @var array<string, array<string, list<string>>> */
@@ -67,13 +72,13 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
             return null;
         }
 
+        $expectedClassName = array_key_first($expectedClassNames);
+        $format            = preg_match(self::CLASS_NAME_PATTERN, $expectedClassName) === 1
+            ? '%s [%s] must match PSR-4 class [%s]'
+            : '%s [%s] is in a file that maps to invalid PSR-4 class name [%s]';
+
         return new RuleViolation(
-            message:   sprintf(
-                '%s [%s] must match PSR-4 class [%s]',
-                $classNode->getType(),
-                $classNode->className,
-                array_key_first($expectedClassNames)
-            ),
+            message:   sprintf($format, $classNode->getType(), $classNode->className, $expectedClassName),
             file:      $classNode->file,
             line:      $classNode->line,
             className: $classNode->className,
