@@ -69,7 +69,7 @@ final class AnalysisResultCache
      * their shape, naming, or reference semantics change. It is recorded in
      * the metadata marker, so older caches are cleared on their next use.
      */
-    public const FORMAT_VERSION = 17;
+    public const FORMAT_VERSION = 18;
 
     private readonly string $cacheDirectory;
 
@@ -976,8 +976,8 @@ final class AnalysisResultCache
 
     /**
      * The file is not stored: the payload belongs to one file, known when
-     * loading. Empty lists — most of a typical class's — are left out and
-     * default on load.
+     * loading. Empty lists — most of a typical class's — and the rarely set
+     * isApi and isInternal flags are left out and default on load.
      *
      * @return array<string, mixed>
      */
@@ -996,6 +996,14 @@ final class AnalysisResultCache
             'isReadonly'      => $classNode->isReadonly,
             'enumBackingType' => $classNode->enumBackingType,
         ];
+
+        if ($classNode->isApi) {
+            $node['isApi'] = true;
+        }
+
+        if ($classNode->isInternal) {
+            $node['isInternal'] = true;
+        }
 
         $lists = [
             'dependencies'         => $classNode->dependencies,
@@ -1040,6 +1048,8 @@ final class AnalysisResultCache
         $isTrait              = $node['isTrait'] ?? null;
         $isEnum               = $node['isEnum'] ?? null;
         $isReadonly           = $node['isReadonly'] ?? null;
+        $isApi                = $node['isApi'] ?? false;
+        $isInternal           = $node['isInternal'] ?? false;
         $dependencies         = $node['dependencies'] ?? [];
         $nonClassDependencies = $node['nonClassDependencies'] ?? [];
         $constantFetches      = $node['constantFetches'] ?? [];
@@ -1065,6 +1075,8 @@ final class AnalysisResultCache
             || ! is_bool($isTrait)
             || ! is_bool($isEnum)
             || ! is_bool($isReadonly)
+            || ! is_bool($isApi)
+            || ! is_bool($isInternal)
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($nonClassDependencies)
             || ! $this->isStringArray($constantFetches)
@@ -1125,6 +1137,8 @@ final class AnalysisResultCache
             enumBackingType:    $enumBackingType,
             nonClassDependencies: array_values($nonClassDependencies),
             constantFetches:    array_values($constantFetches),
+            isApi:              $isApi,
+            isInternal:         $isInternal,
         );
     }
 

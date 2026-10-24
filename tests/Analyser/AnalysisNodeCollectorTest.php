@@ -29,6 +29,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function array_column;
+use function array_combine;
+use function array_map;
 
 #[CoversClass(AnonymousClassNode::class)]
 #[CoversClass(AnalysisNodeCollector::class)]
@@ -885,6 +887,47 @@ PHP);
 
         $this->assertTrue($classNode->isAbstract);
         $this->assertFalse($classNode->isFinal);
+    }
+
+    public function testCollectsApiAndInternalDocBlockTags(): void
+    {
+        $classNodes = $this->collectNodes(<<<'CODE_SAMPLE'
+            <?php
+
+            /**
+             * Public entry point.
+             *
+             * @api
+             */
+            final class PublicFacade {}
+
+            /** @internal */
+            interface InternalContract {}
+
+            /**
+             * @apiVersion 1.0
+             * {@internal not a tag on the class}
+             */
+            class Untagged {}
+
+            class WithoutDocBlock {}
+            CODE_SAMPLE);
+
+        $this->assertSame(
+            [
+                'PublicFacade'     => [true, false],
+                'InternalContract' => [false, true],
+                'Untagged'         => [false, false],
+                'WithoutDocBlock'  => [false, false],
+            ],
+            array_combine(
+                array_column($classNodes, 'className'),
+                array_map(
+                    static fn (ClassNode $classNode): array => [$classNode->isApi, $classNode->isInternal],
+                    $classNodes
+                )
+            )
+        );
     }
 
     public function testCollectsInterface(): void
