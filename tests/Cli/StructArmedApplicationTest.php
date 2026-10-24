@@ -1013,6 +1013,71 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandFixKeepsAbstractClassReferencedByStaticCallableString(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        file_put_contents($basePath . '/src/Handler.php', <<<'PHP'
+<?php
+
+namespace App;
+
+abstract class Handler
+{
+    public static function run(): void
+    {
+        echo 'Hello';
+    }
+}
+PHP);
+        file_put_contents($basePath . '/src/UnusedHandler.php', <<<'PHP'
+<?php
+
+namespace App;
+
+abstract class UnusedHandler
+{
+}
+PHP);
+        file_put_contents($basePath . '/src/bootstrap.php', <<<'PHP'
+<?php
+
+call_user_func('App\Handler::run');
+PHP);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+    ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            // The callable string still calls into App\Handler at runtime.
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('1 violation has been fixed.', $this->withoutAnsi($output));
+            $this->assertFileExists($basePath . '/src/Handler.php');
+            $this->assertFileDoesNotExist($basePath . '/src/UnusedHandler.php');
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandTracksComposerJsonProgressAsSingleFile(): void
     {
         $basePath = $this->createProjectDirectoryWithMissingComposerPsr4Path();

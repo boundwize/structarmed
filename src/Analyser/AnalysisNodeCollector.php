@@ -96,6 +96,7 @@ use function str_starts_with;
 use function strcasecmp;
 use function strlen;
 use function strpos;
+use function strrpos;
 use function strtolower;
 use function substr;
 
@@ -1166,6 +1167,24 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // (`'\App\Contract'`); strip it so the stored name matches the
             // ClassNode::$className form used for usage lookups.
             $value = $this->stripLeadingNamespaceSeparator($node->value);
+
+            // A static callable string ('App\Handler::run') references its
+            // class only: the method name is neither a class nor a function.
+            $separatorPosition = strpos($value, '::');
+
+            if ($separatorPosition !== false) {
+                $staticCallableClass = substr($value, 0, $separatorPosition);
+
+                // A second '::' ('App\A::B::run') is not a callable.
+                if (
+                    $separatorPosition === strrpos($value, '::')
+                    && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
+                ) {
+                    $this->currentFileReferences[$staticCallableClass] = true;
+                }
+
+                return;
+            }
 
             if (
                 preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1

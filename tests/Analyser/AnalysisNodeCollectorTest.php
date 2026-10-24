@@ -308,6 +308,29 @@ PHP);
         );
     }
 
+    public function testCollectsClassOfStaticCallableStringsAsFileReferences(): void
+    {
+        $code = <<<'PHP'
+            <?php
+
+            call_user_func('App\Handler::run');
+            $callback = '\App\Other::run';
+            $invalid  = 'not-a-class::run';
+            $nested   = 'App\Nested::Handler::run';
+
+            PHP;
+
+        $analysisNodeCollector = $this->makeCollector($code);
+
+        // Only the class part is a reference: the method name is neither a
+        // class nor a function, and calling it statically instantiates nothing.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['!call_user_func', 'App\Handler', 'App\Other']],
+            $analysisNodeCollector->getFileReferences()
+        );
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
+    }
+
     public function testCollectsLeadingBackslashStringInstantiationsNormalized(): void
     {
         $code = '<?php namespace App;' . "\n"

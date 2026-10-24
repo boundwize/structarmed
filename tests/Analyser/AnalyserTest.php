@@ -1806,6 +1806,68 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testYagniRulesDoNotFlagAbstractClassReferencedByStaticCallableString(): void
+    {
+        $handler             = static fn (string $name): string => <<<PHP
+            <?php
+
+            namespace App;
+
+            abstract class {$name}
+            {
+                public static function run(): void {}
+            }
+
+            PHP;
+        $basePath            = $this->makeTempProject([
+            'src/CalledHandler.php'    => $handler('CalledHandler'),
+            'src/VariableHandler.php'  => $handler('VariableHandler'),
+            'src/BackslashHandler.php' => $handler('BackslashHandler'),
+            'src/PlainHandler.php'     => $handler('PlainHandler'),
+            'src/UnusedHandler.php'    => $handler('UnusedHandler'),
+            'src/bootstrap.php'        => <<<'PHP'
+                <?php
+
+                call_user_func('App\CalledHandler::run');
+
+                $callback = 'App\VariableHandler::run';
+                $callback();
+
+                call_user_func('\App\BackslashHandler::run');
+
+                class_exists('App\PlainHandler');
+
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        // Sequential, parallel, then a cold and a warm cached run.
+        $runs = [
+            [null, AnalyserOptions::sequential()],
+            [null, AnalyserOptions::parallel(2)],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+            [$analysisResultCache, AnalyserOptions::sequential()],
+        ];
+
+        foreach ($runs as [$cache, $analyserOptions]) {
+            $ruleViolationCollection = (new Analyser($basePath, $cache, 'config'))
+                ->analyse($architecture, [], null, $analyserOptions);
+
+            // 'App\Handler::run' names the class it calls into; removing the
+            // class would break the callable at runtime.
+            $this->assertSame(
+                ['App\UnusedHandler'],
+                $this->violationClassNames(
+                    $ruleViolationCollection->forRule(YagniPreset::ABSTRACT_CLASS_MUST_BE_USED)
+                )
+            );
+            $this->assertSame([], $ruleViolationCollection->forRule(YagniPreset::FUNCTION_MUST_BE_USED));
+        }
+    }
+
     public function testYagniRulesIgnoreSelfReferences(): void
     {
         $basePath = $this->makeTempProject([
