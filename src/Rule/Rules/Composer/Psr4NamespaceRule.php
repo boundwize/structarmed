@@ -20,7 +20,6 @@ use function dirname;
 use function file_exists;
 use function ltrim;
 use function max;
-use function preg_replace;
 use function sprintf;
 use function str_ends_with;
 use function str_replace;
@@ -113,7 +112,6 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
                     }
 
                     $relativeClass = substr($relativeClass, 0, -4);
-                    $relativeClass = (string) preg_replace('/\.class$/i', '', $relativeClass);
                     $relativeClass = str_replace('/', '\\', $relativeClass);
 
                     $className = $namespace . ltrim($relativeClass, '\\');

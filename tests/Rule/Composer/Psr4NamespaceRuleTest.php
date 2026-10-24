@@ -16,6 +16,7 @@ use PHPUnit\Framework\TestCase;
 use function file_put_contents;
 use function json_encode;
 use function mkdir;
+use function sprintf;
 
 #[CoversClass(Psr4NamespaceRule::class)]
 final class Psr4NamespaceRuleTest extends TestCase
@@ -205,19 +206,41 @@ final class Psr4NamespaceRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $psr4NamespaceRule->evaluate($this->makeNode('Foo', $file)));
     }
 
-    public function testStripsClassSuffixFromExpectedClassName(): void
+    public function testDoesNotTreatClassPhpSuffixAsPhpFile(): void
     {
         $basePath = $this->makeTempProject();
-        $file     = $basePath . '/tests/Foo.class.php';
+        mkdir($basePath . '/tests/Service');
 
-        file_put_contents($file, '<?php namespace App\Tests; class Foo {}');
+        file_put_contents($basePath . '/tests/Foo.php', '<?php namespace App\Tests; class Foo {}');
 
         $psr4NamespaceRule = new Psr4NamespaceRule('Source');
 
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $file))
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Tests\\Foo', $basePath . '/tests/Foo.php'))
         );
+
+        foreach ($this->classPhpSuffixFiles() as $relativeFile => [$className, $expectedClassName]) {
+            $file = $basePath . '/tests/' . $relativeFile;
+            file_put_contents($file, '<?php class Foo {}');
+
+            $violation = $psr4NamespaceRule->evaluate($this->makeNode($className, $file));
+
+            $this->assertInstanceOf(RuleViolation::class, $violation, $relativeFile);
+            $this->assertSame(
+                sprintf('Class [%s] must match PSR-4 class [%s]', $className, $expectedClassName),
+                $violation->message,
+                $relativeFile
+            );
+        }
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    private function classPhpSuffixFiles(): iterable
+    {
+        yield 'Foo.class.php'         => ['App\\Tests\\Foo', 'App\\Tests\\Foo.class'];
+        yield 'Bar.class.php'         => ['App\\Tests\\BarClass', 'App\\Tests\\Bar.class'];
+        yield 'Service/Foo.class.php' => ['App\\Tests\\Service\\Foo', 'App\\Tests\\Service\\Foo.class'];
     }
 
     public function testFailsWhenTraitNameDoesNotMatchFilename(): void
