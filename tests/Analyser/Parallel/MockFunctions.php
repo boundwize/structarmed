@@ -12,6 +12,7 @@ use function str_replace;
 $GLOBALS['mock_proc_open']                 = false;
 $GLOBALS['mock_proc_open_command']         = null;
 $GLOBALS['mock_tempnam']                   = false;
+$GLOBALS['mock_stream_select']             = false;
 $GLOBALS['mock_file_get_contents_payload'] = null;
 $GLOBALS['mock_tracked_tempnam_files']     = [];
 // phpcs:enable
@@ -51,6 +52,20 @@ function tempnam(string $directory, string $prefix): string|false
     }
 
     return $result;
+}
+
+/**
+ * @param array<int, resource>|null $read
+ * @param array<int, resource>|null $write
+ * @param array<int, resource>|null $except
+ */
+function stream_select(?array &$read, ?array &$write, ?array &$except, ?int $seconds): int|false
+{
+    if ($GLOBALS['mock_stream_select'] === true) {
+        return false;
+    }
+
+    return \stream_select($read, $write, $except, $seconds);
 }
 
 function file_get_contents(string $filename): string|false
