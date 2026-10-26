@@ -25,7 +25,7 @@ use const SORT_STRING;
  */
 final class RuleViolationCollection implements Countable, IteratorAggregate
 {
-    /** @var RuleViolation[] */
+    /** @var list<RuleViolation> */
     private array $violations = [];
 
     public function add(RuleViolation $ruleViolation): void
@@ -89,9 +89,9 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
     /** @return array<int, array<string, mixed>> */
     public function toArray(): array
     {
-        return array_values(array_map(
+        return array_map(
             static fn(RuleViolation $ruleViolation): array => $ruleViolation->toArray(),
             $this->violations
-        ));
+        );
     }
 }

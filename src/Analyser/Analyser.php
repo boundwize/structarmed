@@ -1603,7 +1603,7 @@ final readonly class Analyser
             $scanPaths[] = 'composer.json';
         }
 
-        foreach (array_values(array_unique($scanPaths)) as $layerPath) {
+        foreach (array_unique($scanPaths) as $layerPath) {
             $fullPath = Path::normalise(
                 Path::resolve($layerPath, $this->basePath),
                 canonicalise: true

@@ -577,17 +577,17 @@ final class AnalysisResultCache
         ];
 
         $lists = [
-            'implements'           => array_values($anonymousClassNode->implements),
-            'traits'               => array_values($anonymousClassNode->traits),
+            'implements'           => $anonymousClassNode->implements,
+            'traits'               => $anonymousClassNode->traits,
             'layers'               => $anonymousClassNode->layers,
             'dependencies'         => $anonymousClassNode->dependencies,
             'nonClassDependencies' => $anonymousClassNode->nonClassDependencies,
             'methods'              => array_map($this->methodNodeToArray(...), $anonymousClassNode->methods),
             'constants'            => array_map($this->constantNodeToArray(...), $anonymousClassNode->constants),
             'properties'           => array_map($this->propertyNodeToArray(...), $anonymousClassNode->properties),
-            'functionCalls'        => array_values($anonymousClassNode->functionCalls),
-            'superglobals'         => array_values($anonymousClassNode->superglobals),
-            'languageConstructs'   => array_values($anonymousClassNode->languageConstructs),
+            'functionCalls'        => $anonymousClassNode->functionCalls,
+            'superglobals'         => $anonymousClassNode->superglobals,
+            'languageConstructs'   => $anonymousClassNode->languageConstructs,
         ];
 
         foreach ($lists as $key => $list) {
@@ -763,7 +763,7 @@ final class AnalysisResultCache
 
         foreach ($lists as $key => $list) {
             if ($list !== []) {
-                $body[$key] = array_values($list);
+                $body[$key] = $list;
             }
         }
 
@@ -1001,18 +1001,18 @@ final class AnalysisResultCache
             'dependencies'         => $classNode->dependencies,
             'nonClassDependencies' => $classNode->nonClassDependencies,
             'constantFetches'      => $classNode->constantFetches,
-            'implements'           => array_values($classNode->implements),
-            'interfaceExtends'     => array_values($classNode->interfaceExtends),
+            'implements'           => $classNode->implements,
+            'interfaceExtends'     => $classNode->interfaceExtends,
             'parentClasses'        => $classNode->parentClasses,
             'parentInterfaces'     => $classNode->parentInterfaces,
-            'traits'               => array_values($classNode->traits),
+            'traits'               => $classNode->traits,
             'methods'              => array_map($this->methodNodeToArray(...), $classNode->methods),
             'constants'            => array_map($this->constantNodeToArray(...), $classNode->constants),
             'properties'           => array_map($this->propertyNodeToArray(...), $classNode->properties),
             'enumCases'            => array_map($this->enumCaseNodeToArray(...), $classNode->enumCases),
-            'functionCalls'        => array_values($classNode->functionCalls),
-            'superglobals'         => array_values($classNode->superglobals),
-            'languageConstructs'   => array_values($classNode->languageConstructs),
+            'functionCalls'        => $classNode->functionCalls,
+            'superglobals'         => $classNode->superglobals,
+            'languageConstructs'   => $classNode->languageConstructs,
             'layers'               => $classNode->layers,
         ];
 
