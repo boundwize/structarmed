@@ -121,6 +121,54 @@ return Architecture::define()
     );
 ```
 
+## Reading @api And @internal Tags In A Custom Rule
+
+Each `ClassNode` records whether the docblock of its class, interface, trait, or enum declaration carries an `@api` or `@internal` tag:
+
+| Flag | Meaning |
+| --- | --- |
+| `$classNode->isApi` | The class-like docblock has an `@api` tag |
+| `$classNode->isInternal` | The class-like docblock has an `@internal` tag |
+
+A tag counts when it starts a docblock line, also when a description follows, such as `@internal only used by the analyser`. A tag name mentioned within the description does not count, and neither do longer tag names such as `@apiVersion` and `@api-version` or the phpDocumentor inline `{@internal ...}}` form, which marks part of the description as internal rather than the class-like itself. Member docblocks are not read.
+
+The built-in `ApiMayNotBeInternalRule` and `ApiMayNotExtendInternalRule` read both flags. The example below enforces that every class-like in a layer declares one of the two tags:
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+
+final readonly class ClassMustDeclareApiOrInternalRule implements RuleInterface
+{
+    public function appliesTo(ClassNode $classNode): bool
+    {
+        return $classNode->isInLayer('Core');
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        if ($classNode->isApi || $classNode->isInternal) {
+            return null;
+        }
+
+        return new RuleViolation(
+            message:   sprintf('%s [%s] must be annotated @api or @internal', $classNode->getType(), $classNode->className),
+            file:      $classNode->file,
+            line:      $classNode->line,
+            className: $classNode->className,
+            layer:     $classNode->layer,
+        );
+    }
+}
+```
+
 ## Reading Usage Flags In A Custom Rule
 
 Usage flags are opt-in because collecting them costs extra analysis time. Before reading a usage flag, a custom rule must declare that it needs the data by implementing the corresponding marker interface instead of the plain `Boundwize\StructArmed\Rule\RuleInterface`. Each marker extends `RuleInterface`, so no other change is needed:
@@ -205,7 +253,7 @@ Trade-off: only usage within the scanned paths is known. A class-like used solel
 
 ## Reading Other Classes' Layers In A Custom Rule
 
-A rule only receives the node it is evaluating. When a check depends on the layer of *another* class — the layer a dependency belongs to, for instance — extend `Boundwize\StructArmed\Rule\AbstractLayerAwareRule`. Before any class is evaluated, the analyser injects the map of every scanned class into its protected `$classNodeMap` property, keyed by fully qualified class name, and `getDependencyNode()` looks a class up in it:
+A rule only receives the node it is evaluating. When a check depends on the layer of *another* class — the layer a dependency belongs to, for instance — extend `Boundwize\StructArmed\Rule\AbstractLayerAwareRule`. Before any class is evaluated, the analyser injects the map of every scanned class into its protected `$classNodeMap` property, keyed by fully qualified class name, and `getDependencyNode()` looks a class up in it, ignoring case as PHP does for class names:
 
 ```php
 <?php

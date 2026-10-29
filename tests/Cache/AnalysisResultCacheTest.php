@@ -2043,6 +2043,25 @@ final class AnalysisResultCacheTest extends TestCase
                 ],
             ],
         ];
+        yield 'node has invalid isApi field' => [
+            [
+                'nodes' => [
+                    [
+                        'className'   => Foo::class,
+                        'line'        => 1,
+                        'layer'       => null,
+                        'extends'     => null,
+                        'isAbstract'  => false,
+                        'isFinal'     => true,
+                        'isInterface' => false,
+                        'isTrait'     => false,
+                        'isEnum'      => false,
+                        'isReadonly'  => false,
+                        'isApi'       => 'yes',
+                    ],
+                ],
+            ],
+        ];
         yield 'node has invalid string array key' => [
             [
                 'nodes' => [
@@ -2992,6 +3011,8 @@ final class AnalysisResultCacheTest extends TestCase
             functionCalls: ['sprintf'],
             superglobals:  ['_SERVER'],
             constantFetches: ['PHP_EOL'],
+            isApi:         true,
+            isInternal:    true,
         );
     }
 

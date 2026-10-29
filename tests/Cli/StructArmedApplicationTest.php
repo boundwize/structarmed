@@ -223,6 +223,11 @@ PHP);
             '    ->withPreset(Preset::CODEQUALITY());',
         ];
 
+        yield 'stability' => [
+            ['--preset=stability'],
+            '    ->withPreset(Preset::STABILITY());',
+        ];
+
         yield 'all' => [
             ['--preset=all'],
             "    ->withPresets(\n"
@@ -234,7 +239,8 @@ PHP);
             . "        Preset::DDD(),\n"
             . "        Preset::MVC(),\n"
             . "        Preset::YAGNI(),\n"
-            . "        Preset::CODEQUALITY()\n"
+            . "        Preset::CODEQUALITY(),\n"
+            . "        Preset::STABILITY()\n"
             . "    );",
         ];
     }
