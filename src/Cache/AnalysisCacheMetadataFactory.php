@@ -25,14 +25,16 @@ use const JSON_THROW_ON_ERROR;
  */
 final readonly class AnalysisCacheMetadataFactory
 {
-    public function __construct(private FileHashProvider $fileHashProvider)
-    {
+    public function __construct(
+        private FileHashProvider $fileHashProvider,
+        private ConfigurationFingerprint $configurationFingerprint = new ConfigurationFingerprint(),
+    ) {
     }
 
     public function configurationHash(Architecture $architecture, string $configPath): string
     {
         return hash('xxh128', $this->fileHash($configPath) . "\0"
-            . (new ConfigurationFingerprint())->hash($architecture));
+            . $this->configurationFingerprint->hash($architecture));
     }
 
     /**
