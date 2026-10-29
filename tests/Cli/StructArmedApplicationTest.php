@@ -465,6 +465,22 @@ JSON);
     public function testAnalyseCommandDetectsNestedImportedConfigChangesWithoutClearCache(): void
     {
         $basePath = $this->createTempDirectory();
+        $progress = new class implements ProgressHandlerInterface {
+            public bool $started = false;
+
+            public function start(int $total): void
+            {
+                $this->started = true;
+            }
+
+            public function advance(string $file): void
+            {
+            }
+
+            public function finish(): void
+            {
+            }
+        };
         mkdir($basePath . '/src');
 
         file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
@@ -537,6 +553,16 @@ PHP);
 
             $this->assertSame(0, $firstExitCode, $firstOutput);
             $this->assertStringContainsString('No violations found', $firstOutput);
+
+            [$warmExitCode, $warmOutput] = $this->runAnalyseCommand(
+                ['src', '--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $warmExitCode, $warmOutput);
+            $this->assertStringContainsString('No violations found', $warmOutput);
+            $this->assertFalse($progress->started);
 
             file_put_contents($basePath . '/bar.php', <<<'PHP'
 <?php
