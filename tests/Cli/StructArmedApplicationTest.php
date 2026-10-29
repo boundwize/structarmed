@@ -462,6 +462,141 @@ JSON);
         }
     }
 
+    public function testAnalyseCommandDetectsNestedImportedConfigChangesWithoutClearCache(): void
+    {
+        $basePath = $this->createTempDirectory();
+        $progress = new class implements ProgressHandlerInterface {
+            public bool $started = false;
+
+            public function start(int $total): void
+            {
+                $this->started = true;
+            }
+
+            public function advance(string $file): void
+            {
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+        mkdir($basePath . '/src');
+
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+<?php
+
+namespace App;
+
+class Foo
+{
+}
+PHP);
+
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}
+JSON);
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->layer('Source', [])
+    ->import(__DIR__ . '/foo.php');
+PHP);
+
+        file_put_contents($basePath . '/foo.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return static function (Architecture $architecture): void {
+    $architecture->import(__DIR__ . '/bar.php');
+};
+PHP);
+
+        file_put_contents($basePath . '/bar.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return static function (Architecture $architecture): void {
+};
+PHP);
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    'src',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertStringContainsString('No violations found', $firstOutput);
+
+            [$warmExitCode, $warmOutput] = $this->runAnalyseCommand(
+                ['src', '--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $warmExitCode, $warmOutput);
+            $this->assertStringContainsString('No violations found', $warmOutput);
+            $this->assertFalse($progress->started);
+
+            file_put_contents($basePath . '/bar.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return static function (Architecture $architecture): void {
+    $architecture->rule('source.must_be_final', new MustBeFinalRule('Source'));
+};
+PHP);
+
+            [$secondExitCode, $secondOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    'src',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $secondExitCode, $secondOutput);
+            $this->assertStringContainsString('Class [App\Foo] must be declared final', $secondOutput);
+        } finally {
+            unlink($basePath . '/foo.php');
+            unlink($basePath . '/bar.php');
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandResolvesProjectPathsAgainstBasePathOption(): void
     {
         $basePath  = (string) realpath($this->createTempDirectory());
