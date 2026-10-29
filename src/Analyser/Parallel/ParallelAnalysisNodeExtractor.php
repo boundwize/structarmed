@@ -39,6 +39,7 @@ use function is_string;
 use function min;
 use function mkdir;
 use function proc_close;
+use function rmdir;
 use function serialize;
 use function sprintf;
 use function stream_set_blocking;
@@ -332,6 +333,13 @@ final readonly class ParallelAnalysisNodeExtractor
             if (! $anyActivity && ! $canSelect) {
                 usleep(5000);
             }
+        }
+
+        // when --no-cache is used, the directory only held worker temporary files:
+        // remove it best-effort, rmdir() refuses a non-empty directory atomically,
+        // so a concurrent run's files or an existing cache keep it in place
+        if (! $this->analysisResultCache instanceof AnalysisResultCache) {
+            @rmdir($cacheDirectory);
         }
 
         if ($failures !== []) {

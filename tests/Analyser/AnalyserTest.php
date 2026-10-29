@@ -33,6 +33,7 @@ use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\AnonymousClassMayNotHaveEmptyParenthesesRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExtendInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotImplementInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
@@ -7059,6 +7060,50 @@ class Order {
         $violations = $ruleViolationCollection->forRule('http.not_depend_auth');
         $this->assertCount(1, $violations);
         $this->assertStringContainsString('Auth', $violations[0]->message);
+    }
+
+    public function testApiMayNotExtendInternalRuleReadsAncestorDocBlockViaAnalyser(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Facade.php'         => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                /** @api */
+                final class Facade extends BaseFacade {}
+                PHP,
+            'src/BaseFacade.php'     => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                // Class names are case-insensitive
+                abstract class BaseFacade extends internalfacade {}
+                PHP,
+            'src/InternalFacade.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                /** @internal */
+                abstract class InternalFacade {}
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Core', 'src/')
+            ->rule('api.not_extend_internal', new ApiMayNotExtendInternalRule(layer: 'Core'));
+
+        $ruleViolationCollection = (new Analyser($basePath))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+
+        $violations = $ruleViolationCollection->forRule('api.not_extend_internal');
+        $this->assertCount(1, $violations);
+        $this->assertSame(
+            '@api Class [App\\Facade] must not extend @internal Class [App\\InternalFacade]',
+            $violations[0]->message
+        );
     }
 
     public function testAnalyserRulesetAllowsUnscannedDependencyWhenFirstMatchedLayerIsAllowed(): void

@@ -202,6 +202,17 @@ final class MayNotDependOnRuleTest extends TestCase
         $this->assertNotInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
     }
 
+    public function testFindsDependencyNodeWrittenInAnotherCase(): void
+    {
+        // Path matching would miss the lowercased name; the node's layer catches it.
+        $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
+        $dependencyNode     = $this->makeNode(layer: 'Infrastructure', className: 'App\Persistence\OrderRepository');
+        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
+        $classNode = $this->makeNode('Domain', ['app\persistence\orderrepository']);
+
+        $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+    }
+
     public function testClassNodeMapTakesPrecedenceOverToPath(): void
     {
         // Path would match 'App\Infrastructure\A', but its node is in Domain — no violation.

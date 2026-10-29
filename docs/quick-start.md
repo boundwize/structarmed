@@ -51,6 +51,9 @@ vendor/bin/structarmed init --preset=yagni
 # Static closures and digit separators in large numeric literals
 vendor/bin/structarmed init --preset=codequality
 
+# @api class-likes kept apart from @internal ones
+vendor/bin/structarmed init --preset=stability
+
 # Enable every preset at once
 vendor/bin/structarmed init --preset=all
 ```
@@ -112,5 +115,6 @@ return Architecture::define()
     Preset::DDD(),
     Preset::CODEQUALITY(),
     Preset::YAGNI(),
+    Preset::STABILITY(),
 )
 ```

@@ -79,6 +79,35 @@ Use `replaceRule()` to swap a preset rule's configuration:
 
 `replaceRule()` throws `RuleNotFoundException` if the target key does not exist, so typos are caught immediately.
 
+## Importing Config Files
+
+Use `import()` to split a large config into per-module files:
+
+```php
+<?php
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->import(__DIR__ . '/module/Foo/structarmed.php')
+    ->import(__DIR__ . '/module/Bar/structarmed.php');
+```
+
+Each imported file returns a callable that receives the root `Architecture`:
+
+```php
+<?php
+
+// module/Foo/structarmed.php
+use Boundwize\StructArmed\Architecture;
+
+return static function (Architecture $architecture): void {
+    $architecture->layer('Foo', 'module/Foo/src/');
+};
+```
+
+Paths in imported files are still resolved from the project root. Imported files can import other files. Changing any imported file invalidates the analysis cache, just like changing the main config.
+
 ## Custom Extensions
 
 Use [Custom Rules And Presets](../custom-rules-and-presets/) when you want to add project-specific rules or package reusable rule sets.

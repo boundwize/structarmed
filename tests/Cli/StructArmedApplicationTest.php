@@ -223,6 +223,11 @@ PHP);
             '    ->withPreset(Preset::CODEQUALITY());',
         ];
 
+        yield 'stability' => [
+            ['--preset=stability'],
+            '    ->withPreset(Preset::STABILITY());',
+        ];
+
         yield 'all' => [
             ['--preset=all'],
             "    ->withPresets(\n"
@@ -234,7 +239,8 @@ PHP);
             . "        Preset::DDD(),\n"
             . "        Preset::MVC(),\n"
             . "        Preset::YAGNI(),\n"
-            . "        Preset::CODEQUALITY()\n"
+            . "        Preset::CODEQUALITY(),\n"
+            . "        Preset::STABILITY()\n"
             . "    );",
         ];
     }
@@ -462,6 +468,141 @@ JSON);
         }
     }
 
+    public function testAnalyseCommandDetectsNestedImportedConfigChangesWithoutClearCache(): void
+    {
+        $basePath = $this->createTempDirectory();
+        $progress = new class implements ProgressHandlerInterface {
+            public bool $started = false;
+
+            public function start(int $total): void
+            {
+                $this->started = true;
+            }
+
+            public function advance(string $file): void
+            {
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+        mkdir($basePath . '/src');
+
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+<?php
+
+namespace App;
+
+class Foo
+{
+}
+PHP);
+
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}
+JSON);
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    ->layer('Source', [])
+    ->import(__DIR__ . '/foo.php');
+PHP);
+
+        file_put_contents($basePath . '/foo.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return static function (Architecture $architecture): void {
+    $architecture->import(__DIR__ . '/bar.php');
+};
+PHP);
+
+        file_put_contents($basePath . '/bar.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return static function (Architecture $architecture): void {
+};
+PHP);
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    'src',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertStringContainsString('No violations found', $firstOutput);
+
+            [$warmExitCode, $warmOutput] = $this->runAnalyseCommand(
+                ['src', '--config=' . $basePath . '/structarmed.php'],
+                $basePath,
+                $progress
+            );
+
+            $this->assertSame(0, $warmExitCode, $warmOutput);
+            $this->assertStringContainsString('No violations found', $warmOutput);
+            $this->assertFalse($progress->started);
+
+            file_put_contents($basePath . '/bar.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return static function (Architecture $architecture): void {
+    $architecture->rule('source.must_be_final', new MustBeFinalRule('Source'));
+};
+PHP);
+
+            [$secondExitCode, $secondOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    'src',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $secondExitCode, $secondOutput);
+            $this->assertStringContainsString('Class [App\Foo] must be declared final', $secondOutput);
+        } finally {
+            unlink($basePath . '/foo.php');
+            unlink($basePath . '/bar.php');
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandResolvesProjectPathsAgainstBasePathOption(): void
     {
         $basePath  = (string) realpath($this->createTempDirectory());
@@ -658,6 +799,137 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandWithNoCacheOptionDoesNotWriteCache(): void
+    {
+        $basePath       = $this->createProjectDirectoryWithViolation();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('1 violation(s) found', $output);
+            $this->assertDirectoryDoesNotExist($cacheDirectory);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandWithNoCacheOptionKeepsExistingCache(): void
+    {
+        $basePath       = $this->createProjectDirectoryWithViolation();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->cacheDirectory('var/cache/structarmed')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+PHP);
+
+        try {
+            [$cachedExitCode, $cachedOutput] = $this->runApplication(
+                ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--no-progress'],
+                $basePath
+            );
+            $cacheContents                   = $this->directoryContents($cacheDirectory);
+
+            // A cached run would now rewrite the node cache of the changed file.
+            file_put_contents($basePath . '/src/Foo.php', '<?php namespace App; final class Foo {}');
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $cachedExitCode, $cachedOutput);
+            $this->assertNotSame([], $cacheContents);
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertSame($cacheContents, $this->directoryContents($cacheDirectory));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandRejectsNoCacheWithClearCacheOption(): void
+    {
+        $basePath       = $this->createProjectDirectory();
+        $cacheDirectory = $basePath . '/var/cache/structarmed';
+
+        try {
+            mkdir($cacheDirectory, 0777, true);
+            file_put_contents($cacheDirectory . '/_metadata.json', '{}');
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--no-cache',
+                    '--clear-cache',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertSame("Error: --no-cache and --clear-cache cannot be used together.\n", $output);
+            $this->assertFileExists($cacheDirectory . '/_metadata.json');
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function directoryContents(string $directory): array
+    {
+        $contents = [];
+
+        foreach (glob($directory . '/*.json') ?: [] as $file) {
+            $contents[$file] = (string) file_get_contents($file);
+        }
+
+        return $contents;
+    }
+
     public function testAnalyseCommandRendersJsonReport(): void
     {
         $basePath = $this->createProjectDirectory();
@@ -721,6 +993,35 @@ PHP);
                 "/1 violation has been fixed\\.\\R\\RStructArmed/",
                 $this->withoutAnsi($output)
             );
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertStringContainsString(
+                '    public function handle(): void',
+                (string) file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandFixesFixableViolationsWithNoCacheOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('1 violation has been fixed.', $this->withoutAnsi($output));
             $this->assertStringContainsString('No violations found', $output);
             $this->assertStringContainsString(
                 '    public function handle(): void',

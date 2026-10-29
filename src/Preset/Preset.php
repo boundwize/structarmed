@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
+use Boundwize\StructArmed\Preset\Presets\StabilityPreset;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 
 /**
@@ -27,6 +28,7 @@ use Boundwize\StructArmed\Preset\Presets\YagniPreset;
  *   ->withPreset(Preset::PSR15())
  *   ->withPreset(Preset::YAGNI())
  *   ->withPreset(Preset::CODEQUALITY())
+ *   ->withPreset(Preset::STABILITY())
  *   ->withPresets(Preset::DDD(), Preset::MVC())
  */
 final class Preset
@@ -120,6 +122,17 @@ final class Preset
         ?array $sourcePaths = null,
     ): CodeQualityPreset {
         return new CodeQualityPreset(
+            sourcePaths: $sourcePaths,
+        );
+    }
+
+    /**
+     * @param list<string>|null $sourcePaths
+     */
+    public static function STABILITY(
+        ?array $sourcePaths = null,
+    ): StabilityPreset {
+        return new StabilityPreset(
             sourcePaths: $sourcePaths,
         );
     }

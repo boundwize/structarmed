@@ -41,6 +41,8 @@ final class ClassNode
      * @param string|null    $enumBackingType     Backing type for a backed enum, null otherwise
      * @param list<string>   $nonClassDependencies Dependencies only ever used as a function or constant name
      * @param list<string>   $constantFetches     Global and namespaced constants fetched within this class
+     * @param bool           $isApi               Whether the docblock marks it as @api
+     * @param bool           $isInternal          Whether the docblock marks it as @internal
      */
     public function __construct(
         public readonly string $className,
@@ -75,6 +77,8 @@ final class ClassNode
         public readonly ?string $enumBackingType = null,
         public readonly array $nonClassDependencies = [],
         public readonly array $constantFetches = [],
+        public readonly bool $isApi = false,
+        public readonly bool $isInternal = false,
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }

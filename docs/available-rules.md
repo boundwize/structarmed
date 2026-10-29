@@ -76,6 +76,8 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 | Rule | Constructor | Checks |
 |---|---|---|
 | `AnonymousClassMayNotHaveEmptyParenthesesRule` | `new AnonymousClassMayNotHaveEmptyParenthesesRule(layer: 'Source')` | Anonymous classes that pass no constructor argument omit the parentheses after `class` (`new class {}`, not `new class () {}`), per [PER Coding Style](https://www.php-fig.org/per/coding-style/#8-anonymous-classes). Supports `--fix` by removing the empty parentheses. |
+| `ApiMayNotBeInternalRule` | `new ApiMayNotBeInternalRule(layer: 'Source')` | Class-likes in a layer are not tagged both `@api` and `@internal`, which contradict each other. |
+| `ApiMayNotExtendInternalRule` | `new ApiMayNotExtendInternalRule(layer: 'Source')` | Classes and interfaces tagged `@api` in a layer do not extend a scanned class or interface tagged `@internal`, directly or through any parent, which would expose its members through the public API. Unscanned parents are skipped, as their docblock is unknown. |
 | `ClassConstantNameMustBeUpperCaseRule` | `new ClassConstantNameMustBeUpperCaseRule(layer: 'Domain')` | Class, interface, and trait constants use upper case with underscore separators. Enums are skipped (PER Coding Style recommends PascalCase enum constants). |
 | `ClassImplementingInterfaceMustHaveSuffixRule` | `new ClassImplementingInterfaceMustHaveSuffixRule(layer: 'HTTP', interface: MiddlewareInterface::class, suffix: 'Middleware')` | Classes implementing a specific interface use the required suffix. |
 | `ClassNameMustBeStudlyCapsRule` | `new ClassNameMustBeStudlyCapsRule(layer: 'Source')` | Class names use StudlyCaps. |
