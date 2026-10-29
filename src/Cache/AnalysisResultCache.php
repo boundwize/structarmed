@@ -17,7 +17,6 @@ use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
-use FilesystemIterator;
 
 use function array_fill_keys;
 use function array_is_list;
@@ -177,11 +176,9 @@ final class AnalysisResultCache
             }
         }
 
-        // only remove the cache directory if it is empty
-        $fileSystemIterator = new FilesystemIterator($this->cacheDirectory);
-        if (! $fileSystemIterator->valid()) {
-            rmdir($this->cacheDirectory);
-        }
+        // only remove the cache directory if it is empty: rmdir() refuses a
+        // non-empty directory atomically, so a concurrent run's files keep it
+        @rmdir($this->cacheDirectory);
     }
 
     public function getCacheDirectory(): string
