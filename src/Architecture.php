@@ -147,20 +147,20 @@ final class Architecture
      */
     public function import(string $file): self
     {
-        $configure = require $file;
-
-        if (! is_callable($configure)) {
-            throw new InvalidArgumentException(
-                sprintf('Imported configuration [%s] must return a callable.', $file)
-            );
-        }
-
         $importedFile = realpath($file) ?: $file;
 
         // only imports still in progress are tracked, so a file imported twice
         // through separate branches is applied again rather than rejected
         if (isset($this->importing[$importedFile])) {
             throw new InvalidArgumentException(sprintf('Circular import of configuration [%s].', $file));
+        }
+
+        $configure = require $file;
+
+        if (! is_callable($configure)) {
+            throw new InvalidArgumentException(
+                sprintf('Imported configuration [%s] must return a callable.', $file)
+            );
         }
 
         $this->importing[$importedFile] = true;
