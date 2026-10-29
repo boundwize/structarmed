@@ -14,6 +14,7 @@ use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Fixtures\Cache\CyclicRuleSettings;
+use Boundwize\StructArmed\Tests\Fixtures\Cache\PartiallyReadonlyRuleSettings;
 use Boundwize\StructArmed\Tests\Fixtures\Cache\RulePolicy;
 use Boundwize\StructArmed\Tests\Fixtures\Cache\RuleSettings;
 use Boundwize\StructArmed\Tests\Fixtures\Cache\RuleSettingsGroup;
@@ -208,6 +209,53 @@ final class ConfigurationFingerprintTest extends TestCase
         $this->assertNotSame(
             $factory->hash($this->withSettings($one)),
             $factory->hash($this->withSettings($changed))
+        );
+    }
+
+    public function testReadonlyPropertiesOfOrdinarySettingsObjectsContributeTheirValues(): void
+    {
+        $factory = new ConfigurationFingerprint();
+
+        $one        = new PartiallyReadonlyRuleSettings(1);
+        $equivalent = new PartiallyReadonlyRuleSettings(1);
+        $changed    = new PartiallyReadonlyRuleSettings(2);
+
+        $one->runtimeCounter        = 10;
+        $equivalent->runtimeCounter = 20;
+
+        $this->assertSame(
+            $factory->hash($this->withSettings($one)),
+            $factory->hash($this->withSettings($equivalent))
+        );
+
+        $this->assertNotSame(
+            $factory->hash($this->withSettings($one)),
+            $factory->hash($this->withSettings($changed))
+        );
+    }
+
+    public function testNestedRulesContributeOptionsWithoutInjectedLayerMaps(): void
+    {
+        $factory = new ConfigurationFingerprint();
+
+        $nested = new MayNotDependOnRule('Catalog', 'Notifications');
+
+        $before = $factory->hash($this->withSettings($nested));
+
+        $nested->injectClassNodeMap([
+            'Example' => new ClassNode('Example', __FILE__, 1, 'Notifications', null, false, true, false, false),
+        ]);
+
+        $this->assertSame($before, $factory->hash($this->withSettings($nested)));
+
+        $this->assertSame(
+            $before,
+            $factory->hash($this->withSettings(new MayNotDependOnRule('Catalog', 'Notifications')))
+        );
+
+        $this->assertNotSame(
+            $before,
+            $factory->hash($this->withSettings(new MayNotDependOnRule('Catalog', 'Billing')))
         );
     }
 

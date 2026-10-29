@@ -6,6 +6,11 @@ namespace Boundwize\StructArmed\Cache;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
+use Boundwize\StructArmed\Rule\AnonymousClassRuleInterface;
+use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
+use Boundwize\StructArmed\Rule\FunctionRuleInterface;
+use Boundwize\StructArmed\Rule\ProjectRuleInterface;
+use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Closure;
 use DateTimeImmutable;
@@ -40,7 +45,7 @@ final class ConfigurationFingerprint
         Psr4NamespaceRule::class      => ['projectBasePath', 'mappingsByBasePath', 'basePathByDirectory'],
     ];
 
-    /** @var SplObjectStorage<object, array<int, string>> */
+    /** @var SplObjectStorage<object, array<string, string>> */
     private SplObjectStorage $objects;
 
     private int $boundaries = 0;
@@ -84,13 +89,13 @@ final class ConfigurationFingerprint
     }
 
     /**
-     * Only rule roots and readonly values are inspected. Mutable collaborators
-     * remain opaque, so service caches, parsers and connections are not traversed.
+     * Rules contribute configured state, excluding known injected runtime fields.
+     * Other objects contribute only readonly properties, leaving mutable service state opaque.
      *
      * @param list<object> $ancestors
      * @return list<mixed>
      */
-    private function properties(object $object, array $ancestors, int $depth): array
+    private function properties(object $object, array $ancestors, int $depth, bool $readonlyOnly = false): array
     {
         $class    = new ReflectionClass($object);
         $identity = $this->classIdentity($class);
@@ -106,8 +111,10 @@ final class ConfigurationFingerprint
             return ['boundary', $identity];
         }
 
-        if (isset($this->objects[$object][$depth])) {
-            return ['object-digest', $this->objects[$object][$depth]];
+        $memoKey = $depth . ':' . ($readonlyOnly ? 'readonly' : 'all');
+
+        if (isset($this->objects[$object][$memoKey])) {
+            return ['object-digest', $this->objects[$object][$memoKey]];
         }
 
         $boundaries  = $this->boundaries;
@@ -117,6 +124,10 @@ final class ConfigurationFingerprint
         do {
             foreach ($class->getProperties() as $property) {
                 if ($property->getDeclaringClass()->getName() !== $class->getName() || $property->isStatic()) {
+                    continue;
+                }
+
+                if ($readonlyOnly && ! $property->isReadOnly()) {
                     continue;
                 }
 
@@ -152,10 +163,10 @@ final class ConfigurationFingerprint
         $digest = hash('xxh128', serialize(['object', $identity, $properties]));
 
         // Cycles and depth cutoffs depend on the current traversal path. Never
-        // memoize them. Depth is part of the memo key, not the persisted identity.
+        // memoize them. Depth and property selection belong to the memo key, not the persisted identity.
         if ($this->boundaries === $boundaries) {
             $memo                   = $this->objects[$object] ?? [];
-            $memo[$depth]           = $digest;
+            $memo[$memoKey]         = $digest;
             $this->objects[$object] = $memo;
         }
 
@@ -214,11 +225,13 @@ final class ConfigurationFingerprint
         }
 
         if (is_object($value)) {
-            $class = new ReflectionClass($value);
+            $isRule = $value instanceof RuleInterface
+                || $value instanceof ProjectRuleInterface
+                || $value instanceof FunctionRuleInterface
+                || $value instanceof AnonymousFunctionRuleInterface
+                || $value instanceof AnonymousClassRuleInterface;
 
-            return $class->isReadOnly()
-                ? $this->properties($value, $ancestors, $depth)
-                : ['opaque', $this->classIdentity($class)];
+            return $this->properties($value, $ancestors, $depth, readonlyOnly: ! $isRule);
         }
 
         if (is_resource($value)) {
