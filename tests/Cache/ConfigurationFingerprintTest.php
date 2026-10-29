@@ -13,9 +13,12 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Tests\Fixtures\Cache\CyclicRuleSettings;
+use Boundwize\StructArmed\Tests\Fixtures\Cache\RulePolicy;
 use Boundwize\StructArmed\Tests\Fixtures\Cache\RuleSettings;
 use Boundwize\StructArmed\Tests\Fixtures\Cache\RuleSettingsGroup;
 use Closure;
+use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -168,6 +171,43 @@ final class ConfigurationFingerprintTest extends TestCase
         $this->assertSame(
             $factory->hash($this->withSettings([$shared, $deepShared])),
             $factory->hash($this->withSettings([$copy(), $deepCopy]))
+        );
+    }
+
+    public function testEnumAndImmutableDateSettingsContributeTheirValues(): void
+    {
+        $factory = new ConfigurationFingerprint();
+        $this->assertNotSame(
+            $factory->hash($this->withSettings(RulePolicy::Strict)),
+            $factory->hash($this->withSettings(RulePolicy::Relaxed))
+        );
+        $one        = new DateTimeImmutable('2026-01-01T00:00:00+00:00');
+        $equivalent = new DateTimeImmutable('2026-01-01T00:00:00+00:00');
+        $changed    = new DateTimeImmutable('2026-01-02T00:00:00+00:00');
+        $this->assertSame(
+            $factory->hash($this->withSettings($one)),
+            $factory->hash($this->withSettings($equivalent))
+        );
+        $this->assertNotSame(
+            $factory->hash($this->withSettings($one)),
+            $factory->hash($this->withSettings($changed))
+        );
+    }
+
+    public function testCyclicSettingsTerminateDeterministicallyWithoutHidingScalarChanges(): void
+    {
+        $factory    = new ConfigurationFingerprint();
+        $one        = new CyclicRuleSettings(1);
+        $equivalent = new CyclicRuleSettings(1);
+        $changed    = new CyclicRuleSettings(2);
+
+        $this->assertSame(
+            $factory->hash($this->withSettings($one)),
+            $factory->hash($this->withSettings($equivalent))
+        );
+        $this->assertNotSame(
+            $factory->hash($this->withSettings($one)),
+            $factory->hash($this->withSettings($changed))
         );
     }
 
