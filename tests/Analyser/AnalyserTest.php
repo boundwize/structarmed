@@ -13,8 +13,11 @@ use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
+use Boundwize\StructArmed\Cache\ConfigurationFingerprint;
 use Boundwize\StructArmed\Cache\FileHashProvider;
+use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\File\PhpFileCollector;
 use Boundwize\StructArmed\File\SkipPathMatcher;
 use Boundwize\StructArmed\Preset\Preset;
@@ -59,11 +62,14 @@ use function array_search;
 use function array_values;
 use function count;
 use function dirname;
+use function file_get_contents;
 use function file_put_contents;
 use function gc_disable;
 use function gc_enable;
 use function gc_enabled;
+use function glob;
 use function is_dir;
+use function json_encode;
 use function mkdir;
 use function realpath;
 use function rename;
@@ -72,16 +78,171 @@ use function sprintf;
 use function str_replace;
 use function symlink;
 use function unlink;
+use function var_export;
 
 use const DIRECTORY_SEPARATOR;
 
 #[CoversClass(Analyser::class)]
+#[CoversClass(AnalysisCacheMetadataFactory::class)]
+#[CoversClass(AnalysisResultCache::class)]
+#[CoversClass(ConfigurationFingerprint::class)]
+#[CoversClass(ConfigLoader::class)]
 #[CoversClass(ParallelAnalysisNodeExtractor::class)]
 #[CoversClass(PhpFileCollector::class)]
 #[CoversClass(SkipPathMatcher::class)]
 final class AnalyserTest extends TestCase
 {
     use TemporaryDirectoryCleanupTrait;
+
+    public function testIncludedConfigurationChangesInvalidateBothCaches(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('library-architecture');
+
+        mkdir($basePath . '/src/Catalog', 0777, true);
+        mkdir($basePath . '/src/Reminders', 0777, true);
+        mkdir($basePath . '/src/Notifications', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', json_encode([
+            'autoload' => ['psr-4' => ['Library\\' => 'src/']],
+        ]));
+
+        file_put_contents($basePath . '/src/Catalog/BookCatalog.php', <<<'PHP'
+<?php
+
+namespace Library\Catalog;
+
+use Library\Reminders\ReminderSender;
+
+final class BookCatalog
+{
+    public function __construct(private ReminderSender $reminders)
+    {
+    }
+}
+PHP);
+
+        file_put_contents($basePath . '/src/Reminders/ReminderSender.php', <<<'PHP'
+<?php
+
+namespace Library\Reminders;
+
+final class ReminderSender
+{
+}
+PHP);
+
+        $configFile   = $basePath . '/structarmed.php';
+        $settingsFile = $basePath . '/layer-settings.php';
+
+        file_put_contents($configFile, <<<'PHP'
+<?php
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
+
+// external source that doesn't affect root config fingerprint
+$settings = require __DIR__ . '/layer-settings.php';
+
+return Architecture::define()
+    ->cacheDirectory('cache')
+    ->layer('Catalog', $settings['catalog'])
+    ->layer('Notifications', $settings['notifications'])
+    ->rule(
+        'catalog.no_notifications',
+        new MayNotDependOnRule('Catalog', 'Notifications')
+    );
+PHP);
+
+        $rootContents = file_get_contents($configFile);
+        $this->assertIsString($rootContents);
+
+        /** @return array{RuleViolationCollection, bool} */
+        $run = static function () use ($basePath, $configFile): array {
+            $architecture = ConfigLoader::load($configFile);
+            $hashes       = new FileHashProvider();
+            $factory      = new AnalysisCacheMetadataFactory($hashes);
+            $configHash   = $factory->configurationHash($architecture, $configFile);
+
+            $cache = new AnalysisResultCache(
+                $basePath,
+                $hashes,
+                $architecture->getCacheDirectory(),
+                $configHash,
+                $factory->composerGeneratedVersionHash()
+            );
+
+            if ($cache->shouldInvalidate()) {
+                $cache->clear();
+            }
+
+            $analyser = new Analyser(
+                $basePath,
+                $cache,
+                $factory->analysisNodeCacheNamespace($basePath, $configHash)
+            );
+
+            $files    = $analyser->filesForAnalysis($architecture);
+            $metadata = $factory->metadata($basePath, $configFile, [], $files, $configHash);
+            $key      = $factory->key($metadata);
+
+            $violations = $cache->load($key, $metadata);
+
+            if ($violations instanceof RuleViolationCollection) {
+                return [$violations, true];
+            }
+
+            $violations = $analyser->analyse(
+                $architecture,
+                analyserOptions: AnalyserOptions::sequential(),
+                files: $files
+            );
+
+            $cache->store($key, $metadata, $violations);
+
+            return [$violations, false];
+        };
+
+        // Initially, both classes belong to Catalog.
+        file_put_contents($settingsFile, '<?php return ' . var_export([
+            'catalog'       => ['src/Catalog/', 'src/Reminders/'],
+            'notifications' => ['src/Notifications/'],
+        ], true) . ';');
+
+        [$violations, $cacheHit] = $run();
+
+        $this->assertFalse($cacheHit);
+        $this->assertTrue($violations->isEmpty());
+        $this->assertNotEmpty(glob($basePath . '/cache/analysis-nodes-*.json'));
+
+        [$violations, $cacheHit] = $run();
+
+        $this->assertTrue($cacheHit);
+        $this->assertTrue($violations->isEmpty());
+
+        // Change only the included settings: reminders now belong to Notifications.
+        file_put_contents($settingsFile, '<?php return ' . var_export([
+            'catalog'       => ['src/Catalog/'],
+            'notifications' => ['src/Notifications/', 'src/Reminders/'],
+        ], true) . ';');
+
+        $this->assertSame($rootContents, file_get_contents($configFile));
+
+        [$violations, $cacheHit] = $run();
+
+        $this->assertFalse($cacheHit);
+        $this->assertCount(1, $violations);
+
+        $dependencyViolations = $violations->forRule('catalog.no_notifications');
+
+        $this->assertCount(1, $dependencyViolations);
+        $this->assertStringContainsString('must not depend on', $dependencyViolations[0]->message);
+        $this->assertStringContainsString('Notifications', $dependencyViolations[0]->message);
+
+        [$cachedViolations, $cacheHit] = $run();
+
+        $this->assertTrue($cacheHit);
+        $this->assertSame($violations->toArray(), $cachedViolations->toArray());
+    }
 
     /**
      * A rule flagging every named function and every anonymous function that
