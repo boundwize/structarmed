@@ -160,7 +160,10 @@ final readonly class AnalyseCommand
         // Without the cache, no file is hashed and no cache entry is read or
         // written, which saves that work on a one-off run over a huge codebase.
         if (! isset($options['no-cache'])) {
-            $configHash                 = $analysisCacheMetadataFactory->fileHash($configFile);
+            $configHash                 = $analysisCacheMetadataFactory->configHash(
+                $configFile,
+                $architecture->getImportedFiles()
+            );
             $analysisResultCache        = new AnalysisResultCache(
                 $basePath,
                 $fileHashProvider,

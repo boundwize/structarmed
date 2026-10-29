@@ -50,7 +50,10 @@ final class StructArmedExtension implements Extension
         $start                        = microtime(true);
         $fileHashProvider             = new FileHashProvider();
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
-        $configHash                   = $analysisCacheMetadataFactory->fileHash($configFile);
+        $configHash                   = $analysisCacheMetadataFactory->configHash(
+            $configFile,
+            $architecture->getImportedFiles()
+        );
         $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
         $analysisResultCache          = new AnalysisResultCache(
             $basePath,

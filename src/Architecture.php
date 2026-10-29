@@ -19,7 +19,9 @@ use function array_key_exists;
 use function array_merge;
 use function array_unique;
 use function array_values;
+use function is_callable;
 use function is_int;
+use function realpath;
 use function sprintf;
 
 /**
@@ -112,6 +114,9 @@ final class Architecture
 
     private ?string $baseline = null;
 
+    /** @var list<string> config files applied through import(), nested imports included */
+    private array $importedFiles = [];
+
     private function __construct()
     {
     }
@@ -119,6 +124,39 @@ final class Architecture
     public static function define(): self
     {
         return new self();
+    }
+
+    /**
+     * Apply another config file, which returns a callable that receives this
+     * Architecture:
+     *
+     *   return Architecture::define()
+     *       ->import(__DIR__ . '/module/Foo/structarmed.php')
+     *       ->import(__DIR__ . '/module/Bar/structarmed.php');
+     *
+     *   // module/Foo/structarmed.php
+     *   return static function (Architecture $architecture): void {
+     *       $architecture->layer('Foo', 'module/Foo/src/');
+     *   };
+     *
+     * Imported files are part of the config cache key, so changing one
+     * invalidates the analysis cache.
+     */
+    public function import(string $file): self
+    {
+        $configure = require $file;
+
+        if (! is_callable($configure)) {
+            throw new InvalidArgumentException(
+                sprintf('Imported configuration [%s] must return a callable.', $file)
+            );
+        }
+
+        $configure($this);
+
+        $this->importedFiles[] = realpath($file) ?: $file;
+
+        return $this;
     }
 
     // -------------------------------------------------------------------------
@@ -490,6 +528,12 @@ final class Architecture
     public function getBaseline(): ?string
     {
         return $this->baseline;
+    }
+
+    /** @return list<string> */
+    public function getImportedFiles(): array
+    {
+        return $this->importedFiles;
     }
 
     private function registerPendingSkip(string $skip): void

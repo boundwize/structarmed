@@ -13,16 +13,21 @@ use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4SourcePathsRule;
+use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+use function file_put_contents;
+use function realpath;
 use function sprintf;
 
 #[CoversClass(Architecture::class)]
 final class ArchitectureTest extends TestCase
 {
+    use TemporaryDirectoryCleanupTrait;
+
     public function testDefineReturnsNewInstance(): void
     {
         $this->assertInstanceOf(Architecture::class, Architecture::define());
@@ -449,5 +454,53 @@ final class ArchitectureTest extends TestCase
             ->skipPathsForRuleset(['fixtures/', 'stubs/']);
 
         $this->assertSame(['tests/', 'fixtures/', 'stubs/'], $architecture->getRulesetSkipPaths());
+    }
+
+    public function testImportAppliesReturnedCallableAndTracksNestedFiles(): void
+    {
+        $directory = (string) realpath($this->makeTemporaryDirectory('structarmed-import'));
+        file_put_contents($directory . '/bar.php', <<<'PHP'
+            <?php
+
+            use Boundwize\StructArmed\Architecture;
+
+            return static function (Architecture $architecture): void {
+                $architecture->layer('Bar', 'module/Bar/src/');
+            };
+
+            PHP);
+        file_put_contents($directory . '/foo.php', <<<'PHP'
+            <?php
+
+            use Boundwize\StructArmed\Architecture;
+
+            return static function (Architecture $architecture): void {
+                $architecture
+                    ->layer('Foo', 'module/Foo/src/')
+                    ->import(__DIR__ . '/bar.php');
+            };
+
+            PHP);
+
+        $architecture = Architecture::define()
+            ->layer('App', 'src/')
+            ->import($directory . '/foo.php');
+
+        $this->assertSame(
+            ['App' => 'src/', 'Foo' => 'module/Foo/src/', 'Bar' => 'module/Bar/src/'],
+            $architecture->getLayers()
+        );
+        $this->assertSame([$directory . '/bar.php', $directory . '/foo.php'], $architecture->getImportedFiles());
+    }
+
+    public function testImportThrowsWhenFileDoesNotReturnCallable(): void
+    {
+        $path = $this->makeTemporaryFile('structarmed-import');
+        file_put_contents($path, "<?php\n\nreturn [];\n");
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(sprintf('Imported configuration [%s] must return a callable.', $path));
+
+        Architecture::define()->import($path);
     }
 }

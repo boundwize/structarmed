@@ -2864,6 +2864,40 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testConfigHashChangesWhenImportedFileChanges(): void
+    {
+        $directory = $this->createTempDirectory();
+        $config    = $directory . '/structarmed.php';
+        $imported  = $directory . '/module.php';
+
+        file_put_contents($config, '<?php return null;');
+        file_put_contents($imported, '<?php return null;');
+
+        try {
+            $configHash = (new AnalysisCacheMetadataFactory(new FileHashProvider()))->configHash($config, [$imported]);
+
+            $this->assertNotSame(
+                (new AnalysisCacheMetadataFactory(new FileHashProvider()))->configHash($config, []),
+                $configHash
+            );
+
+            file_put_contents($imported, '<?php return false;');
+
+            $this->assertNotSame(
+                (new AnalysisCacheMetadataFactory(new FileHashProvider()))->configHash($config, [$imported]),
+                $configHash
+            );
+        } finally {
+            foreach ([$config, $imported] as $file) {
+                if (file_exists($file)) {
+                    unlink($file);
+                }
+            }
+
+            $this->removeTempDirectory($directory);
+        }
+    }
+
     public function testCacheMissesWhenComposerGeneratedVersionChanges(): void
     {
         $directory = $this->createTempDirectory();

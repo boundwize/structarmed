@@ -69,6 +69,17 @@ final readonly class AnalysisCacheMetadataFactory
     }
 
     /**
+     * Files merged through Architecture::import() shape the config as much as
+     * the config file itself, so a change to any of them must change the hash.
+     *
+     * @param list<string> $importedFiles
+     */
+    public function configHash(string $configPath, array $importedFiles): string
+    {
+        return $this->filesHash([$configPath, ...$importedFiles]);
+    }
+
+    /**
      * Cached analysis nodes store resolved layer assignments, which depend on the
      * composer.json PSR-4 mappings as well as the config, so both hashes must
      * key the namespace or a composer.json change would reuse stale layers.
