@@ -458,7 +458,7 @@ final class ArchitectureTest extends TestCase
 
     public function testImportAppliesReturnedCallableAndTracksNestedFiles(): void
     {
-        $directory = (string) realpath($this->makeTemporaryDirectory('structarmed-import'));
+        $directory = $this->makeTemporaryDirectory('structarmed-import');
         file_put_contents($directory . '/bar.php', <<<'PHP'
             <?php
 
@@ -490,7 +490,10 @@ final class ArchitectureTest extends TestCase
             ['App' => 'src/', 'Foo' => 'module/Foo/src/', 'Bar' => 'module/Bar/src/'],
             $architecture->getLayers()
         );
-        $this->assertSame([$directory . '/bar.php', $directory . '/foo.php'], $architecture->getImportedFiles());
+        $this->assertSame(
+            [realpath($directory . '/bar.php'), realpath($directory . '/foo.php')],
+            $architecture->getImportedFiles()
+        );
     }
 
     public function testImportThrowsWhenFileDoesNotReturnCallable(): void
