@@ -11,8 +11,8 @@ use Closure;
 use DateTimeImmutable;
 use ReflectionClass;
 use ReflectionFunction;
+use SplObjectStorage;
 use UnitEnum;
-use WeakMap;
 
 use function get_resource_type;
 use function gettype;
@@ -40,19 +40,19 @@ final class ConfigurationFingerprint
         Psr4NamespaceRule::class      => ['projectBasePath', 'mappingsByBasePath', 'basePathByDirectory'],
     ];
 
-    /** @var WeakMap<object, array<int, string>> */
-    private WeakMap $objects;
+    /** @var SplObjectStorage<object, array<int, string>> */
+    private SplObjectStorage $objects;
 
     private int $boundaries = 0;
 
     public function __construct()
     {
-        $this->objects = new WeakMap();
+        $this->objects = new SplObjectStorage();
     }
 
     public function hash(Architecture $architecture): string
     {
-        $this->objects    = new WeakMap();
+        $this->objects    = new SplObjectStorage();
         $this->boundaries = 0;
         $rules            = [];
 
@@ -64,7 +64,7 @@ final class ConfigurationFingerprint
 
         // Registration order affects precedence. Baselines are applied after cached
         // evaluation; the cache directory is a storage location, not an evaluation input.
-        return hash('xxh128', serialize([
+        $fingerprint = hash('xxh128', serialize([
             $architecture->getLayers(),
             $architecture->getLayerExcludePaths(),
             $architecture->getLayerPatterns(),
@@ -76,6 +76,11 @@ final class ConfigurationFingerprint
             $architecture->getSkippedRuleKeys(),
             $rules,
         ]));
+
+        // SplObjectStorage holds strong references; release the graph after this run.
+        $this->objects = new SplObjectStorage();
+
+        return $fingerprint;
     }
 
     /**
