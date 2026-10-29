@@ -156,11 +156,12 @@ final readonly class AnalyseCommand
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
         $analysisResultCache          = null;
         $analysisNodeCacheNamespace   = '';
+        $configHash                   = '';
 
         // Without the cache, no file is hashed and no cache entry is read or
         // written, which saves that work on a one-off run over a huge codebase.
         if (! isset($options['no-cache'])) {
-            $configHash                 = $analysisCacheMetadataFactory->fileHash($configFile);
+            $configHash                 = $analysisCacheMetadataFactory->configurationHash($architecture, $configFile);
             $analysisResultCache        = new AnalysisResultCache(
                 $basePath,
                 $fileHashProvider,
@@ -194,7 +195,8 @@ final readonly class AnalyseCommand
                 $basePath,
                 $configFile,
                 $scanPaths,
-                $files
+                $files,
+                $configHash
             );
             $cacheKey                = $analysisCacheMetadataFactory->key($metadata);
             $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
@@ -256,7 +258,8 @@ final readonly class AnalyseCommand
                         $basePath,
                         $configFile,
                         $scanPaths,
-                        $files
+                        $files,
+                        $configHash
                     );
                     $analysisResultCache->store(
                         $analysisCacheMetadataFactory->key($metadata),

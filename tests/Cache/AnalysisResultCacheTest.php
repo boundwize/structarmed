@@ -2712,13 +2712,15 @@ final class AnalysisResultCacheTest extends TestCase
                 $directory,
                 $config,
                 ['src'],
-                [$source]
+                [$source],
+                'evaluated-config-hash'
             );
 
             $this->assertSame($directory, $metadata['basePath']);
             $this->assertSame($config, $metadata['configPath']);
             $this->assertSame(['src'], $metadata['scanPaths']);
-            $this->assertSame(5, $metadata['version']);
+            $this->assertSame(6, $metadata['version']);
+            $this->assertSame('evaluated-config-hash', $metadata['configHash']);
             $this->assertIsString($metadata['configHash']);
             $this->assertIsString($metadata['composerGeneratedVersionHash']);
 
@@ -2773,7 +2775,8 @@ final class AnalysisResultCacheTest extends TestCase
                 $directory,
                 $config,
                 ['src'],
-                [$source]
+                [$source],
+                'evaluated-config-hash'
             );
 
             $this->assertIsString($metadata['composerGeneratedVersionHash']);
@@ -2840,7 +2843,8 @@ final class AnalysisResultCacheTest extends TestCase
                 $directory,
                 $config,
                 ['src'],
-                [$source]
+                [$source],
+                'evaluated-config-hash'
             );
 
             touch($source, 1234567890);
@@ -2849,7 +2853,8 @@ final class AnalysisResultCacheTest extends TestCase
                 $directory,
                 $config,
                 ['src'],
-                [$source]
+                [$source],
+                'evaluated-config-hash'
             );
 
             $this->assertSame($metadataBefore['filesHash'], $metadataAfter['filesHash']);
@@ -2881,7 +2886,8 @@ final class AnalysisResultCacheTest extends TestCase
                 $directory,
                 $config,
                 ['src'],
-                [$source]
+                [$source],
+                'evaluated-config-hash'
             );
             $key                          = $analysisCacheMetadataFactory->key($metadataBefore);
 
@@ -2893,7 +2899,8 @@ final class AnalysisResultCacheTest extends TestCase
                 $directory,
                 $config,
                 ['src'],
-                [$source]
+                [$source],
+                'evaluated-config-hash'
             );
             $metadataAfter['composerGeneratedVersionHash'] = 'changed';
 

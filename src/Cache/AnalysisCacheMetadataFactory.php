@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cache;
 
+use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Version;
 use Composer\InstalledVersions;
 
@@ -28,20 +29,31 @@ final readonly class AnalysisCacheMetadataFactory
     {
     }
 
+    public function configurationHash(Architecture $architecture, string $configPath): string
+    {
+        return hash('xxh128', $this->fileHash($configPath) . "\0"
+            . (new ConfigurationFingerprint())->hash($architecture));
+    }
+
     /**
      * @param list<string> $scanPaths
      * @param list<string> $files
      * @return array<string, mixed>
      */
-    public function metadata(string $basePath, string $configPath, array $scanPaths, array $files): array
-    {
+    public function metadata(
+        string $basePath,
+        string $configPath,
+        array $scanPaths,
+        array $files,
+        string $configHash,
+    ): array {
         sort($files);
 
         return [
-            'version'                      => 5,
+            'version'                      => 6,
             'basePath'                     => $basePath,
             'configPath'                   => $configPath,
-            'configHash'                   => $this->fileHash($configPath),
+            'configHash'                   => $configHash,
             'composerGeneratedVersionHash' => $this->composerGeneratedVersionHash(),
             'composerHash'                 => $this->composerHash($basePath),
             'scanPaths'                    => $scanPaths,
