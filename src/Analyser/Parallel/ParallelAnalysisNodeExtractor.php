@@ -13,7 +13,6 @@ use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\CachePathFactory;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
-use FilesystemIterator;
 use RuntimeException;
 
 use function array_fill;
@@ -336,13 +335,11 @@ final readonly class ParallelAnalysisNodeExtractor
             }
         }
 
-        // when --no-cache is used and no files in the cache directory yet, remove dir cache
-        // as means only for temporary file for worker needs
+        // when --no-cache is used, the directory only held worker temporary files:
+        // remove it best-effort, rmdir() refuses a non-empty directory atomically,
+        // so a concurrent run's files or an existing cache keep it in place
         if (! $this->analysisResultCache instanceof AnalysisResultCache) {
-            $fileSystemIterator = new FilesystemIterator($cacheDirectory);
-            if (! $fileSystemIterator->valid()) {
-                rmdir($cacheDirectory);
-            }
+            @rmdir($cacheDirectory);
         }
 
         if ($failures !== []) {
