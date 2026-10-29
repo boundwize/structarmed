@@ -57,7 +57,7 @@ return Architecture::define()
             __DIR__ . '/tests',
         ],
     ])
-    ->withPresets(Preset::PER(), Preset::YAGNI(), Preset::CODEQUALITY())
+    ->withPresets(Preset::PER(), Preset::YAGNI(), Preset::CODEQUALITY(), Preset::STABILITY())
     ->rule(
         'source.must_be_final',
         new MustBeFinalRule(layer: 'Source')

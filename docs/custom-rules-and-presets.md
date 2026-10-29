@@ -130,7 +130,9 @@ Each `ClassNode` records whether the docblock of its class, interface, trait, or
 | `$classNode->isApi` | The class-like docblock has an `@api` tag |
 | `$classNode->isInternal` | The class-like docblock has an `@internal` tag |
 
-A tag followed by a description, such as `@internal only used by the analyser`, counts. Longer tag names such as `@apiVersion` do not, and neither does the phpDocumentor inline `{@internal ...}}` form, which marks part of the description as internal rather than the class-like itself. Member docblocks are not read.
+A tag counts when it starts a docblock line, also when a description follows, such as `@internal only used by the analyser`. A tag name mentioned within the description does not count, and neither do longer tag names such as `@apiVersion` or the phpDocumentor inline `{@internal ...}}` form, which marks part of the description as internal rather than the class-like itself. Member docblocks are not read.
+
+The built-in `ApiMayNotBeInternalRule` and `ApiMayNotExtendInternalRule` read both flags. The example below enforces that every class-like in a layer declares one of the two tags:
 
 ```php
 <?php

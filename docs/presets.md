@@ -28,6 +28,7 @@ StructArmed ships with presets for common PHP standards and architecture styles.
 | `Preset::MVC()` | Layer isolation, thin controllers, model/view/service rules, return types for helper functions |
 | `Preset::YAGNI()` | Speculative-abstraction cleanup: interfaces must be implemented by a class or extended by another interface, abstract classes must be extended, traits must be used, extended classes that are never instantiated must be abstract, and named functions must be called — a dependency reference (type hint, `instanceof`, `::class`, static call, a class-name string, ...) also counts as usage within the scanned paths, while only instantiation (`new X`, `new self`/`static`/`parent`, or a constant class expression such as `new (X::class)`) keeps an extended class concrete. All rules support `--fix`, removing the unused declaration or adding the `abstract` modifier |
 | `Preset::CODEQUALITY()` | General readability conventions independent of any architecture style: closures and arrow functions that do not read `$this` must be declared `static`, and plain decimal numeric literals of `1_000_000` or more must group their digits with `_` separators (`1000500` becomes `1_000_500`). Both rules support `--fix`. Tune the literal threshold with `replaceRule(CodeQualityPreset::LARGE_NUMERIC_LITERALS_MUST_USE_SEPARATOR, new LargeNumericLiteralMustUseSeparatorRule(minimum: 1_000))` |
+| `Preset::STABILITY()` | Keeps the stable `@api` surface apart from `@internal` code: a class-like must not be tagged both `@api` and `@internal`, and an `@api` class-like must not extend a scanned `@internal` class or interface, directly or through any parent. Class-likes without either tag are not checked |
 
 ## Initialize Presets
 
@@ -41,6 +42,7 @@ vendor/bin/structarmed init --preset=mvc
 vendor/bin/structarmed init --preset=ddd
 vendor/bin/structarmed init --preset=yagni
 vendor/bin/structarmed init --preset=codequality
+vendor/bin/structarmed init --preset=stability
 vendor/bin/structarmed init --preset=all
 ```
 
@@ -58,6 +60,7 @@ return Architecture::define()
         Preset::DDD(),
         Preset::YAGNI(),
         Preset::CODEQUALITY(),
+        Preset::STABILITY(),
     );
 ```
 

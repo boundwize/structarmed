@@ -15,7 +15,10 @@ use Boundwize\StructArmed\Preset\Presets\Psr15Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
 use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerNameTrait;
+use Boundwize\StructArmed\Preset\Presets\StabilityPreset;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
+use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotBeInternalRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExtendInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
@@ -37,6 +40,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Psr15Preset::class)]
 #[CoversClass(Psr4Preset::class)]
 #[CoversClass(ResolvesSourceLayerNameTrait::class)]
+#[CoversClass(StabilityPreset::class)]
 #[CoversClass(YagniPreset::class)]
 final class PresetTest extends TestCase
 {
@@ -102,6 +106,28 @@ final class PresetTest extends TestCase
         $this->assertInstanceOf(
             LargeNumericLiteralMustUseSeparatorRule::class,
             $rules[CodeQualityPreset::LARGE_NUMERIC_LITERALS_MUST_USE_SEPARATOR] ?? null
+        );
+    }
+
+    public function testStabilityPresetRegistersSourceLayerAndRules(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::STABILITY(
+            sourcePaths: ['src/'],
+        )->apply($architecture);
+
+        $this->assertSame(['Source' => ['src/']], $architecture->getLayers());
+
+        $rules = $architecture->getRules();
+        $this->assertCount(2, $rules);
+        $this->assertInstanceOf(
+            ApiMayNotBeInternalRule::class,
+            $rules[StabilityPreset::API_MAY_NOT_BE_INTERNAL] ?? null
+        );
+        $this->assertInstanceOf(
+            ApiMayNotExtendInternalRule::class,
+            $rules[StabilityPreset::API_MAY_NOT_EXTEND_INTERNAL] ?? null
         );
     }
 

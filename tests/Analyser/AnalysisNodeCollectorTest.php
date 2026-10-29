@@ -928,6 +928,8 @@ PHP);
             interface InternalContract {}
 
             /**
+             * Keeps the `@api` surface apart from @internal code.
+             *
              * @apiVersion 1.0
              * {@internal not a tag on the class}
              */
