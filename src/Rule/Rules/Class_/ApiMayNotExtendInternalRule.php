@@ -48,7 +48,7 @@ final class ApiMayNotExtendInternalRule extends AbstractLayerAwareRule implement
                     $classNode->getType(),
                     $classNode->className,
                     $parentNode->getType(),
-                    $parent
+                    $parentNode->className
                 ),
                 file:      $classNode->file,
                 line:      $classNode->line,

@@ -130,7 +130,7 @@ Each `ClassNode` records whether the docblock of its class, interface, trait, or
 | `$classNode->isApi` | The class-like docblock has an `@api` tag |
 | `$classNode->isInternal` | The class-like docblock has an `@internal` tag |
 
-A tag counts when it starts a docblock line, also when a description follows, such as `@internal only used by the analyser`. A tag name mentioned within the description does not count, and neither do longer tag names such as `@apiVersion` or the phpDocumentor inline `{@internal ...}}` form, which marks part of the description as internal rather than the class-like itself. Member docblocks are not read.
+A tag counts when it starts a docblock line, also when a description follows, such as `@internal only used by the analyser`. A tag name mentioned within the description does not count, and neither do longer tag names such as `@apiVersion` and `@api-version` or the phpDocumentor inline `{@internal ...}}` form, which marks part of the description as internal rather than the class-like itself. Member docblocks are not read.
 
 The built-in `ApiMayNotBeInternalRule` and `ApiMayNotExtendInternalRule` read both flags. The example below enforces that every class-like in a layer declares one of the two tags:
 
@@ -253,7 +253,7 @@ Trade-off: only usage within the scanned paths is known. A class-like used solel
 
 ## Reading Other Classes' Layers In A Custom Rule
 
-A rule only receives the node it is evaluating. When a check depends on the layer of *another* class — the layer a dependency belongs to, for instance — extend `Boundwize\StructArmed\Rule\AbstractLayerAwareRule`. Before any class is evaluated, the analyser injects the map of every scanned class into its protected `$classNodeMap` property, keyed by fully qualified class name, and `getDependencyNode()` looks a class up in it:
+A rule only receives the node it is evaluating. When a check depends on the layer of *another* class — the layer a dependency belongs to, for instance — extend `Boundwize\StructArmed\Rule\AbstractLayerAwareRule`. Before any class is evaluated, the analyser injects the map of every scanned class into its protected `$classNodeMap` property, keyed by fully qualified class name, and `getDependencyNode()` looks a class up in it, ignoring case as PHP does for class names:
 
 ```php
 <?php

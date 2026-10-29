@@ -52,6 +52,25 @@ final class ApiMayNotExtendInternalRuleTest extends TestCase
         );
     }
 
+    public function testFindsInternalAncestorWrittenInAnotherCase(): void
+    {
+        $apiMayNotExtendInternalRule = new ApiMayNotExtendInternalRule(layer: 'Core');
+        $apiMayNotExtendInternalRule->injectClassNodeMap([
+            'App\InternalFacade' => $this->makeNode('App\InternalFacade', isInternal: true),
+        ]);
+
+        // Class names are case-insensitive: `extends internalfacade` is valid PHP
+        $violation = $apiMayNotExtendInternalRule->evaluate(
+            $this->makeNode('App\Facade', parentClasses: ['App\BaseFacade', 'app\internalfacade'], isApi: true)
+        );
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            '@api Class [App\Facade] must not extend @internal Class [App\InternalFacade]',
+            $violation->message
+        );
+    }
+
     public function testViolatesWhenInterfaceExtendsInternalInterface(): void
     {
         $apiMayNotExtendInternalRule = new ApiMayNotExtendInternalRule(layer: 'Core');

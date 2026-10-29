@@ -7078,7 +7078,8 @@ class Order {
 
                 namespace App;
 
-                abstract class BaseFacade extends InternalFacade {}
+                // Class names are case-insensitive
+                abstract class BaseFacade extends internalfacade {}
                 PHP,
             'src/InternalFacade.php' => <<<'PHP'
                 <?php

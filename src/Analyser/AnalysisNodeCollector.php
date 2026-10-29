@@ -1834,15 +1834,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * Whether the docblock carries the $tag tag, e.g. `@api`. A tag starts a
-     * docblock line, so the tag name mentioned in the description or an
-     * inline `{@internal ...}` comment does not count.
+     * docblock line, so the tag name mentioned in the description, a longer
+     * tag such as `@api-version`, or an inline `{@internal ...}` comment does
+     * not count.
      */
     private function hasDocBlockTag(ClassLike $classLike, string $tag): bool
     {
         $docComment = $classLike->getDocComment();
 
         return $docComment instanceof Doc
-            && preg_match('#^[/*\s]*@' . $tag . '\b#m', $docComment->getText()) === 1;
+            && preg_match('#^[/*\s]*@' . $tag . '(?![\w-])#m', $docComment->getText()) === 1;
     }
 
     /**

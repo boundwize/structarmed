@@ -931,6 +931,8 @@ PHP);
              * Keeps the `@api` surface apart from @internal code.
              *
              * @apiVersion 1.0
+             * @api-version 2.0
+             * @internal-test
              * {@internal not a tag on the class}
              */
             class Untagged {}
