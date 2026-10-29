@@ -482,16 +482,18 @@ final class ArchitectureTest extends TestCase
 
             PHP);
 
+        // bar.php again after foo.php imported it: a repeated import is not a cycle
         $architecture = Architecture::define()
             ->layer('App', 'src/')
-            ->import($directory . '/foo.php');
+            ->import($directory . '/foo.php')
+            ->import($directory . '/bar.php');
 
         $this->assertSame(
             ['App' => 'src/', 'Foo' => 'module/Foo/src/', 'Bar' => 'module/Bar/src/'],
             $architecture->getLayers()
         );
         $this->assertSame(
-            [realpath($directory . '/bar.php'), realpath($directory . '/foo.php')],
+            [realpath($directory . '/bar.php'), realpath($directory . '/foo.php'), realpath($directory . '/bar.php')],
             $architecture->getImportedFiles()
         );
     }
@@ -505,5 +507,35 @@ final class ArchitectureTest extends TestCase
         $this->expectExceptionMessage(sprintf('Imported configuration [%s] must return a callable.', $path));
 
         Architecture::define()->import($path);
+    }
+
+    public function testImportThrowsOnCircularImport(): void
+    {
+        $directory = $this->makeTemporaryDirectory('structarmed-import');
+        file_put_contents($directory . '/foo.php', <<<'PHP'
+            <?php
+
+            use Boundwize\StructArmed\Architecture;
+
+            return static function (Architecture $architecture): void {
+                $architecture->import(__DIR__ . '/bar.php');
+            };
+
+            PHP);
+        file_put_contents($directory . '/bar.php', <<<'PHP'
+            <?php
+
+            use Boundwize\StructArmed\Architecture;
+
+            return static function (Architecture $architecture): void {
+                $architecture->import(__DIR__ . '/foo.php');
+            };
+
+            PHP);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('#^Circular import of configuration \[.+/foo\.php\]\.$#');
+
+        Architecture::define()->import($directory . '/foo.php');
     }
 }

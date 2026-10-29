@@ -117,6 +117,9 @@ final class Architecture
     /** @var list<string> config files applied through import(), nested imports included */
     private array $importedFiles = [];
 
+    /** @var array<string, true> config files whose import() is still running */
+    private array $importing = [];
+
     private function __construct()
     {
     }
@@ -152,9 +155,23 @@ final class Architecture
             );
         }
 
-        $configure($this);
+        $importedFile = realpath($file) ?: $file;
 
-        $this->importedFiles[] = realpath($file) ?: $file;
+        // only imports still in progress are tracked, so a file imported twice
+        // through separate branches is applied again rather than rejected
+        if (isset($this->importing[$importedFile])) {
+            throw new InvalidArgumentException(sprintf('Circular import of configuration [%s].', $file));
+        }
+
+        $this->importing[$importedFile] = true;
+
+        try {
+            $configure($this);
+        } finally {
+            unset($this->importing[$importedFile]);
+        }
+
+        $this->importedFiles[] = $importedFile;
 
         return $this;
     }
