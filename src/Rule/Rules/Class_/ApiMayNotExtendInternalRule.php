@@ -20,6 +20,11 @@ final class ApiMayNotExtendInternalRule extends AbstractLayerAwareRule implement
 
     public function appliesTo(ClassNode $classNode): bool
     {
+        // Traits and enums cannot extend
+        if (! $classNode->isClass() && ! $classNode->isInterface) {
+            return false;
+        }
+
         return $classNode->isApi && $classNode->isInLayer($this->layer);
     }
 

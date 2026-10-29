@@ -13,11 +13,20 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ApiMayNotExtendInternalRule::class)]
 final class ApiMayNotExtendInternalRuleTest extends TestCase
 {
-    public function testAppliesOnlyToApiClassLikesInConfiguredLayer(): void
+    public function testAppliesOnlyToApiClassesAndInterfacesInConfiguredLayer(): void
     {
         $apiMayNotExtendInternalRule = new ApiMayNotExtendInternalRule(layer: 'Core');
 
         $this->assertTrue($apiMayNotExtendInternalRule->appliesTo($this->makeNode('App\Facade', isApi: true)));
+        $this->assertTrue(
+            $apiMayNotExtendInternalRule->appliesTo($this->makeNode('App\Facade', isInterface: true, isApi: true))
+        );
+        $this->assertFalse(
+            $apiMayNotExtendInternalRule->appliesTo($this->makeNode('App\Facade', isTrait: true, isApi: true))
+        );
+        $this->assertFalse(
+            $apiMayNotExtendInternalRule->appliesTo($this->makeNode('App\Facade', isEnum: true, isApi: true))
+        );
         $this->assertFalse($apiMayNotExtendInternalRule->appliesTo($this->makeNode('App\Facade')));
         $this->assertFalse(
             $apiMayNotExtendInternalRule->appliesTo($this->makeNode('App\Facade', layer: 'Other', isApi: true))
@@ -95,6 +104,8 @@ final class ApiMayNotExtendInternalRuleTest extends TestCase
         array $parentClasses = [],
         array $parentInterfaces = [],
         bool $isInterface = false,
+        bool $isTrait = false,
+        bool $isEnum = false,
         bool $isApi = false,
         bool $isInternal = false,
     ): ClassNode {
@@ -108,6 +119,8 @@ final class ApiMayNotExtendInternalRuleTest extends TestCase
             isFinal:          false,
             isInterface:      $isInterface,
             isReadonly:       false,
+            isTrait:          $isTrait,
+            isEnum:           $isEnum,
             parentClasses:    $parentClasses,
             parentInterfaces: $parentInterfaces,
             isApi:            $isApi,

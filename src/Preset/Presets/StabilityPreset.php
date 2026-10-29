@@ -11,8 +11,8 @@ use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExtendInternalRule;
 
 /**
  * Stability preset: keeps the stable `@api` surface apart from `@internal`
- * code — a class-like is not tagged both, and an `@api` class-like does not
- * extend an `@internal` one, which would expose its members.
+ * code — a class-like is not tagged both, and an `@api` class or interface
+ * does not extend an `@internal` one, which would expose its members.
  *
  * Trade-off: only docblock tags of scanned class-likes are known. Class-likes
  * without either tag are not checked.
