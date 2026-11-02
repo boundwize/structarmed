@@ -1082,15 +1082,12 @@ PHP);
         );
     }
 
-    public function testCollectsPromotedParameterAsParameterAndProperty(): void
+    public function testCollectsPromotedParameterOnlyAsProperty(): void
     {
         $this->assertSame(
             [
-                ['Hidden', 'a', ClassSignature::PARAM, 'public', 5],
                 ['Hidden', 'a', ClassSignature::PROPERTY, 'private', 5],
-                ['Guarded', 'b', ClassSignature::PARAM, 'public', 5],
                 ['Guarded', 'b', ClassSignature::PROPERTY, 'protected', 5],
-                ['Open', 'c', ClassSignature::PARAM, 'public', 5],
                 ['Open', 'c', ClassSignature::PROPERTY, 'public', 5],
                 ['Plain', 'd', ClassSignature::PARAM, 'public', 5],
             ],

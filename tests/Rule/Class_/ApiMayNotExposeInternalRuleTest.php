@@ -87,26 +87,6 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         );
     }
 
-    public function testReportsConstructorParameterOfPrivatelyPromotedProperty(): void
-    {
-        $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
-        $apiMayNotExposeInternalRule->injectClassNodeMap([
-            'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
-        ]);
-
-        $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
-            'App\Facade',
-            signatures: [
-                new ClassSignature('App\Pool', 'value', ClassSignature::PARAM, 'public', 6),
-                new ClassSignature('App\Pool', 'value', ClassSignature::PROPERTY, 'private', 6),
-            ],
-            isApi: true,
-        ));
-
-        $this->assertCount(1, $violations);
-        $this->assertSame(6, $violations[0]->line);
-    }
-
     public function testReportsEachMemberExposingATypeOnTheSameLine(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
@@ -133,28 +113,6 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
             ],
             array_map(static fn (RuleViolation $ruleViolation): string => $ruleViolation->message, $violations)
         );
-    }
-
-    public function testReportsPublicPromotedParameterAsParameterAndProperty(): void
-    {
-        $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
-        $apiMayNotExposeInternalRule->injectClassNodeMap([
-            'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
-        ]);
-
-        // A public promoted parameter is both a public parameter and a public property
-        $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
-            'App\Facade',
-            signatures: [
-                new ClassSignature('App\Pool', 'value', ClassSignature::PARAM, 'public', 6),
-                new ClassSignature('app\pool', 'value', ClassSignature::PROPERTY, 'public', 6),
-            ],
-            isApi: true,
-        ));
-
-        $this->assertCount(2, $violations);
-        $this->assertStringEndsWith('through param [value]', $violations[0]->message);
-        $this->assertStringEndsWith('through property [value]', $violations[1]->message);
     }
 
     public function testFindsInternalTypeWrittenInAnotherCase(): void

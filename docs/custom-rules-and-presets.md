@@ -202,7 +202,7 @@ For `public function find(Criteria $criteria): Result`, the signatures read as f
 
 A parameter's signature holds the parameter's name, not its method's; use `$signature->line` to point at where it is written.
 
-Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per type name, and the same type is recorded again in every signature that names it, including each property of `public Pool $a, $b;`. A promoted constructor parameter is recorded twice: as a parameter with the constructor's visibility and as a property with its own, so `public function __construct(private Pool $pool)` is exposed through the parameter even though the property is private. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
+Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per type name, and the same type is recorded again in every signature that names it, including each property of `public Pool $a, $b;`. A promoted constructor parameter is recorded only as a property with its own visibility, so `public function __construct(private Pool $pool)` is not exposed even though callers must pass a `Pool`. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
 
 The example below keeps database details inside repositories. A repository may build queries with Doctrine's `QueryBuilder`, but no public or protected method may return one, or callers could keep changing the query outside the repository:
 

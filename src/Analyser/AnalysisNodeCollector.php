@@ -1127,9 +1127,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         foreach ($classMethod->params as $param) {
             $name = $param->var instanceof Variable && is_string($param->var->name) ? $param->var->name : '';
 
-            $this->collectSignatures($classLikeAnalysis, $param->type, $name, ClassSignature::PARAM, $visibility);
-
-            // a promoted parameter also declares a property with its own visibility
+            // a promoted parameter is recorded as the property it declares
             if ($param->isPromoted()) {
                 $this->collectSignatures(
                     $classLikeAnalysis,
@@ -1138,7 +1136,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     ClassSignature::PROPERTY,
                     $this->resolveVisibilityName($param)
                 );
+
+                continue;
             }
+
+            $this->collectSignatures($classLikeAnalysis, $param->type, $name, ClassSignature::PARAM, $visibility);
         }
 
         $this->collectSignatures(
