@@ -57,11 +57,11 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $classNode = $this->makeNode(
             'App\Facade',
             signatures: [
-                new ClassSignature('App\Money', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 5),
-                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 7),
-                new ClassSignature('Vendor\Unscanned', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 9),
-                new ClassSignature('App\Contract', ClassSignature::PROTECTED | ClassSignature::PROPERTY, 11),
-                new ClassSignature('App\Pool', ClassSignature::PROTECTED | ClassSignature::PARAMETER, 13),
+                new ClassSignature('App\Money', 'run', ClassSignature::METHOD, 'public', 5),
+                new ClassSignature('App\Pool', 'run', ClassSignature::METHOD, 'public', 7),
+                new ClassSignature('Vendor\Unscanned', 'value', ClassSignature::PARAM, 'public', 9),
+                new ClassSignature('App\Contract', 'value', ClassSignature::PROPERTY, 'protected', 11),
+                new ClassSignature('App\Pool', 'value', ClassSignature::PARAM, 'protected', 13),
             ],
             isApi: true,
         );
@@ -72,9 +72,13 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $this->assertSame(7, $violation->line);
         $this->assertSame(
             [
-                [7, '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature'],
-                [11, '@api Class [App\Facade] must not expose @internal Interface [App\Contract] in its signature'],
-                [13, '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature'],
+                [7, '@api Class [App\Facade] must not expose @internal Class [App\Pool] through method [run]'],
+                [
+                    11,
+                    '@api Class [App\Facade] must not expose @internal Interface [App\Contract] '
+                    . 'through property [value]',
+                ],
+                [13, '@api Class [App\Facade] must not expose @internal Class [App\Pool] through param [value]'],
             ],
             array_map(
                 static fn (RuleViolation $ruleViolation): array => [$ruleViolation->line, $ruleViolation->message],
@@ -93,34 +97,42 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
             'App\Facade',
             signatures: [
-                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 6),
-                new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 6),
+                new ClassSignature('App\Pool', 'pool', ClassSignature::PROPERTY, 'private', 6),
+                new ClassSignature('App\Pool', 'pool', ClassSignature::PARAM, 'public', 6),
             ],
             isApi: true,
         ));
 
         $this->assertCount(1, $violations);
-        $this->assertSame(6, $violations[0]->line);
+        $this->assertStringEndsWith('through param [pool]', $violations[0]->message);
     }
 
-    public function testReportsATypeOnceWhenALineExposesItTwice(): void
+    public function testReportsEachMemberExposingATypeOnTheSameLine(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
         $apiMayNotExposeInternalRule->injectClassNodeMap([
             'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
         ]);
 
-        // A public promoted parameter is both a public parameter and a public property
+        // `public function run(Pool $pool, Pool $run): Pool`: a parameter can share its method's name
         $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
             'App\Facade',
             signatures: [
-                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 6),
-                new ClassSignature('app\pool', ClassSignature::PUBLIC | ClassSignature::PROPERTY, 6),
+                new ClassSignature('App\Pool', 'pool', ClassSignature::PARAM, 'public', 6),
+                new ClassSignature('App\Pool', 'run', ClassSignature::PARAM, 'public', 6),
+                new ClassSignature('App\Pool', 'run', ClassSignature::METHOD, 'public', 6),
             ],
             isApi: true,
         ));
 
-        $this->assertCount(1, $violations);
+        $this->assertSame(
+            [
+                '@api Class [App\Facade] must not expose @internal Class [App\Pool] through param [pool]',
+                '@api Class [App\Facade] must not expose @internal Class [App\Pool] through param [run]',
+                '@api Class [App\Facade] must not expose @internal Class [App\Pool] through method [run]',
+            ],
+            array_map(static fn (RuleViolation $ruleViolation): string => $ruleViolation->message, $violations)
+        );
     }
 
     public function testFindsInternalTypeWrittenInAnotherCase(): void
@@ -133,13 +145,13 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         // Class names are case-insensitive: `function pool(): pool` is valid PHP
         $violation = $apiMayNotExposeInternalRule->evaluate($this->makeNode(
             'App\Facade',
-            signatures: [new ClassSignature('app\pool', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 5)],
+            signatures: [new ClassSignature('app\pool', 'run', ClassSignature::METHOD, 'public', 5)],
             isApi: true,
         ));
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertSame(
-            '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature',
+            '@api Class [App\Facade] must not expose @internal Class [App\Pool] through method [run]',
             $violation->message
         );
     }
@@ -158,9 +170,9 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
                 'App\Facade',
                 dependencies: ['App\Pool'],
                 signatures: [
-                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 5),
-                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PARAMETER, 7),
-                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::RETURN_TYPE, 7),
+                    new ClassSignature('App\Pool', 'value', ClassSignature::PROPERTY, 'private', 5),
+                    new ClassSignature('App\Pool', 'value', ClassSignature::PARAM, 'private', 7),
+                    new ClassSignature('App\Pool', 'run', ClassSignature::METHOD, 'private', 7),
                 ],
                 isApi: true,
             ))

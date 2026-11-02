@@ -13,18 +13,18 @@ use PHPUnit\Framework\TestCase;
 final class ClassSignatureTest extends TestCase
 {
     #[DataProvider('exposures')]
-    public function testIsExposedFollowsVisibilityFlag(int $modifiers, bool $isExposed): void
+    public function testIsExposedFollowsVisibility(string $kind, string $visibility, bool $isExposed): void
     {
-        $classSignature = new ClassSignature('App\Money', $modifiers, 1);
+        $classSignature = new ClassSignature('App\Money', 'money', $kind, $visibility, 1);
 
         $this->assertSame($isExposed, $classSignature->isExposed());
     }
 
-    /** @return iterable<string, array{int, bool}> */
+    /** @return iterable<string, array{string, string, bool}> */
     public static function exposures(): iterable
     {
-        yield 'public parameter' => [ClassSignature::PUBLIC | ClassSignature::PARAMETER, true];
-        yield 'protected return type' => [ClassSignature::PROTECTED | ClassSignature::RETURN_TYPE, true];
-        yield 'private property' => [ClassSignature::PRIVATE | ClassSignature::PROPERTY, false];
+        yield 'public parameter' => [ClassSignature::PARAM, 'public', true];
+        yield 'protected method' => [ClassSignature::METHOD, 'protected', true];
+        yield 'private property' => [ClassSignature::PROPERTY, 'private', false];
     }
 }

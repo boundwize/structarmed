@@ -45,7 +45,7 @@ final class PropertyUnserializeTraitTest extends TestCase
         yield 'property' => [new PropertyNode('name', 'private', true, 4)];
         yield 'constant' => [new ConstantNode('LIMIT', 'public', true, 3)];
         yield 'class signature' => [
-            new ClassSignature('App\Domain\Money', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 3),
+            new ClassSignature('App\Domain\Money', 'value', ClassSignature::PROPERTY, 'private', 3),
         ];
         yield 'enum case' => [new EnumCaseNode('Active', 5, 'active')];
         yield 'file analysis' => [
@@ -87,7 +87,7 @@ final class PropertyUnserializeTraitTest extends TestCase
                 nonClassDependencies: ['App\Domain\helper'],
                 constantFetches: ['PHP_EOL'],
                 signatures: [
-                    new ClassSignature('App\Domain\Money', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 12),
+                    new ClassSignature('App\Domain\Money', 'run', ClassSignature::METHOD, 'public', 12),
                 ],
             ),
         ];

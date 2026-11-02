@@ -956,15 +956,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $visibility            = $this->resolveVisibilityName($stmt);
             $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
 
-            if ($this->withSignatures) {
-                $this->collectSignatures(
-                    $analysis,
-                    $stmt->type,
-                    $this->signatureVisibility($stmt) | ClassSignature::PROPERTY
-                );
-            }
-
             foreach ($stmt->props as $prop) {
+                if ($this->withSignatures) {
+                    $this->collectSignatures(
+                        $analysis,
+                        $stmt->type,
+                        (string) $prop->name,
+                        ClassSignature::PROPERTY,
+                        $visibility
+                    );
+                }
+
                 $analysis->properties[] = new PropertyNode(
                     name:                 (string) $prop->name,
                     visibility:           $visibility,
@@ -1120,35 +1122,53 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     private function collectMethodSignatures(ClassLikeAnalysis $classLikeAnalysis, ClassMethod $classMethod): void
     {
-        $visibility = $this->signatureVisibility($classMethod);
+        $visibility = $this->resolveVisibilityName($classMethod);
 
         foreach ($classMethod->params as $param) {
-            $this->collectSignatures($classLikeAnalysis, $param->type, $visibility | ClassSignature::PARAMETER);
+            $name = $param->var instanceof Variable && is_string($param->var->name) ? $param->var->name : '';
 
-            // a promoted parameter also declares a property with its own visibility
+            // a promoted parameter is recorded as the property it declares, and also
+            // as a parameter when private, since callers must still pass its type
             if ($param->isPromoted()) {
                 $this->collectSignatures(
                     $classLikeAnalysis,
                     $param->type,
-                    $this->signatureVisibility($param) | ClassSignature::PROPERTY
+                    $name,
+                    ClassSignature::PROPERTY,
+                    $this->resolveVisibilityName($param)
                 );
+
+                if (! $param->isPrivate()) {
+                    continue;
+                }
             }
+
+            $this->collectSignatures($classLikeAnalysis, $param->type, $name, ClassSignature::PARAM, $visibility);
         }
 
         $this->collectSignatures(
             $classLikeAnalysis,
             $classMethod->returnType,
-            $visibility | ClassSignature::RETURN_TYPE
+            $classMethod->name->toString(),
+            ClassSignature::METHOD,
+            $visibility
         );
     }
 
-    private function collectSignatures(ClassLikeAnalysis $classLikeAnalysis, ?Node $type, int $modifiers): void
-    {
+    private function collectSignatures(
+        ClassLikeAnalysis $classLikeAnalysis,
+        ?Node $type,
+        string $name,
+        string $kind,
+        string $visibility,
+    ): void {
         if ($type instanceof Name) {
             if (! $type->isSpecialClassName()) {
                 $classLikeAnalysis->signatures[] = new ClassSignature(
                     $type->toString(),
-                    $modifiers,
+                    $name,
+                    $kind,
+                    $visibility,
                     $type->getStartLine()
                 );
             }
@@ -1157,25 +1177,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($type instanceof NullableType) {
-            $this->collectSignatures($classLikeAnalysis, $type->type, $modifiers);
+            $this->collectSignatures($classLikeAnalysis, $type->type, $name, $kind, $visibility);
 
             return;
         }
 
         if ($type instanceof UnionType || $type instanceof IntersectionType) {
             foreach ($type->types as $innerType) {
-                $this->collectSignatures($classLikeAnalysis, $innerType, $modifiers);
+                $this->collectSignatures($classLikeAnalysis, $innerType, $name, $kind, $visibility);
             }
         }
-    }
-
-    private function signatureVisibility(ClassMethod|Property|Param $node): int
-    {
-        if ($node->isProtected()) {
-            return ClassSignature::PROTECTED;
-        }
-
-        return $node->isPrivate() ? ClassSignature::PRIVATE : ClassSignature::PUBLIC;
     }
 
     /**

@@ -1670,8 +1670,8 @@ final class AnalysisResultCacheTest extends TestCase
             isInterface: false,
             isReadonly:  false,
             signatures:  [
-                new ClassSignature('App\Money', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 3),
-                new ClassSignature('App\Money', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 3),
+                new ClassSignature('App\Money', 'value', ClassSignature::PARAM, 'public', 3),
+                new ClassSignature('App\Money', 'value', ClassSignature::PROPERTY, 'private', 3),
             ],
         );
 
@@ -1728,12 +1728,22 @@ final class AnalysisResultCacheTest extends TestCase
         try {
             foreach (
                 [
-                    'not a list'      => ['App\Money'],
-                    'wrong length'    => [['App\Money', 9]],
-                    'wrong type name' => [[1, 9, 3]],
-                    'wrong modifiers' => [['App\Money', '9', 3]],
-                    'wrong line'      => [['App\Money', 9, '3']],
-                    'not a tuple'     => [['type' => 'App\Money', 'modifiers' => 9, 'line' => 3]],
+                    'not a list'       => ['App\Money'],
+                    'wrong length'     => [['App\Money', 'money']],
+                    'wrong type name'  => [[1, 'money', 'param', 'public', 3]],
+                    'wrong name'       => [['App\Money', 1, 'param', 'public', 3]],
+                    'wrong kind'       => [['App\Money', 'money', 1, 'public', 3]],
+                    'wrong visibility' => [['App\Money', 'money', 'param', 1, 3]],
+                    'wrong line'       => [['App\Money', 'money', 'param', 'public', '3']],
+                    'not a tuple'      => [
+                        [
+                            'type'       => 'App\Money',
+                            'name'       => 'money',
+                            'kind'       => 'param',
+                            'visibility' => 'public',
+                            'line'       => 3,
+                        ],
+                    ],
                 ] as $signatures
             ) {
                 $analysisResultCache->storeAnalysisNodes(

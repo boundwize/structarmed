@@ -10,7 +10,6 @@ use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
 
-use function array_values;
 use function sprintf;
 
 final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implements
@@ -51,15 +50,15 @@ final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implement
                 continue;
             }
 
-            // A line can name a type more than once, such as a promoted
-            // parameter that is also a property: one violation is enough
-            $violations[$signature->line . ' ' . $typeNode->className] = new RuleViolation(
+            $violations[] = new RuleViolation(
                 message:   sprintf(
-                    '@api %s [%s] must not expose @internal %s [%s] in its signature',
+                    '@api %s [%s] must not expose @internal %s [%s] through %s [%s]',
                     $classNode->getType(),
                     $classNode->className,
                     $typeNode->getType(),
-                    $typeNode->className
+                    $typeNode->className,
+                    $signature->kind,
+                    $signature->name
                 ),
                 file:      $classNode->file,
                 line:      $signature->line,
@@ -68,6 +67,6 @@ final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implement
             );
         }
 
-        return array_values($violations);
+        return $violations;
     }
 }
