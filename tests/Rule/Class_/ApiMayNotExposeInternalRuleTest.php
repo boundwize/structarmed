@@ -114,10 +114,12 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
             'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
         ]);
 
+        // `public function run(Pool $pool, Pool $run): Pool`: a parameter can share its method's name
         $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
             'App\Facade',
             signatures: [
                 new ClassSignature('App\Pool', 'pool', ClassSignature::PARAM, 'public', 6),
+                new ClassSignature('App\Pool', 'run', ClassSignature::PARAM, 'public', 6),
                 new ClassSignature('App\Pool', 'run', ClassSignature::METHOD, 'public', 6),
             ],
             isApi: true,
@@ -126,6 +128,7 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $this->assertSame(
             [
                 '@api Class [App\Facade] must not expose @internal Class [App\Pool] through param [pool]',
+                '@api Class [App\Facade] must not expose @internal Class [App\Pool] through param [run]',
                 '@api Class [App\Facade] must not expose @internal Class [App\Pool] through method [run]',
             ],
             array_map(static fn (RuleViolation $ruleViolation): string => $ruleViolation->message, $violations)
