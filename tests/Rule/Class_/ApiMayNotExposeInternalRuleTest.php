@@ -57,11 +57,11 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $classNode = $this->makeNode(
             'App\Facade',
             signatures: [
-                new ClassSignature('App\Money', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 5),
-                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 7),
-                new ClassSignature('Vendor\Unscanned', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 9),
-                new ClassSignature('App\Contract', ClassSignature::PROTECTED | ClassSignature::PROPERTY, 11),
-                new ClassSignature('App\Pool', ClassSignature::PROTECTED | ClassSignature::PARAMETER, 13),
+                new ClassSignature('App\Money', 'run', ClassSignature::METHOD, 'public', 5),
+                new ClassSignature('App\Pool', 'run', ClassSignature::METHOD, 'public', 7),
+                new ClassSignature('Vendor\Unscanned', 'value', ClassSignature::PARAM, 'public', 9),
+                new ClassSignature('App\Contract', 'value', ClassSignature::PROPERTY, 'protected', 11),
+                new ClassSignature('App\Pool', 'value', ClassSignature::PARAM, 'protected', 13),
             ],
             isApi: true,
         );
@@ -93,8 +93,8 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
             'App\Facade',
             signatures: [
-                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 6),
-                new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 6),
+                new ClassSignature('App\Pool', 'value', ClassSignature::PARAM, 'public', 6),
+                new ClassSignature('App\Pool', 'value', ClassSignature::PROPERTY, 'private', 6),
             ],
             isApi: true,
         ));
@@ -114,8 +114,8 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
             'App\Facade',
             signatures: [
-                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 6),
-                new ClassSignature('app\pool', ClassSignature::PUBLIC | ClassSignature::PROPERTY, 6),
+                new ClassSignature('App\Pool', 'value', ClassSignature::PARAM, 'public', 6),
+                new ClassSignature('app\pool', 'value', ClassSignature::PROPERTY, 'public', 6),
             ],
             isApi: true,
         ));
@@ -133,7 +133,7 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         // Class names are case-insensitive: `function pool(): pool` is valid PHP
         $violation = $apiMayNotExposeInternalRule->evaluate($this->makeNode(
             'App\Facade',
-            signatures: [new ClassSignature('app\pool', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 5)],
+            signatures: [new ClassSignature('app\pool', 'run', ClassSignature::METHOD, 'public', 5)],
             isApi: true,
         ));
 
@@ -158,9 +158,9 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
                 'App\Facade',
                 dependencies: ['App\Pool'],
                 signatures: [
-                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 5),
-                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PARAMETER, 7),
-                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::RETURN_TYPE, 7),
+                    new ClassSignature('App\Pool', 'value', ClassSignature::PROPERTY, 'private', 5),
+                    new ClassSignature('App\Pool', 'value', ClassSignature::PARAM, 'private', 7),
+                    new ClassSignature('App\Pool', 'run', ClassSignature::METHOD, 'private', 7),
                 ],
                 isApi: true,
             ))

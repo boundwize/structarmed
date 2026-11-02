@@ -178,12 +178,14 @@ Signatures are opt-in because collecting them costs extra analysis time and cach
 | Property | Meaning |
 | --- | --- |
 | `$signature->type` | The fully-qualified type name |
-| `$signature->modifiers` | Exactly one visibility flag (`ClassSignature::PUBLIC`, `PROTECTED`, `PRIVATE`) and one kind flag (`PARAMETER`, `RETURN_TYPE`, `PROPERTY`) |
+| `$signature->name` | The name of the property, parameter (without `$`), or method |
+| `$signature->kind` | `ClassSignature::PROPERTY`, `ClassSignature::PARAM`, or `ClassSignature::METHOD`; a `METHOD` signature is the method's return type |
+| `$signature->visibility` | `public`, `protected`, or `private`; a parameter has its method's visibility |
 | `$signature->line` | The line the type name is written on |
 
-`$signature->isExposed()` is true for a public or protected signature. Members of every visibility are recorded, so a rule decides which ones matter by reading the flags, for example `$signature->modifiers & ClassSignature::PROPERTY`.
+`$signature->isExposed()` is true for a public or protected signature. Members of every visibility are recorded, so a rule decides which ones matter by reading these properties, for example `$signature->kind === ClassSignature::PROPERTY`.
 
-Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per name, and the same type is recorded again in every signature that names it. A promoted constructor parameter is recorded twice: as a parameter with the constructor's visibility and as a property with its own, so `public function __construct(private Pool $pool)` is exposed through the parameter even though the property is private. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
+Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per type name, and the same type is recorded again in every signature that names it, including each property of `public Pool $a, $b;`. A promoted constructor parameter is recorded twice: as a parameter with the constructor's visibility and as a property with its own, so `public function __construct(private Pool $pool)` is exposed through the parameter even though the property is private. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
 
 The example below keeps database details inside repositories. A repository may build queries with Doctrine's `QueryBuilder`, but no public or protected method may return one, or callers could keep changing the query outside the repository:
 
@@ -212,7 +214,7 @@ final readonly class RepositoryMayNotReturnQueryBuilderRule implements Signature
         foreach ($classNode->signatures as $signature) {
             if (
                 ! $signature->isExposed()
-                || ($signature->modifiers & ClassSignature::RETURN_TYPE) === 0
+                || $signature->kind !== ClassSignature::METHOD
                 || $signature->type !== QueryBuilder::class
             ) {
                 continue;

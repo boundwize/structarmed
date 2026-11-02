@@ -5,34 +5,30 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 /**
- * One class-like type named by a member's signature. Its modifiers hold exactly
- * one visibility flag and one kind flag; rules decide which of them matter.
+ * One class-like type named by a member's signature. Its name and kind tell
+ * which member: the type of a property or parameter, or a method's return type.
  */
 final readonly class ClassSignature
 {
     use PropertyUnserializeTrait;
 
-    public const PUBLIC = 1;
+    public const PROPERTY = 'property';
 
-    public const PROTECTED = 2;
+    public const PARAM = 'param';
 
-    public const PRIVATE = 4;
-
-    public const PARAMETER = 8;
-
-    public const RETURN_TYPE = 16;
-
-    public const PROPERTY = 32;
+    public const METHOD = 'method';
 
     public function __construct(
         public string $type,
-        public int $modifiers,
+        public string $name,
+        public string $kind,
+        public string $visibility,
         public int $line,
     ) {
     }
 
     public function isExposed(): bool
     {
-        return ($this->modifiers & (self::PUBLIC | self::PROTECTED)) !== 0;
+        return $this->visibility !== 'private';
     }
 }
