@@ -135,7 +135,7 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         );
     }
 
-    public function testReportsATypeOnceWhenAMemberExposesItTwice(): void
+    public function testReportsPublicPromotedParameterAsParameterAndProperty(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
         $apiMayNotExposeInternalRule->injectClassNodeMap([
@@ -152,8 +152,9 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
             isApi: true,
         ));
 
-        $this->assertCount(1, $violations);
+        $this->assertCount(2, $violations);
         $this->assertStringEndsWith('through param [value]', $violations[0]->message);
+        $this->assertStringEndsWith('through property [value]', $violations[1]->message);
     }
 
     public function testFindsInternalTypeWrittenInAnotherCase(): void

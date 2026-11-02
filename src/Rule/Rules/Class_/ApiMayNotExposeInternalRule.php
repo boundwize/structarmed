@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Rules\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
 
-use function array_values;
 use function sprintf;
 
 final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implements
@@ -52,11 +50,7 @@ final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implement
                 continue;
             }
 
-            // A promoted parameter is also a property of the same name: one violation
-            // is enough. A return type stays apart from a parameter named like its method
-            $member = $signature->kind === ClassSignature::METHOD ? $signature->name . '()' : $signature->name;
-
-            $violations[$signature->line . ' ' . $typeNode->className . ' ' . $member] ??= new RuleViolation(
+            $violations[] = new RuleViolation(
                 message:   sprintf(
                     '@api %s [%s] must not expose @internal %s [%s] through %s [%s]',
                     $classNode->getType(),
@@ -73,6 +67,6 @@ final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implement
             );
         }
 
-        return array_values($violations);
+        return $violations;
     }
 }

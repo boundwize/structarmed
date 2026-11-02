@@ -352,6 +352,7 @@ final class AnalyserTest extends TestCase
         $expected            = [
             [6, '@api Class [App\Client] must not expose @internal Class [App\Pool] through method [pool]'],
             [10, '@api Class [App\Client] must not expose @internal Class [App\Pool] through param [exposed]'],
+            [10, '@api Class [App\Client] must not expose @internal Class [App\Pool] through property [exposed]'],
         ];
         $linesAndMessages    = static fn(Analyser $analyser, AnalyserOptions $analyserOptions): array => array_map(
             static fn (RuleViolation $ruleViolation): array => [$ruleViolation->line, $ruleViolation->message],
