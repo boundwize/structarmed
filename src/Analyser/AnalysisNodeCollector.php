@@ -43,9 +43,11 @@ use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\IntersectionType;
 use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
 use PhpParser\Node\Scalar\Float_;
 use PhpParser\Node\Scalar\Int_;
@@ -75,6 +77,7 @@ use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
+use PhpParser\Node\UnionType;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
@@ -952,6 +955,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $visibility            = $this->resolveVisibilityName($stmt);
             $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
 
+            if (! $stmt->isPrivate()) {
+                $this->collectSignatureType($analysis, $stmt->type);
+            }
+
             foreach ($stmt->props as $prop) {
                 $analysis->properties[] = new PropertyNode(
                     name:                 (string) $prop->name,
@@ -1080,6 +1087,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             isMagic:              $classMethod->isMagic(),
         );
 
+        foreach ($classMethod->params as $param) {
+            // a promoted parameter is a property with its own visibility
+            if ($param->isPromoted() ? ! $param->isPrivate() : ! $classMethod->isPrivate()) {
+                $this->collectSignatureType($analysis, $param->type);
+            }
+        }
+
+        if (! $classMethod->isPrivate()) {
+            $this->collectSignatureType($analysis, $classMethod->returnType);
+        }
+
         if ($classMethod->name->toLowerString() !== '__construct') {
             return;
         }
@@ -1099,6 +1117,29 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($param->flags),
                 line:                  $param->getStartLine(),
             );
+        }
+    }
+
+    private function collectSignatureType(ClassLikeAnalysis $classLikeAnalysis, ?Node $type): void
+    {
+        if ($type instanceof Name) {
+            if (! $type->isSpecialClassName()) {
+                $classLikeAnalysis->signatureTypes[$type->toString()] = true;
+            }
+
+            return;
+        }
+
+        if ($type instanceof NullableType) {
+            $this->collectSignatureType($classLikeAnalysis, $type->type);
+
+            return;
+        }
+
+        if ($type instanceof UnionType || $type instanceof IntersectionType) {
+            foreach ($type->types as $innerType) {
+                $this->collectSignatureType($classLikeAnalysis, $innerType);
+            }
         }
     }
 
@@ -1692,6 +1733,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             constantFetches:    $analysis['constantFetches'],
             isApi:              $this->hasDocBlockTag($classLike, 'api'),
             isInternal:         $this->hasDocBlockTag($classLike, 'internal'),
+            signatureTypes:     $analysis['signatureTypes'],
         );
     }
 
@@ -1851,6 +1893,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *     dependencies: list<string>,
      *     nonClassDependencies: list<string>,
      *     constantFetches: list<string>,
+     *     signatureTypes: list<string>,
      *     functionCalls: string[],
      *     superglobals: string[],
      *     languageConstructs: string[],
@@ -1879,6 +1922,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 )
             ),
             'constantFetches'      => array_keys($classLikeAnalysis->constantFetches),
+            'signatureTypes'       => array_keys($classLikeAnalysis->signatureTypes),
             'functionCalls'        => array_values(array_unique($functionCalls)),
             'superglobals'         => array_keys($classLikeAnalysis->superglobals),
             'languageConstructs'   => array_keys($classLikeAnalysis->languageConstructs),

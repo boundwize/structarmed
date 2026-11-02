@@ -43,6 +43,7 @@ final class ClassNode
      * @param list<string>   $constantFetches     Global and namespaced constants fetched within this class
      * @param bool           $isApi               Whether the docblock marks it as @api
      * @param bool           $isInternal          Whether the docblock marks it as @internal
+     * @param list<string>   $signatureTypes      Class-like types in non-private method and property signatures
      */
     public function __construct(
         public readonly string $className,
@@ -79,6 +80,7 @@ final class ClassNode
         public readonly array $constantFetches = [],
         public readonly bool $isApi = false,
         public readonly bool $isInternal = false,
+        public readonly array $signatureTypes = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
     }

@@ -957,6 +957,88 @@ PHP);
         );
     }
 
+    public function testCollectsSignatureTypes(): void
+    {
+        $classNode = $this->collect(<<<'CODE_SAMPLE'
+            <?php
+
+            namespace App;
+
+            use Vendor\Imported;
+
+            class Foo extends Base
+            {
+                public ?Nullable $publicProperty;
+                protected PartOne|PartTwo|null $protectedProperty;
+                private PrivateProperty $privateProperty;
+                public int $builtin;
+
+                public function __construct(
+                    public PublicPromoted $publicPromoted,
+                    readonly ImplicitPublicPromoted $implicitPublicPromoted,
+                    private PrivatePromoted $privatePromoted,
+                    Imported $plainParam,
+                ) {
+                }
+
+                public function run(\Fully\Qualified $param, (First&Second)|null $dnf): Imported
+                {
+                    new OnlyInBody();
+
+                    return new class {
+                        public function anonymous(OnlyInAnonymousClass $param): void
+                        {
+                        }
+                    };
+                }
+
+                protected function guarded(): ProtectedReturn
+                {
+                }
+
+                public function keywords(self $self, parent $parent, int $int): static
+                {
+                }
+
+                private function hidden(PrivateParam $param): PrivateReturn
+                {
+                }
+            }
+            CODE_SAMPLE);
+
+        $this->assertSame(
+            [
+                'App\Nullable',
+                'App\PartOne',
+                'App\PartTwo',
+                'App\PublicPromoted',
+                'App\ImplicitPublicPromoted',
+                'Vendor\Imported',
+                'Fully\Qualified',
+                'App\First',
+                'App\Second',
+                'App\ProtectedReturn',
+            ],
+            $classNode->signatureTypes
+        );
+    }
+
+    public function testCollectsPromotedSignatureTypeOfPrivateConstructor(): void
+    {
+        $classNode = $this->collect(<<<'CODE_SAMPLE'
+            <?php
+
+            class Foo
+            {
+                private function __construct(public Exposed $exposed, Hidden $hidden)
+                {
+                }
+            }
+            CODE_SAMPLE);
+
+        $this->assertSame(['Exposed'], $classNode->signatureTypes);
+    }
+
     public function testCollectsInterface(): void
     {
         $classNode = $this->collect('<?php interface FooInterface {}');

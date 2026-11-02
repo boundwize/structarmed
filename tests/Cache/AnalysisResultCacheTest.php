@@ -3013,6 +3013,7 @@ final class AnalysisResultCacheTest extends TestCase
             constantFetches: ['PHP_EOL'],
             isApi:         true,
             isInternal:    true,
+            signatureTypes: ['App\Domain\Money'],
         );
     }
 

@@ -132,7 +132,7 @@ Each `ClassNode` records whether the docblock of its class, interface, trait, or
 
 A tag counts when it starts a docblock line, also when a description follows, such as `@internal only used by the analyser`. A tag name mentioned within the description does not count, and neither do longer tag names such as `@apiVersion` and `@api-version` or the phpDocumentor inline `{@internal ...}}` form, which marks part of the description as internal rather than the class-like itself. Member docblocks are not read.
 
-The built-in `ApiMayNotBeInternalRule` and `ApiMayNotExtendInternalRule` read both flags. The example below enforces that every class-like in a layer declares one of the two tags:
+The built-in `ApiMayNotBeInternalRule`, `ApiMayNotExtendInternalRule`, and `ApiMayNotExposeInternalRule` read these flags. The example below enforces that every class-like in a layer declares one of the two tags:
 
 ```php
 <?php
@@ -165,6 +165,52 @@ final readonly class ClassMustDeclareApiOrInternalRule implements RuleInterface
             className: $classNode->className,
             layer:     $classNode->layer,
         );
+    }
+}
+```
+
+## Reading Signature Types In A Custom Rule
+
+`$classNode->signatureTypes` lists the fully-qualified class-like names a class-like exposes in its public and protected signatures: method parameter and return types, property types, and promoted constructor parameters that are not private. Nullable, union, intersection, and DNF types are flattened, and each name appears once. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, so `new Foo()` inside a public method does not add `Foo`. Docblock types are not read.
+
+The example below reports a class-like that names an `Internal` namespace type in its signature:
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+use function sprintf;
+use function str_contains;
+
+final readonly class InternalMayNotLeakIntoSignatureRule implements RuleInterface
+{
+    public function appliesTo(ClassNode $classNode): bool
+    {
+        return $classNode->isInLayer('Core') && ! $classNode->isInternal;
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        foreach ($classNode->signatureTypes as $signatureType) {
+            if (! str_contains($signatureType, '\\Internal\\')) {
+                continue;
+            }
+
+            return new RuleViolation(
+                message:   sprintf('%s [%s] exposes internal type [%s] in its signature', $classNode->getType(), $classNode->className, $signatureType),
+                file:      $classNode->file,
+                line:      $classNode->line,
+                className: $classNode->className,
+                layer:     $classNode->layer,
+            );
+        }
+
+        return null;
     }
 }
 ```

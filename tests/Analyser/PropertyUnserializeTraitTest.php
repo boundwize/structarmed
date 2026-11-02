@@ -82,6 +82,7 @@ final class PropertyUnserializeTraitTest extends TestCase
                 enumCases: [new EnumCaseNode('Draft', 8, 'draft')],
                 nonClassDependencies: ['App\Domain\helper'],
                 constantFetches: ['PHP_EOL'],
+                signatureTypes: ['App\Domain\Money'],
             ),
         ];
         yield 'function' => [

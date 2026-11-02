@@ -68,7 +68,7 @@ final class AnalysisResultCache
      * their shape, naming, or reference semantics change. It is recorded in
      * the metadata marker, so older caches are cleared on their next use.
      */
-    public const FORMAT_VERSION = 18;
+    public const FORMAT_VERSION = 19;
 
     private readonly string $cacheDirectory;
 
@@ -1006,6 +1006,7 @@ final class AnalysisResultCache
             'dependencies'         => $classNode->dependencies,
             'nonClassDependencies' => $classNode->nonClassDependencies,
             'constantFetches'      => $classNode->constantFetches,
+            'signatureTypes'       => $classNode->signatureTypes,
             'implements'           => array_values($classNode->implements),
             'interfaceExtends'     => array_values($classNode->interfaceExtends),
             'parentClasses'        => $classNode->parentClasses,
@@ -1050,6 +1051,7 @@ final class AnalysisResultCache
         $dependencies         = $node['dependencies'] ?? [];
         $nonClassDependencies = $node['nonClassDependencies'] ?? [];
         $constantFetches      = $node['constantFetches'] ?? [];
+        $signatureTypes       = $node['signatureTypes'] ?? [];
         $implements           = $node['implements'] ?? [];
         $interfaceExtends     = $node['interfaceExtends'] ?? [];
         $parentClasses        = $node['parentClasses'] ?? [];
@@ -1077,6 +1079,7 @@ final class AnalysisResultCache
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($nonClassDependencies)
             || ! $this->isStringArray($constantFetches)
+            || ! $this->isStringArray($signatureTypes)
             || ! $this->isStringArray($implements)
             || ! $this->isStringArray($interfaceExtends)
             || ! $this->isStringArray($parentClasses)
@@ -1136,6 +1139,7 @@ final class AnalysisResultCache
             constantFetches:    array_values($constantFetches),
             isApi:              $isApi,
             isInternal:         $isInternal,
+            signatureTypes:     array_values($signatureTypes),
         );
     }
 
