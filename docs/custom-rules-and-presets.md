@@ -171,9 +171,21 @@ final readonly class ClassMustDeclareApiOrInternalRule implements RuleInterface
 
 ## Reading Signature Types In A Custom Rule
 
-`$classNode->signatureTypes` lists the fully-qualified class-like names a class-like exposes in its public and protected signatures: method parameter and return types, property types, and promoted constructor parameters that are not private. Nullable, union, intersection, and DNF types are flattened, and each name appears once. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, so `new Foo()` inside a public method does not add `Foo`. Docblock types are not read.
+Signatures are opt-in because collecting them costs extra analysis time and cache space. A rule that reads them implements `Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface` instead of the plain `RuleInterface`; without an active rule implementing it, `$classNode->signatures` stays empty.
 
-The example below reports a class-like that names an `Internal` namespace type in its signature:
+`$classNode->signatures` holds one `ClassSignature` per class-like type a member's signature names, each with these properties:
+
+| Property | Meaning |
+| --- | --- |
+| `$signature->type` | The fully-qualified type name |
+| `$signature->modifiers` | Exactly one visibility flag (`ClassSignature::PUBLIC`, `PROTECTED`, `PRIVATE`) and one kind flag (`PARAMETER`, `RETURN_TYPE`, `PROPERTY`) |
+| `$signature->line` | The line the type name is written on |
+
+`$signature->isExposed()` is true for a public or protected signature. Members of every visibility are recorded, so a rule decides which ones matter by reading the flags, for example `$signature->modifiers & ClassSignature::PROPERTY`.
+
+Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per name, and the same type is recorded again in every signature that names it. A promoted constructor parameter is recorded twice: as a parameter with the constructor's visibility and as a property with its own, so `public function __construct(private Pool $pool)` is exposed through the parameter even though the property is private. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
+
+The example below keeps database details inside repositories. A repository may build queries with Doctrine's `QueryBuilder`, but no public or protected method may return one, or callers could keep changing the query outside the repository:
 
 ```php
 <?php
@@ -181,36 +193,60 @@ The example below reports a class-like that names an `Internal` namespace type i
 namespace App\Architecture\Rules;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
+use Doctrine\ORM\QueryBuilder;
 
 use function sprintf;
-use function str_contains;
 
-final readonly class InternalMayNotLeakIntoSignatureRule implements RuleInterface
+final readonly class RepositoryMayNotReturnQueryBuilderRule implements SignatureTypesAwareRuleInterface
 {
     public function appliesTo(ClassNode $classNode): bool
     {
-        return $classNode->isInLayer('Core') && ! $classNode->isInternal;
+        return $classNode->nameEndsWith('Repository');
     }
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        foreach ($classNode->signatureTypes as $signatureType) {
-            if (! str_contains($signatureType, '\\Internal\\')) {
+        foreach ($classNode->signatures as $signature) {
+            if (
+                ! $signature->isExposed()
+                || ($signature->modifiers & ClassSignature::RETURN_TYPE) === 0
+                || $signature->type !== QueryBuilder::class
+            ) {
                 continue;
             }
 
             return new RuleViolation(
-                message:   sprintf('%s [%s] exposes internal type [%s] in its signature', $classNode->getType(), $classNode->className, $signatureType),
+                message:   sprintf('[%s] must not return a QueryBuilder', $classNode->className),
                 file:      $classNode->file,
-                line:      $classNode->line,
+                line:      $signature->line,
                 className: $classNode->className,
                 layer:     $classNode->layer,
             );
         }
 
         return null;
+    }
+}
+```
+
+With this rule active, the first method below is reported and the second is allowed:
+
+```php
+final class UserRepository
+{
+    // Reported: the query leaves the repository
+    public function activeUsers(): QueryBuilder
+    {
+        return $this->baseQuery()->where('u.active = true');
+    }
+
+    // Allowed: the query stays inside the repository
+    private function baseQuery(): QueryBuilder
+    {
+        return $this->entityManager->createQueryBuilder();
     }
 }
 ```

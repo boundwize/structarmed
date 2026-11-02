@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Cache;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
@@ -68,7 +69,7 @@ final class AnalysisResultCache
      * their shape, naming, or reference semantics change. It is recorded in
      * the metadata marker, so older caches are cleared on their next use.
      */
-    public const FORMAT_VERSION = 19;
+    public const FORMAT_VERSION = 20;
 
     private readonly string $cacheDirectory;
 
@@ -259,11 +260,17 @@ final class AnalysisResultCache
      *     anonymousFunctionNodes: list<AnonymousFunctionNode>
      * })|null
      */
-    public function loadAnalysisNodes(string $file, string $namespace, bool $withFileAnalysis = false): ?array
-    {
+    public function loadAnalysisNodes(
+        string $file,
+        string $namespace,
+        bool $withFileAnalysis = false,
+        bool $withSignatures = false,
+    ): ?array {
         $payload = $this->analysisNodePayload($file, $namespace);
 
-        if ($payload === null) {
+        // An empty signature list cannot tell "none declared" from "not
+        // collected", so the payload records that it was collected.
+        if ($payload === null || ($withSignatures && ($payload['hasSignatures'] ?? null) !== true)) {
             return null;
         }
 
@@ -279,7 +286,7 @@ final class AnalysisResultCache
             }
         }
 
-        $classNodes             = $this->classNodesFromPayload($payload, $file);
+        $classNodes             = $this->classNodesFromPayload($payload, $file, $withSignatures);
         $anonymousClassNodes    = $this->anonymousClassNodesFromPayload($payload);
         $fileReferences         = $this->fileReferencesFromPayload($payload);
         $fileInstantiations     = $this->fileInstantiationsFromPayload($payload);
@@ -329,7 +336,7 @@ final class AnalysisResultCache
      * @param array<string, mixed> $payload
      * @return list<ClassNode>|null
      */
-    private function classNodesFromPayload(array $payload, string $file): ?array
+    private function classNodesFromPayload(array $payload, string $file, bool $withSignatures): ?array
     {
         if (! is_array($payload['nodes'] ?? null)) {
             return null;
@@ -342,7 +349,7 @@ final class AnalysisResultCache
                 return null;
             }
 
-            $classNode = $this->classNodeFromArray($node, $file);
+            $classNode = $this->classNodeFromArray($node, $file, $withSignatures);
 
             if (! $classNode instanceof ClassNode) {
                 return null;
@@ -361,8 +368,12 @@ final class AnalysisResultCache
      *
      * @param list<string> $files
      */
-    public function storeExtractionResult(array $files, string $namespace, ExtractionResult $extractionResult): void
-    {
+    public function storeExtractionResult(
+        array $files,
+        string $namespace,
+        ExtractionResult $extractionResult,
+        bool $withSignatures = false,
+    ): void {
         $fileSet                      = array_fill_keys($files, true);
         $classNodesByFile             = [];
         $anonymousClassNodesByFile    = [];
@@ -404,6 +415,7 @@ final class AnalysisResultCache
                 $extractionResult->fileInstantiations[$file] ?? [],
                 $functionNodesByFile[$file] ?? [],
                 $anonymousFunctionNodesByFile[$file] ?? [],
+                $withSignatures,
             );
         }
     }
@@ -427,6 +439,7 @@ final class AnalysisResultCache
         array $fileInstantiations = [],
         array $functionNodes = [],
         array $anonymousFunctionNodes = [],
+        bool $withSignatures = false,
     ): void {
         $this->ensureCacheInitialised();
 
@@ -436,6 +449,10 @@ final class AnalysisResultCache
             'metadata' => $this->fileHashProvider->hash($file),
             'nodes'    => array_map($this->classNodeToArray(...), $classNodes),
         ];
+
+        if ($withSignatures) {
+            $payload['hasSignatures'] = true;
+        }
 
         // Most files have none of these; leave their keys out entirely.
         $lists = [
@@ -1006,7 +1023,7 @@ final class AnalysisResultCache
             'dependencies'         => $classNode->dependencies,
             'nonClassDependencies' => $classNode->nonClassDependencies,
             'constantFetches'      => $classNode->constantFetches,
-            'signatureTypes'       => $classNode->signatureTypes,
+            'signatures'           => array_map($this->classSignatureToArray(...), $classNode->signatures),
             'implements'           => array_values($classNode->implements),
             'interfaceExtends'     => array_values($classNode->interfaceExtends),
             'parentClasses'        => $classNode->parentClasses,
@@ -1034,7 +1051,7 @@ final class AnalysisResultCache
     /**
      * @param array<mixed, mixed> $node
      */
-    private function classNodeFromArray(array $node, string $file): ?ClassNode
+    private function classNodeFromArray(array $node, string $file, bool $withSignatures): ?ClassNode
     {
         $className            = $node['className'] ?? null;
         $line                 = $node['line'] ?? null;
@@ -1051,7 +1068,6 @@ final class AnalysisResultCache
         $dependencies         = $node['dependencies'] ?? [];
         $nonClassDependencies = $node['nonClassDependencies'] ?? [];
         $constantFetches      = $node['constantFetches'] ?? [];
-        $signatureTypes       = $node['signatureTypes'] ?? [];
         $implements           = $node['implements'] ?? [];
         $interfaceExtends     = $node['interfaceExtends'] ?? [];
         $parentClasses        = $node['parentClasses'] ?? [];
@@ -1079,7 +1095,6 @@ final class AnalysisResultCache
             || ! $this->isStringArray($dependencies)
             || ! $this->isStringArray($nonClassDependencies)
             || ! $this->isStringArray($constantFetches)
-            || ! $this->isStringArray($signatureTypes)
             || ! $this->isStringArray($implements)
             || ! $this->isStringArray($interfaceExtends)
             || ! $this->isStringArray($parentClasses)
@@ -1097,12 +1112,18 @@ final class AnalysisResultCache
         $constants  = $this->memberNodesFromArray($node['constants'] ?? [], $this->constantNodeFromArray(...));
         $properties = $this->memberNodesFromArray($node['properties'] ?? [], $this->propertyNodeFromArray(...));
         $enumCases  = $this->memberNodesFromArray($node['enumCases'] ?? [], $this->enumCaseNodeFromArray(...));
+        // Left out when no rule reads them, so a run sees the same nodes
+        // whether or not an earlier run collected them.
+        $signatures = $withSignatures
+            ? $this->memberNodesFromArray($node['signatures'] ?? [], $this->classSignatureFromArray(...))
+            : [];
 
         if (
             $methods === null
             || $constants === null
             || $properties === null
             || $enumCases === null
+            || $signatures === null
             || ($enumBackingType !== null && ! is_string($enumBackingType))
         ) {
             return null;
@@ -1139,12 +1160,12 @@ final class AnalysisResultCache
             constantFetches:    array_values($constantFetches),
             isApi:              $isApi,
             isInternal:         $isInternal,
-            signatureTypes:     array_values($signatureTypes),
+            signatures:         $signatures,
         );
     }
 
     /**
-     * @template TMember of MethodNode|ConstantNode|PropertyNode|EnumCaseNode
+     * @template TMember of MethodNode|ConstantNode|PropertyNode|EnumCaseNode|ClassSignature
      * @param callable(array<mixed, mixed>): (TMember|null) $memberFromArray
      * @return list<TMember>|null
      */
@@ -1234,6 +1255,36 @@ final class AnalysisResultCache
             $enumCaseNode->line,
             $enumCaseNode->value,
         ];
+    }
+
+    /**
+     * @return array{string, int, int}
+     */
+    private function classSignatureToArray(ClassSignature $classSignature): array
+    {
+        return [
+            $classSignature->type,
+            $classSignature->modifiers,
+            $classSignature->line,
+        ];
+    }
+
+    /**
+     * @param array<mixed, mixed> $signature
+     */
+    private function classSignatureFromArray(array $signature): ?ClassSignature
+    {
+        if (count($signature) !== 3 || ! array_is_list($signature)) {
+            return null;
+        }
+
+        [$type, $modifiers, $line] = $signature;
+
+        if (! is_string($type) || ! is_int($modifiers) || ! is_int($line)) {
+            return null;
+        }
+
+        return new ClassSignature($type, $modifiers, $line);
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Foo;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
@@ -1652,6 +1653,113 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testSignaturesRoundTripAndFollowTheCapabilityOfThePayload(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $withoutSignatures   = $this->makeClassNode($sourceFile);
+        $withSignatures      = new ClassNode(
+            className:   $withoutSignatures->className,
+            file:        $sourceFile,
+            line:        1,
+            layer:       'Source',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     true,
+            isInterface: false,
+            isReadonly:  false,
+            signatures:  [
+                new ClassSignature('App\Money', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 3),
+                new ClassSignature('App\Money', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 3),
+            ],
+        );
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            // Collected: reused whether or not the run needs them.
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'with', [$withSignatures], withSignatures: true);
+
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'with', withSignatures: true);
+            $this->assertNotNull($loaded);
+            $this->assertEquals([$withSignatures], $loaded['classNodes']);
+
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'with');
+            $this->assertNotNull($loaded);
+            $this->assertSame([], $loaded['classNodes'][0]->signatures);
+
+            // Not collected: a run that needs them must extract again.
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'without', [$withoutSignatures]);
+
+            $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'without'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'without', withSignatures: true));
+
+            // Collected but none declared: an empty list is still a hit.
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'empty', [$withoutSignatures], withSignatures: true);
+
+            $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'empty', withSignatures: true));
+
+            // A file without any class-like records the capability as well.
+            $analysisResultCache->storeExtractionResult(
+                [$sourceFile],
+                'no-nodes',
+                new ExtractionResult(classNodes: [], fileAnalyses: []),
+                withSignatures: true,
+            );
+
+            $this->assertNotNull(
+                $analysisResultCache->loadAnalysisNodes($sourceFile, 'no-nodes', withSignatures: true)
+            );
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testMalformedSignatureTupleIsACacheMissOnlyWhenSignaturesAreNeeded(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            foreach (
+                [
+                    'not a list'      => ['App\Money'],
+                    'wrong length'    => [['App\Money', 9]],
+                    'wrong type name' => [[1, 9, 3]],
+                    'wrong modifiers' => [['App\Money', '9', 3]],
+                    'wrong line'      => [['App\Money', 9, '3']],
+                    'not a tuple'     => [['type' => 'App\Money', 'modifiers' => 9, 'line' => 3]],
+                ] as $signatures
+            ) {
+                $analysisResultCache->storeAnalysisNodes(
+                    $sourceFile,
+                    'config',
+                    [$this->makeClassNode($sourceFile)],
+                    withSignatures: true,
+                );
+
+                $path    = $this->firstJsonFile($cacheDirectory);
+                $payload = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+                $this->assertIsArray($payload);
+                $this->assertIsArray($payload['nodes']);
+                $this->assertIsArray($payload['nodes'][0]);
+                $payload['nodes'][0]['signatures'] = $signatures;
+                file_put_contents($path, json_encode($payload, JSON_THROW_ON_ERROR));
+
+                $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config', withSignatures: true));
+                $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
+            }
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testClassNodesWithFileAnalysisMissesLegacyEntryWithoutFileFacts(): void
     {
         $cacheDirectory      = $this->createTempDirectory();
@@ -3013,7 +3121,6 @@ final class AnalysisResultCacheTest extends TestCase
             constantFetches: ['PHP_EOL'],
             isApi:         true,
             isInternal:    true,
-            signatureTypes: ['App\Domain\Money'],
         );
     }
 

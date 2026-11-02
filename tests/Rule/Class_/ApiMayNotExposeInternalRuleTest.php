@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Class_;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExposeInternalRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -15,6 +17,14 @@ use function array_map;
 #[CoversClass(ApiMayNotExposeInternalRule::class)]
 final class ApiMayNotExposeInternalRuleTest extends TestCase
 {
+    public function testAsksTheAnalyserToCollectSignatures(): void
+    {
+        $this->assertInstanceOf(
+            SignatureTypesAwareRuleInterface::class,
+            new ApiMayNotExposeInternalRule(layer: 'Core')
+        );
+    }
+
     public function testAppliesOnlyToApiClassLikesInConfiguredLayer(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
@@ -35,7 +45,7 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         );
     }
 
-    public function testReportsEveryInternalTypeInSignature(): void
+    public function testReportsEveryExposedInternalTypeAtItsSignatureLine(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
         $apiMayNotExposeInternalRule->injectClassNodeMap([
@@ -46,27 +56,71 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
 
         $classNode = $this->makeNode(
             'App\Facade',
-            signatureTypes: ['App\Money', 'App\Pool', 'Vendor\Unscanned', 'App\Contract'],
+            signatures: [
+                new ClassSignature('App\Money', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 5),
+                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 7),
+                new ClassSignature('Vendor\Unscanned', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 9),
+                new ClassSignature('App\Contract', ClassSignature::PROTECTED | ClassSignature::PROPERTY, 11),
+                new ClassSignature('App\Pool', ClassSignature::PROTECTED | ClassSignature::PARAMETER, 13),
+            ],
             isApi: true,
         );
 
         $violation = $apiMayNotExposeInternalRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertSame(
-            '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature',
-            $violation->message
-        );
+        $this->assertSame(7, $violation->line);
         $this->assertSame(
             [
-                '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature',
-                '@api Class [App\Facade] must not expose @internal Interface [App\Contract] in its signature',
+                [7, '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature'],
+                [11, '@api Class [App\Facade] must not expose @internal Interface [App\Contract] in its signature'],
+                [13, '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature'],
             ],
             array_map(
-                static fn (RuleViolation $ruleViolation): string => $ruleViolation->message,
+                static fn (RuleViolation $ruleViolation): array => [$ruleViolation->line, $ruleViolation->message],
                 $apiMayNotExposeInternalRule->evaluateAll($classNode)
             )
         );
+    }
+
+    public function testReportsConstructorParameterOfPrivatelyPromotedProperty(): void
+    {
+        $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
+        $apiMayNotExposeInternalRule->injectClassNodeMap([
+            'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
+        ]);
+
+        $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
+            'App\Facade',
+            signatures: [
+                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 6),
+                new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 6),
+            ],
+            isApi: true,
+        ));
+
+        $this->assertCount(1, $violations);
+        $this->assertSame(6, $violations[0]->line);
+    }
+
+    public function testReportsATypeOnceWhenALineExposesItTwice(): void
+    {
+        $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
+        $apiMayNotExposeInternalRule->injectClassNodeMap([
+            'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
+        ]);
+
+        // A public promoted parameter is both a public parameter and a public property
+        $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
+            'App\Facade',
+            signatures: [
+                new ClassSignature('App\Pool', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 6),
+                new ClassSignature('app\pool', ClassSignature::PUBLIC | ClassSignature::PROPERTY, 6),
+            ],
+            isApi: true,
+        ));
+
+        $this->assertCount(1, $violations);
     }
 
     public function testFindsInternalTypeWrittenInAnotherCase(): void
@@ -77,9 +131,11 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         ]);
 
         // Class names are case-insensitive: `function pool(): pool` is valid PHP
-        $violation = $apiMayNotExposeInternalRule->evaluate(
-            $this->makeNode('App\Facade', signatureTypes: ['app\pool'], isApi: true)
-        );
+        $violation = $apiMayNotExposeInternalRule->evaluate($this->makeNode(
+            'App\Facade',
+            signatures: [new ClassSignature('app\pool', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 5)],
+            isApi: true,
+        ));
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertSame(
@@ -88,7 +144,7 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         );
     }
 
-    public function testPassesWhenInternalTypeIsOnlyAPlainDependency(): void
+    public function testPassesWhenInternalTypeIsPrivateOrOnlyAPlainDependency(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
         $apiMayNotExposeInternalRule->injectClassNodeMap([
@@ -98,21 +154,28 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         // An @api class may use an @internal type behind its signature
         $this->assertNotInstanceOf(
             RuleViolation::class,
-            $apiMayNotExposeInternalRule->evaluate(
-                $this->makeNode('App\Facade', dependencies: ['App\Pool'], isApi: true)
-            )
+            $apiMayNotExposeInternalRule->evaluate($this->makeNode(
+                'App\Facade',
+                dependencies: ['App\Pool'],
+                signatures: [
+                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 5),
+                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::PARAMETER, 7),
+                    new ClassSignature('App\Pool', ClassSignature::PRIVATE | ClassSignature::RETURN_TYPE, 7),
+                ],
+                isApi: true,
+            ))
         );
     }
 
     /**
-     * @param list<string> $dependencies
-     * @param list<string> $signatureTypes
+     * @param list<string>         $dependencies
+     * @param list<ClassSignature> $signatures
      */
     private function makeNode(
         string $className,
         string $layer = 'Core',
         array $dependencies = [],
-        array $signatureTypes = [],
+        array $signatures = [],
         bool $isInterface = false,
         bool $isTrait = false,
         bool $isEnum = false,
@@ -120,21 +183,21 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         bool $isInternal = false,
     ): ClassNode {
         return new ClassNode(
-            className:      $className,
-            file:           '/fake.php',
-            line:           1,
-            layer:          $layer,
-            extends:        null,
-            isAbstract:     false,
-            isFinal:        false,
-            isInterface:    $isInterface,
-            isReadonly:     false,
-            isTrait:        $isTrait,
-            dependencies:   $dependencies,
-            isEnum:         $isEnum,
-            isApi:          $isApi,
-            isInternal:     $isInternal,
-            signatureTypes: $signatureTypes,
+            className:    $className,
+            file:         '/fake.php',
+            line:         1,
+            layer:        $layer,
+            extends:      null,
+            isAbstract:   false,
+            isFinal:      false,
+            isInterface:  $isInterface,
+            isReadonly:   false,
+            isTrait:      $isTrait,
+            dependencies: $dependencies,
+            isEnum:       $isEnum,
+            isApi:        $isApi,
+            isInternal:   $isInternal,
+            signatures:   $signatures,
         );
     }
 }

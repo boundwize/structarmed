@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use PhpParser\Modifiers;
@@ -202,10 +203,32 @@ PHP);
         return $this->makeCollector($code)->getAnonymousClassNodes();
     }
 
-    private function makeCollector(string $code, bool $withFileAnalysis = true): AnalysisNodeCollector
+    /** @return list<array{string, int, int}> */
+    private function collectSignatures(string $code): array
     {
+        $classNode = $this->makeCollector($code, withSignatures: true)->getClassNodes()[0];
+
+        return array_map(
+            static fn (ClassSignature $classSignature): array => [
+                $classSignature->type,
+                $classSignature->modifiers,
+                $classSignature->line,
+            ],
+            $classNode->signatures
+        );
+    }
+
+    private function makeCollector(
+        string $code,
+        bool $withFileAnalysis = true,
+        bool $withSignatures = false,
+    ): AnalysisNodeCollector {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
-        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver, $withFileAnalysis);
+        $analysisNodeCollector  = new AnalysisNodeCollector(
+            $namespaceLayerResolver,
+            $withFileAnalysis,
+            $withSignatures
+        );
         $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
         $ast                    = $parser->parse($code);
 
@@ -957,86 +980,224 @@ PHP);
         );
     }
 
-    public function testCollectsSignatureTypes(): void
+    public function testLeavesSignaturesEmptyWhenCollectionIsDisabled(): void
     {
-        $classNode = $this->collect(<<<'CODE_SAMPLE'
-            <?php
-
-            namespace App;
-
-            use Vendor\Imported;
-
-            class Foo extends Base
-            {
-                public ?Nullable $publicProperty;
-                protected PartOne|PartTwo|null $protectedProperty;
-                private PrivateProperty $privateProperty;
-                public int $builtin;
-
-                public function __construct(
-                    public PublicPromoted $publicPromoted,
-                    readonly ImplicitPublicPromoted $implicitPublicPromoted,
-                    private PrivatePromoted $privatePromoted,
-                    Imported $plainParam,
-                ) {
-                }
-
-                public function run(\Fully\Qualified $param, (First&Second)|null $dnf): Imported
-                {
-                    new OnlyInBody();
-
-                    return new class {
-                        public function anonymous(OnlyInAnonymousClass $param): void
-                        {
-                        }
-                    };
-                }
-
-                protected function guarded(): ProtectedReturn
-                {
-                }
-
-                public function keywords(self $self, parent $parent, int $int): static
-                {
-                }
-
-                private function hidden(PrivateParam $param): PrivateReturn
-                {
-                }
-            }
-            CODE_SAMPLE);
-
-        $this->assertSame(
-            [
-                'App\Nullable',
-                'App\PartOne',
-                'App\PartTwo',
-                'App\PublicPromoted',
-                'App\ImplicitPublicPromoted',
-                'Vendor\Imported',
-                'Fully\Qualified',
-                'App\First',
-                'App\Second',
-                'App\ProtectedReturn',
-            ],
-            $classNode->signatureTypes
-        );
-    }
-
-    public function testCollectsPromotedSignatureTypeOfPrivateConstructor(): void
-    {
-        $classNode = $this->collect(<<<'CODE_SAMPLE'
+        $analysisNodeCollector = $this->makeCollector(<<<'CODE_SAMPLE'
             <?php
 
             class Foo
             {
-                private function __construct(public Exposed $exposed, Hidden $hidden)
+                public Bar $bar;
+
+                public function __construct(public Baz $baz)
+                {
+                }
+
+                public function run(Qux $qux): Quux
                 {
                 }
             }
             CODE_SAMPLE);
 
-        $this->assertSame(['Exposed'], $classNode->signatureTypes);
+        $this->assertSame([], $analysisNodeCollector->getClassNodes()[0]->signatures);
+    }
+
+    public function testCollectsSignatureVisibilityKindLineAndFullyQualifiedName(): void
+    {
+        $this->assertSame(
+            [
+                ['Vendor\Imported', ClassSignature::PUBLIC | ClassSignature::PROPERTY, 9],
+                ['App\Second', ClassSignature::PROTECTED | ClassSignature::PROPERTY, 10],
+                ['App\Third', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 11],
+                ['App\Param', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 14],
+                ['App\Result', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 14],
+                ['App\Param', ClassSignature::PROTECTED | ClassSignature::PARAMETER, 18],
+                ['App\Result', ClassSignature::PROTECTED | ClassSignature::RETURN_TYPE, 18],
+                ['Fully\Qualified', ClassSignature::PRIVATE | ClassSignature::PARAMETER, 22],
+                ['App\Result', ClassSignature::PRIVATE | ClassSignature::RETURN_TYPE, 22],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                namespace App;
+
+                use Vendor\Imported;
+
+                class Foo extends Base
+                {
+                    public Imported $publicProperty;
+                    protected Second $protectedProperty;
+                    private Third $privateProperty;
+                    public int $builtin;
+
+                    public function publicMethod(Param $param): Result
+                    {
+                    }
+
+                    protected function protectedMethod(Param $param): Result
+                    {
+                    }
+
+                    private function privateMethod(\Fully\Qualified $param): Result
+                    {
+                    }
+
+                    public function keywords(self $self, parent $parent, int $int): static
+                    {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testFlattensCompositeSignatureTypes(): void
+    {
+        $parameter = ClassSignature::PUBLIC | ClassSignature::PARAMETER;
+
+        $this->assertSame(
+            [
+                ['Nullable', $parameter, 6],
+                ['First', $parameter, 7],
+                ['Second', $parameter, 8],
+                ['Left', $parameter, 9],
+                ['Right', $parameter, 9],
+                ['Dnf', $parameter, 10],
+                ['Form', $parameter, 10],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    public function run(
+                        ?Nullable $nullable,
+                        First
+                            |Second|int $union,
+                        Left&Right $intersection,
+                        (Dnf&Form)|null $dnf,
+                    ): void {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testCollectsPromotedParameterAsParameterAndProperty(): void
+    {
+        $this->assertSame(
+            [
+                ['Hidden', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 5],
+                ['Hidden', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 5],
+                ['Guarded', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 5],
+                ['Guarded', ClassSignature::PROTECTED | ClassSignature::PROPERTY, 5],
+                ['Open', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 5],
+                ['Open', ClassSignature::PUBLIC | ClassSignature::PROPERTY, 5],
+                ['Plain', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 5],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    public function __construct(private Hidden $a, protected Guarded $b, readonly Open $c, Plain $d)
+                    {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testPrivateConstructorExposesOnlyThroughPromotedPropertyVisibility(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(
+            <<<'CODE_SAMPLE'
+            <?php
+
+            class Foo
+            {
+                private function __construct(private Hidden $a, public Exposed $b, Plain $c)
+                {
+                }
+            }
+            CODE_SAMPLE,
+            withSignatures: true,
+        );
+
+        $exposedTypes = [];
+
+        foreach ($analysisNodeCollector->getClassNodes()[0]->signatures as $signature) {
+            if ($signature->isExposed()) {
+                $exposedTypes[] = $signature->type;
+            }
+        }
+
+        $this->assertSame(['Exposed'], $exposedTypes);
+    }
+
+    public function testKeepsRepeatedSignatureTypeInEachContext(): void
+    {
+        $this->assertSame(
+            [
+                ['Shared', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 5],
+                ['Shared', ClassSignature::PUBLIC | ClassSignature::PARAMETER, 7],
+                ['Shared', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 7],
+                ['Shared', ClassSignature::PROTECTED | ClassSignature::RETURN_TYPE, 11],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    private Shared $shared;
+
+                    public function run(Shared $shared): Shared
+                    {
+                    }
+
+                    protected function other(): Shared
+                    {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testKeepsSignaturesWithTheirDeclaringClassLike(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(
+            <<<'CODE_SAMPLE'
+            <?php
+
+            class Outer
+            {
+                public function make(): OuterResult
+                {
+                    return new class {
+                        public AnonymousProperty $property;
+
+                        public function anonymous(AnonymousParam $param): void
+                        {
+                        }
+                    };
+                }
+            }
+
+            interface Second
+            {
+                public function run(SecondParam $param): void;
+            }
+            CODE_SAMPLE,
+            withSignatures: true,
+        );
+
+        $classNodes = $analysisNodeCollector->getClassNodes();
+        $types      = static fn (ClassNode $classNode): array => array_map(
+            static fn (ClassSignature $classSignature): string => $classSignature->type,
+            $classNode->signatures
+        );
+
+        $this->assertSame(['OuterResult'], $types($classNodes[0]));
+        $this->assertSame(['SecondParam'], $types($classNodes[1]));
     }
 
     public function testCollectsInterface(): void

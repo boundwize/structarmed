@@ -33,13 +33,8 @@ final class ClassLikeAnalysis
      */
     public array $constantFetches = [];
 
-    /**
-     * The class-like types named by non-private method parameters, return
-     * types, and properties.
-     *
-     * @var array<string, true>
-     */
-    public array $signatureTypes = [];
+    /** @var list<ClassSignature> */
+    public array $signatures = [];
 
     /** @var list<Name> */
     public array $functionCallNames = [];

@@ -8,10 +8,14 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\AbstractLayerAwareRule;
 use Boundwize\StructArmed\Rule\MultipleRuleViolationInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
 
+use function array_values;
 use function sprintf;
 
-final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implements MultipleRuleViolationInterface
+final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implements
+    MultipleRuleViolationInterface,
+    SignatureTypesAwareRuleInterface
 {
     public function __construct(
         private readonly string $layer,
@@ -35,15 +39,21 @@ final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implement
     {
         $violations = [];
 
-        foreach ($classNode->signatureTypes as $signatureType) {
-            // Only a scanned type has a known docblock
-            $typeNode = $this->getDependencyNode($signatureType);
-
-            if (! $typeNode instanceof ClassNode || ! $typeNode->isInternal) {
+        foreach ($classNode->signatures as $signature) {
+            if (! $signature->isExposed()) {
                 continue;
             }
 
-            $violations[] = new RuleViolation(
+            // Only a scanned type has a known docblock
+            $typeNode = $this->getDependencyNode($signature->type);
+
+            if ($typeNode?->isInternal !== true) {
+                continue;
+            }
+
+            // A line can name a type more than once, such as a promoted
+            // parameter that is also a property: one violation is enough
+            $violations[$signature->line . ' ' . $typeNode->className] = new RuleViolation(
                 message:   sprintf(
                     '@api %s [%s] must not expose @internal %s [%s] in its signature',
                     $classNode->getType(),
@@ -52,12 +62,12 @@ final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implement
                     $typeNode->className
                 ),
                 file:      $classNode->file,
-                line:      $classNode->line,
+                line:      $signature->line,
                 className: $classNode->className,
                 layer:     $classNode->layer,
             );
         }
 
-        return $violations;
+        return array_values($violations);
     }
 }
