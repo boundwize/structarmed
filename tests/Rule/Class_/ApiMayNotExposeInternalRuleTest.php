@@ -87,6 +87,26 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         );
     }
 
+    public function testReportsConstructorParameterOfPrivatelyPromotedProperty(): void
+    {
+        $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
+        $apiMayNotExposeInternalRule->injectClassNodeMap([
+            'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
+        ]);
+
+        $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
+            'App\Facade',
+            signatures: [
+                new ClassSignature('App\Pool', 'pool', ClassSignature::PROPERTY, 'private', 6),
+                new ClassSignature('App\Pool', 'pool', ClassSignature::PARAM, 'public', 6),
+            ],
+            isApi: true,
+        ));
+
+        $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('through param [pool]', $violations[0]->message);
+    }
+
     public function testReportsEachMemberExposingATypeOnTheSameLine(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
