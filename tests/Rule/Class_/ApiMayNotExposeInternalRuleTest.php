@@ -72,9 +72,13 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $this->assertSame(7, $violation->line);
         $this->assertSame(
             [
-                [7, '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature'],
-                [11, '@api Class [App\Facade] must not expose @internal Interface [App\Contract] in its signature'],
-                [13, '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature'],
+                [7, '@api Class [App\Facade] must not expose @internal Class [App\Pool] through method [run]'],
+                [
+                    11,
+                    '@api Class [App\Facade] must not expose @internal Interface [App\Contract] '
+                    . 'through property [value]',
+                ],
+                [13, '@api Class [App\Facade] must not expose @internal Class [App\Pool] through param [value]'],
             ],
             array_map(
                 static fn (RuleViolation $ruleViolation): array => [$ruleViolation->line, $ruleViolation->message],
@@ -103,7 +107,32 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $this->assertSame(6, $violations[0]->line);
     }
 
-    public function testReportsATypeOnceWhenALineExposesItTwice(): void
+    public function testReportsEachMemberExposingATypeOnTheSameLine(): void
+    {
+        $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
+        $apiMayNotExposeInternalRule->injectClassNodeMap([
+            'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
+        ]);
+
+        $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
+            'App\Facade',
+            signatures: [
+                new ClassSignature('App\Pool', 'pool', ClassSignature::PARAM, 'public', 6),
+                new ClassSignature('App\Pool', 'run', ClassSignature::METHOD, 'public', 6),
+            ],
+            isApi: true,
+        ));
+
+        $this->assertSame(
+            [
+                '@api Class [App\Facade] must not expose @internal Class [App\Pool] through param [pool]',
+                '@api Class [App\Facade] must not expose @internal Class [App\Pool] through method [run]',
+            ],
+            array_map(static fn (RuleViolation $ruleViolation): string => $ruleViolation->message, $violations)
+        );
+    }
+
+    public function testReportsATypeOnceWhenAMemberExposesItTwice(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
         $apiMayNotExposeInternalRule->injectClassNodeMap([
@@ -121,6 +150,7 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         ));
 
         $this->assertCount(1, $violations);
+        $this->assertStringEndsWith('through param [value]', $violations[0]->message);
     }
 
     public function testFindsInternalTypeWrittenInAnotherCase(): void
@@ -139,7 +169,7 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertSame(
-            '@api Class [App\Facade] must not expose @internal Class [App\Pool] in its signature',
+            '@api Class [App\Facade] must not expose @internal Class [App\Pool] through method [run]',
             $violation->message
         );
     }

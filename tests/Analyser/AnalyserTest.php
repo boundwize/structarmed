@@ -350,8 +350,8 @@ final class AnalyserTest extends TestCase
             ->layer('Source', 'src/')
             ->rule('count', $this->makeSignatureCountRule());
         $expected            = [
-            [6, '@api Class [App\Client] must not expose @internal Class [App\Pool] in its signature'],
-            [10, '@api Class [App\Client] must not expose @internal Class [App\Pool] in its signature'],
+            [6, '@api Class [App\Client] must not expose @internal Class [App\Pool] through method [pool]'],
+            [10, '@api Class [App\Client] must not expose @internal Class [App\Pool] through param [exposed]'],
         ];
         $linesAndMessages    = static fn(Analyser $analyser, AnalyserOptions $analyserOptions): array => array_map(
             static fn (RuleViolation $ruleViolation): array => [$ruleViolation->line, $ruleViolation->message],

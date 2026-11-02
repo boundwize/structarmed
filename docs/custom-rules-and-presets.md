@@ -183,7 +183,24 @@ Signatures are opt-in because collecting them costs extra analysis time and cach
 | `$signature->visibility` | `public`, `protected`, or `private`; a parameter has its method's visibility |
 | `$signature->line` | The line the type name is written on |
 
-`$signature->isExposed()` is true for a public or protected signature. Members of every visibility are recorded, so a rule decides which ones matter by reading these properties, for example `$signature->kind === ClassSignature::PROPERTY`.
+`$signature->isExposed()` is true for a public or protected signature. Members of every visibility are recorded, so a rule decides which ones matter by reading these properties:
+
+```php
+// the return type of any public method
+$signature->kind === ClassSignature::METHOD && $signature->visibility === 'public'
+
+// the type of a property named $connection, whatever its visibility
+$signature->kind === ClassSignature::PROPERTY && $signature->name === 'connection'
+```
+
+For `public function find(Criteria $criteria): Result`, the signatures read as follows:
+
+| `type` | `name` | `kind` | `visibility` |
+| --- | --- | --- | --- |
+| `App\Criteria` | `criteria` | `ClassSignature::PARAM` | `public` |
+| `App\Result` | `find` | `ClassSignature::METHOD` | `public` |
+
+A parameter's signature holds the parameter's name, not its method's; use `$signature->line` to point at where it is written.
 
 Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per type name, and the same type is recorded again in every signature that names it, including each property of `public Pool $a, $b;`. A promoted constructor parameter is recorded twice: as a parameter with the constructor's visibility and as a property with its own, so `public function __construct(private Pool $pool)` is exposed through the parameter even though the property is private. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
 
@@ -221,7 +238,11 @@ final readonly class RepositoryMayNotReturnQueryBuilderRule implements Signature
             }
 
             return new RuleViolation(
-                message:   sprintf('[%s] must not return a QueryBuilder', $classNode->className),
+                message:   sprintf(
+                    '[%s::%s()] must not return a QueryBuilder',
+                    $classNode->className,
+                    $signature->name
+                ),
                 file:      $classNode->file,
                 line:      $signature->line,
                 className: $classNode->className,
