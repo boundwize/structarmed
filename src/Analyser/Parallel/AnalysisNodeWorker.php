@@ -41,6 +41,8 @@ final readonly class AnalysisNodeWorker
             $emitProgress = $payload['emitProgress'] ?? true;
             /** @var bool $withFileAnalysis */
             $withFileAnalysis = $payload['withFileAnalysis'] ?? true;
+            /** @var bool $withSignatures */
+            $withSignatures = $payload['withSignatures'] ?? false;
             /**
              * @var array<string, array{
              *     pattern: string|list<string>,
@@ -72,7 +74,7 @@ final readonly class AnalysisNodeWorker
                 $layerResolver,
                 analysisResultCache: $cache instanceof AnalysisResultCache ? $cache : null,
                 analysisNodeCacheNamespace: $cacheNamespace,
-            ))->extract($files, $progressHandler, $withFileAnalysis);
+            ))->extract($files, $progressHandler, $withFileAnalysis, $withSignatures);
 
             file_put_contents($outputFile, serialize([
                 'nodes'                  => $result->classNodes,

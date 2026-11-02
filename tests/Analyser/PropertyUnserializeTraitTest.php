@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
@@ -43,6 +44,9 @@ final class PropertyUnserializeTraitTest extends TestCase
         yield 'method' => [new MethodNode('handle', 'protected', true, true, 2, 3, 12, true, 7, false)];
         yield 'property' => [new PropertyNode('name', 'private', true, 4)];
         yield 'constant' => [new ConstantNode('LIMIT', 'public', true, 3)];
+        yield 'class signature' => [
+            new ClassSignature('App\Domain\Money', ClassSignature::PRIVATE | ClassSignature::PROPERTY, 3),
+        ];
         yield 'enum case' => [new EnumCaseNode('Active', 5, 'active')];
         yield 'file analysis' => [
             new FileAnalysis(
@@ -82,6 +86,9 @@ final class PropertyUnserializeTraitTest extends TestCase
                 enumCases: [new EnumCaseNode('Draft', 8, 'draft')],
                 nonClassDependencies: ['App\Domain\helper'],
                 constantFetches: ['PHP_EOL'],
+                signatures: [
+                    new ClassSignature('App\Domain\Money', ClassSignature::PUBLIC | ClassSignature::RETURN_TYPE, 12),
+                ],
             ),
         ];
         yield 'function' => [

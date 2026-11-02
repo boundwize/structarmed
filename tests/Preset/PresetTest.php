@@ -18,6 +18,7 @@ use Boundwize\StructArmed\Preset\Presets\ResolvesSourceLayerNameTrait;
 use Boundwize\StructArmed\Preset\Presets\StabilityPreset;
 use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotBeInternalRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExposeInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExtendInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
@@ -120,7 +121,7 @@ final class PresetTest extends TestCase
         $this->assertSame(['Source' => ['src/']], $architecture->getLayers());
 
         $rules = $architecture->getRules();
-        $this->assertCount(2, $rules);
+        $this->assertCount(3, $rules);
         $this->assertInstanceOf(
             ApiMayNotBeInternalRule::class,
             $rules[StabilityPreset::API_MAY_NOT_BE_INTERNAL] ?? null
@@ -128,6 +129,10 @@ final class PresetTest extends TestCase
         $this->assertInstanceOf(
             ApiMayNotExtendInternalRule::class,
             $rules[StabilityPreset::API_MAY_NOT_EXTEND_INTERNAL] ?? null
+        );
+        $this->assertInstanceOf(
+            ApiMayNotExposeInternalRule::class,
+            $rules[StabilityPreset::API_MAY_NOT_EXPOSE_INTERNAL] ?? null
         );
     }
 

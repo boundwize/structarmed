@@ -82,6 +82,7 @@ final readonly class ParallelAnalysisNodeExtractor
         array $files,
         ?ProgressHandlerInterface $progressHandler = null,
         bool $withFileAnalysis = true,
+        bool $withSignatures = false,
     ): ExtractionResult {
         if ($files === []) {
             $progressHandler?->start(0);
@@ -117,6 +118,7 @@ final readonly class ParallelAnalysisNodeExtractor
                 'files'             => $chunk,
                 'emitProgress'      => $emitProgress,
                 'withFileAnalysis'  => $withFileAnalysis,
+                'withSignatures'    => $withSignatures,
                 'cache'             => $this->analysisResultCache?->forFiles($chunk),
                 'cacheNamespace'    => $this->analysisNodeCacheNamespace,
             ]));

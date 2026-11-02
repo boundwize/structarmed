@@ -43,9 +43,11 @@ use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\IntersectionType;
 use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
 use PhpParser\Node\Scalar\Float_;
 use PhpParser\Node\Scalar\Int_;
@@ -75,6 +77,7 @@ use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
+use PhpParser\Node\UnionType;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
@@ -451,6 +454,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     public function __construct(
         private readonly LayerResolverInterface $layerResolver,
         private readonly bool $withFileAnalysis = true,
+        private readonly bool $withSignatures = false,
     ) {
         $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): string {
             if (
@@ -952,6 +956,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $visibility            = $this->resolveVisibilityName($stmt);
             $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
 
+            if ($this->withSignatures) {
+                $this->collectSignatures(
+                    $analysis,
+                    $stmt->type,
+                    $this->signatureVisibility($stmt) | ClassSignature::PROPERTY
+                );
+            }
+
             foreach ($stmt->props as $prop) {
                 $analysis->properties[] = new PropertyNode(
                     name:                 (string) $prop->name,
@@ -1080,6 +1092,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             isMagic:              $classMethod->isMagic(),
         );
 
+        if ($this->withSignatures) {
+            $this->collectMethodSignatures($analysis, $classMethod);
+        }
+
         if ($classMethod->name->toLowerString() !== '__construct') {
             return;
         }
@@ -1100,6 +1116,66 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 line:                  $param->getStartLine(),
             );
         }
+    }
+
+    private function collectMethodSignatures(ClassLikeAnalysis $classLikeAnalysis, ClassMethod $classMethod): void
+    {
+        $visibility = $this->signatureVisibility($classMethod);
+
+        foreach ($classMethod->params as $param) {
+            $this->collectSignatures($classLikeAnalysis, $param->type, $visibility | ClassSignature::PARAMETER);
+
+            // a promoted parameter also declares a property with its own visibility
+            if ($param->isPromoted()) {
+                $this->collectSignatures(
+                    $classLikeAnalysis,
+                    $param->type,
+                    $this->signatureVisibility($param) | ClassSignature::PROPERTY
+                );
+            }
+        }
+
+        $this->collectSignatures(
+            $classLikeAnalysis,
+            $classMethod->returnType,
+            $visibility | ClassSignature::RETURN_TYPE
+        );
+    }
+
+    private function collectSignatures(ClassLikeAnalysis $classLikeAnalysis, ?Node $type, int $modifiers): void
+    {
+        if ($type instanceof Name) {
+            if (! $type->isSpecialClassName()) {
+                $classLikeAnalysis->signatures[] = new ClassSignature(
+                    $type->toString(),
+                    $modifiers,
+                    $type->getStartLine()
+                );
+            }
+
+            return;
+        }
+
+        if ($type instanceof NullableType) {
+            $this->collectSignatures($classLikeAnalysis, $type->type, $modifiers);
+
+            return;
+        }
+
+        if ($type instanceof UnionType || $type instanceof IntersectionType) {
+            foreach ($type->types as $innerType) {
+                $this->collectSignatures($classLikeAnalysis, $innerType, $modifiers);
+            }
+        }
+    }
+
+    private function signatureVisibility(ClassMethod|Property|Param $node): int
+    {
+        if ($node->isProtected()) {
+            return ClassSignature::PROTECTED;
+        }
+
+        return $node->isPrivate() ? ClassSignature::PRIVATE : ClassSignature::PUBLIC;
     }
 
     /**
@@ -1692,6 +1768,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             constantFetches:    $analysis['constantFetches'],
             isApi:              $this->hasDocBlockTag($classLike, 'api'),
             isInternal:         $this->hasDocBlockTag($classLike, 'internal'),
+            signatures:         $analysis['signatures'],
         );
     }
 
@@ -1851,6 +1928,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *     dependencies: list<string>,
      *     nonClassDependencies: list<string>,
      *     constantFetches: list<string>,
+     *     signatures: list<ClassSignature>,
      *     functionCalls: string[],
      *     superglobals: string[],
      *     languageConstructs: string[],
@@ -1879,6 +1957,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 )
             ),
             'constantFetches'      => array_keys($classLikeAnalysis->constantFetches),
+            'signatures'           => $classLikeAnalysis->signatures,
             'functionCalls'        => array_values(array_unique($functionCalls)),
             'superglobals'         => array_keys($classLikeAnalysis->superglobals),
             'languageConstructs'   => array_keys($classLikeAnalysis->languageConstructs),

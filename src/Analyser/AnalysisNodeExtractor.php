@@ -48,12 +48,13 @@ final readonly class AnalysisNodeExtractor
         array $files,
         ?ProgressHandlerInterface $progressHandler = null,
         bool $withFileAnalysis = true,
+        bool $withSignatures = false,
     ): ExtractionResult {
-        [$cachedResult, $filesToParse] = $this->loadFromCache($files, $withFileAnalysis);
+        [$cachedResult, $filesToParse] = $this->loadFromCache($files, $withFileAnalysis, $withSignatures);
 
         $progressHandler?->start(count($filesToParse));
 
-        $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver, $withFileAnalysis);
+        $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver, $withFileAnalysis, $withSignatures);
         $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $fileAnalyses          = [];
         $storedCounts          = [0, 0, 0, 0];
@@ -107,6 +108,7 @@ final readonly class AnalysisNodeExtractor
                     $fileToParse,
                     $fileAnalyses[$fileToParse] ?? null,
                     $storedCounts,
+                    $withSignatures,
                 );
             }
         }
@@ -137,6 +139,7 @@ final readonly class AnalysisNodeExtractor
         string $file,
         ?FileAnalysis $fileAnalysis,
         array $storedCounts,
+        bool $withSignatures,
     ): array {
         [$classNodeCount, $anonymousClassNodeCount, $functionNodeCount, $anonymousFunctionNodeCount] = $storedCounts;
 
@@ -155,6 +158,7 @@ final readonly class AnalysisNodeExtractor
             $analysisNodeCollector->getFileInstantiations()[$file] ?? [],
             array_slice($functionNodes, $functionNodeCount),
             array_slice($anonymousFunctionNodes, $anonymousFunctionNodeCount),
+            $withSignatures,
         );
 
         return [
@@ -171,7 +175,7 @@ final readonly class AnalysisNodeExtractor
      * @param list<string> $files
      * @return array{ExtractionResult, list<string>}
      */
-    private function loadFromCache(array $files, bool $withFileAnalysis): array
+    private function loadFromCache(array $files, bool $withFileAnalysis, bool $withSignatures): array
     {
         $classNodes             = [];
         $fileAnalyses           = [];
@@ -186,7 +190,8 @@ final readonly class AnalysisNodeExtractor
             $cachedResult = $this->analysisResultCache?->loadAnalysisNodes(
                 $file,
                 $this->analysisNodeCacheNamespace,
-                $withFileAnalysis
+                $withFileAnalysis,
+                $withSignatures
             );
 
             if ($cachedResult === null) {

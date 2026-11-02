@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Analyser\Parallel;
 
+use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\Parallel\AnalysisNodeWorker;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerFailedException;
 use Boundwize\StructArmed\Analyser\Parallel\WorkerProgressHandler;
@@ -101,6 +102,40 @@ PHP);
         $this->assertNotNull($cached);
         $this->assertCount(1, $cached['classNodes']);
         $this->assertSame('App\\Domain\\Foo', $cached['classNodes'][0]->className);
+    }
+
+    public function testRunCollectsSignaturesOnlyWhenThePayloadAsksForThem(): void
+    {
+        $dir     = $this->makeTemporaryDirectory('structarmed-worker-test');
+        $srcFile = $dir . '/Foo.php';
+
+        file_put_contents($srcFile, <<<'PHP'
+<?php
+
+final class Foo
+{
+    public function run(Bar $bar): void
+    {
+    }
+}
+PHP);
+
+        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
+        $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
+        $payload    = ['basePath' => $dir, 'layers' => [], 'layerPatterns' => [], 'files' => [$srcFile]];
+
+        foreach ([[[], 0], [['withSignatures' => true], 1]] as [$option, $signatureCount]) {
+            file_put_contents($inputFile, serialize($payload + $option));
+
+            $this->assertSame(0, AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream()));
+
+            $result = unserialize((string) file_get_contents($outputFile));
+
+            $this->assertIsArray($result);
+            $this->assertIsArray($result['nodes']);
+            $this->assertInstanceOf(ClassNode::class, $result['nodes'][0]);
+            $this->assertCount($signatureCount, $result['nodes'][0]->signatures);
+        }
     }
 
     public function testRunWithInvalidPayloadReturnsOneAndWritesError(): void
