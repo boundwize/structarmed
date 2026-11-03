@@ -319,6 +319,9 @@ PHP);
             $callback = '\App\Other::run';
             $invalid  = 'not-a-class::run';
             $nested   = 'App\Nested::Handler::run';
+            $noMethod = 'App\NoMethod::';
+            $digits   = 'App\Digits::123';
+            $dashed   = 'App\Dashed::a-b';
 
             PHP;
 
@@ -542,6 +545,22 @@ PHP);
         $code = '<?php namespace App;' . "\n"
             . 'final class Greeter { public function greet(): string {'
             . ' $mode = true ? \'foo-bar\' : \'hello world\'; return $mode . \'123abc\' . \'\'; } }';
+
+        $analysisNodeCollector = $this->makeCollector($code);
+
+        $this->assertSame([], $analysisNodeCollector->getFileReferences());
+    }
+
+    public function testDoesNotCollectClassNameShapedStringValuesWithTrailingNewline(): void
+    {
+        $code = <<<'PHP'
+            <?php
+
+            $contract = "App\\Contract\n";
+            $callback = "App\\Handler\n::run";
+            $method   = "App\\Method::run\n";
+
+            PHP;
 
         $analysisNodeCollector = $this->makeCollector($code);
 
