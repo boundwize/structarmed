@@ -69,7 +69,7 @@ final class AnalysisResultCache
      * their shape, naming, or reference semantics change. It is recorded in
      * the metadata marker, so older caches are cleared on their next use.
      */
-    public const FORMAT_VERSION = 21;
+    public const FORMAT_VERSION = 22;
 
     private readonly string $cacheDirectory;
 
@@ -1246,7 +1246,7 @@ final class AnalysisResultCache
     }
 
     /**
-     * @return array{string, int, int|string|null}
+     * @return array{string, int, int|string|null, bool}
      */
     private function enumCaseNodeToArray(EnumCaseNode $enumCaseNode): array
     {
@@ -1254,6 +1254,7 @@ final class AnalysisResultCache
             $enumCaseNode->name,
             $enumCaseNode->line,
             $enumCaseNode->value,
+            $enumCaseNode->sharesLine,
         ];
     }
 
@@ -1397,20 +1398,26 @@ final class AnalysisResultCache
      */
     private function enumCaseNodeFromArray(array $enumCase): ?EnumCaseNode
     {
-        if (count($enumCase) !== 3 || ! array_is_list($enumCase)) {
+        if (count($enumCase) !== 4 || ! array_is_list($enumCase)) {
             return null;
         }
 
-        [$name, $line, $value] = $enumCase;
+        [$name, $line, $value, $sharesLine] = $enumCase;
 
-        if (! is_string($name) || ! is_int($line) || ($value !== null && ! is_int($value) && ! is_string($value))) {
+        if (
+            ! is_string($name)
+            || ! is_int($line)
+            || ($value !== null && ! is_int($value) && ! is_string($value))
+            || ! is_bool($sharesLine)
+        ) {
             return null;
         }
 
         return new EnumCaseNode(
-            name:  $name,
-            line:  $line,
-            value: $value,
+            name:       $name,
+            line:       $line,
+            value:      $value,
+            sharesLine: $sharesLine,
         );
     }
 

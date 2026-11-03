@@ -20,6 +20,7 @@ use Boundwize\StructArmed\Preset\Presets\YagniPreset;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotBeInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExposeInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExtendInternalRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseMustBeOnOwnLineRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
@@ -227,6 +228,8 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(PerPreset::ENUM_METHODS_MAY_NOT_BE_PROTECTED, $rules);
         $this->assertArrayHasKey(PerPreset::ENUM_CONSTANTS_MAY_NOT_BE_PROTECTED, $rules);
         $this->assertArrayHasKey(PerPreset::ANONYMOUS_CLASSES_MAY_NOT_HAVE_EMPTY_PARENTHESES, $rules);
+        $this->assertArrayHasKey(PerPreset::ENUM_CASES_MUST_BE_ON_OWN_LINE, $rules);
+        $this->assertInstanceOf(EnumCaseMustBeOnOwnLineRule::class, $rules[PerPreset::ENUM_CASES_MUST_BE_ON_OWN_LINE]);
     }
 
     public function testPerPresetUsesComposerSourcePathsByDefault(): void

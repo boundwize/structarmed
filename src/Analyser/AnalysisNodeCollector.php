@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
+use Boundwize\StructArmed\Util\PhpParser\EnumCaseLine;
 use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
 use Boundwize\StructArmed\Util\PhpParser\UnconditionallyDeclaredFunctions;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
@@ -1016,9 +1017,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         foreach ($enumCases as $enumCase) {
             $analysis->enumCases[] = new EnumCaseNode(
-                name:  (string) $enumCase->name,
-                line:  $enumCase->getStartLine(),
-                value: $this->resolveEnumCaseValue($enumCase->expr, $evaluator),
+                name:       (string) $enumCase->name,
+                line:       $enumCase->getStartLine(),
+                value:      $this->resolveEnumCaseValue($enumCase->expr, $evaluator),
+                sharesLine: EnumCaseLine::sharesLine($this->currentTokens, $enumCase),
             );
         }
     }

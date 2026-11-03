@@ -1653,9 +1653,24 @@ PHP);
         $this->assertSame(['Hearts', 'Spades'], array_column($classNode->enumCases, 'name'));
         $this->assertSame([4, 5], array_column($classNode->enumCases, 'line'));
         $this->assertSame(['H', 'S'], array_column($classNode->enumCases, 'value'));
+        $this->assertSame([false, false], array_column($classNode->enumCases, 'sharesLine'));
         $this->assertTrue($classNode->enumCases[0]->hasResolvedValue());
         $this->assertSame(['Wild'], array_column($classNode->constants, 'name'));
         $this->assertSame(['label'], array_column($classNode->methods, 'name'));
+    }
+
+    public function testRecordsEnumCasesSharingALine(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            enum Suit: string { case Hearts = 'H';
+                case Spades = 'S'; case Clubs = 'C';
+                case Diamonds = 'D';
+            }
+            PHP);
+
+        $this->assertSame([true, true, true, false], array_column($classNode->enumCases, 'sharesLine'));
+        $this->assertSame([2, 3, 3, 4], array_column($classNode->enumCases, 'line'));
     }
 
     public function testResolvesImportedClassNameInEnumCaseValue(): void

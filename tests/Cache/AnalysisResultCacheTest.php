@@ -1551,7 +1551,7 @@ final class AnalysisResultCacheTest extends TestCase
                 isEnum:      true,
                 enumCases:   [
                     new EnumCaseNode(name: 'Hearts', line: 4, value: 'H'),
-                    new EnumCaseNode(name: 'Spades', line: 5, value: 7),
+                    new EnumCaseNode(name: 'Spades', line: 5, value: 7, sharesLine: true),
                     new EnumCaseNode(name: 'Joker', line: 6),
                 ],
                 enumBackingType: 'string',
@@ -1568,6 +1568,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertFalse($loaded[0]->properties[1]->hasExplicitVisibility);
             $this->assertSame(['Hearts', 'Spades', 'Joker'], array_column($loaded[0]->enumCases, 'name'));
             $this->assertSame(['H', 7, null], array_column($loaded[0]->enumCases, 'value'));
+            $this->assertSame([false, true, false], array_column($loaded[0]->enumCases, 'sharesLine'));
             $this->assertSame('string', $loaded[0]->enumBackingType);
         } finally {
             if (file_exists($sourceFile)) {
@@ -2738,7 +2739,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'methods'       => [],
                         'constants'     => [],
                         'properties'    => [],
-                        'enumCases'     => [['Hearts', 'bad', null]],
+                        'enumCases'     => [['Hearts', 'bad', null, false]],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
@@ -2767,7 +2768,36 @@ final class AnalysisResultCacheTest extends TestCase
                         'methods'       => [],
                         'constants'     => [],
                         'properties'    => [],
-                        'enumCases'     => [['Hearts', 4, ['bad']]],
+                        'enumCases'     => [['Hearts', 4, ['bad'], false]],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                        'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'enum case shared-line flag has invalid type' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => Foo::class,
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isTrait'       => false,
+                        'isEnum'        => true,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'traits'        => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'enumCases'     => [['Hearts', 4, null, 'yes']],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
