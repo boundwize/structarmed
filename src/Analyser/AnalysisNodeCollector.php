@@ -1058,8 +1058,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 if (isset($constants[$name])) {
                     $constant = $constants[$name];
                     unset($constants[$name]);
-                    /** @var ConstExprEvaluator $evaluator */
-                    return $values[$name] = $evaluator->evaluateDirectly($constant);
+
+                    return $values[$name] = $evaluator?->evaluateDirectly($constant);
                 }
             }
 
