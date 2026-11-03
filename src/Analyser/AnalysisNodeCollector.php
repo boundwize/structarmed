@@ -89,7 +89,6 @@ use function array_pop;
 use function array_push;
 use function array_unique;
 use function array_values;
-use function assert;
 use function count;
 use function end;
 use function in_array;
@@ -1059,8 +1058,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 if (isset($constants[$name])) {
                     $constant = $constants[$name];
                     unset($constants[$name]);
-                    assert($evaluator instanceof ConstExprEvaluator);
-
+                    /** @var ConstExprEvaluator $evaluator */
                     return $values[$name] = $evaluator->evaluateDirectly($constant);
                 }
             }
