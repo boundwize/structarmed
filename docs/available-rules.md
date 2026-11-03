@@ -84,6 +84,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Class_`.
 | `ClassNameMustBeStudlyCapsRule` | `new ClassNameMustBeStudlyCapsRule(layer: 'Source')` | Class names use StudlyCaps. |
 | `ClassNameMustHaveSuffixRule` | `new ClassNameMustHaveSuffixRule(layer: 'Controller', suffix: 'Controller')` | Classes in a layer have the required suffix. |
 | `ClassNameMustNotHavePrefixRule` | `new ClassNameMustNotHavePrefixRule(layer: 'Model', prefix: 'Model')` | Classes in a layer do not use a forbidden prefix. |
+| `EnumCaseMustBeOnOwnLineRule` | `new EnumCaseMustBeOnOwnLineRule(layer: 'Source')` | Each enum case is declared on its own line, sharing it with no other case, member, or brace of the enum, per [PER Coding Style](https://www.php-fig.org/per/coding-style/#9-enumerations). Supports `--fix` by moving the case onto its own line; comments between members stay with the member after them, and ordinary comments above cases that shared a line are repeated above each case (doc comments are not). |
 | `EnumCaseNameMustBePascalCaseRule` | `new EnumCaseNameMustBePascalCaseRule(layer: 'Source')` | Enum case names use PascalCase, per [PER Coding Style](https://www.php-fig.org/per/coding-style/#9-enumerations). |
 | `EnumConstantMayNotBeProtectedRule` | `new EnumConstantMayNotBeProtectedRule(layer: 'Source')` | Enum constants are not declared `protected` — enums cannot be extended, so `private` is used instead, per [PER Coding Style](https://www.php-fig.org/per/coding-style/#9-enumerations). Supports `--fix` by changing `protected` to `private`. |
 | `EnumMethodMayNotBeProtectedRule` | `new EnumMethodMayNotBeProtectedRule(layer: 'Source')` | Enum methods are not declared `protected` — enums cannot be extended, so `private` is used instead, per [PER Coding Style](https://www.php-fig.org/per/coding-style/#9-enumerations). Supports `--fix` by changing `protected` to `private`. |
@@ -117,6 +118,7 @@ The following rules implement `Boundwize\StructArmed\Rule\FixableInterface` and 
 | `MustUseLowercaseKeywordConstantRule` | Lowercases `TRUE`, `FALSE`, and `NULL` keyword constants. |
 | `LargeNumericLiteralMustUseSeparatorRule` | Adds `_` separators to large numeric literals. |
 | `AnonymousClassMayNotHaveEmptyParenthesesRule` | Removes empty parentheses from anonymous classes that pass no constructor arguments. |
+| `EnumCaseMustBeOnOwnLineRule` | Moves an enum case that shares a line onto its own line. |
 | `ExtendedClassMustBeAbstractOrInstantiatedRule` | Adds the `abstract` modifier to an extended class that is not instantiated. |
 | `MustBeFinalRule` | Adds the `final` modifier. |
 | `MustBeUsedInterfaceRule` | Removes an unused interface, deleting its file when only boilerplate remains. |

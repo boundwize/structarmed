@@ -27,6 +27,12 @@ use function unlink;
 
 final readonly class PhpParserFixerProcessor
 {
+    /**
+     * One indentation level: the printer's `indent` option for the nodes it
+     * re-prints, also used by token-editing visitors for the lines they add.
+     */
+    public const INDENT = '    ';
+
     /** @param NodeVisitor|non-empty-list<NodeVisitor> $nodeVisitors */
     public function process(string $file, NodeVisitor|array $nodeVisitors, bool $removeFileWhenEmpty = false): bool
     {
@@ -73,7 +79,7 @@ final readonly class PhpParserFixerProcessor
             return unlink($file);
         }
 
-        $prettyPrinter = new class extends Standard {
+        $prettyPrinter = new class (['indent' => self::INDENT]) extends Standard {
             // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps -- PHP-Parser extension hook.
             protected function pScalar_Float(Float_ $node): string
             {

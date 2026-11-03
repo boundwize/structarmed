@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Preset\Presets;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\AnonymousClassMayNotHaveEmptyParenthesesRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseMustBeOnOwnLineRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseNameMustBePascalCaseRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumConstantMayNotBeProtectedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumMethodMayNotBeProtectedRule;
@@ -28,6 +29,8 @@ final readonly class PerPreset implements PresetInterface
 
     public const ANONYMOUS_CLASSES_MAY_NOT_HAVE_EMPTY_PARENTHESES =
         'per.anonymous_classes.may_not_have_empty_parentheses';
+
+    public const ENUM_CASES_MUST_BE_ON_OWN_LINE = 'per.enum_cases.must_be_on_own_line';
 
     /**
      * @param list<string>|null $sourcePaths
@@ -69,6 +72,11 @@ final readonly class PerPreset implements PresetInterface
         $architecture->rule(
             self::ANONYMOUS_CLASSES_MAY_NOT_HAVE_EMPTY_PARENTHESES,
             new AnonymousClassMayNotHaveEmptyParenthesesRule($layerName)
+        );
+
+        $architecture->rule(
+            self::ENUM_CASES_MUST_BE_ON_OWN_LINE,
+            new EnumCaseMustBeOnOwnLineRule($layerName)
         );
     }
 }

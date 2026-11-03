@@ -14,11 +14,14 @@ final readonly class EnumCaseNode
      *                               the analyser cannot evaluate (a global or class constant
      *                               expression, for instance) — use ClassNode::isBackedEnum()
      *                               to tell whether the case is backed at all.
+     * @param bool            $sharesLine Whether the case shares a line with another member
+     *                                    of the enum or with one of its braces.
      */
     public function __construct(
         public string $name,
         public int $line = 0,
         public int|string|null $value = null,
+        public bool $sharesLine = false,
     ) {
     }
 
