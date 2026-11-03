@@ -9,6 +9,7 @@ use function count;
 use function explode;
 use function implode;
 use function ltrim;
+use function preg_match;
 use function preg_replace;
 use function realpath;
 use function rtrim;
@@ -128,8 +129,6 @@ final class Path
     {
         return str_starts_with($path, '/')
             || str_starts_with($path, '\\\\')
-            || (strlen($path) >= 3
-                && $path[1] === ':'
-                && ($path[2] === '/' || $path[2] === '\\'));
+            || preg_match('#^[A-Za-z]:[/\\\\]#', $path) === 1;
     }
 }

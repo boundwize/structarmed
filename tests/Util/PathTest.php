@@ -49,7 +49,10 @@ final class PathTest extends TestCase
         yield 'unix absolute' => ['/external/src', '/project', '/external/src'];
         yield 'windows absolute forward' => ['C:/external/src', '/project', 'C:/external/src'];
         yield 'windows absolute' => ['C:\\external\\src', '/project', 'C:\\external\\src'];
+        yield 'windows absolute lowercase drive' => ['c:\\external\\src', '/project', 'c:\\external\\src'];
         yield 'windows drive-relative' => ['C:src', '/project', '/project/C:src'];
+        yield 'numeric drive-like segment' => ['1:/src/Foo.php', '/project', '/project/1:/src/Foo.php'];
+        yield 'punctuation drive-like segment' => ['@:\\src', '/project', '/project/@:\\src'];
         yield 'windows UNC absolute' => ['\\\\server\\share\\src', '/project', '\\\\server\\share\\src'];
     }
 
