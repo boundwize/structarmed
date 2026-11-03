@@ -128,9 +128,6 @@ final class Path
     {
         return str_starts_with($path, '/')
             || str_starts_with($path, '\\\\')
-            || (strlen($path) >= 3
-                && (($path[0] >= 'A' && $path[0] <= 'Z') || ($path[0] >= 'a' && $path[0] <= 'z'))
-                && $path[1] === ':'
-                && ($path[2] === '/' || $path[2] === '\\'));
+            || preg_match('#^[A-Za-z]:[/\\\\]#', $path) === 1;
     }
 }
