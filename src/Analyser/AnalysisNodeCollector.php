@@ -100,7 +100,6 @@ use function str_starts_with;
 use function strcasecmp;
 use function strlen;
 use function strpos;
-use function strrpos;
 use function strtolower;
 use function substr;
 
@@ -137,7 +136,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * `instanceof $class` at runtime, so they count as references.
      */
     private const CLASS_LIKE_STRING_PATTERN =
-        '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+)*+$/';
+        '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+(?:\\\\[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+)*+\z/';
+
+    /**
+     * The method part of a static callable string, e.g. 'run' in
+     * 'App\Handler::run'.
+     */
+    private const METHOD_NAME_PATTERN = '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+\z/';
 
     /**
      * Marks the name string passed to function_exists(): the check probes for
@@ -1263,9 +1268,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             if ($separatorPosition !== false) {
                 $staticCallableClass = substr($value, 0, $separatorPosition);
 
-                // A second '::' ('App\A::B::run') is not a callable.
+                // A method part that is not an identifier ('App\A::',
+                // 'App\A::123', 'App\A::B::run') is not a callable.
                 if (
-                    $separatorPosition === strrpos($value, '::')
+                    preg_match(self::METHOD_NAME_PATTERN, substr($value, $separatorPosition + 2)) === 1
                     && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
                 ) {
                     $this->currentFileReferences[$staticCallableClass] = true;
