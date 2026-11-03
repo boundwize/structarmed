@@ -1711,6 +1711,105 @@ PHP);
         $this->assertFalse($classNode->enumCases[2]->hasResolvedValue());
     }
 
+    public function testResolvesEnumCaseValuesFromOwnConstants(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            namespace App;
+
+            enum Status: int
+            {
+                case Active    = self::BASE;
+                case Pending   = self::NEXT;
+                case Completed = Status::NEXT + 1;
+                case Zero      = self::BASE - 100;
+
+                private const NEXT = self::BASE + 1;
+                private const BASE = 100;
+            }
+            PHP);
+
+        $this->assertSame([100, 101, 102, 0], array_column($classNode->enumCases, 'value'));
+        $this->assertTrue($classNode->enumCases[3]->hasResolvedValue());
+    }
+
+    public function testResolvesStringEnumCaseValuesFromOwnConstants(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            enum Prefix: string
+            {
+                public const SEPARATOR = '.';
+                public const EMPTY = '';
+
+                case App   = 'app' . self::SEPARATOR;
+                case Empty = self::EMPTY;
+                case First = self::LIST[0];
+                case Own   = self::class;
+
+                public const LIST = ['first', 'second'];
+            }
+            PHP);
+
+        $this->assertSame(['app.', '', 'first', 'Prefix'], array_column($classNode->enumCases, 'value'));
+        $this->assertTrue($classNode->enumCases[1]->hasResolvedValue());
+    }
+
+    public function testLeavesEnumCaseValuesFromUnresolvableConstantsUnresolved(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            namespace App;
+
+            use Vendor\Codes;
+
+            enum Status: int
+            {
+                private const A = self::B;
+                private const B = self::A + 1;
+                private const SELF = self::SELF;
+                private const GLOBAL = E_ALL;
+                private const DEFAULT = self::Known;
+
+                case Known     = 1;
+                case Cyclic    = self::A;
+                case Recursive = self::SELF;
+                case Global    = self::GLOBAL + 1;
+                case Missing   = self::MISSING;
+                case Foreign   = Codes::BASE;
+                case OfCase    = self::DEFAULT;
+                case Again     = self::A;
+            }
+            PHP);
+
+        $this->assertSame(
+            [1, null, null, null, null, null, null, null],
+            array_column($classNode->enumCases, 'value')
+        );
+    }
+
+    public function testResolvesEnumConstantsPerEnum(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+            <?php
+            enum First: int
+            {
+                private const BASE = 10;
+
+                case One = self::BASE;
+            }
+
+            enum Second: int
+            {
+                case One = self::BASE;
+                case Other = First::BASE;
+            }
+            PHP);
+
+        $this->assertSame([10], array_column($nodes[0]->enumCases, 'value'));
+        $this->assertSame([null, null], array_column($nodes[1]->enumCases, 'value'));
+    }
+
     public function testPureEnumHasNoBackingTypeOrCaseValues(): void
     {
         $classNode = $this->collect('<?php enum Suit { case Hearts; case Spades; }');
