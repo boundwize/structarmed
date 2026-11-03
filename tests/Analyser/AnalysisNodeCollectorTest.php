@@ -558,6 +558,7 @@ PHP);
 
             $contract = "App\\Contract\n";
             $callback = "App\\Handler\n::run";
+            $method   = "App\\Method::run\n";
 
             PHP;
 
