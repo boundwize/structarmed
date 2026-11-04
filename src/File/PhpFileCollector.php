@@ -14,6 +14,8 @@ use SplFileInfo;
 use function dirname;
 use function realpath;
 
+use const PHP_OS_FAMILY;
+
 /**
  * Recursively collects PHP files under a directory, pruning skipped paths
  * while traversing so skipped directories are never descended into.
@@ -27,10 +29,12 @@ final readonly class PhpFileCollector
     {
         // Walking from the canonical root keeps every entry canonical, since symlinks
         // are pruned and entry names are joined verbatim, so no per-file realpath() is
-        // needed. A filesystem root (its own parent) is excluded: SPL joins "/" children
-        // as "//name", which Path::normalise() reads as a UNC path.
+        // needed. Not so for a filesystem root (its own parent), whose children SPL joins
+        // as "//name", nor on Windows, where isLink() misses junctions.
         $canonicalDirectory = realpath($directory);
-        $isCanonical        = $canonicalDirectory !== false && dirname($canonicalDirectory) !== $canonicalDirectory;
+        $isCanonical        = PHP_OS_FAMILY !== 'Windows'
+            && $canonicalDirectory !== false
+            && dirname($canonicalDirectory) !== $canonicalDirectory;
         $rootDirectory      = $isCanonical ? $canonicalDirectory : $directory;
 
         $iterator = new RecursiveIteratorIterator(

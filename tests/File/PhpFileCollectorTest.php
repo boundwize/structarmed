@@ -17,15 +17,19 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 use function dirname;
+use function escapeshellarg;
+use function exec;
 use function file_put_contents;
 use function implode;
 use function is_dir;
 use function mkdir;
 use function realpath;
 use function sort;
+use function sprintf;
+use function str_replace;
 use function symlink;
 
-use const DIRECTORY_SEPARATOR;
+use const PHP_OS_FAMILY;
 
 #[CoversClass(PhpFileCollector::class)]
 final class PhpFileCollectorTest extends TestCase
@@ -68,7 +72,18 @@ final class PhpFileCollectorTest extends TestCase
             $canonicalBasePath . '/src',
         ];
 
-        if (DIRECTORY_SEPARATOR !== '\\') {
+        if (PHP_OS_FAMILY === 'Windows') {
+            // isLink() is false for a junction, so the walk descends into it like a plain
+            // directory; registered last, it is removed first, before its target
+            $junction = $this->registerTemporaryPath($basePath . '/src-extra/Junction');
+            exec(sprintf(
+                'mklink /J %s %s',
+                escapeshellarg(str_replace('/', '\\', $junction)),
+                escapeshellarg(str_replace('/', '\\', $basePath . '/outside'))
+            ));
+            $this->assertDirectoryExists($junction);
+            $roots[] = $basePath . '/src-extra';
+        } else {
             symlink($basePath . '/src', $basePath . '/src-link');
             $roots[] = $basePath . '/src-link';
         }
