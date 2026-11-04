@@ -53,6 +53,10 @@ final readonly class AnalysisNodeExtractor
 
         $progressHandler?->start(count($filesToParse));
 
+        if ($filesToParse === []) {
+            return $cachedResult;
+        }
+
         $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver, $withFileAnalysis);
         $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $fileAnalyses          = [];
