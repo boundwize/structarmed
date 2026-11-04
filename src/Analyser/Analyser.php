@@ -37,6 +37,7 @@ use function array_fill_keys;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
+use function array_merge;
 use function array_unique;
 use function array_values;
 use function count;
@@ -1564,7 +1565,32 @@ final readonly class Analyser
 
         $progressHandler?->finish();
 
-        return $extractionResult;
+        return $this->withClassNodesInFileOrder($extractionResult, $files);
+    }
+
+    /**
+     * Cached files come first and parallel workers finish in any order, so class nodes are put back
+     * in file order: a class declared in several files then resolves to the same one on every run.
+     *
+     * @param list<string> $files
+     */
+    private function withClassNodesInFileOrder(ExtractionResult $extractionResult, array $files): ExtractionResult
+    {
+        $classNodesByFile = array_fill_keys($files, []);
+
+        foreach ($extractionResult->classNodes as $classNode) {
+            $classNodesByFile[$classNode->file][] = $classNode;
+        }
+
+        return new ExtractionResult(
+            array_merge(...array_values($classNodesByFile)),
+            $extractionResult->fileAnalyses,
+            $extractionResult->anonymousClassNodes,
+            $extractionResult->fileReferences,
+            $extractionResult->fileInstantiations,
+            $extractionResult->functionNodes,
+            $extractionResult->anonymousFunctionNodes,
+        );
     }
 
     /**

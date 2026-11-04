@@ -75,6 +75,7 @@ use function symlink;
 use function unlink;
 
 use const DIRECTORY_SEPARATOR;
+use const FILE_APPEND;
 
 #[CoversClass(Analyser::class)]
 #[CoversClass(ParallelAnalysisNodeExtractor::class)]
@@ -298,6 +299,60 @@ final class AnalyserTest extends TestCase
 
         $this->assertCount(3, $coldViolations);
         $this->assertEquals($coldViolations, $warmViolations);
+    }
+
+    public function testAnalyserResolvesClassDeclaredInSeveralFilesInFileOrderOnEveryRun(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/Cache.php'            => '<?php namespace App; final class Cache {}',
+            'tests/Support/Cache.php'  => '<?php namespace App; final class Cache {}',
+            'tests/Unit/CacheTest.php' => <<<'PHP'
+                <?php
+
+                namespace App\Tests;
+
+                use App\Cache;
+
+                final class CacheTest
+                {
+                    public function cache(): Cache
+                    {
+                        return new Cache();
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        // App\Cache is declared in Core and in Support; the last scanned file wins, putting it in Support.
+        $architecture = Architecture::define()
+            ->layer('Core', 'src/')
+            ->layer('Support', 'tests/Support/')
+            ->layer('Tests', 'tests/Unit/')
+            ->ruleset([
+                'Tests' => ['Core'],
+            ]);
+
+        $coldViolations     = $this->violationTuples(
+            (new Analyser($basePath, $analysisResultCache, 'config'))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+        );
+        $parallelViolations = $this->violationTuples(
+            (new Analyser($basePath))->analyse($architecture, [], null, AnalyserOptions::parallel(2))
+        );
+
+        // Only the first declaration is parsed again, the other one comes from the cache.
+        file_put_contents($basePath . '/src/Cache.php', "\n// changed\n", FILE_APPEND);
+
+        $changedViolations = $this->violationTuples(
+            (new Analyser($basePath, new AnalysisResultCache($basePath, new FileHashProvider(), 'cache'), 'config'))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+        );
+
+        $this->assertCount(1, $coldViolations);
+        $this->assertStringContainsString('[App\Cache] which belongs to layer [Support]', $coldViolations[0][2]);
+        $this->assertSame($coldViolations, $parallelViolations);
+        $this->assertSame($coldViolations, $changedViolations);
     }
 
     public function testFunctionRuleViolationsSurviveTheAnalysisNodeCacheWithFileAnalysis(): void
