@@ -117,19 +117,25 @@ final class SkipPathMatcher
         $this->hasMatchers           = $pathPrefixesWithSlash !== [] || $this->patterns !== [];
     }
 
-    public function isSkipped(string $path): bool
+    /**
+     * Pass $isCanonical only for a path the caller guarantees is already canonical
+     * (e.g. found by walking a canonical directory without following symlinks),
+     * so it is normalised without realpath().
+     */
+    public function isSkipped(string $path, bool $isCanonical = false): bool
     {
         if (! $this->hasMatchers) {
             return false;
         }
 
-        return $this->results[$path] ??= $this->computeIsSkipped($path);
+        return $this->results[$path] ??= $this->computeIsSkipped(
+            Path::normalise($path, canonicalise: ! $isCanonical)
+        );
     }
 
-    private function computeIsSkipped(string $path): bool
+    private function computeIsSkipped(string $normalisedPath): bool
     {
-        $normalisedPath = Path::normalise($path, canonicalise: true);
-        $pathWithSlash  = $normalisedPath . '/';
+        $pathWithSlash = $normalisedPath . '/';
 
         foreach ($this->pathPrefixesWithSlash as $pathPrefixWithSlash) {
             if (str_starts_with($pathWithSlash, $pathPrefixWithSlash)) {

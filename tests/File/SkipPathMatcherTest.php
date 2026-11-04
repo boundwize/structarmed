@@ -100,6 +100,53 @@ final class SkipPathMatcherTest extends TestCase
         $this->assertFalse($skipPathMatcher->isSkipped('/project/lib/Bar.php'));
     }
 
+    public function testCanonicalPathMatchesLikeCanonicalisedPath(): void
+    {
+        $cases = [
+            '/project'                   => [
+                '/project/src/Foo.php',
+                '/project/src',
+                '/project/src-extra/Foo.php',
+                '/project/tests/functional/Core/Foo.php',
+                '/project/lib/Bar.php',
+                '/vendor/autoload.php',
+            ],
+            'C:\\project'                => [
+                'C:\\project\\src\\Foo.php',
+                'C:\\project\\src-extra\\Foo.php',
+                'C:\\project\\tests\\functional\\Core\\Foo.php',
+                'C:\\project\\lib\\Bar.php',
+            ],
+            '\\\\server\\share\\project' => [
+                '\\\\server\\share\\project\\src\\Foo.php',
+                '\\\\server\\share\\project\\src-extra\\Foo.php',
+                '\\\\server\\share\\project\\tests\\functional\\Core\\Foo.php',
+                '\\\\server\\share\\project\\lib\\Bar.php',
+            ],
+        ];
+
+        foreach ($cases as $basePath => $paths) {
+            $skipPaths = ['src/', 'tests/**/Core', '/vendor'];
+            // a trailing slash compiles a separate instance, so neither side reads the other's memoised decision
+            $canonicalMatcher      = SkipPathMatcher::compile($basePath, $skipPaths);
+            $canonicalisingMatcher = SkipPathMatcher::compile($basePath . '/', $skipPaths);
+            $this->assertNotSame($canonicalMatcher, $canonicalisingMatcher);
+
+            foreach ($paths as $path) {
+                $this->assertSame(
+                    $canonicalisingMatcher->isSkipped($path),
+                    $canonicalMatcher->isSkipped($path, isCanonical: true),
+                    $path
+                );
+            }
+        }
+
+        $skipPathMatcher = SkipPathMatcher::compile('C:\\project', ['src/']);
+        $this->assertTrue($skipPathMatcher->isSkipped('C:\\project\\src\\Foo.php', isCanonical: true));
+        $this->assertFalse($skipPathMatcher->isSkipped('C:\\project\\src-extra\\Foo.php', isCanonical: true));
+        $this->assertFalse(SkipPathMatcher::compile('/project', [])->isSkipped('/project/src', isCanonical: true));
+    }
+
     /**
      * A relative, non-glob skip path also matches its location resolved from the
      * current working directory, even when that differs from the base path.
