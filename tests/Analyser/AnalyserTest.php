@@ -5983,6 +5983,175 @@ final class AnalyserTest extends TestCase
         $this->assertFalse($ruleViolationCollection->hasViolations());
     }
 
+    public function testAnalyserRulesetChecksSharedDependencyPerLayerAndReportsEveryClass(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Admin/Panel.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Admin;
+
+                use App\Database\QueryBuilder;
+
+                final class Panel
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/HTTP/Request.php'  => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Request
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/HTTP/Response.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Response
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+            'src/HTTP/Session.php'  => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                final class Session
+                {
+                    public function __construct(private QueryBuilder $db) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('Admin', '/^App\\\\Admin\\\\.*$/')
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset([
+                'Admin' => ['Database'],
+                'HTTP'  => [],
+            ])
+            ->skipClassViolation('App\\HTTP\\Session', 'App\\Database\\QueryBuilder');
+
+        // Admin is checked first, so its allowed dependency must not carry
+        // over to HTTP, and each HTTP class still reports its own violation.
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            ['src/'],
+            null,
+            AnalyserOptions::sequential(),
+            [
+                $basePath . '/src/Admin/Panel.php',
+                $basePath . '/src/HTTP/Session.php',
+                $basePath . '/src/HTTP/Request.php',
+                $basePath . '/src/HTTP/Response.php',
+            ]
+        );
+
+        $classNames = array_map(
+            static fn (RuleViolation $ruleViolation): string => $ruleViolation->className,
+            $ruleViolationCollection->forRule('ruleset.HTTP')
+        );
+        sort($classNames);
+
+        $this->assertSame(['App\HTTP\Request', 'App\HTTP\Response'], $classNames);
+        $this->assertSame([], $ruleViolationCollection->forRule('ruleset.Admin'));
+    }
+
+    public function testAnalyserRulesetChecksSharedSecondaryLayerDependencyPerLayer(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/System/Clock.php'                   => <<<'PHP'
+                <?php
+
+                namespace App\System;
+
+                use App\System\Formatter\DateFormatter;
+
+                final class Clock
+                {
+                    public function __construct(private DateFormatter $formatter) {}
+                }
+                PHP,
+            'src/System/Calendar.php'                => <<<'PHP'
+                <?php
+
+                namespace App\System;
+
+                use App\System\Formatter\DateFormatter;
+
+                final class Calendar
+                {
+                    public function __construct(private DateFormatter $formatter) {}
+                }
+                PHP,
+            'src/System/Formatter/DateFormatter.php' => <<<'PHP'
+                <?php
+
+                namespace App\System\Formatter;
+
+                final class DateFormatter {}
+                PHP,
+            'src/Http/Request.php'                   => <<<'PHP'
+                <?php
+
+                namespace App\Http;
+
+                use App\System\Formatter\DateFormatter;
+
+                final class Request
+                {
+                    public function __construct(private DateFormatter $formatter) {}
+                }
+                PHP,
+        ]);
+
+        // DateFormatter's primary layer is Formatter, but it also belongs to
+        // System, so System classes may use it through that shared layer.
+        $architecture = Architecture::define()
+            ->layer('System', 'src/System/')
+            ->layer('Formatter', 'src/System/Formatter/')
+            ->layer('Http', 'src/Http/')
+            ->ruleset([
+                'System' => [],
+                'Http'   => [],
+            ]);
+
+        // System classes are checked first, so the shared-layer allowance
+        // must not carry over to Http.
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            ['src/'],
+            null,
+            AnalyserOptions::sequential(),
+            [
+                $basePath . '/src/System/Formatter/DateFormatter.php',
+                $basePath . '/src/System/Clock.php',
+                $basePath . '/src/System/Calendar.php',
+                $basePath . '/src/Http/Request.php',
+            ]
+        );
+
+        $httpViolations = $ruleViolationCollection->forRule('ruleset.Http');
+
+        $this->assertSame([], $ruleViolationCollection->forRule('ruleset.System'));
+        $this->assertCount(1, $httpViolations);
+        $this->assertSame('App\Http\Request', $httpViolations[0]->className);
+    }
+
     public function testAnalyserRulesetSkipClassViolationSuppressesViolationWithPathBasedLayers(): void
     {
         $basePath = $this->makeTempProject([

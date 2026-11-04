@@ -304,6 +304,11 @@ final readonly class Analyser
 
         $resolvedInheritedDependencies = [];
 
+        // Whether a dependency is allowed depends only on the class's layer, and
+        // the same dependencies recur across many classes, so each allowed
+        // (layer, dependency) pair is checked once.
+        $allowedDependencies = [];
+
         foreach ($layerAwareRules as $layerAwareRule) {
             $layerAwareRule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
         }
@@ -354,7 +359,10 @@ final readonly class Analyser
             );
 
             foreach ($dependencies as $dependency) {
-                if (isset($skippedDepsForClass[$dependency])) {
+                if (
+                    isset($skippedDepsForClass[$dependency])
+                    || isset($allowedDependencies[$classNode->layer][$dependency])
+                ) {
                     continue;
                 }
 
@@ -365,6 +373,7 @@ final readonly class Analyser
                 // catch-all, $depLayers is re-resolved without its file path and
                 // therefore need not contain the primary layer.
                 if ($primaryLayer === $classNode->layer) {
+                    $allowedDependencies[$classNode->layer][$dependency] = true;
                     continue;
                 }
 
@@ -379,6 +388,7 @@ final readonly class Analyser
 
                 if ($depLayers === []) {
                     // External / unregistered dependency — not restricted.
+                    $allowedDependencies[$classNode->layer][$dependency] = true;
                     continue;
                 }
 
@@ -387,10 +397,12 @@ final readonly class Analyser
                 // of whether the dependency was scanned or resolved without a file path.
                 foreach ($depLayers as $depLayer) {
                     if ($classNode->layer === $depLayer) {
+                        $allowedDependencies[$classNode->layer][$dependency] = true;
                         continue 2;
                     }
 
                     if (isset($allowedLayerMap[$depLayer])) {
+                        $allowedDependencies[$classNode->layer][$dependency] = true;
                         continue 2;
                     }
                 }
