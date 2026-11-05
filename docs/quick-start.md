@@ -54,6 +54,9 @@ vendor/bin/structarmed init --preset=codequality
 # @api class-likes kept apart from @internal ones
 vendor/bin/structarmed init --preset=stability
 
+# String-backed enum cases must not be backed by an empty string
+vendor/bin/structarmed init --preset=enum
+
 # Enable every preset at once
 vendor/bin/structarmed init --preset=all
 ```
@@ -116,5 +119,6 @@ return Architecture::define()
     Preset::CODEQUALITY(),
     Preset::YAGNI(),
     Preset::STABILITY(),
+    Preset::ENUM(),
 )
 ```
