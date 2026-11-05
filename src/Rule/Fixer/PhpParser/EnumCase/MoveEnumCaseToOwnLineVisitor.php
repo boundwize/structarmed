@@ -212,7 +212,7 @@ final class MoveEnumCaseToOwnLineVisitor extends AbstractTokenAwareVisitor
             }
         }
 
-        return $enumIndent . (str_contains($enumIndent, "\t") ? "\t" : PhpParserFixerProcessor::INDENT);
+        return $enumIndent . (str_contains($enumIndent, "\t") ? "\t" : '    ');
     }
 
     /** The whitespace starting the line the token at the given position is on. */
