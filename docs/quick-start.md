@@ -55,6 +55,7 @@ vendor/bin/structarmed init --preset=codequality
 vendor/bin/structarmed init --preset=stability
 
 # String-backed enum cases must not be backed by an empty string
+# or a value with leading or trailing whitespace
 vendor/bin/structarmed init --preset=enum
 
 # Enable every preset at once
