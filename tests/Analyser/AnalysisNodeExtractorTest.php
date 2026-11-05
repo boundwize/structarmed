@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_keys;
 use function count;
 use function file_put_contents;
 
@@ -393,5 +394,71 @@ PHP);
         $this->assertStringEndsWith('\\Bar', $extractionResult->classNodes[0]->className);
         $this->assertStringEndsWith('\\Foo', $extractionResult->classNodes[1]->className);
         $this->assertCount(1, $extractionResult->classNodes[1]->methods);
+    }
+
+    public function testExtractReturnsCachedNodesAndStartsProgressWithZeroOnFullCacheHit(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-extractor-cache');
+        $fooFile  = $dir . '/Foo.php';
+        $barFile  = $dir . '/Bar.php';
+
+        file_put_contents($fooFile, <<<'PHP'
+<?php
+
+namespace App;
+
+final class Foo
+{
+    public function bar(): Bar
+    {
+        return new Bar();
+    }
+}
+PHP);
+        file_put_contents($barFile, <<<'PHP'
+<?php
+
+namespace App;
+
+final class Bar
+{
+}
+PHP);
+
+        $extractor = static fn (): AnalysisNodeExtractor => new AnalysisNodeExtractor(
+            analysisResultCache: new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
+            analysisNodeCacheNamespace: 'config',
+        );
+
+        $parsedResult = $extractor()->extract([$fooFile, $barFile]);
+
+        $progress = new class implements ProgressHandlerInterface {
+            public int $total = -1;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        $cachedResult = $extractor()->extract([$fooFile, $barFile], $progress);
+
+        $this->assertSame(0, $progress->total);
+        $this->assertSame([], $progress->files);
+        $this->assertEquals($parsedResult->classNodes, $cachedResult->classNodes);
+        $this->assertSame(array_keys($parsedResult->fileAnalyses), array_keys($cachedResult->fileAnalyses));
     }
 }
