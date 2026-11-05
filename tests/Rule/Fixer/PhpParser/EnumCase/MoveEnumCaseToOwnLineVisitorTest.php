@@ -178,6 +178,28 @@ final class MoveEnumCaseToOwnLineVisitorTest extends TestCase
                 PHP,
         ];
 
+        yield 'comments sharing a line between cases stay on one line' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+                enum Status
+                {
+                    case Active; /* first */  /* second *//* third */ case Pending;
+                }
+                PHP,
+            ['Active', 'Pending'],
+            <<<'PHP'
+                <?php
+                namespace App;
+                enum Status
+                {
+                    case Active;
+                    /* first */  /* second *//* third */
+                    case Pending;
+                }
+                PHP,
+        ];
+
         yield 'comment trailing the opening brace is not mirrored' => [
             <<<'PHP'
                 <?php

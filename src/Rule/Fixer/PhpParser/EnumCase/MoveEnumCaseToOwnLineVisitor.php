@@ -114,8 +114,9 @@ final class MoveEnumCaseToOwnLineVisitor extends AbstractTokenAwareVisitor
     }
 
     /**
-     * Rewrites the gap between two code tokens as one comment per line, the
-     * mirrored ones first, followed by the break before the second token.
+     * Rewrites the gap between two code tokens with the mirrored comments
+     * first, one per line, then the gap's own comments together on one line
+     * as written, followed by the break before the second token.
      *
      * @param array{int, int} $gap
      * @param list<string>    $mirroredComments
@@ -130,9 +131,16 @@ final class MoveEnumCaseToOwnLineVisitor extends AbstractTokenAwareVisitor
             $text .= $commentBreak . $mirroredComment;
         }
 
+        // A gap holds no newline, so its comments shared one line; the
+        // whitespace between them is kept, the one before the first dropped.
+        $separator = $commentBreak;
+
         for ($position = $previous + 1; $position < $next; $position++) {
             if ($this->tokens[$position]->id !== T_WHITESPACE) {
-                $text .= $commentBreak . $this->tokens[$position]->text;
+                $text     .= $separator . $this->tokens[$position]->text;
+                $separator = '';
+            } elseif ($separator === '') {
+                $separator = $this->tokens[$position]->text;
             }
 
             $this->tokens[$position]->text = '';
