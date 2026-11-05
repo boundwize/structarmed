@@ -25,6 +25,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExposeInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExtendInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseMustBeOnOwnLineRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseValueMustNotBeEmptyRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseValueMustNotHaveSurroundingWhitespaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
@@ -33,8 +34,11 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
 use Boundwize\StructArmed\Rule\Rules\File\LargeNumericLiteralMustUseSeparatorRule;
 use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Function_\MustBeUsedFunctionRule;
+use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+
+use function array_map;
 
 #[CoversClass(Preset::class)]
 #[CoversClass(CodeQualityPreset::class)]
@@ -155,12 +159,20 @@ final class PresetTest extends TestCase
         $this->assertSame(['Source' => ['src/']], $architecture->getLayers());
 
         $rules = $architecture->getRules();
-        $this->assertCount(1, $rules);
+        $this->assertCount(2, $rules);
         $this->assertInstanceOf(
             EnumCaseValueMustNotBeEmptyRule::class,
             $rules[EnumPreset::CASE_VALUE_MUST_NOT_BE_EMPTY] ?? null
         );
         $this->assertSame('enum.case_value.must_not_be_empty', EnumPreset::CASE_VALUE_MUST_NOT_BE_EMPTY);
+        $this->assertInstanceOf(
+            EnumCaseValueMustNotHaveSurroundingWhitespaceRule::class,
+            $rules[EnumPreset::CASE_VALUE_MUST_NOT_HAVE_SURROUNDING_WHITESPACE] ?? null
+        );
+        $this->assertSame(
+            'enum.case_value.must_not_have_surrounding_whitespace',
+            EnumPreset::CASE_VALUE_MUST_NOT_HAVE_SURROUNDING_WHITESPACE
+        );
     }
 
     public function testEnumPresetUsesComposerSourcePathsByDefault(): void
@@ -172,6 +184,10 @@ final class PresetTest extends TestCase
         // A null source path list defers to Composer-discovered PSR-4 paths.
         $this->assertSame(['Source' => []], $architecture->getLayers());
         $this->assertArrayHasKey(EnumPreset::CASE_VALUE_MUST_NOT_BE_EMPTY, $architecture->getRules());
+        $this->assertArrayHasKey(
+            EnumPreset::CASE_VALUE_MUST_NOT_HAVE_SURROUNDING_WHITESPACE,
+            $architecture->getRules()
+        );
     }
 
     public function testEnumPresetRuleTargetsItsOwnSourceLayerBesideOtherPresets(): void
@@ -186,19 +202,37 @@ final class PresetTest extends TestCase
         );
 
         $rules = $architecture->getRules();
-        $this->assertCount(4, $rules);
+        $this->assertCount(5, $rules);
         $this->assertInstanceOf(ApiMayNotBeInternalRule::class, $rules[StabilityPreset::API_MAY_NOT_BE_INTERNAL]);
 
         $enumRule = $rules[EnumPreset::CASE_VALUE_MUST_NOT_BE_EMPTY];
         $this->assertInstanceOf(EnumCaseValueMustNotBeEmptyRule::class, $enumRule);
 
+        $whitespaceRule = $rules[EnumPreset::CASE_VALUE_MUST_NOT_HAVE_SURROUNDING_WHITESPACE];
+        $this->assertInstanceOf(EnumCaseValueMustNotHaveSurroundingWhitespaceRule::class, $whitespaceRule);
+
         $libEnum = $this->makeStringBackedEnum('Source[lib/]');
         $this->assertTrue($enumRule->appliesTo($libEnum));
+        $this->assertTrue($whitespaceRule->appliesTo($libEnum));
+        // Each rule reports only its own case: '' is left to the empty-value rule.
         $this->assertSame(
-            'Enum case [App\Status::Pending] must not have an empty backing value',
-            $enumRule->evaluate($libEnum)?->message
+            ['Enum case [App\Status::Pending] must not have an empty backing value'],
+            array_map(
+                static fn (RuleViolation $ruleViolation): string => $ruleViolation->message,
+                $enumRule->evaluateAll($libEnum)
+            )
         );
-        $this->assertFalse($enumRule->appliesTo($this->makeStringBackedEnum('Source')));
+        $this->assertSame(
+            ['Enum case [App\Status::Padded] must not have surrounding whitespace in its backing value'],
+            array_map(
+                static fn (RuleViolation $ruleViolation): string => $ruleViolation->message,
+                $whitespaceRule->evaluateAll($libEnum)
+            )
+        );
+
+        $sourceEnum = $this->makeStringBackedEnum('Source');
+        $this->assertFalse($enumRule->appliesTo($sourceEnum));
+        $this->assertFalse($whitespaceRule->appliesTo($sourceEnum));
     }
 
     public function testCodeQualityPresetUsesComposerSourcePathsByDefault(): void
@@ -682,7 +716,10 @@ final class PresetTest extends TestCase
             isInterface: false,
             isReadonly: false,
             isEnum: true,
-            enumCases: [new EnumCaseNode(name: 'Pending', line: 3, value: '')],
+            enumCases: [
+                new EnumCaseNode(name: 'Pending', line: 3, value: ''),
+                new EnumCaseNode(name: 'Padded', line: 4, value: ' padded'),
+            ],
             enumBackingType: 'string',
         );
     }
