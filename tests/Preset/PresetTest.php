@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Preset;
 
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Preset\Preset;
 use Boundwize\StructArmed\Preset\Presets\CodeQualityPreset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
+use Boundwize\StructArmed\Preset\Presets\EnumPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\PerPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
@@ -21,6 +24,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotBeInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExposeInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExtendInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseMustBeOnOwnLineRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseValueMustNotBeEmptyRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ExtendedClassMustBeAbstractOrInstantiatedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
@@ -35,6 +39,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Preset::class)]
 #[CoversClass(CodeQualityPreset::class)]
 #[CoversClass(DddPreset::class)]
+#[CoversClass(EnumPreset::class)]
 #[CoversClass(MvcPreset::class)]
 #[CoversClass(PerPreset::class)]
 #[CoversClass(Psr1Preset::class)]
@@ -135,6 +140,65 @@ final class PresetTest extends TestCase
             ApiMayNotExposeInternalRule::class,
             $rules[StabilityPreset::API_MAY_NOT_EXPOSE_INTERNAL] ?? null
         );
+    }
+
+    public function testEnumPresetRegistersSourceLayerAndRules(): void
+    {
+        $architecture = Architecture::define();
+
+        $enumPreset = Preset::ENUM(
+            sourcePaths: ['src/'],
+        );
+        $enumPreset->apply($architecture);
+
+        $this->assertInstanceOf(EnumPreset::class, $enumPreset);
+        $this->assertSame(['Source' => ['src/']], $architecture->getLayers());
+
+        $rules = $architecture->getRules();
+        $this->assertCount(1, $rules);
+        $this->assertInstanceOf(
+            EnumCaseValueMustNotBeEmptyRule::class,
+            $rules[EnumPreset::CASE_VALUE_MUST_NOT_BE_EMPTY] ?? null
+        );
+        $this->assertSame('enum.case_value.must_not_be_empty', EnumPreset::CASE_VALUE_MUST_NOT_BE_EMPTY);
+    }
+
+    public function testEnumPresetUsesComposerSourcePathsByDefault(): void
+    {
+        $architecture = Architecture::define();
+
+        Preset::ENUM()->apply($architecture);
+
+        // A null source path list defers to Composer-discovered PSR-4 paths.
+        $this->assertSame(['Source' => []], $architecture->getLayers());
+        $this->assertArrayHasKey(EnumPreset::CASE_VALUE_MUST_NOT_BE_EMPTY, $architecture->getRules());
+    }
+
+    public function testEnumPresetRuleTargetsItsOwnSourceLayerBesideOtherPresets(): void
+    {
+        $architecture = Architecture::define()
+            ->withPreset(Preset::STABILITY(sourcePaths: ['src/']))
+            ->withPreset(Preset::ENUM(sourcePaths: ['lib/']));
+
+        $this->assertSame(
+            ['Source' => ['src/'], 'Source[lib/]' => ['lib/']],
+            $architecture->getLayers()
+        );
+
+        $rules = $architecture->getRules();
+        $this->assertCount(4, $rules);
+        $this->assertInstanceOf(ApiMayNotBeInternalRule::class, $rules[StabilityPreset::API_MAY_NOT_BE_INTERNAL]);
+
+        $enumRule = $rules[EnumPreset::CASE_VALUE_MUST_NOT_BE_EMPTY];
+        $this->assertInstanceOf(EnumCaseValueMustNotBeEmptyRule::class, $enumRule);
+
+        $libEnum = $this->makeStringBackedEnum('Source[lib/]');
+        $this->assertTrue($enumRule->appliesTo($libEnum));
+        $this->assertSame(
+            'Enum case [App\Status::Pending] must not have an empty backing value',
+            $enumRule->evaluate($libEnum)?->message
+        );
+        $this->assertFalse($enumRule->appliesTo($this->makeStringBackedEnum('Source')));
     }
 
     public function testCodeQualityPresetUsesComposerSourcePathsByDefault(): void
@@ -602,6 +666,24 @@ final class PresetTest extends TestCase
         $this->assertSame(
             '/(?:^|\\\\)Models?(?:\\\\|$)/',
             $architecture->getLayerPatterns()['Model']['pattern']
+        );
+    }
+
+    private function makeStringBackedEnum(string $layer): ClassNode
+    {
+        return new ClassNode(
+            className: 'App\\Status',
+            file: '/fake.php',
+            line: 1,
+            layer: $layer,
+            extends: null,
+            isAbstract: false,
+            isFinal: false,
+            isInterface: false,
+            isReadonly: false,
+            isEnum: true,
+            enumCases: [new EnumCaseNode(name: 'Pending', line: 3, value: '')],
+            enumBackingType: 'string',
         );
     }
 }

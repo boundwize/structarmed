@@ -28,6 +28,7 @@ vendor/bin/structarmed init --preset=ddd
 vendor/bin/structarmed init --preset=yagni
 vendor/bin/structarmed init --preset=codequality
 vendor/bin/structarmed init --preset=stability
+vendor/bin/structarmed init --preset=enum
 vendor/bin/structarmed init --preset=all
 ```
 
