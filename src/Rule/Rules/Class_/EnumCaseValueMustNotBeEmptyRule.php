@@ -28,6 +28,7 @@ final readonly class EnumCaseValueMustNotBeEmptyRule implements MultipleRuleViol
     public function appliesTo(ClassNode $classNode): bool
     {
         return $classNode->isInLayer($this->layer)
+            && $classNode->isBackedEnum()
             && $classNode->enumBackingType === 'string';
     }
 
