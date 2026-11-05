@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\EnumCase;
 
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractTokenAwareVisitor;
-use Boundwize\StructArmed\Rule\Fixer\PhpParser\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Util\PhpParser\EnumCaseLine;
 use PhpParser\Comment\Doc;
 use PhpParser\Node;
@@ -212,7 +211,7 @@ final class MoveEnumCaseToOwnLineVisitor extends AbstractTokenAwareVisitor
             }
         }
 
-        return $enumIndent . (str_contains($enumIndent, "\t") ? "\t" : PhpParserFixerProcessor::INDENT);
+        return $enumIndent . (str_contains($enumIndent, "\t") ? "\t" : '    ');
     }
 
     /** The whitespace starting the line the token at the given position is on. */
