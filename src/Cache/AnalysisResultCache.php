@@ -69,7 +69,7 @@ final class AnalysisResultCache
      * their shape, naming, or reference semantics change. It is recorded in
      * the metadata marker, so older caches are cleared on their next use.
      */
-    public const FORMAT_VERSION = 22;
+    public const FORMAT_VERSION = 23;
 
     private readonly string $cacheDirectory;
 
@@ -1259,7 +1259,7 @@ final class AnalysisResultCache
     }
 
     /**
-     * @return array{string, string, string, string, int}
+     * @return array{string, string, string, string, int, bool}
      */
     private function classSignatureToArray(ClassSignature $classSignature): array
     {
@@ -1269,6 +1269,7 @@ final class AnalysisResultCache
             $classSignature->kind,
             $classSignature->visibility,
             $classSignature->line,
+            $classSignature->isPromoted,
         ];
     }
 
@@ -1277,11 +1278,11 @@ final class AnalysisResultCache
      */
     private function classSignatureFromArray(array $signature): ?ClassSignature
     {
-        if (count($signature) !== 5 || ! array_is_list($signature)) {
+        if (count($signature) !== 6 || ! array_is_list($signature)) {
             return null;
         }
 
-        [$type, $name, $kind, $visibility, $line] = $signature;
+        [$type, $name, $kind, $visibility, $line, $isPromoted] = $signature;
 
         if (
             ! is_string($type)
@@ -1289,11 +1290,12 @@ final class AnalysisResultCache
             || ! is_string($kind)
             || ! is_string($visibility)
             || ! is_int($line)
+            || ! is_bool($isPromoted)
         ) {
             return null;
         }
 
-        return new ClassSignature($type, $name, $kind, $visibility, $line);
+        return new ClassSignature($type, $name, $kind, $visibility, $line, $isPromoted);
     }
 
     /**
