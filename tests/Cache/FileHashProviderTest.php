@@ -10,6 +10,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
+use function hash;
 use function hash_file;
 use function stat;
 
@@ -96,14 +97,15 @@ final class FileHashProviderTest extends TestCase
         file_put_contents($changedFile, '<?php echo "changed";');
         file_put_contents($malformedFile, '<?php echo "malformed";');
 
+        $storedHash       = hash('xxh128', 'stored');
         $fileHashProvider = new FileHashProvider();
         $fileHashProvider->useFingerprints([
-            $unchangedFile => [$this->signature($unchangedFile), 'unchanged-hash'],
-            $changedFile   => ['1:1:1:1', 'changed-hash'],
-            $malformedFile => [$this->signature($malformedFile)],
+            $unchangedFile => $storedHash . ':' . $this->signature($unchangedFile),
+            $changedFile   => $storedHash . ':1:1:1:1',
+            $malformedFile => [$storedHash, $this->signature($malformedFile)],
         ]);
 
-        $this->assertSame('unchanged-hash', $fileHashProvider->hash($unchangedFile));
+        $this->assertSame($storedHash, $fileHashProvider->hash($unchangedFile));
         $this->assertSame(hash_file('xxh128', $changedFile), $fileHashProvider->hash($changedFile));
         $this->assertSame(hash_file('xxh128', $malformedFile), $fileHashProvider->hash($malformedFile));
     }
@@ -123,7 +125,7 @@ final class FileHashProviderTest extends TestCase
         // this test file was last changed before the run started
         $fileHashProvider->hash(__FILE__);
 
-        $fingerprint = [$this->signature(__FILE__), hash_file('xxh128', __FILE__)];
+        $fingerprint = hash_file('xxh128', __FILE__) . ':' . $this->signature(__FILE__);
 
         $this->assertSame(
             PHP_OS_FAMILY === 'Windows' ? null : [__FILE__ => $fingerprint],

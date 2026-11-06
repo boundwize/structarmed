@@ -402,17 +402,18 @@ final class AnalysisResultCacheTest extends TestCase
         $stat = stat($sourceFile);
         $this->assertIsArray($stat);
 
-        $signature = $stat['mtime'] . ':' . $stat['ctime'] . ':' . $stat['size'] . ':' . $stat['ino'];
+        $fingerprint = hash('xxh128', 'stored') . ':'
+            . $stat['mtime'] . ':' . $stat['ctime'] . ':' . $stat['size'] . ':' . $stat['ino'];
 
         file_put_contents($cacheDirectory . '/_fingerprints.json', json_encode([
-            $sourceFile => [$signature, 'stored-hash'],
+            $sourceFile => $fingerprint,
         ], JSON_THROW_ON_ERROR));
 
         try {
             $fileHashProvider    = new FileHashProvider();
             $analysisResultCache = new AnalysisResultCache(__DIR__, $fileHashProvider, $cacheDirectory);
 
-            $this->assertSame('stored-hash', $fileHashProvider->hash($sourceFile));
+            $this->assertSame(hash('xxh128', 'stored'), $fileHashProvider->hash($sourceFile));
 
             // this test file was last changed before the run started, so it is fingerprinted
             $fileHashProvider->hash(__FILE__);
@@ -426,7 +427,7 @@ final class AnalysisResultCacheTest extends TestCase
             );
 
             $this->assertIsArray($fingerprints);
-            $this->assertSame([$signature, 'stored-hash'], $fingerprints[$sourceFile]);
+            $this->assertSame($fingerprint, $fingerprints[$sourceFile]);
             $this->assertSame(PHP_OS_FAMILY !== 'Windows', isset($fingerprints[__FILE__]));
 
             // nothing new was fingerprinted since, so nothing is written again

@@ -7,9 +7,9 @@ namespace Boundwize\StructArmed\Cache;
 use function array_fill_keys;
 use function array_intersect_key;
 use function hash_file;
-use function is_array;
 use function is_string;
 use function stat;
+use function substr;
 use function time;
 
 use const PHP_OS_FAMILY;
@@ -26,7 +26,13 @@ final class FileHashProvider
     /** @var array<string, string> */
     private array $hashes = [];
 
-    /** @var array<string, array{string, string}> stat signature and content hash per file */
+    /**
+     * Per file, the 32-character content hash and the stat signature it was
+     * taken at, joined as "hash:signature": one string per file instead of a
+     * pair keeps the map several MB smaller on large projects.
+     *
+     * @var array<string, string>
+     */
     private array $fingerprints = [];
 
     private bool $hasNewFingerprints = false;
@@ -59,8 +65,8 @@ final class FileHashProvider
         $signature   = $stat['mtime'] . ':' . $stat['ctime'] . ':' . $stat['size'] . ':' . $stat['ino'];
         $fingerprint = $this->fingerprints[$file] ?? null;
 
-        if ($fingerprint !== null && $fingerprint[0] === $signature) {
-            return $this->hashes[$file] = $fingerprint[1];
+        if ($fingerprint !== null && substr($fingerprint, 33) === $signature) {
+            return $this->hashes[$file] = substr($fingerprint, 0, 32);
         }
 
         $hash = @hash_file('xxh128', $file);
@@ -70,7 +76,7 @@ final class FileHashProvider
         }
 
         if ($stat['ctime'] < $this->fingerprintBefore) {
-            $this->fingerprints[$file] = [$signature, $hash];
+            $this->fingerprints[$file] = $hash . ':' . $signature;
             $this->hasNewFingerprints  = true;
         }
 
@@ -83,19 +89,14 @@ final class FileHashProvider
     public function useFingerprints(array $fingerprints): void
     {
         foreach ($fingerprints as $file => $fingerprint) {
-            if (
-                is_array($fingerprint)
-                && isset($fingerprint[0], $fingerprint[1])
-                && is_string($fingerprint[0])
-                && is_string($fingerprint[1])
-            ) {
-                $this->fingerprints[$file] = [$fingerprint[0], $fingerprint[1]];
+            if (is_string($fingerprint)) {
+                $this->fingerprints[$file] = $fingerprint;
             }
         }
     }
 
     /**
-     * @return array<string, array{string, string}>|null null when nothing new was fingerprinted
+     * @return array<string, string>|null null when nothing new was fingerprinted
      */
     public function newFingerprints(): ?array
     {
