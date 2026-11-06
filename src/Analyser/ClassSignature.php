@@ -7,7 +7,8 @@ namespace Boundwize\StructArmed\Analyser;
 /**
  * One class-like type named by a member's signature. Its name and kind tell
  * which member: the type of a property or parameter, or a method's return type.
- * A property declared by constructor promotion is flagged as promoted.
+ * A property declared by constructor promotion, and the parameter a private one
+ * is also recorded as, are flagged as promoted.
  */
 final readonly class ClassSignature
 {

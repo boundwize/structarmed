@@ -1107,7 +1107,7 @@ PHP);
         $this->assertSame(
             [
                 ['Hidden', 'a', ClassSignature::PROPERTY, 'private', 5, true],
-                ['Hidden', 'a', ClassSignature::PARAM, 'public', 5, false],
+                ['Hidden', 'a', ClassSignature::PARAM, 'public', 5, true],
                 ['Guarded', 'b', ClassSignature::PROPERTY, 'protected', 5, true],
                 ['Open', 'c', ClassSignature::PROPERTY, 'public', 5, true],
                 ['Plain', 'd', ClassSignature::PARAM, 'public', 5, false],
