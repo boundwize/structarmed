@@ -89,6 +89,11 @@ final class InitCommandTest extends TestCase
             '    ->withPreset(Preset::STABILITY());',
         ];
 
+        yield 'enum' => [
+            ['--preset=enum'],
+            '    ->withPreset(Preset::ENUM());',
+        ];
+
         yield 'all' => [
             ['--preset=all'],
             "    ->withPresets(\n"
@@ -101,7 +106,8 @@ final class InitCommandTest extends TestCase
             . "        Preset::MVC(),\n"
             . "        Preset::YAGNI(),\n"
             . "        Preset::CODEQUALITY(),\n"
-            . "        Preset::STABILITY()\n"
+            . "        Preset::STABILITY(),\n"
+            . "        Preset::ENUM()\n"
             . "    );",
         ];
     }

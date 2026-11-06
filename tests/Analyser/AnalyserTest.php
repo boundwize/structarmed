@@ -33,6 +33,7 @@ use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\Rules\Class_\AnonymousClassMayNotHaveEmptyParenthesesRule;
+use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExposeInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\ApiMayNotExtendInternalRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MayNotImplementInterfaceRule;
@@ -48,6 +49,7 @@ use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -298,6 +300,188 @@ final class AnalyserTest extends TestCase
 
         $this->assertCount(3, $coldViolations);
         $this->assertEquals($coldViolations, $warmViolations);
+    }
+
+    public function testCollectsSignaturesOnlyForAnActiveSignatureAwareRule(): void
+    {
+        $basePath = $this->makeTempProject($this->signatureProjectFiles());
+
+        $plain   = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('count', $this->makeSignatureCountRule());
+        $aware   = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('count', $this->makeSignatureCountRule())
+            ->rule('aware', $this->makeSignatureAwareRule());
+        $skipped = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('count', $this->makeSignatureCountRule())
+            ->rule('aware', $this->makeSignatureAwareRule())
+            ->skipRule('aware');
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $this->assertSame(
+                ['App\Client:0', 'App\Pool:0'],
+                $this->sortedMessages($plain, $basePath, $analyserOptions, 'count')
+            );
+            $this->assertSame(
+                ['App\Client:3', 'App\Pool:0'],
+                $this->sortedMessages($aware, $basePath, $analyserOptions, 'count')
+            );
+            $this->assertSame(
+                ['App\Client:3', 'App\Pool:0'],
+                $this->sortedMessages($aware, $basePath, $analyserOptions, 'aware')
+            );
+            $this->assertSame(
+                ['App\Client:0', 'App\Pool:0'],
+                $this->sortedMessages($skipped, $basePath, $analyserOptions, 'count')
+            );
+        }
+    }
+
+    public function testApiMayNotExposeInternalRuleAgreesAcrossRunnersAndCacheStates(): void
+    {
+        $basePath            = $this->makeTempProject($this->signatureProjectFiles());
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+        $architecture        = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('expose', new ApiMayNotExposeInternalRule('Source'));
+        $plain               = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('count', $this->makeSignatureCountRule());
+        $expected            = [
+            [6, '@api Class [App\Client] must not expose @internal Class [App\Pool] through method [pool]'],
+            [10, '@api Class [App\Client] must not expose @internal Class [App\Pool] through property [exposed]'],
+        ];
+        $linesAndMessages    = static fn(Analyser $analyser, AnalyserOptions $analyserOptions): array => array_map(
+            static fn (RuleViolation $ruleViolation): array => [$ruleViolation->line, $ruleViolation->message],
+            $analyser->analyse($architecture, [], null, $analyserOptions)->forRule('expose')
+        );
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $this->assertSame($expected, $linesAndMessages(new Analyser($basePath), $analyserOptions));
+        }
+
+        // Each runner, starting from a cache the other one filled without signatures.
+        foreach (
+            [
+                [AnalyserOptions::sequential(), AnalyserOptions::parallel(2)],
+                [AnalyserOptions::parallel(2), AnalyserOptions::sequential()],
+            ] as [$filledBy, $readBy]
+        ) {
+            $analyser = new Analyser($basePath, $analysisResultCache, 'config-' . $filledBy->workerCount);
+
+            $this->assertSame(
+                ['App\Client:0', 'App\Pool:0'],
+                $this->sortedViolationMessages($analyser->analyse($plain, [], null, $filledBy)->forRule('count'))
+            );
+            $this->assertSame($expected, $linesAndMessages($analyser, $readBy));
+            $this->assertSame($expected, $linesAndMessages($analyser, $filledBy));
+            $this->assertSame(
+                ['App\Client:0', 'App\Pool:0'],
+                $this->sortedViolationMessages($analyser->analyse($plain, [], null, $readBy)->forRule('count'))
+            );
+        }
+    }
+
+    /** @return array<string, string> */
+    private function signatureProjectFiles(): array
+    {
+        return [
+            'src/Pool.php'   => <<<'PHP'
+                <?php
+                namespace App;
+                /** @internal */
+                final class Pool {}
+
+                PHP,
+            'src/Client.php' => <<<'PHP'
+                <?php
+                namespace App;
+                /** @api */
+                final class Client {
+                    private Pool $hidden;
+                    public function pool(): Pool {
+                        return new Pool();
+                    }
+                    public function __construct(
+                        public Pool $exposed,
+                    ) {
+                    }
+                }
+
+                PHP,
+        ];
+    }
+
+    private function makeSignatureCountRule(): RuleInterface
+    {
+        return new class implements RuleInterface {
+            public function appliesTo(ClassNode $classNode): bool
+            {
+                return true;
+            }
+
+            public function evaluate(ClassNode $classNode): RuleViolation
+            {
+                return new RuleViolation(
+                    message:   $classNode->className . ':' . count($classNode->signatures),
+                    file:      $classNode->file,
+                    line:      $classNode->line,
+                    className: $classNode->className,
+                    layer:     $classNode->layer,
+                );
+            }
+        };
+    }
+
+    private function makeSignatureAwareRule(): SignatureTypesAwareRuleInterface
+    {
+        return new class implements SignatureTypesAwareRuleInterface {
+            public function appliesTo(ClassNode $classNode): bool
+            {
+                return true;
+            }
+
+            public function evaluate(ClassNode $classNode): RuleViolation
+            {
+                return new RuleViolation(
+                    message:   $classNode->className . ':' . count($classNode->signatures),
+                    file:      $classNode->file,
+                    line:      $classNode->line,
+                    className: $classNode->className,
+                    layer:     $classNode->layer,
+                );
+            }
+        };
+    }
+
+    /** @return list<string> */
+    private function sortedMessages(
+        Architecture $architecture,
+        string $basePath,
+        AnalyserOptions $analyserOptions,
+        string $ruleKey,
+    ): array {
+        return $this->sortedViolationMessages(
+            (new Analyser($basePath))->analyse($architecture, [], null, $analyserOptions)->forRule($ruleKey)
+        );
+    }
+
+    /**
+     * @param array<RuleViolation> $ruleViolations
+     * @return list<string>
+     */
+    private function sortedViolationMessages(array $ruleViolations): array
+    {
+        $messages = array_map(
+            static fn (RuleViolation $ruleViolation): string => $ruleViolation->message,
+            $ruleViolations
+        );
+
+        sort($messages);
+
+        return $messages;
     }
 
     public function testFunctionRuleViolationsSurviveTheAnalysisNodeCacheWithFileAnalysis(): void

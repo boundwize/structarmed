@@ -132,7 +132,7 @@ Each `ClassNode` records whether the docblock of its class, interface, trait, or
 
 A tag counts when it starts a docblock line, also when a description follows, such as `@internal only used by the analyser`. A tag name mentioned within the description does not count, and neither do longer tag names such as `@apiVersion` and `@api-version` or the phpDocumentor inline `{@internal ...}}` form, which marks part of the description as internal rather than the class-like itself. Member docblocks are not read.
 
-The built-in `ApiMayNotBeInternalRule` and `ApiMayNotExtendInternalRule` read both flags. The example below enforces that every class-like in a layer declares one of the two tags:
+The built-in `ApiMayNotBeInternalRule`, `ApiMayNotExtendInternalRule`, and `ApiMayNotExposeInternalRule` read these flags. The example below enforces that every class-like in a layer declares one of the two tags:
 
 ```php
 <?php
@@ -165,6 +165,111 @@ final readonly class ClassMustDeclareApiOrInternalRule implements RuleInterface
             className: $classNode->className,
             layer:     $classNode->layer,
         );
+    }
+}
+```
+
+## Reading Signature Types In A Custom Rule
+
+Signatures are opt-in because collecting them costs extra analysis time and cache space. A rule that reads them implements `Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface` instead of the plain `RuleInterface`; without an active rule implementing it, `$classNode->signatures` stays empty.
+
+`$classNode->signatures` holds one `ClassSignature` per class-like type a member's signature names, each with these properties:
+
+| Property | Meaning |
+| --- | --- |
+| `$signature->type` | The fully-qualified type name |
+| `$signature->name` | The name of the property, parameter (without `$`), or method |
+| `$signature->kind` | `ClassSignature::PROPERTY`, `ClassSignature::PARAM`, or `ClassSignature::METHOD`; a `METHOD` signature is the method's return type |
+| `$signature->visibility` | `public`, `protected`, or `private`; a parameter has its method's visibility |
+| `$signature->line` | The line the type name is written on |
+
+`$signature->isExposed()` is true for a public or protected signature. Members of every visibility are recorded, so a rule decides which ones matter by reading these properties:
+
+```php
+// the return type of any public method
+$signature->kind === ClassSignature::METHOD && $signature->visibility === 'public'
+
+// the type of a property named $connection, whatever its visibility
+$signature->kind === ClassSignature::PROPERTY && $signature->name === 'connection'
+```
+
+For `public function find(Criteria $criteria): Result`, the signatures read as follows:
+
+| `type` | `name` | `kind` | `visibility` |
+| --- | --- | --- | --- |
+| `App\Criteria` | `criteria` | `ClassSignature::PARAM` | `public` |
+| `App\Result` | `find` | `ClassSignature::METHOD` | `public` |
+
+A parameter's signature holds the parameter's name, not its method's; use `$signature->line` to point at where it is written.
+
+Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per type name, and the same type is recorded again in every signature that names it, including each property of `public Pool $a, $b;`. A promoted constructor parameter is recorded as a property with its own visibility. A private one is also recorded as a parameter with the constructor's visibility, so `public function __construct(private Pool $pool)` is exposed through the parameter, as callers must pass a `Pool`. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
+
+The example below keeps database details inside repositories. A repository may build queries with Doctrine's `QueryBuilder`, but no public or protected method may return one, or callers could keep changing the query outside the repository:
+
+```php
+<?php
+
+namespace App\Architecture\Rules;
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
+use Boundwize\StructArmed\Rule\RuleViolation;
+use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
+use Doctrine\ORM\QueryBuilder;
+
+use function sprintf;
+
+final readonly class RepositoryMayNotReturnQueryBuilderRule implements SignatureTypesAwareRuleInterface
+{
+    public function appliesTo(ClassNode $classNode): bool
+    {
+        return $classNode->nameEndsWith('Repository');
+    }
+
+    public function evaluate(ClassNode $classNode): ?RuleViolation
+    {
+        foreach ($classNode->signatures as $signature) {
+            if (
+                ! $signature->isExposed()
+                || $signature->kind !== ClassSignature::METHOD
+                || $signature->type !== QueryBuilder::class
+            ) {
+                continue;
+            }
+
+            return new RuleViolation(
+                message:   sprintf(
+                    '[%s::%s()] must not return a QueryBuilder',
+                    $classNode->className,
+                    $signature->name
+                ),
+                file:      $classNode->file,
+                line:      $signature->line,
+                className: $classNode->className,
+                layer:     $classNode->layer,
+            );
+        }
+
+        return null;
+    }
+}
+```
+
+With this rule active, the first method below is reported and the second is allowed:
+
+```php
+final class UserRepository
+{
+    // Reported: the query leaves the repository
+    public function activeUsers(): QueryBuilder
+    {
+        return $this->baseQuery()->where('u.active = true');
+    }
+
+    // Allowed: the query stays inside the repository
+    private function baseQuery(): QueryBuilder
+    {
+        return $this->entityManager->createQueryBuilder();
     }
 }
 ```

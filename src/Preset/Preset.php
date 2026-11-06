@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Preset;
 
 use Boundwize\StructArmed\Preset\Presets\CodeQualityPreset;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
+use Boundwize\StructArmed\Preset\Presets\EnumPreset;
 use Boundwize\StructArmed\Preset\Presets\MvcPreset;
 use Boundwize\StructArmed\Preset\Presets\PerPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr12Preset;
@@ -29,6 +30,7 @@ use Boundwize\StructArmed\Preset\Presets\YagniPreset;
  *   ->withPreset(Preset::YAGNI())
  *   ->withPreset(Preset::CODEQUALITY())
  *   ->withPreset(Preset::STABILITY())
+ *   ->withPreset(Preset::ENUM())
  *   ->withPresets(Preset::DDD(), Preset::MVC())
  */
 final class Preset
@@ -133,6 +135,17 @@ final class Preset
         ?array $sourcePaths = null,
     ): StabilityPreset {
         return new StabilityPreset(
+            sourcePaths: $sourcePaths,
+        );
+    }
+
+    /**
+     * @param list<string>|null $sourcePaths
+     */
+    public static function ENUM(
+        ?array $sourcePaths = null,
+    ): EnumPreset {
+        return new EnumPreset(
             sourcePaths: $sourcePaths,
         );
     }

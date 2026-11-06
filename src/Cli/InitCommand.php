@@ -91,6 +91,7 @@ PHP);
             'yagni' => '    ->withPreset(Preset::YAGNI());',
             'codequality' => '    ->withPreset(Preset::CODEQUALITY());',
             'stability' => '    ->withPreset(Preset::STABILITY());',
+            'enum' => '    ->withPreset(Preset::ENUM());',
             'all' => "    ->withPresets(\n"
                 . "        Preset::PSR4(),\n"
                 . "        Preset::PSR1(),\n"
@@ -101,7 +102,8 @@ PHP);
                 . "        Preset::MVC(),\n"
                 . "        Preset::YAGNI(),\n"
                 . "        Preset::CODEQUALITY(),\n"
-                . "        Preset::STABILITY()\n"
+                . "        Preset::STABILITY(),\n"
+                . "        Preset::ENUM()\n"
                 . "    );",
             default => null,
         };

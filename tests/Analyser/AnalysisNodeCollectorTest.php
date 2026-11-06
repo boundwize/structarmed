@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use PhpParser\Modifiers;
@@ -202,10 +203,34 @@ PHP);
         return $this->makeCollector($code)->getAnonymousClassNodes();
     }
 
-    private function makeCollector(string $code, bool $withFileAnalysis = true): AnalysisNodeCollector
+    /** @return list<array{string, string, string, string, int}> */
+    private function collectSignatures(string $code): array
     {
+        $classNode = $this->makeCollector($code, withSignatures: true)->getClassNodes()[0];
+
+        return array_map(
+            static fn (ClassSignature $classSignature): array => [
+                $classSignature->type,
+                $classSignature->name,
+                $classSignature->kind,
+                $classSignature->visibility,
+                $classSignature->line,
+            ],
+            $classNode->signatures
+        );
+    }
+
+    private function makeCollector(
+        string $code,
+        bool $withFileAnalysis = true,
+        bool $withSignatures = false,
+    ): AnalysisNodeCollector {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
-        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver, $withFileAnalysis);
+        $analysisNodeCollector  = new AnalysisNodeCollector(
+            $namespaceLayerResolver,
+            $withFileAnalysis,
+            $withSignatures
+        );
         $parser                 = (new ParserFactory())->createForNewestSupportedVersion();
         $ast                    = $parser->parse($code);
 
@@ -976,6 +1001,240 @@ PHP);
         );
     }
 
+    public function testLeavesSignaturesEmptyWhenCollectionIsDisabled(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'CODE_SAMPLE'
+            <?php
+
+            class Foo
+            {
+                public Bar $bar;
+
+                public function __construct(public Baz $baz)
+                {
+                }
+
+                public function run(Qux $qux): Quux
+                {
+                }
+            }
+            CODE_SAMPLE);
+
+        $this->assertSame([], $analysisNodeCollector->getClassNodes()[0]->signatures);
+    }
+
+    public function testCollectsSignatureNameKindVisibilityLineAndFullyQualifiedType(): void
+    {
+        $this->assertSame(
+            [
+                ['Vendor\Imported', 'publicProperty', ClassSignature::PROPERTY, 'public', 9],
+                ['App\Second', 'protectedProperty', ClassSignature::PROPERTY, 'protected', 10],
+                ['App\Third', 'privateProperty', ClassSignature::PROPERTY, 'private', 11],
+                ['App\Param', 'param', ClassSignature::PARAM, 'public', 14],
+                ['App\Result', 'publicMethod', ClassSignature::METHOD, 'public', 14],
+                ['App\Param', 'param', ClassSignature::PARAM, 'protected', 18],
+                ['App\Result', 'protectedMethod', ClassSignature::METHOD, 'protected', 18],
+                ['Fully\Qualified', 'param', ClassSignature::PARAM, 'private', 22],
+                ['App\Result', 'privateMethod', ClassSignature::METHOD, 'private', 22],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                namespace App;
+
+                use Vendor\Imported;
+
+                class Foo extends Base
+                {
+                    public Imported $publicProperty;
+                    protected Second $protectedProperty;
+                    private Third $privateProperty;
+                    public int $builtin;
+
+                    public function publicMethod(Param $param): Result
+                    {
+                    }
+
+                    protected function protectedMethod(Param $param): Result
+                    {
+                    }
+
+                    private function privateMethod(\Fully\Qualified $param): Result
+                    {
+                    }
+
+                    public function keywords(self $self, parent $parent, int $int): static
+                    {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testFlattensCompositeSignatureTypes(): void
+    {
+        $this->assertSame(
+            [
+                ['Nullable', 'nullable', ClassSignature::PARAM, 'public', 6],
+                ['First', 'union', ClassSignature::PARAM, 'public', 7],
+                ['Second', 'union', ClassSignature::PARAM, 'public', 8],
+                ['Left', 'intersection', ClassSignature::PARAM, 'public', 9],
+                ['Right', 'intersection', ClassSignature::PARAM, 'public', 9],
+                ['Dnf', 'dnf', ClassSignature::PARAM, 'public', 10],
+                ['Form', 'dnf', ClassSignature::PARAM, 'public', 10],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    public function run(
+                        ?Nullable $nullable,
+                        First
+                            |Second|int $union,
+                        Left&Right $intersection,
+                        (Dnf&Form)|null $dnf,
+                    ): void {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testCollectsPromotedParameterAsPropertyAndAlsoAsParameterWhenPrivate(): void
+    {
+        $this->assertSame(
+            [
+                ['Hidden', 'a', ClassSignature::PROPERTY, 'private', 5],
+                ['Hidden', 'a', ClassSignature::PARAM, 'public', 5],
+                ['Guarded', 'b', ClassSignature::PROPERTY, 'protected', 5],
+                ['Open', 'c', ClassSignature::PROPERTY, 'public', 5],
+                ['Plain', 'd', ClassSignature::PARAM, 'public', 5],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    public function __construct(private Hidden $a, protected Guarded $b, readonly Open $c, Plain $d)
+                    {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testPrivateConstructorExposesOnlyThroughPromotedPropertyVisibility(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(
+            <<<'CODE_SAMPLE'
+            <?php
+
+            class Foo
+            {
+                private function __construct(private Hidden $a, public Exposed $b, Plain $c)
+                {
+                }
+            }
+            CODE_SAMPLE,
+            withSignatures: true,
+        );
+
+        $exposedTypes = [];
+
+        foreach ($analysisNodeCollector->getClassNodes()[0]->signatures as $signature) {
+            if ($signature->isExposed()) {
+                $exposedTypes[] = $signature->type;
+            }
+        }
+
+        $this->assertSame(['Exposed'], $exposedTypes);
+    }
+
+    public function testKeepsRepeatedSignatureTypeInEachContext(): void
+    {
+        $this->assertSame(
+            [
+                ['Shared', 'shared', ClassSignature::PROPERTY, 'private', 5],
+                ['Shared', 'shared', ClassSignature::PARAM, 'public', 7],
+                ['Shared', 'run', ClassSignature::METHOD, 'public', 7],
+                ['Shared', 'other', ClassSignature::METHOD, 'protected', 11],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    private Shared $shared;
+
+                    public function run(Shared $shared): Shared
+                    {
+                    }
+
+                    protected function other(): Shared
+                    {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testCollectsOneSignaturePerPropertyOfADeclaration(): void
+    {
+        $this->assertSame(
+            [
+                ['Shared', 'first', ClassSignature::PROPERTY, 'public', 5],
+                ['Shared', 'second', ClassSignature::PROPERTY, 'public', 5],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    public Shared $first, $second;
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testKeepsSignaturesWithTheirDeclaringClassLike(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(
+            <<<'CODE_SAMPLE'
+            <?php
+
+            class Outer
+            {
+                public function make(): OuterResult
+                {
+                    return new class {
+                        public AnonymousProperty $property;
+
+                        public function anonymous(AnonymousParam $param): void
+                        {
+                        }
+                    };
+                }
+            }
+
+            interface Second
+            {
+                public function run(SecondParam $param): void;
+            }
+            CODE_SAMPLE,
+            withSignatures: true,
+        );
+
+        $classNodes = $analysisNodeCollector->getClassNodes();
+        $types      = static fn (ClassNode $classNode): array => array_map(
+            static fn (ClassSignature $classSignature): string => $classSignature->type,
+            $classNode->signatures
+        );
+
+        $this->assertSame(['OuterResult'], $types($classNodes[0]));
+        $this->assertSame(['SecondParam'], $types($classNodes[1]));
+    }
+
     public function testCollectsInterface(): void
     {
         $classNode = $this->collect('<?php interface FooInterface {}');
@@ -1394,9 +1653,24 @@ PHP);
         $this->assertSame(['Hearts', 'Spades'], array_column($classNode->enumCases, 'name'));
         $this->assertSame([4, 5], array_column($classNode->enumCases, 'line'));
         $this->assertSame(['H', 'S'], array_column($classNode->enumCases, 'value'));
+        $this->assertSame([false, false], array_column($classNode->enumCases, 'sharesLine'));
         $this->assertTrue($classNode->enumCases[0]->hasResolvedValue());
         $this->assertSame(['Wild'], array_column($classNode->constants, 'name'));
         $this->assertSame(['label'], array_column($classNode->methods, 'name'));
+    }
+
+    public function testRecordsEnumCasesSharingALine(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            enum Suit: string { case Hearts = 'H';
+                case Spades = 'S'; case Clubs = 'C';
+                case Diamonds = 'D';
+            }
+            PHP);
+
+        $this->assertSame([true, true, true, false], array_column($classNode->enumCases, 'sharesLine'));
+        $this->assertSame([2, 3, 3, 4], array_column($classNode->enumCases, 'line'));
     }
 
     public function testResolvesImportedClassNameInEnumCaseValue(): void
@@ -1450,6 +1724,105 @@ PHP);
         // Still a backed case: the analyser just cannot evaluate PHP_INT_MAX.
         $this->assertTrue($classNode->isBackedEnum());
         $this->assertFalse($classNode->enumCases[2]->hasResolvedValue());
+    }
+
+    public function testResolvesEnumCaseValuesFromOwnConstants(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            namespace App;
+
+            enum Status: int
+            {
+                case Active    = self::BASE;
+                case Pending   = self::NEXT;
+                case Completed = Status::NEXT + 1;
+                case Zero      = self::BASE - 100;
+
+                private const NEXT = self::BASE + 1;
+                private const BASE = 100;
+            }
+            PHP);
+
+        $this->assertSame([100, 101, 102, 0], array_column($classNode->enumCases, 'value'));
+        $this->assertTrue($classNode->enumCases[3]->hasResolvedValue());
+    }
+
+    public function testResolvesStringEnumCaseValuesFromOwnConstants(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            enum Prefix: string
+            {
+                public const SEPARATOR = '.';
+                public const EMPTY = '';
+
+                case App   = 'app' . self::SEPARATOR;
+                case Empty = self::EMPTY;
+                case First = self::LIST[0];
+                case Own   = self::class;
+
+                public const LIST = ['first', 'second'];
+            }
+            PHP);
+
+        $this->assertSame(['app.', '', 'first', 'Prefix'], array_column($classNode->enumCases, 'value'));
+        $this->assertTrue($classNode->enumCases[1]->hasResolvedValue());
+    }
+
+    public function testLeavesEnumCaseValuesFromUnresolvableConstantsUnresolved(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+            namespace App;
+
+            use Vendor\Codes;
+
+            enum Status: int
+            {
+                private const A = self::B;
+                private const B = self::A + 1;
+                private const SELF = self::SELF;
+                private const GLOBAL = E_ALL;
+                private const DEFAULT = self::Known;
+
+                case Known     = 1;
+                case Cyclic    = self::A;
+                case Recursive = self::SELF;
+                case Global    = self::GLOBAL + 1;
+                case Missing   = self::MISSING;
+                case Foreign   = Codes::BASE;
+                case OfCase    = self::DEFAULT;
+                case Again     = self::A;
+            }
+            PHP);
+
+        $this->assertSame(
+            [1, null, null, null, null, null, null, null],
+            array_column($classNode->enumCases, 'value')
+        );
+    }
+
+    public function testResolvesEnumConstantsPerEnum(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+            <?php
+            enum First: int
+            {
+                private const BASE = 10;
+
+                case One = self::BASE;
+            }
+
+            enum Second: int
+            {
+                case One = self::BASE;
+                case Other = First::BASE;
+            }
+            PHP);
+
+        $this->assertSame([10], array_column($nodes[0]->enumCases, 'value'));
+        $this->assertSame([null, null], array_column($nodes[1]->enumCases, 'value'));
     }
 
     public function testPureEnumHasNoBackingTypeOrCaseValues(): void

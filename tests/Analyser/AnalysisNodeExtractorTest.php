@@ -17,6 +17,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 use function array_keys;
+use function count;
 use function file_put_contents;
 
 #[CoversClass(AnalysisNodeExtractor::class)]
@@ -235,6 +236,65 @@ PHP);
 
         $this->assertCount(1, $extractionResult->classNodes);
         $this->assertSame([], $extractionResult->fileAnalyses);
+    }
+
+    public function testSignatureCacheTransitionsBetweenCollectionEnabledAndDisabled(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-extractor-cache');
+        $file     = $dir . '/Foo.php';
+
+        file_put_contents($file, <<<'PHP'
+<?php
+
+final class Foo
+{
+    public function run(Bar $bar): void
+    {
+    }
+}
+PHP);
+
+        $analysisNodeExtractor = new AnalysisNodeExtractor(
+            new NamespaceLayerResolver(['Source' => ''], $dir),
+            analysisResultCache: new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
+            analysisNodeCacheNamespace: 'config',
+        );
+        $extract               = static function (bool $withSignatures) use ($analysisNodeExtractor, $file): array {
+            $totals          = [];
+            $progressHandler = new class ($totals) implements ProgressHandlerInterface {
+                /** @param list<int> $totals */
+                public function __construct(
+                    /** @phpstan-ignore property.onlyWritten */
+                    private array &$totals
+                ) {
+                }
+
+                public function start(int $total): void
+                {
+                    $this->totals[] = $total;
+                }
+
+                public function advance(string $file): void
+                {
+                }
+
+                public function finish(): void
+                {
+                }
+            };
+
+            $extractionResult = $analysisNodeExtractor->extract([$file], $progressHandler, false, $withSignatures);
+
+            return [$totals[0], count($extractionResult->classNodes[0]->signatures)];
+        };
+
+        // [files parsed, signatures seen]
+        $this->assertSame([1, 0], $extract(false));
+        $this->assertSame([0, 0], $extract(false));
+        $this->assertSame([1, 1], $extract(true));
+        $this->assertSame([0, 1], $extract(true));
+        $this->assertSame([0, 0], $extract(false));
     }
 
     public function testExtractAdvancesProgressHandler(): void

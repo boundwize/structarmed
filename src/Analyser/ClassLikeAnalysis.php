@@ -33,6 +33,9 @@ final class ClassLikeAnalysis
      */
     public array $constantFetches = [];
 
+    /** @var list<ClassSignature> */
+    public array $signatures = [];
+
     /** @var list<Name> */
     public array $functionCallNames = [];
 

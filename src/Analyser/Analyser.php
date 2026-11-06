@@ -27,6 +27,7 @@ use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedFunctionAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedInterfaceAwareRuleInterface;
 use Boundwize\StructArmed\Rule\UsedTraitAwareRuleInterface;
@@ -124,6 +125,7 @@ final readonly class Analyser
         $hasUsedInterfaceAwareRule  = false;
         $hasUsedTraitAwareRule      = false;
         $hasUsedFunctionAwareRule   = false;
+        $withSignatures             = false;
 
         foreach ($rules as $key => $rule) {
             if (array_key_exists($key, $skippedRuleKeys)) {
@@ -170,6 +172,10 @@ final readonly class Analyser
 
             if ($rule instanceof UsedFunctionAwareRuleInterface) {
                 $hasUsedFunctionAwareRule = true;
+            }
+
+            if ($rule instanceof SignatureTypesAwareRuleInterface) {
+                $withSignatures = true;
             }
 
             if (! $rule instanceof ProjectRuleInterface) {
@@ -221,6 +227,7 @@ final readonly class Analyser
             $analyserOptions ?? AnalyserOptions::parallel(),
             $withFileAnalysis,
             $layerExcludePaths,
+            $withSignatures,
         );
         $classNodes       = $extractionResult->classNodes;
 
@@ -1549,6 +1556,7 @@ final readonly class Analyser
         ?AnalyserOptions $analyserOptions = null,
         bool $withFileAnalysis = true,
         array $layerExcludePaths = [],
+        bool $withSignatures = false,
     ): ExtractionResult {
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
@@ -1565,13 +1573,13 @@ final readonly class Analyser
                 $this->analysisResultCache,
                 $this->analysisNodeCacheNamespace,
                 $layerExcludePaths,
-            ))->extract($files, $progressHandler, $withFileAnalysis);
+            ))->extract($files, $progressHandler, $withFileAnalysis, $withSignatures);
         } else {
             $extractionResult = (new AnalysisNodeExtractor(
                 $chainLayerResolver,
                 analysisResultCache: $this->analysisResultCache,
                 analysisNodeCacheNamespace: $this->analysisNodeCacheNamespace,
-            ))->extract($files, $progressHandler, $withFileAnalysis);
+            ))->extract($files, $progressHandler, $withFileAnalysis, $withSignatures);
         }
 
         $progressHandler?->finish();

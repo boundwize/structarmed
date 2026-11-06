@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
+use Boundwize\StructArmed\Util\PhpParser\EnumCaseLine;
 use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
 use Boundwize\StructArmed\Util\PhpParser\UnconditionallyDeclaredFunctions;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
@@ -43,9 +44,11 @@ use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\IntersectionType;
 use PhpParser\Node\MatchArm;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
 use PhpParser\Node\Scalar\Float_;
 use PhpParser\Node\Scalar\Int_;
@@ -75,11 +78,13 @@ use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
+use PhpParser\Node\UnionType;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
 use function array_diff_ukey;
 use function array_intersect_key;
+use function array_key_exists;
 use function array_keys;
 use function array_pop;
 use function array_push;
@@ -208,9 +213,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * Class-like member statements collected on enter, see collectMember().
-     * EnumCase is collected on leave instead: its value expression may hold
-     * class names that the NameResolver only resolves on entering the
-     * expression's own nodes, after this visitor has entered the case.
+     * Enum cases are collected on leaving the enum instead, see
+     * collectEnumCases().
      */
     private const MEMBER_NODES = [
         Property::class   => true,
@@ -262,7 +266,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
         ClassMethod::class        => true,
-        EnumCase::class           => true,
         Function_::class          => true,
         Class_::class             => true,
         Interface_::class         => true,
@@ -456,23 +459,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     public function __construct(
         private readonly LayerResolverInterface $layerResolver,
         private readonly bool $withFileAnalysis = true,
+        private readonly bool $withSignatures = false,
     ) {
-        $this->constExprEvaluator = new ConstExprEvaluator(function (Expr $expr): string {
-            if (
-                $expr instanceof ClassConstFetch
-                && $expr->name instanceof Identifier
-                && $expr->name->toLowerString() === 'class'
-                && $expr->class instanceof Name
-            ) {
-                $className = $this->resolveClassLikeName($expr->class);
-
-                if ($className !== null) {
-                    return $className;
-                }
-            }
-
-            throw new ConstExprEvaluationException('Expression is not a resolvable class name.');
-        });
+        $this->constExprEvaluator = new ConstExprEvaluator($this->evaluateClassNameFetch(...));
     }
 
     /** @param array<Token> $tokens The file's token stream, for the facts its AST does not carry */
@@ -807,12 +796,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
-        if ($node instanceof EnumCase) {
-            $this->collectEnumCase($node);
-
-            return null;
-        }
-
         if ($node instanceof Function_) {
             $this->finishFunctionLikeAnalysis();
             array_pop($this->activeFunctionNames);
@@ -822,6 +805,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         // Every remaining LEAVE_NODES entry is a class-like statement.
         /** @phpstan-var ClassLike $node */
+
+        if ($node instanceof Enum_) {
+            $this->collectEnumCases($node);
+        }
 
         array_pop($this->activeClassLikeScopes);
         array_pop($this->activeClassLikeNames);
@@ -958,6 +945,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $hasExplicitVisibility = VisibilityFlagChecker::hasExplicitVisibilityFlag($stmt->flags);
 
             foreach ($stmt->props as $prop) {
+                if ($this->withSignatures) {
+                    $this->collectSignatures(
+                        $analysis,
+                        $stmt->type,
+                        (string) $prop->name,
+                        ClassSignature::PROPERTY,
+                        $visibility
+                    );
+                }
+
                 $analysis->properties[] = new PropertyNode(
                     name:                 (string) $prop->name,
                     visibility:           $visibility,
@@ -992,19 +989,86 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
     }
 
-    private function collectEnumCase(EnumCase $enumCase): void
+    /**
+     * Collected on leaving the enum, while its scope is still active: by then
+     * the NameResolver has resolved every name in the case values, and a case
+     * value may reference an enum constant declared after the case.
+     */
+    private function collectEnumCases(Enum_ $enum): void
     {
-        $analysis = $this->declaringClassLikeAnalysis();
+        /** @var ClassLikeAnalysis $analysis The enum's own analysis */
+        $analysis  = $this->declaringClassLikeAnalysis();
+        $enumCases = [];
+        $constants = [];
 
-        if (! $analysis instanceof ClassLikeAnalysis) {
-            return;
+        foreach ($enum->stmts as $stmt) {
+            if ($stmt instanceof EnumCase) {
+                $enumCases[] = $stmt;
+            } elseif ($stmt instanceof ClassConst) {
+                foreach ($stmt->consts as $const) {
+                    $constants[$const->name->toString()] = $const->value;
+                }
+            }
         }
 
-        $analysis->enumCases[] = new EnumCaseNode(
-            name:  (string) $enumCase->name,
-            line:  $enumCase->getStartLine(),
-            value: $this->resolveEnumCaseValue($enumCase->expr),
-        );
+        $evaluator = $constants === []
+            ? $this->constExprEvaluator
+            : $this->createEnumConstantEvaluator($constants);
+
+        foreach ($enumCases as $enumCase) {
+            $analysis->enumCases[] = new EnumCaseNode(
+                name:       (string) $enumCase->name,
+                line:       $enumCase->getStartLine(),
+                value:      $this->resolveEnumCaseValue($enumCase->expr, $evaluator),
+                sharesLine: EnumCaseLine::sharesLine($this->currentTokens, $enumCase),
+            );
+        }
+    }
+
+    /**
+     * An evaluator that also resolves the enum's own constants, fetched as
+     * `self::X` or by the enum's own name. Each is evaluated at most once; a
+     * constant is dropped from the list before its evaluation, so a reference
+     * cycle back to it, or a fetch after its evaluation failed, stays
+     * unresolved like any unknown constant.
+     *
+     * @param array<string, Expr> $constants The enum's constant expressions, by name
+     */
+    private function createEnumConstantEvaluator(array $constants): ConstExprEvaluator
+    {
+        $enumName = end($this->activeClassLikeNames);
+        $values   = [];
+
+        $evaluator = new ConstExprEvaluator(function (Expr $expr) use (
+            &$evaluator,
+            &$constants,
+            &$values,
+            $enumName,
+        ): mixed {
+            if (
+                $expr instanceof ClassConstFetch
+                && $expr->class instanceof Name
+                && $expr->name instanceof Identifier
+                && $this->resolveClassLikeName($expr->class) === $enumName
+            ) {
+                $name = $expr->name->toString();
+
+                if (array_key_exists($name, $values)) {
+                    return $values[$name];
+                }
+
+                if (isset($constants[$name])) {
+                    $constant = $constants[$name];
+                    unset($constants[$name]);
+
+                    return $values[$name] = $evaluator?->evaluateDirectly($constant);
+                }
+            }
+
+            return $this->evaluateClassNameFetch($expr);
+        });
+
+        return $evaluator;
     }
 
     /**
@@ -1085,6 +1149,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             isMagic:              $classMethod->isMagic(),
         );
 
+        if ($this->withSignatures) {
+            $this->collectMethodSignatures($analysis, $classMethod);
+        }
+
         if ($classMethod->name->toLowerString() !== '__construct') {
             return;
         }
@@ -1104,6 +1172,75 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($param->flags),
                 line:                  $param->getStartLine(),
             );
+        }
+    }
+
+    private function collectMethodSignatures(ClassLikeAnalysis $classLikeAnalysis, ClassMethod $classMethod): void
+    {
+        $visibility = $this->resolveVisibilityName($classMethod);
+
+        foreach ($classMethod->params as $param) {
+            $name = $param->var instanceof Variable && is_string($param->var->name) ? $param->var->name : '';
+
+            // a promoted parameter is recorded as the property it declares, and also
+            // as a parameter when private, since callers must still pass its type
+            if ($param->isPromoted()) {
+                $this->collectSignatures(
+                    $classLikeAnalysis,
+                    $param->type,
+                    $name,
+                    ClassSignature::PROPERTY,
+                    $this->resolveVisibilityName($param)
+                );
+
+                if (! $param->isPrivate()) {
+                    continue;
+                }
+            }
+
+            $this->collectSignatures($classLikeAnalysis, $param->type, $name, ClassSignature::PARAM, $visibility);
+        }
+
+        $this->collectSignatures(
+            $classLikeAnalysis,
+            $classMethod->returnType,
+            $classMethod->name->toString(),
+            ClassSignature::METHOD,
+            $visibility
+        );
+    }
+
+    private function collectSignatures(
+        ClassLikeAnalysis $classLikeAnalysis,
+        ?Node $type,
+        string $name,
+        string $kind,
+        string $visibility,
+    ): void {
+        if ($type instanceof Name) {
+            if (! $type->isSpecialClassName()) {
+                $classLikeAnalysis->signatures[] = new ClassSignature(
+                    $type->toString(),
+                    $name,
+                    $kind,
+                    $visibility,
+                    $type->getStartLine()
+                );
+            }
+
+            return;
+        }
+
+        if ($type instanceof NullableType) {
+            $this->collectSignatures($classLikeAnalysis, $type->type, $name, $kind, $visibility);
+
+            return;
+        }
+
+        if ($type instanceof UnionType || $type instanceof IntersectionType) {
+            foreach ($type->types as $innerType) {
+                $this->collectSignatures($classLikeAnalysis, $innerType, $name, $kind, $visibility);
+            }
         }
     }
 
@@ -1555,23 +1692,48 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * Statically resolve a backed enum case value. Returns null for a pure
-     * enum case and for values that depend on symbols outside the expression
+     * enum case and for values that depend on symbols outside the enum
      * (global constants, other class constants), which the analyser cannot
      * evaluate.
      */
-    private function resolveEnumCaseValue(?Expr $expr): int|string|null
+    private function resolveEnumCaseValue(?Expr $expr, ConstExprEvaluator $evaluator): int|string|null
     {
         if (! $expr instanceof Expr) {
             return null;
         }
 
         try {
-            $value = $this->constExprEvaluator->evaluateSilently($expr);
+            $value = $evaluator->evaluateSilently($expr);
         } catch (ConstExprEvaluationException) {
             return null;
         }
 
         return is_int($value) || is_string($value) ? $value : null;
+    }
+
+    /**
+     * The constant expression evaluator's fallback: `X::class` of a
+     * resolvable class name. Anything else the evaluator cannot evaluate
+     * itself is unresolvable.
+     *
+     * @throws ConstExprEvaluationException
+     */
+    private function evaluateClassNameFetch(Expr $expr): string
+    {
+        if (
+            $expr instanceof ClassConstFetch
+            && $expr->name instanceof Identifier
+            && $expr->name->toLowerString() === 'class'
+            && $expr->class instanceof Name
+        ) {
+            $className = $this->resolveClassLikeName($expr->class);
+
+            if ($className !== null) {
+                return $className;
+            }
+        }
+
+        throw new ConstExprEvaluationException('Expression is not a resolvable class name.');
     }
 
     /**
@@ -1698,6 +1860,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             constantFetches:    $analysis['constantFetches'],
             isApi:              $this->hasDocBlockTag($classLike, 'api'),
             isInternal:         $this->hasDocBlockTag($classLike, 'internal'),
+            signatures:         $analysis['signatures'],
         );
     }
 
@@ -1857,6 +2020,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *     dependencies: list<string>,
      *     nonClassDependencies: list<string>,
      *     constantFetches: list<string>,
+     *     signatures: list<ClassSignature>,
      *     functionCalls: string[],
      *     superglobals: string[],
      *     languageConstructs: string[],
@@ -1885,6 +2049,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 )
             ),
             'constantFetches'      => array_keys($classLikeAnalysis->constantFetches),
+            'signatures'           => $classLikeAnalysis->signatures,
             'functionCalls'        => array_values(array_unique($functionCalls)),
             'superglobals'         => array_keys($classLikeAnalysis->superglobals),
             'languageConstructs'   => array_keys($classLikeAnalysis->languageConstructs),

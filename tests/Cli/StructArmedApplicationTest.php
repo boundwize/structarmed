@@ -228,6 +228,11 @@ PHP);
             '    ->withPreset(Preset::STABILITY());',
         ];
 
+        yield 'enum' => [
+            ['--preset=enum'],
+            '    ->withPreset(Preset::ENUM());',
+        ];
+
         yield 'all' => [
             ['--preset=all'],
             "    ->withPresets(\n"
@@ -240,7 +245,8 @@ PHP);
             . "        Preset::MVC(),\n"
             . "        Preset::YAGNI(),\n"
             . "        Preset::CODEQUALITY(),\n"
-            . "        Preset::STABILITY()\n"
+            . "        Preset::STABILITY(),\n"
+            . "        Preset::ENUM()\n"
             . "    );",
         ];
     }

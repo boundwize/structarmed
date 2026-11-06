@@ -8,6 +8,7 @@ use App\Foo;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
@@ -1550,7 +1551,7 @@ final class AnalysisResultCacheTest extends TestCase
                 isEnum:      true,
                 enumCases:   [
                     new EnumCaseNode(name: 'Hearts', line: 4, value: 'H'),
-                    new EnumCaseNode(name: 'Spades', line: 5, value: 7),
+                    new EnumCaseNode(name: 'Spades', line: 5, value: 7, sharesLine: true),
                     new EnumCaseNode(name: 'Joker', line: 6),
                 ],
                 enumBackingType: 'string',
@@ -1567,6 +1568,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertFalse($loaded[0]->properties[1]->hasExplicitVisibility);
             $this->assertSame(['Hearts', 'Spades', 'Joker'], array_column($loaded[0]->enumCases, 'name'));
             $this->assertSame(['H', 7, null], array_column($loaded[0]->enumCases, 'value'));
+            $this->assertSame([false, true, false], array_column($loaded[0]->enumCases, 'sharesLine'));
             $this->assertSame('string', $loaded[0]->enumBackingType);
         } finally {
             if (file_exists($sourceFile)) {
@@ -1646,6 +1648,123 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertNotNull($loaded);
             $this->assertEquals($classNodes, $loaded['classNodes']);
             $this->assertEquals($fileAnalysis, $loaded['fileAnalysis']);
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testSignaturesRoundTripAndFollowTheCapabilityOfThePayload(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $withoutSignatures   = $this->makeClassNode($sourceFile);
+        $withSignatures      = new ClassNode(
+            className:   $withoutSignatures->className,
+            file:        $sourceFile,
+            line:        1,
+            layer:       'Source',
+            extends:     null,
+            isAbstract:  false,
+            isFinal:     true,
+            isInterface: false,
+            isReadonly:  false,
+            signatures:  [
+                new ClassSignature('App\Money', 'value', ClassSignature::PARAM, 'public', 3),
+                new ClassSignature('App\Money', 'value', ClassSignature::PROPERTY, 'private', 3),
+            ],
+        );
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            // Collected: reused whether or not the run needs them.
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'with', [$withSignatures], withSignatures: true);
+
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'with', withSignatures: true);
+            $this->assertNotNull($loaded);
+            $this->assertEquals([$withSignatures], $loaded['classNodes']);
+
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'with');
+            $this->assertNotNull($loaded);
+            $this->assertSame([], $loaded['classNodes'][0]->signatures);
+
+            // Not collected: a run that needs them must extract again.
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'without', [$withoutSignatures]);
+
+            $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'without'));
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'without', withSignatures: true));
+
+            // Collected but none declared: an empty list is still a hit.
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'empty', [$withoutSignatures], withSignatures: true);
+
+            $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'empty', withSignatures: true));
+
+            // A file without any class-like records the capability as well.
+            $analysisResultCache->storeExtractionResult(
+                [$sourceFile],
+                'no-nodes',
+                new ExtractionResult(classNodes: [], fileAnalyses: []),
+                withSignatures: true,
+            );
+
+            $this->assertNotNull(
+                $analysisResultCache->loadAnalysisNodes($sourceFile, 'no-nodes', withSignatures: true)
+            );
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testMalformedSignatureTupleIsACacheMissOnlyWhenSignaturesAreNeeded(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        try {
+            foreach (
+                [
+                    'not a list'       => ['App\Money'],
+                    'wrong length'     => [['App\Money', 'money']],
+                    'wrong type name'  => [[1, 'money', 'param', 'public', 3]],
+                    'wrong name'       => [['App\Money', 1, 'param', 'public', 3]],
+                    'wrong kind'       => [['App\Money', 'money', 1, 'public', 3]],
+                    'wrong visibility' => [['App\Money', 'money', 'param', 1, 3]],
+                    'wrong line'       => [['App\Money', 'money', 'param', 'public', '3']],
+                    'not a tuple'      => [
+                        [
+                            'type'       => 'App\Money',
+                            'name'       => 'money',
+                            'kind'       => 'param',
+                            'visibility' => 'public',
+                            'line'       => 3,
+                        ],
+                    ],
+                ] as $signatures
+            ) {
+                $analysisResultCache->storeAnalysisNodes(
+                    $sourceFile,
+                    'config',
+                    [$this->makeClassNode($sourceFile)],
+                    withSignatures: true,
+                );
+
+                $path    = $this->firstJsonFile($cacheDirectory);
+                $payload = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+                $this->assertIsArray($payload);
+                $this->assertIsArray($payload['nodes']);
+                $this->assertIsArray($payload['nodes'][0]);
+                $payload['nodes'][0]['signatures'] = $signatures;
+                file_put_contents($path, json_encode($payload, JSON_THROW_ON_ERROR));
+
+                $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config', withSignatures: true));
+                $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'config'));
+            }
         } finally {
             unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
@@ -2620,7 +2739,7 @@ final class AnalysisResultCacheTest extends TestCase
                         'methods'       => [],
                         'constants'     => [],
                         'properties'    => [],
-                        'enumCases'     => [['Hearts', 'bad', null]],
+                        'enumCases'     => [['Hearts', 'bad', null, false]],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
@@ -2649,7 +2768,36 @@ final class AnalysisResultCacheTest extends TestCase
                         'methods'       => [],
                         'constants'     => [],
                         'properties'    => [],
-                        'enumCases'     => [['Hearts', 4, ['bad']]],
+                        'enumCases'     => [['Hearts', 4, ['bad'], false]],
+                        'functionCalls' => [],
+                        'superglobals'  => [],
+                        'layers'        => [],
+                    ],
+                ],
+            ],
+        ];
+        yield 'enum case shared-line flag has invalid type' => [
+            [
+                'nodes' => [
+                    [
+                        'className'     => Foo::class,
+                        'file'          => __FILE__,
+                        'line'          => 1,
+                        'layer'         => null,
+                        'extends'       => null,
+                        'isAbstract'    => false,
+                        'isFinal'       => true,
+                        'isInterface'   => false,
+                        'isTrait'       => false,
+                        'isEnum'        => true,
+                        'isReadonly'    => false,
+                        'dependencies'  => [],
+                        'implements'    => [],
+                        'traits'        => [],
+                        'methods'       => [],
+                        'constants'     => [],
+                        'properties'    => [],
+                        'enumCases'     => [['Hearts', 4, null, 'yes']],
                         'functionCalls' => [],
                         'superglobals'  => [],
                         'layers'        => [],
