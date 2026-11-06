@@ -182,6 +182,7 @@ Signatures are opt-in because collecting them costs extra analysis time and cach
 | `$signature->kind` | `ClassSignature::PROPERTY`, `ClassSignature::PARAM`, or `ClassSignature::METHOD`; a `METHOD` signature is the method's return type |
 | `$signature->visibility` | `public`, `protected`, or `private`; a parameter has its method's visibility |
 | `$signature->line` | The line the type name is written on |
+| `$signature->isPromoted` | `true` for a `PROPERTY` signature declared by constructor promotion, `false` for a property declaration, parameter, or method |
 
 `$signature->isExposed()` is true for a public or protected signature. Members of every visibility are recorded, so a rule decides which ones matter by reading these properties:
 
@@ -191,6 +192,9 @@ $signature->kind === ClassSignature::METHOD && $signature->visibility === 'publi
 
 // the type of a property named $connection, whatever its visibility
 $signature->kind === ClassSignature::PROPERTY && $signature->name === 'connection'
+
+// the type of a property declared in the class body, not by constructor promotion
+$signature->kind === ClassSignature::PROPERTY && ! $signature->isPromoted
 ```
 
 For `public function find(Criteria $criteria): Result`, the signatures read as follows:
@@ -202,7 +206,7 @@ For `public function find(Criteria $criteria): Result`, the signatures read as f
 
 A parameter's signature holds the parameter's name, not its method's; use `$signature->line` to point at where it is written.
 
-Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per type name, and the same type is recorded again in every signature that names it, including each property of `public Pool $a, $b;`. A promoted constructor parameter is recorded as a property with its own visibility. A private one is also recorded as a parameter with the constructor's visibility, so `public function __construct(private Pool $pool)` is exposed through the parameter, as callers must pass a `Pool`. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
+Nullable, union, intersection, and DNF types are flattened into one `ClassSignature` per type name, and the same type is recorded again in every signature that names it, including each property of `public Pool $a, $b;`. A promoted constructor parameter is recorded as a property with its own visibility and `isPromoted` set to `true`. A private one is also recorded as a parameter with the constructor's visibility, so `public function __construct(private Pool $pool)` is exposed through the parameter, as callers must pass a `Pool`. Built-in types, `self`, `parent`, and `static` are left out, as are the bodies of methods, inherited members, and members coming from a used trait. Docblock types are not read.
 
 The example below keeps database details inside repositories. A repository may build queries with Doctrine's `QueryBuilder`, but no public or protected method may return one, or callers could keep changing the query outside the repository:
 
