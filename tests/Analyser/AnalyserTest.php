@@ -47,6 +47,7 @@ use Boundwize\StructArmed\Rule\Rules\Layer\MayNotDependOnRule;
 use Boundwize\StructArmed\Rule\Rules\Method\MaxMethodLengthRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseClassRule;
+use Boundwize\StructArmed\Rule\Rules\Usage\MayNotUseLanguageConstructRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
@@ -926,6 +927,44 @@ final class AnalyserTest extends TestCase
         $this->assertCount(1, $violations);
         $this->assertSame(
             'Class [App\Domain\Service] must not call function [App\Domain\Dangerous()]',
+            $violations[0]->message,
+        );
+    }
+
+    public function testMayNotUseLanguageConstructRuleMatchesConfiguredConstructCaseInsensitively(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Service.php' => <<<'PHP'
+                <?php
+
+                namespace App\Domain;
+
+                final class Service
+                {
+                    public function run(): void
+                    {
+                        exit(1);
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Domain', 'src/')
+            ->rule(
+                'domain.no_exit',
+                new MayNotUseLanguageConstructRule(layer: 'Domain', construct: 'EXIT'),
+            );
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('domain.no_exit');
+
+        // PHP language constructs are case-insensitive, so an uppercase
+        // configuration must still catch the recorded lowercase `exit`.
+        $this->assertCount(1, $violations);
+        $this->assertSame(
+            'Class [App\Domain\Service] must not use language construct [EXIT]',
             $violations[0]->message,
         );
     }

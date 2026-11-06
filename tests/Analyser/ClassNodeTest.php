@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Analyser\MethodNode;
 use DateTime;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ClassNode::class)]
@@ -260,6 +261,43 @@ final class ClassNodeTest extends TestCase
         // Distinct constructs are not over-aliased.
         $this->assertFalse($usesExit->usesLanguageConstruct('echo'));
         $this->assertFalse($usesExit->usesLanguageConstruct('include'));
+    }
+
+    /** @param list<string> $recordedConstructs */
+    #[DataProvider('languageConstructCasingProvider')]
+    public function testUsesLanguageConstructIsCaseInsensitive(
+        string $construct,
+        array $recordedConstructs,
+        bool $expected,
+    ): void {
+        $classNode = new ClassNode(
+            className:          'App\\Domain\\Service',
+            file:               '/src/Service.php',
+            line:               1,
+            layer:              'Domain',
+            extends:            null,
+            isAbstract:         false,
+            isFinal:            true,
+            isInterface:        false,
+            isReadonly:         false,
+            languageConstructs: $recordedConstructs,
+        );
+
+        $this->assertSame($expected, $classNode->usesLanguageConstruct($construct));
+    }
+
+    /** @return iterable<string, array{string, list<string>, bool}> */
+    public static function languageConstructCasingProvider(): iterable
+    {
+        yield 'EXIT matches exit'          => ['EXIT', ['exit'], true];
+        yield 'ExIt matches exit'          => ['ExIt', ['exit'], true];
+        yield 'DIE matches exit'           => ['DIE', ['exit'], true];
+        yield 'EXIT matches die'           => ['EXIT', ['die'], true];
+        yield 'ECHO matches echo'          => ['ECHO', ['echo'], true];
+        yield 'IsSeT matches isset'        => ['IsSeT', ['isset'], true];
+        yield 'lowercase echo still works' => ['echo', ['echo'], true];
+        yield 'EVAL is not recorded'       => ['EVAL', ['exit', 'echo'], false];
+        yield 'unknown construct'          => ['GoTo', ['exit'], false];
     }
 
     public function testImplementsInterfaceIsCaseInsensitive(): void
