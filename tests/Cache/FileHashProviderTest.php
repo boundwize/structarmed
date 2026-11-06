@@ -11,6 +11,9 @@ use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
 use function hash_file;
+use function stat;
+
+use const PHP_OS_FAMILY;
 
 #[CoversClass(FileHashProvider::class)]
 final class FileHashProviderTest extends TestCase
@@ -50,6 +53,8 @@ final class FileHashProviderTest extends TestCase
         $fileHashProvider = new FileHashProvider();
 
         $this->assertSame('', $fileHashProvider->hash($file));
+        // stat() succeeds on a directory, but it cannot be read to be hashed
+        $this->assertSame('', $fileHashProvider->hash($directory));
 
         file_put_contents($file, '<?php echo "created later";');
 
@@ -79,5 +84,65 @@ final class FileHashProviderTest extends TestCase
         $this->assertSame($retainedHash, $providerForFiles->hash($retainedFile));
         $this->assertSame(hash_file('xxh128', $unrelatedFile), $providerForFiles->hash($unrelatedFile));
         $this->assertSame(hash_file('xxh128', $missingFile), $providerForFiles->hash($missingFile));
+    }
+
+    public function testUsesFingerprintedHashOnlyWhileStatSignatureIsUnchanged(): void
+    {
+        $unchangedFile = $this->makeTemporaryFile('structarmed-file-hash');
+        $changedFile   = $this->makeTemporaryFile('structarmed-file-hash');
+        $malformedFile = $this->makeTemporaryFile('structarmed-file-hash');
+
+        file_put_contents($unchangedFile, '<?php echo "unchanged";');
+        file_put_contents($changedFile, '<?php echo "changed";');
+        file_put_contents($malformedFile, '<?php echo "malformed";');
+
+        $fileHashProvider = new FileHashProvider();
+        $fileHashProvider->useFingerprints([
+            $unchangedFile => [$this->signature($unchangedFile), 'unchanged-hash'],
+            $changedFile   => ['1:1:1:1', 'changed-hash'],
+            $malformedFile => [$this->signature($malformedFile)],
+        ]);
+
+        $this->assertSame('unchanged-hash', $fileHashProvider->hash($unchangedFile));
+        $this->assertSame(hash_file('xxh128', $changedFile), $fileHashProvider->hash($changedFile));
+        $this->assertSame(hash_file('xxh128', $malformedFile), $fileHashProvider->hash($malformedFile));
+    }
+
+    public function testFingerprintsOnlyFilesChangedBeforeTheRunStarted(): void
+    {
+        $fileHashProvider = new FileHashProvider();
+        $freshFile        = $this->makeTemporaryFile('structarmed-file-hash');
+
+        file_put_contents($freshFile, '<?php echo "fresh";');
+
+        // changed within the run, so it could change again without a new signature
+        $fileHashProvider->hash($freshFile);
+
+        $this->assertNull($fileHashProvider->newFingerprints());
+
+        // this test file was last changed before the run started
+        $fileHashProvider->hash(__FILE__);
+
+        $fingerprint = [$this->signature(__FILE__), hash_file('xxh128', __FILE__)];
+
+        $this->assertSame(
+            PHP_OS_FAMILY === 'Windows' ? null : [__FILE__ => $fingerprint],
+            $fileHashProvider->newFingerprints()
+        );
+        $this->assertNull($fileHashProvider->newFingerprints());
+
+        $fileHashProvider->clear();
+        $fileHashProvider->hash(__FILE__);
+        $fileHashProvider->clear();
+
+        $this->assertNull($fileHashProvider->newFingerprints());
+    }
+
+    private function signature(string $file): string
+    {
+        $stat = stat($file);
+        $this->assertIsArray($stat);
+
+        return $stat['mtime'] . ':' . $stat['ctime'] . ':' . $stat['size'] . ':' . $stat['ino'];
     }
 }

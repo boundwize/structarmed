@@ -49,6 +49,7 @@ use function mkdir;
 use function preg_match;
 use function random_bytes;
 use function rmdir;
+use function stat;
 use function str_replace;
 use function str_starts_with;
 use function sys_get_temp_dir;
@@ -56,6 +57,7 @@ use function touch;
 use function unlink;
 
 use const JSON_THROW_ON_ERROR;
+use const PHP_OS_FAMILY;
 
 #[CoversClass(AnalysisCacheMetadataFactory::class)]
 #[CoversClass(AnalysisResultCache::class)]
@@ -362,6 +364,7 @@ final class AnalysisResultCacheTest extends TestCase
         $hash                = hash('xxh128', 'key');
         $cacheFiles          = [
             '_metadata.json',
+            '_fingerprints.json',
             $hash . '.json',
             'analysis-nodes-' . $hash . '.json',
             'class-nodes-' . $hash . '.json',
@@ -385,6 +388,55 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertFileExists($cacheDirectory . '/keep.json');
             $this->assertDirectoryExists($cacheDirectory . '/nested');
         } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testReusesStoredFileFingerprintsAndStoresNewOnesOnLoad(): void
+    {
+        $cacheDirectory = $this->createTempDirectory();
+        $sourceFile     = $cacheDirectory . '/Foo.php';
+
+        file_put_contents($sourceFile, '<?php class Foo {}');
+
+        $stat = stat($sourceFile);
+        $this->assertIsArray($stat);
+
+        $signature = $stat['mtime'] . ':' . $stat['ctime'] . ':' . $stat['size'] . ':' . $stat['ino'];
+
+        file_put_contents($cacheDirectory . '/_fingerprints.json', json_encode([
+            $sourceFile => [$signature, 'stored-hash'],
+        ], JSON_THROW_ON_ERROR));
+
+        try {
+            $fileHashProvider    = new FileHashProvider();
+            $analysisResultCache = new AnalysisResultCache(__DIR__, $fileHashProvider, $cacheDirectory);
+
+            $this->assertSame('stored-hash', $fileHashProvider->hash($sourceFile));
+
+            // this test file was last changed before the run started, so it is fingerprinted
+            $fileHashProvider->hash(__FILE__);
+
+            $this->assertNull($analysisResultCache->load(hash('xxh128', 'key'), []));
+
+            $fingerprints = json_decode(
+                (string) file_get_contents($cacheDirectory . '/_fingerprints.json'),
+                true,
+                flags: JSON_THROW_ON_ERROR
+            );
+
+            $this->assertIsArray($fingerprints);
+            $this->assertSame([$signature, 'stored-hash'], $fingerprints[$sourceFile]);
+            $this->assertSame(PHP_OS_FAMILY !== 'Windows', isset($fingerprints[__FILE__]));
+
+            // nothing new was fingerprinted since, so nothing is written again
+            unlink($cacheDirectory . '/_fingerprints.json');
+
+            $this->assertNull($analysisResultCache->load(hash('xxh128', 'key'), []));
+
+            $this->assertFileDoesNotExist($cacheDirectory . '/_fingerprints.json');
+        } finally {
+            unlink($sourceFile);
             $this->removeTempDirectory($cacheDirectory);
         }
     }

@@ -65,6 +65,12 @@ final class AnalysisResultCache
     private const METADATA_FILE = '_metadata.json';
 
     /**
+     * Stat signatures and content hashes from earlier runs, so an unchanged
+     * file is not read again just to hash it.
+     */
+    private const FINGERPRINTS_FILE = '_fingerprints.json';
+
+    /**
      * Format version of the analysis-node payload files. Bump it whenever
      * their shape, naming, or reference semantics change. It is recorded in
      * the metadata marker, so older caches are cleared on their next use.
@@ -87,8 +93,11 @@ final class AnalysisResultCache
         private readonly ComposerJsonProvider $composerJsonProvider = new ComposerJsonProvider(),
     ) {
         $this->cacheDirectory = CachePathFactory::getPath($cacheDirectory, $basePath);
-        $composerFile         = rtrim($basePath, '/') . '/composer.json';
-        $this->composerHash   = $fileHashProvider->hash($composerFile);
+        $fingerprints         = $this->readPath($this->cacheDirectory . '/' . self::FINGERPRINTS_FILE);
+        $fileHashProvider->useFingerprints($fingerprints ?? []);
+
+        $composerFile       = rtrim($basePath, '/') . '/composer.json';
+        $this->composerHash = $fileHashProvider->hash($composerFile);
     }
 
     /**
@@ -96,6 +105,10 @@ final class AnalysisResultCache
      */
     public function load(string $key, array $metadata): ?RuleViolationCollection
     {
+        // the metadata is built after every file has been hashed, so the
+        // fingerprints recorded while hashing are complete by now
+        $this->storeFileFingerprints();
+
         $payload = $this->read($key);
 
         if ($payload === null) {
@@ -156,6 +169,7 @@ final class AnalysisResultCache
         // with other files keeps them:
         //
         // - _metadata.json
+        // - _fingerprints.json
         // - 8679959e514dd177bc6fd1830ee55b48.json                violation payloads
         // - analysis-nodes-0a489b7052209b1aa6ce9a7c07ce0627.json per-file payloads (0.17.0+)
         // - class-nodes-0a489b7052209b1aa6ce9a7c07ce0627.json    per-file payloads (pre 0.17.0: to be cleared later)
@@ -168,6 +182,7 @@ final class AnalysisResultCache
             $filename = basename($path);
             if (
                 $filename === self::METADATA_FILE
+                || $filename === self::FINGERPRINTS_FILE
                 || preg_match(
                     '/^(?:(?:analysis-nodes-|class-nodes-)?[a-f0-9]{32}\.json|structarmed-worker-.+)$/',
                     $filename,
@@ -216,6 +231,25 @@ final class AnalysisResultCache
             || ($payload['configHash'] ?? null) !== $this->configHash
             || ($payload['composerGeneratedVersionHash'] ?? null) !== $this->composerGeneratedVersionHash
             || ($payload['composerHash'] ?? null) !== $this->composerHash;
+    }
+
+    /**
+     * Writes nothing when every hash came from a stored fingerprint.
+     */
+    private function storeFileFingerprints(): void
+    {
+        $fingerprints = $this->fileHashProvider->newFingerprints();
+
+        if ($fingerprints === null) {
+            return;
+        }
+
+        $this->ensureCacheInitialised();
+
+        file_put_contents(
+            $this->cacheDirectory . '/' . self::FINGERPRINTS_FILE,
+            json_encode($fingerprints, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR)
+        );
     }
 
     private function ensureCacheInitialised(): void
