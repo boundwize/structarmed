@@ -9,6 +9,7 @@ use function rtrim;
 use function strcasecmp;
 use function strlen;
 use function strncasecmp;
+use function strtolower;
 
 /**
  * Query helpers shared by {@see ClassNode}, {@see AnonymousClassNode},
@@ -88,6 +89,10 @@ trait NodeQueryTrait
 
     public function usesLanguageConstruct(string $construct): bool
     {
+        // Language constructs are case-insensitive; the collector records them
+        // in their canonical lowercase spelling.
+        $construct = strtolower($construct);
+
         if (in_array($construct, $this->languageConstructs, true)) {
             return true;
         }
