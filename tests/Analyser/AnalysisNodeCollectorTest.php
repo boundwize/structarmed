@@ -203,7 +203,7 @@ PHP);
         return $this->makeCollector($code)->getAnonymousClassNodes();
     }
 
-    /** @return list<array{string, string, string, string, int}> */
+    /** @return list<array{string, string, string, string, int, bool}> */
     private function collectSignatures(string $code): array
     {
         $classNode = $this->makeCollector($code, withSignatures: true)->getClassNodes()[0];
@@ -215,6 +215,7 @@ PHP);
                 $classSignature->kind,
                 $classSignature->visibility,
                 $classSignature->line,
+                $classSignature->isPromoted,
             ],
             $classNode->signatures
         );
@@ -1027,15 +1028,15 @@ PHP);
     {
         $this->assertSame(
             [
-                ['Vendor\Imported', 'publicProperty', ClassSignature::PROPERTY, 'public', 9],
-                ['App\Second', 'protectedProperty', ClassSignature::PROPERTY, 'protected', 10],
-                ['App\Third', 'privateProperty', ClassSignature::PROPERTY, 'private', 11],
-                ['App\Param', 'param', ClassSignature::PARAM, 'public', 14],
-                ['App\Result', 'publicMethod', ClassSignature::METHOD, 'public', 14],
-                ['App\Param', 'param', ClassSignature::PARAM, 'protected', 18],
-                ['App\Result', 'protectedMethod', ClassSignature::METHOD, 'protected', 18],
-                ['Fully\Qualified', 'param', ClassSignature::PARAM, 'private', 22],
-                ['App\Result', 'privateMethod', ClassSignature::METHOD, 'private', 22],
+                ['Vendor\Imported', 'publicProperty', ClassSignature::PROPERTY, 'public', 9, false],
+                ['App\Second', 'protectedProperty', ClassSignature::PROPERTY, 'protected', 10, false],
+                ['App\Third', 'privateProperty', ClassSignature::PROPERTY, 'private', 11, false],
+                ['App\Param', 'param', ClassSignature::PARAM, 'public', 14, false],
+                ['App\Result', 'publicMethod', ClassSignature::METHOD, 'public', 14, false],
+                ['App\Param', 'param', ClassSignature::PARAM, 'protected', 18, false],
+                ['App\Result', 'protectedMethod', ClassSignature::METHOD, 'protected', 18, false],
+                ['Fully\Qualified', 'param', ClassSignature::PARAM, 'private', 22, false],
+                ['App\Result', 'privateMethod', ClassSignature::METHOD, 'private', 22, false],
             ],
             $this->collectSignatures(<<<'CODE_SAMPLE'
                 <?php
@@ -1075,13 +1076,13 @@ PHP);
     {
         $this->assertSame(
             [
-                ['Nullable', 'nullable', ClassSignature::PARAM, 'public', 6],
-                ['First', 'union', ClassSignature::PARAM, 'public', 7],
-                ['Second', 'union', ClassSignature::PARAM, 'public', 8],
-                ['Left', 'intersection', ClassSignature::PARAM, 'public', 9],
-                ['Right', 'intersection', ClassSignature::PARAM, 'public', 9],
-                ['Dnf', 'dnf', ClassSignature::PARAM, 'public', 10],
-                ['Form', 'dnf', ClassSignature::PARAM, 'public', 10],
+                ['Nullable', 'nullable', ClassSignature::PARAM, 'public', 6, false],
+                ['First', 'union', ClassSignature::PARAM, 'public', 7, false],
+                ['Second', 'union', ClassSignature::PARAM, 'public', 8, false],
+                ['Left', 'intersection', ClassSignature::PARAM, 'public', 9, false],
+                ['Right', 'intersection', ClassSignature::PARAM, 'public', 9, false],
+                ['Dnf', 'dnf', ClassSignature::PARAM, 'public', 10, false],
+                ['Form', 'dnf', ClassSignature::PARAM, 'public', 10, false],
             ],
             $this->collectSignatures(<<<'CODE_SAMPLE'
                 <?php
@@ -1105,11 +1106,11 @@ PHP);
     {
         $this->assertSame(
             [
-                ['Hidden', 'a', ClassSignature::PROPERTY, 'private', 5],
-                ['Hidden', 'a', ClassSignature::PARAM, 'public', 5],
-                ['Guarded', 'b', ClassSignature::PROPERTY, 'protected', 5],
-                ['Open', 'c', ClassSignature::PROPERTY, 'public', 5],
-                ['Plain', 'd', ClassSignature::PARAM, 'public', 5],
+                ['Hidden', 'a', ClassSignature::PROPERTY, 'private', 5, true],
+                ['Hidden', 'a', ClassSignature::PARAM, 'public', 5, false],
+                ['Guarded', 'b', ClassSignature::PROPERTY, 'protected', 5, true],
+                ['Open', 'c', ClassSignature::PROPERTY, 'public', 5, true],
+                ['Plain', 'd', ClassSignature::PARAM, 'public', 5, false],
             ],
             $this->collectSignatures(<<<'CODE_SAMPLE'
                 <?php
@@ -1155,10 +1156,10 @@ PHP);
     {
         $this->assertSame(
             [
-                ['Shared', 'shared', ClassSignature::PROPERTY, 'private', 5],
-                ['Shared', 'shared', ClassSignature::PARAM, 'public', 7],
-                ['Shared', 'run', ClassSignature::METHOD, 'public', 7],
-                ['Shared', 'other', ClassSignature::METHOD, 'protected', 11],
+                ['Shared', 'shared', ClassSignature::PROPERTY, 'private', 5, false],
+                ['Shared', 'shared', ClassSignature::PARAM, 'public', 7, false],
+                ['Shared', 'run', ClassSignature::METHOD, 'public', 7, false],
+                ['Shared', 'other', ClassSignature::METHOD, 'protected', 11, false],
             ],
             $this->collectSignatures(<<<'CODE_SAMPLE'
                 <?php
@@ -1183,8 +1184,8 @@ PHP);
     {
         $this->assertSame(
             [
-                ['Shared', 'first', ClassSignature::PROPERTY, 'public', 5],
-                ['Shared', 'second', ClassSignature::PROPERTY, 'public', 5],
+                ['Shared', 'first', ClassSignature::PROPERTY, 'public', 5, false],
+                ['Shared', 'second', ClassSignature::PROPERTY, 'public', 5, false],
             ],
             $this->collectSignatures(<<<'CODE_SAMPLE'
                 <?php

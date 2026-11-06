@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Analyser;
 /**
  * One class-like type named by a member's signature. Its name and kind tell
  * which member: the type of a property or parameter, or a method's return type.
+ * A property declared by constructor promotion is flagged as promoted.
  */
 final readonly class ClassSignature
 {
@@ -24,6 +25,7 @@ final readonly class ClassSignature
         public string $kind,
         public string $visibility,
         public int $line,
+        public bool $isPromoted = false,
     ) {
     }
 

@@ -1672,7 +1672,7 @@ final class AnalysisResultCacheTest extends TestCase
             isReadonly:  false,
             signatures:  [
                 new ClassSignature('App\Money', 'value', ClassSignature::PARAM, 'public', 3),
-                new ClassSignature('App\Money', 'value', ClassSignature::PROPERTY, 'private', 3),
+                new ClassSignature('App\Money', 'value', ClassSignature::PROPERTY, 'private', 3, true),
             ],
         );
 
@@ -1731,11 +1731,12 @@ final class AnalysisResultCacheTest extends TestCase
                 [
                     'not a list'       => ['App\Money'],
                     'wrong length'     => [['App\Money', 'money']],
-                    'wrong type name'  => [[1, 'money', 'param', 'public', 3]],
-                    'wrong name'       => [['App\Money', 1, 'param', 'public', 3]],
-                    'wrong kind'       => [['App\Money', 'money', 1, 'public', 3]],
-                    'wrong visibility' => [['App\Money', 'money', 'param', 1, 3]],
-                    'wrong line'       => [['App\Money', 'money', 'param', 'public', '3']],
+                    'wrong type name'  => [[1, 'money', 'param', 'public', 3, false]],
+                    'wrong name'       => [['App\Money', 1, 'param', 'public', 3, false]],
+                    'wrong kind'       => [['App\Money', 'money', 1, 'public', 3, false]],
+                    'wrong visibility' => [['App\Money', 'money', 'param', 1, 3, false]],
+                    'wrong line'       => [['App\Money', 'money', 'param', 'public', '3', false]],
+                    'wrong promoted'   => [['App\Money', 'money', 'param', 'public', 3, 0]],
                     'not a tuple'      => [
                         [
                             'type'       => 'App\Money',
@@ -1743,6 +1744,7 @@ final class AnalysisResultCacheTest extends TestCase
                             'kind'       => 'param',
                             'visibility' => 'public',
                             'line'       => 3,
+                            'isPromoted' => false,
                         ],
                     ],
                 ] as $signatures

@@ -1190,7 +1190,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     $param->type,
                     $name,
                     ClassSignature::PROPERTY,
-                    $this->resolveVisibilityName($param)
+                    $this->resolveVisibilityName($param),
+                    true
                 );
 
                 if (! $param->isPrivate()) {
@@ -1216,6 +1217,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         string $name,
         string $kind,
         string $visibility,
+        bool $isPromoted = false,
     ): void {
         if ($type instanceof Name) {
             if (! $type->isSpecialClassName()) {
@@ -1224,7 +1226,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     $name,
                     $kind,
                     $visibility,
-                    $type->getStartLine()
+                    $type->getStartLine(),
+                    $isPromoted
                 );
             }
 
@@ -1232,14 +1235,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($type instanceof NullableType) {
-            $this->collectSignatures($classLikeAnalysis, $type->type, $name, $kind, $visibility);
+            $this->collectSignatures($classLikeAnalysis, $type->type, $name, $kind, $visibility, $isPromoted);
 
             return;
         }
 
         if ($type instanceof UnionType || $type instanceof IntersectionType) {
             foreach ($type->types as $innerType) {
-                $this->collectSignatures($classLikeAnalysis, $innerType, $name, $kind, $visibility);
+                $this->collectSignatures($classLikeAnalysis, $innerType, $name, $kind, $visibility, $isPromoted);
             }
         }
     }
