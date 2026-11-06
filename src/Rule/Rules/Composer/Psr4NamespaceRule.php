@@ -56,10 +56,13 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
     /**
      * Records the analysed project root so PSR-4 paths pointing outside it
      * (e.g. "../shared/src/") are still checked; project rules run before class rules.
+     * Memoised lookups are dropped so a reused instance sees composer.json changes.
      */
     public function evaluateProject(string $basePath, Architecture $architecture, array $skipPaths = []): ?RuleViolation
     {
-        $this->projectBasePath = Path::normalise($basePath, canonicalise: true);
+        $this->projectBasePath     = Path::normalise($basePath, canonicalise: true);
+        $this->mappingsByBasePath  = [];
+        $this->basePathByDirectory = [];
 
         return null;
     }

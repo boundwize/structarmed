@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Rule\Composer;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
@@ -428,6 +429,77 @@ final class Psr4NamespaceRuleTest extends TestCase
             RuleViolation::class,
             $psr4NamespaceRule->evaluate($this->makeNode('Foo\\Bar\\Baz', $file))
         );
+    }
+
+    public function testRefreshesComposerMappingsOnNextAnalysis(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-mapping-refresh');
+        mkdir($basePath . '/src');
+
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+            {"autoload":{"psr-4":{"App\\":"src/"}}}
+            JSON);
+
+        $file = $basePath . '/src/Mapped.php';
+        file_put_contents($file, '<?php namespace App; class Mapped {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+        $psr4NamespaceRule->evaluateProject($basePath, Architecture::define());
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Mapped', $file))
+        );
+
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+            {"autoload":{"psr-4":{"Domain\\":"src/"}}}
+            JSON);
+        (new ComposerJsonProvider())->clear();
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('App\\Mapped', $file)),
+            'mappings stay memoised within one analysis run'
+        );
+
+        $psr4NamespaceRule->evaluateProject($basePath, Architecture::define());
+
+        $violation = $psr4NamespaceRule->evaluate($this->makeNode('App\\Mapped', $file));
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame('Class [App\\Mapped] must match PSR-4 class [Domain\\Mapped]', $violation->message);
+    }
+
+    public function testRefreshesComposerBasePathOnNextAnalysis(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-psr4-base-path-refresh');
+        mkdir($basePath . '/packages/a/src', 0777, true);
+
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+            {"autoload":{"psr-4":{"App\\":"src/"}}}
+            JSON);
+
+        $file = $basePath . '/packages/a/src/Foo.php';
+        file_put_contents($file, '<?php namespace Wrong; class Foo {}');
+
+        $psr4NamespaceRule = new Psr4NamespaceRule('Source');
+        $psr4NamespaceRule->evaluateProject($basePath, Architecture::define());
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4NamespaceRule->evaluate($this->makeNode('Wrong\\Foo', $file))
+        );
+
+        file_put_contents($basePath . '/packages/a/composer.json', <<<'JSON'
+            {"autoload":{"psr-4":{"Package\\":"src/"}}}
+            JSON);
+
+        $psr4NamespaceRule->evaluateProject($basePath, Architecture::define());
+
+        $violation = $psr4NamespaceRule->evaluate($this->makeNode('Wrong\\Foo', $file));
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame('Class [Wrong\\Foo] must match PSR-4 class [Package\\Foo]', $violation->message);
     }
 
     private function makeNode(
