@@ -1199,7 +1199,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 }
             }
 
-            $this->collectSignatures($classLikeAnalysis, $param->type, $name, ClassSignature::PARAM, $visibility);
+            $this->collectSignatures(
+                $classLikeAnalysis,
+                $param->type,
+                $name,
+                ClassSignature::PARAM,
+                $visibility,
+                $param->isPromoted()
+            );
         }
 
         $this->collectSignatures(
