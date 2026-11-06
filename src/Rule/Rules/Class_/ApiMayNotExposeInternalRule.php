@@ -57,7 +57,7 @@ final class ApiMayNotExposeInternalRule extends AbstractLayerAwareRule implement
                     $classNode->className,
                     $typeNode->getType(),
                     $typeNode->className,
-                    $signature->kind,
+                    $signature->isPromoted ? 'promoted ' . $signature->kind : $signature->kind,
                     $signature->name
                 ),
                 file:      $classNode->file,
