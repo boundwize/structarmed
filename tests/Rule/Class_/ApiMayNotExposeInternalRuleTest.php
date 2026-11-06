@@ -97,14 +97,14 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
         $violations = $apiMayNotExposeInternalRule->evaluateAll($this->makeNode(
             'App\Facade',
             signatures: [
-                new ClassSignature('App\Pool', 'pool', ClassSignature::PROPERTY, 'private', 6),
-                new ClassSignature('App\Pool', 'pool', ClassSignature::PARAM, 'public', 6),
+                new ClassSignature('App\Pool', 'pool', ClassSignature::PROPERTY, 'private', 6, true),
+                new ClassSignature('App\Pool', 'pool', ClassSignature::PARAM, 'public', 6, true),
             ],
             isApi: true,
         ));
 
         $this->assertCount(1, $violations);
-        $this->assertStringEndsWith('through param [pool]', $violations[0]->message);
+        $this->assertStringEndsWith('through promoted param [pool]', $violations[0]->message);
     }
 
     public function testReportsEachMemberExposingATypeOnTheSameLine(): void
