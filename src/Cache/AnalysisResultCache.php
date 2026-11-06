@@ -67,7 +67,7 @@ final class AnalysisResultCache
      * their shape, naming, or reference semantics change. It is recorded in
      * the metadata marker, so older caches are cleared on their next use.
      */
-    public const FORMAT_VERSION = 23;
+    public const FORMAT_VERSION = 24;
 
     private readonly string $cacheDirectory;
 

@@ -4,20 +4,15 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\FunctionLike;
 
-use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
+use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunctions;
 use PhpParser\Node;
 use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
-use PhpParser\Node\Expr\MethodCall;
-use PhpParser\Node\Expr\NullsafeMethodCall;
-use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
-
-use function in_array;
 
 /**
  * Adds the `static` modifier to the anonymous functions starting on the given
@@ -28,63 +23,67 @@ use function in_array;
  * rule's own condition here — instead of trusting the line alone — means
  * every function this visitor changes is one the rule flags, so an unsafe
  * anonymous function sharing the line with a flagged one is left untouched.
+ * A binding through a variable may follow the anonymous function, so the
+ * modifier is only added once the whole file has been traversed.
  */
 final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 {
+    private readonly ObjectBoundAnonymousFunctions $objectBoundAnonymousFunctions;
+
     /** @var list<Closure|ArrowFunction> */
-    private array $objectBoundAnonymousFunctions = [];
+    private array $candidates = [];
 
     public function __construct(
         private readonly int $line,
     ) {
+        $this->objectBoundAnonymousFunctions = new ObjectBoundAnonymousFunctions();
     }
 
     /** @param Node[] $nodes */
     public function beforeTraverse(array $nodes): null
     {
-        $this->objectBoundAnonymousFunctions = [];
+        $this->objectBoundAnonymousFunctions->reset();
+        $this->candidates = [];
 
         return null;
     }
 
-    public function enterNode(Node $node): ?Node
+    public function enterNode(Node $node): null
     {
+        $this->objectBoundAnonymousFunctions->enterNode($node);
+
         if (
-            $node instanceof StaticCall
-            || $node instanceof MethodCall
-            || $node instanceof NullsafeMethodCall
+            ($node instanceof Closure || $node instanceof ArrowFunction)
+            && ! $node->static
+            && $node->getStartLine() === $this->line
+            && ! $this->usesThis($node)
         ) {
-            $anonymousFunction = $node instanceof StaticCall
-                ? ObjectBoundAnonymousFunction::fromStaticCall($node)
-                : ObjectBoundAnonymousFunction::fromMethodCall($node);
-
-            if ($anonymousFunction instanceof Closure || $anonymousFunction instanceof ArrowFunction) {
-                $this->objectBoundAnonymousFunctions[] = $anonymousFunction;
-            }
-
-            return null;
+            $this->candidates[] = $node;
         }
 
-        if (! $node instanceof Closure && ! $node instanceof ArrowFunction) {
-            return null;
-        }
-
-        if ($node->static || $node->getStartLine() !== $this->line) {
-            return null;
-        }
-
-        if ($this->requiresObjectBinding($node) || $this->usesThis($node)) {
-            return null;
-        }
-
-        $node->static = true;
-
-        return $node;
+        return null;
     }
 
-    private function requiresObjectBinding(Closure|ArrowFunction $anonymousFunction): bool
+    public function leaveNode(Node $node): null
     {
-        return in_array($anonymousFunction, $this->objectBoundAnonymousFunctions, true);
+        $this->objectBoundAnonymousFunctions->leaveNode($node);
+
+        return null;
+    }
+
+    /** @param Node[] $nodes */
+    public function afterTraverse(array $nodes): null
+    {
+        foreach ($this->candidates as $candidate) {
+            if (! $this->objectBoundAnonymousFunctions->isObjectBound($candidate)) {
+                $candidate->static = true;
+            }
+        }
+
+        $this->objectBoundAnonymousFunctions->reset();
+        $this->candidates = [];
+
+        return null;
     }
 
     /**

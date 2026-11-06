@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Analyser;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use Boundwize\StructArmed\Util\PhpParser\EnumCaseLine;
-use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
+use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunctions;
 use Boundwize\StructArmed\Util\PhpParser\UnconditionallyDeclaredFunctions;
 use Boundwize\StructArmed\Util\PhpParser\VisibilityFlagChecker;
 use PhpParser\Comment\Doc;
@@ -17,6 +17,7 @@ use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\ArrowFunction;
+use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\AssignOp\Coalesce as AssignCoalesce;
 use PhpParser\Node\Expr\BinaryOp\BooleanAnd;
 use PhpParser\Node\Expr\BinaryOp\BooleanOr;
@@ -238,6 +239,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private const ENTER_NODES = self::COMPLEXITY_BRANCH_NODES
         + self::LANGUAGE_CONSTRUCT_NODES
         + self::MEMBER_NODES
+        + ObjectBoundAnonymousFunctions::CONTROL_FLOW_NODES
         + [
             Namespace_::class     => true,
             Use_::class           => true,
@@ -265,6 +267,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * Every node class leaveNode() acts on, see ENTER_NODES.
      */
     private const LEAVE_NODES = [
+        Assign::class             => true,
+        AssignCoalesce::class     => true,
         Closure::class            => true,
         ArrowFunction::class      => true,
         New_::class               => true,
@@ -456,6 +460,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $fileFunctionLikeAnalyses = [];
 
+    private readonly ObjectBoundAnonymousFunctions $objectBoundAnonymousFunctions;
+
     /**
      * @param bool $withFileAnalysis Whether to record the facts only file-analysis
      *                               rules read ({@see getNonCanonicalKeywordConstants()},
@@ -467,7 +473,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         private readonly bool $withFileAnalysis = true,
         private readonly bool $withSignatures = false,
     ) {
-        $this->constExprEvaluator = new ConstExprEvaluator($this->evaluateClassNameFetch(...));
+        $this->constExprEvaluator            = new ConstExprEvaluator($this->evaluateClassNameFetch(...));
+        $this->objectBoundAnonymousFunctions = new ObjectBoundAnonymousFunctions();
     }
 
     /** @param array<Token> $tokens The file's token stream, for the facts its AST does not carry */
@@ -493,6 +500,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
+        $this->objectBoundAnonymousFunctions->reset();
     }
 
     /** @return list<ClassNode> */
@@ -705,6 +713,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             if ($node instanceof Function_) {
                 $this->activeFunctionNames[] = $this->resolveFunctionDeclarationName($node);
                 $this->startFunctionLikeAnalysis($node);
+                $this->objectBoundAnonymousFunctions->enterFunctionLike($node);
 
                 return null;
             }
@@ -724,6 +733,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             if ($node instanceof ClassMethod) {
                 $this->startMethodAnalysis();
+                $this->objectBoundAnonymousFunctions->enterFunctionLike($node);
 
                 return null;
             }
@@ -735,8 +745,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
         } elseif ($node instanceof FunctionLike) {
             $this->startFunctionLikeAnalysis($node);
+            $this->objectBoundAnonymousFunctions->enterFunctionLike($node);
 
             return null;
+        }
+
+        if (isset(ObjectBoundAnonymousFunctions::CONTROL_FLOW_NODES[$node::class])) {
+            $this->objectBoundAnonymousFunctions->branch();
         }
 
         $this->collectNodeAnalysis($node);
@@ -755,8 +770,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // class expression). They only match expressions, and ClassMethod /
         // ClassLike are statements, so one instanceof splits the two groups.
         if ($node instanceof Expr) {
+            if ($node instanceof Assign || $node instanceof AssignCoalesce) {
+                $this->objectBoundAnonymousFunctions->assign($node);
+
+                return null;
+            }
+
             if ($node instanceof Closure || $node instanceof ArrowFunction) {
                 $this->finishFunctionLikeAnalysis();
+                $this->objectBoundAnonymousFunctions->leaveFunctionLike();
 
                 return null;
             }
@@ -775,7 +797,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // The exact-class LEAVE_NODES filter and the returns above leave
             // only these three call nodes on this path.
             /** @phpstan-var StaticCall|MethodCall|NullsafeMethodCall $node */
-            $this->collectObjectBindingRequirement($node);
+            $this->objectBoundAnonymousFunctions->bindingCall($node);
 
             if ($node instanceof StaticCall) {
                 return null;
@@ -798,12 +820,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($node instanceof ClassMethod) {
             $this->finishMethodAnalysis($node);
+            $this->objectBoundAnonymousFunctions->leaveFunctionLike();
 
             return null;
         }
 
         if ($node instanceof Function_) {
             $this->finishFunctionLikeAnalysis();
+            $this->objectBoundAnonymousFunctions->leaveFunctionLike();
             array_pop($this->activeFunctionNames);
 
             return null;
@@ -895,6 +919,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses        = [];
         $this->fileFunctionLikeAnalyses          = [];
         $this->functionLikeDepthAtClassLikeEntry = [];
+        $this->objectBoundAnonymousFunctions->reset();
 
         return null;
     }
@@ -1093,27 +1118,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $this->activeFunctionLikeAnalyses[] = $functionLikeAnalysis;
         $this->fileFunctionLikeAnalyses[]   = $functionLikeAnalysis;
-    }
-
-    private function collectObjectBindingRequirement(StaticCall|MethodCall|NullsafeMethodCall $call): void
-    {
-        $anonymousFunction = $call instanceof StaticCall
-            ? ObjectBoundAnonymousFunction::fromStaticCall($call)
-            : ObjectBoundAnonymousFunction::fromMethodCall($call);
-
-        if (! $anonymousFunction instanceof Closure && ! $anonymousFunction instanceof ArrowFunction) {
-            return;
-        }
-
-        for ($index = count($this->fileFunctionLikeAnalyses) - 1; $index >= 0; $index--) {
-            $functionLikeAnalysis = $this->fileFunctionLikeAnalyses[$index];
-
-            if ($functionLikeAnalysis->functionLike === $anonymousFunction) {
-                $functionLikeAnalysis->requiresObjectBinding = true;
-
-                return;
-            }
-        }
     }
 
     private function innermostActiveClassLikeName(): ?string
@@ -1980,7 +1984,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             superglobals:          $superglobals,
             languageConstructs:    $languageConstructs,
             layers:                $layers,
-            requiresObjectBinding: $functionLikeAnalysis->requiresObjectBinding,
+            requiresObjectBinding: $this->objectBoundAnonymousFunctions->isObjectBound($functionLike),
         );
     }
 

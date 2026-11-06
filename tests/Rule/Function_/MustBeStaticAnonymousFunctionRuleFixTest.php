@@ -14,6 +14,7 @@ use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_map;
 use function file_get_contents;
 use function file_put_contents;
 use function mkdir;
@@ -72,6 +73,148 @@ PHP;
             layer:     'Source',
         )));
         $this->assertSame($code, file_get_contents($file));
+    }
+
+    public function testAnonymousFunctionsBoundThroughLocalVariablesStayNonStatic(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-variable-bound-closure');
+        mkdir($basePath . '/src');
+
+        $file = $basePath . '/src/Binder.php';
+        file_put_contents(
+            $file,
+            <<<'PHP'
+<?php
+
+final class Binder
+{
+    public function bound(object $object): ?Closure
+    {
+        $callback = fn () => 'hello';
+
+        return $callback->bindTo($object);
+    }
+
+    public function called(object $object): mixed
+    {
+        $callback = function () { return 'hello'; };
+
+        return $callback->call($object);
+    }
+
+    public function staticallyBound(object $object): ?Closure
+    {
+        $callback = fn () => 'hello';
+
+        return Closure::bind($callback, $object);
+    }
+
+    public function scopeOnly(): ?Closure
+    {
+        $callback = fn () => 'hello';
+
+        return $callback->bindTo(null, self::class);
+    }
+
+    public function unbound(): Closure
+    {
+        $callback = fn () => 'hello';
+
+        return $callback;
+    }
+
+    public function reassigned(object $object): ?Closure
+    {
+        $callback = fn () => 'first';
+        $callback = fn () => 'second';
+
+        return $callback->bindTo($object);
+    }
+
+    public function sameLine(object $object): void
+    {
+        $plain = fn () => 1; $bound = fn () => 2;
+        $bound->bindTo($object);
+    }
+}
+PHP
+        );
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.static_closures');
+
+        $this->assertSame(
+            [28, 35, 42, 50],
+            array_map(static fn (RuleViolation $violation): int => $violation->line, $violations)
+        );
+
+        $rule = $architecture->getRules()['source.static_closures'];
+        $this->assertInstanceOf(MustBeStaticAnonymousFunctionRule::class, $rule);
+        $this->assertTrue($rule->fix(...$violations));
+
+        $this->assertSame(
+            <<<'PHP'
+<?php
+
+final class Binder
+{
+    public function bound(object $object): ?Closure
+    {
+        $callback = fn () => 'hello';
+
+        return $callback->bindTo($object);
+    }
+
+    public function called(object $object): mixed
+    {
+        $callback = function () { return 'hello'; };
+
+        return $callback->call($object);
+    }
+
+    public function staticallyBound(object $object): ?Closure
+    {
+        $callback = fn () => 'hello';
+
+        return Closure::bind($callback, $object);
+    }
+
+    public function scopeOnly(): ?Closure
+    {
+        $callback = static fn () => 'hello';
+
+        return $callback->bindTo(null, self::class);
+    }
+
+    public function unbound(): Closure
+    {
+        $callback = static fn () => 'hello';
+
+        return $callback;
+    }
+
+    public function reassigned(object $object): ?Closure
+    {
+        $callback = static fn () => 'first';
+        $callback = fn () => 'second';
+
+        return $callback->bindTo($object);
+    }
+
+    public function sameLine(object $object): void
+    {
+        $plain = static fn () => 1; $bound = fn () => 2;
+        $bound->bindTo($object);
+    }
+}
+PHP,
+            file_get_contents($file)
+        );
     }
 
     public function testScopeOnlyBindingsRemainFixable(): void

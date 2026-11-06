@@ -32,8 +32,6 @@ final class FunctionLikeAnalysis
 
     public bool $usesThis = false;
 
-    public bool $requiresObjectBinding = false;
-
     public function __construct(
         public readonly FunctionLike $functionLike,
         public readonly ?string $enclosingClassName,

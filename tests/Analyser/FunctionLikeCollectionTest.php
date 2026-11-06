@@ -9,7 +9,7 @@ use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\FunctionLikeAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
-use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
+use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunctions;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
@@ -17,6 +17,8 @@ use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+
+use function array_map;
 
 /**
  * Collection of named functions, closures, and arrow functions by the
@@ -26,7 +28,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(AnalysisNodeCollector::class)]
 #[CoversClass(FunctionLikeAnalysis::class)]
 #[CoversClass(FunctionNode::class)]
-#[CoversClass(ObjectBoundAnonymousFunction::class)]
+#[CoversClass(ObjectBoundAnonymousFunctions::class)]
 final class FunctionLikeCollectionTest extends TestCase
 {
     private const BASE_PATH = '/structarmed-test-project';
@@ -503,10 +505,55 @@ final class FunctionLikeCollectionTest extends TestCase
             \Closure::class . '::bind(function (): void { foo(); }, $newThis)',
             true,
         ];
-        yield 'indirect bindTo is outside direct AST scope' => [
+        yield 'bindTo through a local variable' => [
             '$closure = function (): void { foo(); }; $closure->bindTo(new stdClass())',
-            false,
+            true,
         ];
+    }
+
+    public function testTracksObjectBindingThroughLocalVariablesPerScope(): void
+    {
+        $anonymousFunctionNodes = $this->makeCollector(<<<'PHP'
+<?php
+namespace App\Domain;
+
+final class Handler
+{
+    public function first(): void
+    {
+        $callback = fn () => 'first';
+    }
+
+    public function second(object $object): void
+    {
+        $callback = fn () => 'second';
+        $callback->bindTo($object);
+    }
+}
+
+function third(object $object): void
+{
+    $callback = fn () => 'third';
+    $callback = fn () => 'fourth';
+    $callback->call($object);
+}
+
+$callback = fn () => 'fifth';
+
+if ($condition) {
+    $callback = fn () => 'sixth';
+}
+
+\Closure::bind($callback, new \stdClass());
+PHP)->getAnonymousFunctionNodes();
+
+        $this->assertSame(
+            [false, true, false, true, true, true],
+            array_map(
+                static fn (AnonymousFunctionNode $node): bool => $node->requiresObjectBinding,
+                $anonymousFunctionNodes
+            )
+        );
     }
 
     public function testNullsafeObjectBindingStillCountsTowardEnclosingFunctionComplexity(): void

@@ -35,8 +35,8 @@ final class AnonymousFunctionNode
      * @param string[]     $superglobals          Superglobals accessed ($_GET, $_POST, etc.)
      * @param string[]     $languageConstructs    Language constructs used (exit, die, etc.)
      * @param list<string> $layers                Layer names this anonymous function belongs to; defaults to [$layer]
-     * @param bool         $requiresObjectBinding Whether this anonymous function is directly bound to an object;
-     *                                            such an anonymous function cannot be declared static
+     * @param bool         $requiresObjectBinding Whether this anonymous function is bound to an object, directly
+     *                                            or through a local variable; it cannot be declared static
      */
     public function __construct(
         public readonly string $file,

@@ -1040,6 +1040,67 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandFixKeepsClosureBoundThroughLocalVariableNonStatic(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        file_put_contents($basePath . '/src/closures.php', <<<'PHP'
+<?php
+
+$callback = fn () => 'hello';
+
+$callback->bindTo(new stdClass());
+
+$plain = fn () => 'plain';
+PHP);
+
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule('Source'));
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--no-progress'],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('1 violation(s) found', $output);
+
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--fix', '--no-progress'],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('1 violation has been fixed.', $this->withoutAnsi($output));
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertSame(
+                <<<'PHP'
+<?php
+
+$callback = fn () => 'hello';
+
+$callback->bindTo(new stdClass());
+
+$plain = static fn () => 'plain';
+PHP,
+                (string) file_get_contents($basePath . '/src/closures.php')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandCountsEveryViolationResolvedByOneFix(): void
     {
         $basePath = $this->createProjectDirectory();

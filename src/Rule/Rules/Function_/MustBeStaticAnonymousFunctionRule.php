@@ -31,7 +31,7 @@ final readonly class MustBeStaticAnonymousFunctionRule extends AbstractPhpParser
 
     public function evaluate(AnonymousFunctionNode $anonymousFunctionNode): ?RuleViolation
     {
-        // An anonymous function reading `$this` or directly bound to an
+        // An anonymous function reading `$this` or bound to an
         // object cannot be static without changing valid runtime behaviour.
         if (
             $anonymousFunctionNode->isStatic

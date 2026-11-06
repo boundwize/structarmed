@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\FunctionLike;
 
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\FunctionLike\AddStaticAnonymousFunctionVisitor;
-use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
+use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunctions;
 use PhpParser\Node;
 use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
@@ -25,7 +25,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(AddStaticAnonymousFunctionVisitor::class)]
-#[CoversClass(ObjectBoundAnonymousFunction::class)]
+#[CoversClass(ObjectBoundAnonymousFunctions::class)]
 final class AddStaticAnonymousFunctionVisitorTest extends TestCase
 {
     public function testAddsStaticToClosureOnMatchingLine(): void
@@ -57,10 +57,12 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
 
     public function testDoesNotChangeAlreadyStaticClosure(): void
     {
-        $closure                           = new Closure(['static' => true], ['startLine' => 12]);
-        $addStaticAnonymousFunctionVisitor = new AddStaticAnonymousFunctionVisitor(12);
+        $closure = new Closure(['static' => true], ['startLine' => 12]);
 
-        $this->assertNotInstanceOf(Node::class, $addStaticAnonymousFunctionVisitor->enterNode($closure));
+        $this->assertSame(
+            [$closure],
+            (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(12)))->traverse([$closure])
+        );
         $this->assertTrue($closure->static);
     }
 
@@ -169,6 +171,30 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
             '(function (): void { foo(); })?->call(new stdClass())',
         ];
         yield 'nullsafe arrow call with object' => ['(fn () => foo())?->call(new stdClass())'];
+        yield 'bindTo through a local variable' => ['$callback = fn () => foo(); $callback->bindTo(new stdClass())'];
+        yield 'call through a local variable' => ['$callback = fn () => foo(); $callback->call(new stdClass())'];
+        yield 'Closure bind through a local variable' => [
+            '$callback = fn () => foo(); ' . \Closure::class . '::bind($callback, new stdClass())',
+        ];
+        yield 'conditionally reassigned local variable' => [
+            '$callback = fn () => foo(); if ($x) { $callback = make(); } $callback->bindTo(new stdClass())',
+        ];
+    }
+
+    public function testOnlyChangesTheUnboundAnonymousFunctionOfALine(): void
+    {
+        $statements = (new ParserFactory())->createForNewestSupportedVersion()->parse(
+            '<?php $plain = fn () => 1; $bound = fn () => 2; $bound->bindTo(new stdClass());'
+        );
+        $this->assertIsArray($statements);
+
+        /** @var list<ArrowFunction> $arrowFunctions */
+        $arrowFunctions = (new NodeFinder())->findInstanceOf($statements, ArrowFunction::class);
+
+        (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(1)))->traverse($statements);
+
+        $this->assertTrue($arrowFunctions[0]->static);
+        $this->assertFalse($arrowFunctions[1]->static);
     }
 
     public function testObjectBindingLookupFindsTheClosureBeforeALaterAnonymousFunctionArgument(): void
@@ -234,18 +260,23 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         yield 'call on a non-anonymous-function receiver' => [
             '$closure = function (): void { foo(); }; $service->call(new stdClass())',
         ];
+        yield 'bindTo null through a local variable' => [
+            '$callback = fn () => foo(); $callback->bindTo(null, Foo::class)',
+        ];
+        yield 'local variable reassigned before bindTo' => [
+            '$callback = fn () => foo(); $callback = make(); $callback->bindTo(new stdClass())',
+        ];
     }
 
     public function testDoesNotChangeNonAnonymousFunctionNode(): void
     {
-        $addStaticAnonymousFunctionVisitor = new AddStaticAnonymousFunctionVisitor(12);
+        $classMethod = new ClassMethod('save', [], ['startLine' => 12]);
 
-        $this->assertNotInstanceOf(
-            Node::class,
-            $addStaticAnonymousFunctionVisitor->enterNode(
-                new ClassMethod('save', [], ['startLine' => 12])
-            )
+        $this->assertSame(
+            [$classMethod],
+            (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(12)))->traverse([$classMethod])
         );
+        $this->assertFalse($classMethod->isStatic());
     }
 
     /**
