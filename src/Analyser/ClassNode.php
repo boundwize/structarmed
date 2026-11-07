@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use function array_filter;
 use function in_array;
+use function ltrim;
 use function preg_match;
 use function strcasecmp;
 use function strncasecmp;
@@ -92,6 +93,8 @@ final class ClassNode
      */
     public function usesClass(string $class): bool
     {
+        $class = ltrim($class, '\\');
+
         if (! $this->dependsOn($class, isCaseSensitive: false)) {
             return false;
         }
@@ -111,6 +114,7 @@ final class ClassNode
      */
     public function usesConstant(string $constant): bool
     {
+        $constant          = ltrim($constant, '\\');
         $separatorPosition = strrpos($constant, '\\');
 
         // a constant name is case-sensitive
@@ -224,6 +228,8 @@ final class ClassNode
      */
     public function implementsInterface(string $interface): bool
     {
+        $interface = ltrim($interface, '\\');
+
         return $this->matchesAnyClassLike($interface, $this->implements)
             || $this->matchesAnyClassLike($interface, $this->interfaceExtends)
             || $this->matchesAnyClassLike($interface, $this->parentInterfaces);

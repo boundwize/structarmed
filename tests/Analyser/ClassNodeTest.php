@@ -196,6 +196,7 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\BaseOrderService'));
         $this->assertTrue($classNode->callsFunction('var_dump'));
         $this->assertTrue($classNode->callsFunction('VAR_DUMP'));
+        $this->assertTrue($classNode->callsFunction('\\var_dump'));
         $this->assertFalse($classNode->callsFunction('array_map'));
         $this->assertTrue($classNode->accessesSuperglobals());
         $this->assertTrue($classNode->usesLanguageConstruct('exit'));
@@ -318,6 +319,7 @@ final class ClassNodeTest extends TestCase
 
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\FooInterface'));
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\RootInterface'));
+        $this->assertTrue($classNode->implementsInterface('\\App\\Contracts\\FooInterface'));
         $this->assertFalse($classNode->implementsInterface('App\\Contracts\\OtherInterface'));
     }
 
@@ -338,6 +340,8 @@ final class ClassNodeTest extends TestCase
 
         $this->assertTrue($classNode->extendsClass('App\\Support\\BaseClass'));
         $this->assertTrue($classNode->extendsClass('App\\Support\\RootClass'));
+        $this->assertTrue($classNode->extendsClass('\\App\\Support\\BaseClass'));
+        $this->assertTrue($classNode->extendsClass('\\App\\Support\\RootClass'));
         $this->assertFalse($classNode->extendsClass('App\\Support\\OtherClass'));
     }
 
@@ -358,6 +362,7 @@ final class ClassNodeTest extends TestCase
         );
 
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\BaseInterface'));
+        $this->assertTrue($classNode->implementsInterface('\\App\\Contracts\\BaseInterface'));
         $this->assertTrue($classNode->implementsInterface('App\\Contracts\\RootInterface'));
         $this->assertFalse($classNode->implementsInterface('App\\Contracts\\OtherInterface'));
     }
@@ -514,6 +519,7 @@ final class ClassNodeTest extends TestCase
 
         $this->assertFalse($classNode->dependsOn('datetimeimmutable'));
         $this->assertTrue($classNode->dependsOn('datetimeimmutable', isCaseSensitive: false));
+        $this->assertTrue($classNode->dependsOn('\\' . DateTimeImmutable::class));
         $this->assertFalse($classNode->dependsOn('datetime', isCaseSensitive: false));
     }
 
@@ -535,7 +541,9 @@ final class ClassNodeTest extends TestCase
 
         $this->assertTrue($classNode->usesClass('datetimeimmutable'));
         $this->assertTrue($classNode->usesClass('DATETIMEIMMUTABLE'));
+        $this->assertTrue($classNode->usesClass('\\' . DateTimeImmutable::class));
         $this->assertFalse($classNode->usesClass('VENDOR\\HELPER'));
+        $this->assertFalse($classNode->usesClass('\\Vendor\\helper'));
     }
 
     public function testUsesClassIgnoresDependencyOnlyUsedAsFunctionOrConstant(): void
@@ -577,6 +585,8 @@ final class ClassNodeTest extends TestCase
         );
 
         $this->assertTrue($classNode->usesConstant('STDIN'));
+        $this->assertTrue($classNode->usesConstant('\\STDIN'));
+        $this->assertTrue($classNode->usesConstant('\\Vendor\\Config\\DEBUG'));
         $this->assertFalse($classNode->usesConstant('stdin'));
         $this->assertTrue($classNode->usesConstant('vendor\\config\\DEBUG'));
         $this->assertFalse($classNode->usesConstant('Vendor\\Config\\debug'));
@@ -621,6 +631,8 @@ final class ClassNodeTest extends TestCase
         );
 
         $this->assertTrue($classNode->dependsOnNamespace('App\\Bar'));
+        $this->assertTrue($classNode->dependsOnNamespace('\\App\\Bar'));
+        $this->assertTrue($classNode->dependsOnNamespace('\\App\\Bar\\'));
         $this->assertFalse($classNode->dependsOnNamespace('App\\Baz'));
     }
 

@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser;
 
 use function in_array;
-use function rtrim;
+use function ltrim;
 use function strcasecmp;
 use function strlen;
 use function strncasecmp;
 use function strtolower;
+use function trim;
 
 /**
  * Query helpers shared by {@see ClassNode}, {@see AnonymousClassNode},
@@ -35,6 +36,8 @@ trait NodeQueryTrait
 
     public function dependsOn(string $dependency, bool $isCaseSensitive = true): bool
     {
+        $dependency = ltrim($dependency, '\\');
+
         if ($isCaseSensitive) {
             return in_array($dependency, $this->dependencies, true);
         }
@@ -50,7 +53,7 @@ trait NodeQueryTrait
 
     public function dependsOnNamespace(string $namespace): bool
     {
-        $prefix       = rtrim($namespace, '\\') . '\\';
+        $prefix       = trim($namespace, '\\') . '\\';
         $prefixLength = strlen($prefix);
 
         // namespace names are case-insensitive; only the prefix is compared,
@@ -78,6 +81,8 @@ trait NodeQueryTrait
 
     public function callsFunction(string $function): bool
     {
+        $function = ltrim($function, '\\');
+
         foreach ($this->functionCalls as $functionCall) {
             if (strcasecmp($functionCall, $function) === 0) {
                 return true;

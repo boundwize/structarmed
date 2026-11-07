@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use function ltrim;
 use function strcasecmp;
 
 /**
@@ -36,12 +37,16 @@ trait RecursiveParentsTrait
      */
     public function implementsInterface(string $interface): bool
     {
+        $interface = ltrim($interface, '\\');
+
         return $this->matchesAnyClassLike($interface, $this->implements)
             || $this->matchesAnyClassLike($interface, $this->parentInterfaces);
     }
 
     public function extendsClass(string $class): bool
     {
+        $class = ltrim($class, '\\');
+
         if ($this->extends !== null && strcasecmp($this->extends, $class) === 0) {
             return true;
         }

@@ -37,6 +37,8 @@ final class AnonymousClassNodeTest extends TestCase
 
         $this->assertSame(['App\\Support\\baseclass', 'App\\Support\\rootclass'], $anonymousClassNode->parentClasses);
         $this->assertTrue($anonymousClassNode->extendsClass('App\\Support\\RootClass'));
+        $this->assertTrue($anonymousClassNode->extendsClass('\\App\\Support\\RootClass'));
+        $this->assertTrue($anonymousClassNode->implementsInterface('\\App\\Contracts\\RootInterface'));
         $this->assertFalse($anonymousClassNode->extendsClass('App\\Support\\OtherClass'));
         $this->assertTrue($anonymousClassNode->implementsInterface('App\\Contracts\\RootInterface'));
         $this->assertFalse($anonymousClassNode->implementsInterface('App\\Contracts\\OtherInterface'));
