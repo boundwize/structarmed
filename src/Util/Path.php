@@ -95,7 +95,7 @@ final class Path
      */
     public static function relativeTo(string $path, string $normalisedBasePath): string
     {
-        $normalisedPath = self::normalise($path, canonicalise: true);
+        $normalisedPath = self::normalise(self::resolve($path, $normalisedBasePath), canonicalise: true);
 
         if ($normalisedPath === $normalisedBasePath) {
             return '';

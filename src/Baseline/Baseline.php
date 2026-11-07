@@ -85,7 +85,7 @@ final readonly class Baseline
         $violations = [];
 
         foreach ($ruleViolationCollection as $violation) {
-            $relativeFile = $this->relativeFile($violation->file, $normalisedBasePath);
+            $relativeFile = Path::relativeTo($violation->file, $normalisedBasePath);
             $entry        = [
                 'rule'    => $violation->ruleKey,
                 'message' => $this->relativeMessagePath(
@@ -185,7 +185,7 @@ final readonly class Baseline
         array $messagePathPrefixes,
     ): string {
         $file         = $this->stringValue($violation['file'] ?? null);
-        $relativeFile = $this->relativeFile($file, $normalisedBasePath);
+        $relativeFile = Path::relativeTo($file, $normalisedBasePath);
 
         return (string) json_encode([
             'rule'    => $this->stringValue($violation['rule'] ?? null),
@@ -199,16 +199,6 @@ final readonly class Baseline
             'class'   => $this->stringValue($violation['class'] ?? null),
             'layer'   => $violation['layer'] ?? null,
         ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
-    }
-
-    /**
-     * Resolved against the base path first: a baseline entry is stored relative
-     * to it, and realpath() would resolve a relative path, or an empty one,
-     * against the working directory instead.
-     */
-    private function relativeFile(string $file, string $normalisedBasePath): string
-    {
-        return Path::relativeTo(Path::resolve($file, $normalisedBasePath), $normalisedBasePath);
     }
 
     private function stringValue(mixed $value): string
@@ -226,7 +216,7 @@ final readonly class Baseline
         string $normalisedBasePath,
         array $messagePathPrefixes,
     ): string {
-        $relativeFile = $this->relativeFile($ruleViolation->file, $normalisedBasePath);
+        $relativeFile = Path::relativeTo($ruleViolation->file, $normalisedBasePath);
 
         return (string) json_encode([
             'rule'    => $ruleViolation->ruleKey,

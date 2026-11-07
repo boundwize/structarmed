@@ -92,6 +92,9 @@ final class PathTest extends TestCase
         yield 'base itself' => ['/project', '/project', ''];
         yield 'sibling of base' => ['/shared/src/Foo.php', '/project', '../shared/src/Foo.php'];
         yield 'no common ancestor' => ['C:/other/Foo.php', '/project', 'C:/other/Foo.php'];
+        // resolved against the base path, never the working directory
+        yield 'relative to base' => ['src/Foo.php', '/project', 'src/Foo.php'];
+        yield 'empty is the base' => ['', '/project', ''];
     }
 
     #[DataProvider('provideRelativeTo')]
