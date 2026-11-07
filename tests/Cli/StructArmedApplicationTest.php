@@ -19,9 +19,11 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function bin2hex;
+use function chdir;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function getcwd;
 use function glob;
 use function is_dir;
 use function json_decode;
@@ -1445,6 +1447,91 @@ PHP);
             $this->assertStringContainsString("'file' => 'src/Foo.php'", $baseline);
         } finally {
             $this->removeTempDirectory($basePath);
+        }
+    }
+
+    /**
+     * A baseline entry stores its file relative to the base path. Running from
+     * a monorepo root that holds a file at the same relative path must not
+     * resolve the entry to that file instead.
+     */
+    public function testAnalyseCommandAppliesBaselineFromOtherWorkingDirectoryWithBasePathOption(): void
+    {
+        $rootPath    = (string) realpath($this->createTempDirectory());
+        $packagePath = $rootPath . '/packages/app';
+
+        mkdir($rootPath . '/src');
+        mkdir($packagePath . '/src', 0777, true);
+
+        $source = <<<'PHP'
+<?php
+
+namespace App;
+
+class Foo
+{
+}
+PHP;
+        file_put_contents($rootPath . '/src/Foo.php', $source);
+        file_put_contents($packagePath . '/src/Foo.php', $source);
+        file_put_contents($packagePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'))
+    ->baseline('structarmed-baseline.php');
+PHP);
+
+        $originalWorkingDirectory = getcwd();
+        $this->assertNotFalse($originalWorkingDirectory);
+
+        try {
+            [$generateExitCode, $generateOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--no-progress',
+                    '--no-cache',
+                    '--generate-baseline=structarmed-baseline.php',
+                ],
+                $packagePath
+            );
+
+            $this->assertSame(0, $generateExitCode, $generateOutput);
+            $this->assertStringContainsString(
+                "'file' => 'src/Foo.php'",
+                (string) file_get_contents($packagePath . '/structarmed-baseline.php')
+            );
+
+            chdir($rootPath);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--basepath=packages/app',
+                    '--config=packages/app/structarmed.php',
+                    '--no-progress',
+                    '--no-cache',
+                ],
+                $rootPath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('No violations found.', $output);
+        } finally {
+            chdir($originalWorkingDirectory);
+            $this->removeTempDirectory($packagePath);
+            unlink($rootPath . '/src/Foo.php');
+            rmdir($rootPath . '/src');
+            rmdir($rootPath . '/packages');
+            rmdir($rootPath);
         }
     }
 
