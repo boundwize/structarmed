@@ -252,26 +252,17 @@ final readonly class ParallelAnalysisNodeExtractor
                     // empty output file and a non-zero exit code; report the exit failure and stderr first instead
                     // of masking it behind a generic "invalid payload" protocol error.
                     if ($exitCode !== 0) {
-                        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                        // to avoid error in test that mock it
-                        $stderr = (string) file_get_contents($worker['stderrFile']);
-                        // phpcs:enable
-
-                        $error = is_array($result) && is_string($result['error'] ?? null)
-                            ? $result['error']
-                            : sprintf('worker exited with code %d', $exitCode);
-
-                        throw new RuntimeException(sprintf(
-                            "Parallel analysis worker failed: %s%s",
-                            $error,
-                            $stderr !== '' ? "\n" . $stderr : ''
-                        ));
+                        throw $this->workerFailure(
+                            is_array($result) && is_string($result['error'] ?? null)
+                                ? $result['error']
+                                : sprintf('worker exited with code %d', $exitCode),
+                            $worker['stderrFile'],
+                        );
                     }
 
                     if (
                         ! is_array($result)
-                        || ! isset($result['nodes'])
-                        || ! is_array($result['nodes'])
+                        || ! is_array($result['nodes'] ?? null)
                         || ! array_key_exists('error', $result)
                     ) {
                         throw new RuntimeException('Parallel analysis worker returned an invalid payload.');
@@ -279,21 +270,12 @@ final readonly class ParallelAnalysisNodeExtractor
 
                     $error = $result['error'];
 
-                    if ($error !== null && ! is_string($error)) {
-                        throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
-                    }
-
                     if ($error !== null) {
-                        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-                        // to avoid error in test that mock it
-                        $stderr = (string) file_get_contents($worker['stderrFile']);
-                        // phpcs:enable
+                        if (! is_string($error)) {
+                            throw new RuntimeException('Parallel analysis worker returned an invalid error payload.');
+                        }
 
-                        throw new RuntimeException(sprintf(
-                            "Parallel analysis worker failed: %s%s",
-                            $error,
-                            $stderr !== '' ? "\n" . $stderr : ''
-                        ));
+                        throw $this->workerFailure($error, $worker['stderrFile']);
                     }
 
                     /** @var list<ClassNode> $workerNodes */
@@ -389,7 +371,7 @@ final readonly class ParallelAnalysisNodeExtractor
         $share = array_sum($fileSizes) / $workerCount;
 
         foreach ($fileSizes as $file => $fileSize) {
-            $minIdx = $workerCount > 1 && $bucketSizes[0] < $share
+            $minIdx = $bucketSizes[0] < $share
                 ? 0
                 : (int) array_search(min($bucketSizes), $bucketSizes, true);
 
@@ -398,6 +380,20 @@ final readonly class ParallelAnalysisNodeExtractor
         }
 
         return $buckets;
+    }
+
+    private function workerFailure(string $error, string $stderrFile): RuntimeException
+    {
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
+        $stderr = (string) file_get_contents($stderrFile);
+        // phpcs:enable
+
+        return new RuntimeException(sprintf(
+            "Parallel analysis worker failed: %s%s",
+            $error,
+            $stderr !== '' ? "\n" . $stderr : ''
+        ));
     }
 
     /**
