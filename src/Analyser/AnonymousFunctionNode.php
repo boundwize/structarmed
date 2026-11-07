@@ -20,12 +20,7 @@ final class AnonymousFunctionNode
 {
     use NodeQueryTrait;
     use PropertyUnserializeTrait;
-
-    /**
-     * Scope label reported by {@see enclosingScopeName()} for an anonymous
-     * function declared outside any class-like or named function.
-     */
-    public const FILE_SCOPE = 'file scope';
+    use ScopeTrait;
 
     /** @var list<string> */
     public readonly array $layers;
@@ -69,15 +64,5 @@ final class AnonymousFunctionNode
     public function getType(): string
     {
         return $this->isArrowFunction ? 'Arrow function' : 'Closure';
-    }
-
-    /**
-     * Label of the innermost named scope declaring this anonymous function —
-     * the enclosing class-like, else the enclosing named function — or
-     * {@see self::FILE_SCOPE} for one declared in top-level procedural code.
-     */
-    public function enclosingScopeName(): string
-    {
-        return $this->enclosingClassName ?? $this->enclosingFunctionName ?? self::FILE_SCOPE;
     }
 }

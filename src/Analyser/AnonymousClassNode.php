@@ -34,12 +34,7 @@ final class AnonymousClassNode
     use NodeQueryTrait;
     use PropertyUnserializeTrait;
     use RecursiveParentsTrait;
-
-    /**
-     * Scope label reported by {@see enclosingScopeName()} for an anonymous
-     * class declared outside any class-like or named function.
-     */
-    public const FILE_SCOPE = 'file scope';
+    use ScopeTrait;
 
     /** @var list<string> */
     public readonly array $layers;
@@ -87,15 +82,5 @@ final class AnonymousClassNode
         public readonly array $nonClassDependencies = [],
     ) {
         $this->layers = $layers ?: array_filter([$this->layer]);
-    }
-
-    /**
-     * Label of the innermost named scope declaring this anonymous class —
-     * the enclosing class-like, else the enclosing named function — or
-     * {@see self::FILE_SCOPE} for one declared in top-level procedural code.
-     */
-    public function enclosingScopeName(): string
-    {
-        return $this->enclosingClassName ?? $this->enclosingFunctionName ?? self::FILE_SCOPE;
     }
 }
