@@ -1842,7 +1842,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         [$layer, $layers]     = $this->resolveLayerData($className);
         $implements           = $this->collectImplements($classLike);
         $interfaceExtends     = $this->collectInterfaceExtends($classLike);
-        [$isApi, $isInternal] = $this->collectApiAndInternalTags($classLike);
+        [$isApi, $isInternal] = $this->detectApiAndInternalTags($classLike);
 
         $this->classNodes[] = new ClassNode(
             className:          $className,
@@ -2023,7 +2023,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *
      * @return array{bool, bool} [isApi, isInternal]
      */
-    private function collectApiAndInternalTags(ClassLike $classLike): array
+    private function detectApiAndInternalTags(ClassLike $classLike): array
     {
         $docComment = $classLike->getDocComment();
 
