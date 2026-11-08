@@ -9,9 +9,11 @@ use Boundwize\StructArmed\Version;
 
 use function array_slice;
 use function array_values;
+use function file_get_contents;
 use function getcwd;
 use function in_array;
 use function sprintf;
+use function unserialize;
 
 final readonly class StructArmedApplication
 {
@@ -27,7 +29,7 @@ final readonly class StructArmedApplication
         $command   = $arguments[0] ?? null;
 
         if ($command === '--internal-worker') {
-            return AnalysisNodeWorker::run($argv[2] ?? '', $argv[3] ?? '');
+            return AnalysisNodeWorker::run(unserialize((string) file_get_contents($argv[2] ?? '')), $argv[3] ?? '');
         }
 
         // Options may precede the command: `structarmed --basepath=../../ --clear-cache`.

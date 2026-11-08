@@ -18,7 +18,6 @@ use RuntimeException;
 use function file_get_contents;
 use function file_put_contents;
 use function fopen;
-use function serialize;
 use function unserialize;
 
 #[CoversClass(AnalysisNodeWorker::class)]
@@ -43,17 +42,14 @@ final class Foo
 }
 PHP);
 
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
         $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
 
-        file_put_contents($inputFile, serialize([
+        $exitCode = AnalysisNodeWorker::run([
             'basePath'      => $dir,
             'layers'        => ['Domain' => 'App\\Domain'],
             'layerPatterns' => [],
             'files'         => [$srcFile],
-        ]));
-
-        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        ], $outputFile, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 
@@ -82,19 +78,16 @@ final class Foo
 }
 PHP);
 
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
         $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
 
-        file_put_contents($inputFile, serialize([
+        $this->assertSame(0, AnalysisNodeWorker::run([
             'basePath'       => $dir,
             'layers'         => ['Domain' => 'App\\Domain'],
             'layerPatterns'  => [],
             'files'          => [$srcFile],
             'cache'          => new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
             'cacheNamespace' => 'namespace',
-        ]));
-
-        $this->assertSame(0, AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream()));
+        ], $outputFile, $this->silentStream()));
 
         $cached = (new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir))
             ->loadAnalysisNodes($srcFile, 'namespace', true);
@@ -120,14 +113,11 @@ final class Foo
 }
 PHP);
 
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
         $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
         $payload    = ['basePath' => $dir, 'layers' => [], 'layerPatterns' => [], 'files' => [$srcFile]];
 
         foreach ([[[], 0], [['withSignatures' => true], 1]] as [$option, $signatureCount]) {
-            file_put_contents($inputFile, serialize($payload + $option));
-
-            $this->assertSame(0, AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream()));
+            $this->assertSame(0, AnalysisNodeWorker::run($payload + $option, $outputFile, $this->silentStream()));
 
             $result = unserialize((string) file_get_contents($outputFile));
 
@@ -140,12 +130,9 @@ PHP);
 
     public function testRunWithInvalidPayloadReturnsOneAndWritesError(): void
     {
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
         $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
 
-        file_put_contents($inputFile, serialize('not-an-array'));
-
-        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        $exitCode = AnalysisNodeWorker::run('not-an-array', $outputFile, $this->silentStream());
 
         $this->assertSame(1, $exitCode);
 
@@ -179,17 +166,14 @@ final class FooService
 }
 PHP);
 
-        $inputFile  = $this->makeTemporaryFile('structarmed-worker-input');
         $outputFile = $this->makeTemporaryFile('structarmed-worker-output');
 
-        file_put_contents($inputFile, serialize([
+        $exitCode = AnalysisNodeWorker::run([
             'basePath'      => $dir,
             'layers'        => ['Domain' => 'App\\Domain'],
             'layerPatterns' => ['Domain' => ['pattern' => '/Service$/', 'excludePattern' => null]],
             'files'         => [$srcFile],
-        ]));
-
-        $exitCode = AnalysisNodeWorker::run($inputFile, $outputFile, $this->silentStream());
+        ], $outputFile, $this->silentStream());
 
         $this->assertSame(0, $exitCode);
 

@@ -16,7 +16,10 @@ use RuntimeException;
 
 use function array_map;
 use function bin2hex;
+use function end;
+use function file_get_contents;
 use function file_put_contents;
+use function getmypid;
 use function glob;
 use function is_dir;
 use function random_bytes;
@@ -25,8 +28,10 @@ use function sort;
 use function sprintf;
 use function sys_get_temp_dir;
 use function unlink;
+use function unserialize;
 
 use const PHP_BINARY;
+use const SIGKILL;
 
 #[CoversClass(ParallelAnalysisNodeExtractor::class)]
 final class ParallelAnalysisNodeExtractorTest extends TestCase
@@ -638,6 +643,108 @@ PHP);
         try {
             $parallelAnalysisNodeExtractor->extract([$file]);
         } finally {
+            $GLOBALS['mock_file_get_contents_payload'] = null;
+            $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    public function testExtractThrowsWhenForkedWorkerCannotStart(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        foreach (['mock_stream_socket_pair' => true, 'mock_pcntl_fork' => -1] as $mock => $value) {
+            $GLOBALS[$mock] = $value;
+
+            try {
+                (new ParallelAnalysisNodeExtractor($dir, [], [], 2))->extract([$file]);
+                $this->fail('Expected RuntimeException was not thrown.');
+            } catch (RuntimeException $runtimeException) {
+                $this->assertSame('Unable to start parallel analysis worker.', $runtimeException->getMessage());
+            } finally {
+                $GLOBALS['mock_stream_socket_pair'] = false;
+                $GLOBALS['mock_pcntl_fork']         = null;
+            }
+        }
+    }
+
+    public function testForkedWorkerWritesPayloadThenKillsItself(): void
+    {
+        // pcntl_fork() returning 0 runs the child branch in this process; the mocked
+        // posix_kill() throws instead of killing the test runner.
+        $GLOBALS['mock_pcntl_fork'] = 0;
+        $GLOBALS['mock_posix_kill'] = true;
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php final class ForkedWorkerFixture {}');
+
+        try {
+            (new ParallelAnalysisNodeExtractor($dir, [], [], 1))->extract([$file]);
+            $this->fail('Expected the forked worker to kill itself.');
+        } catch (RuntimeException $runtimeException) {
+            $this->assertSame(sprintf('posix_kill(%d, %d)', getmypid(), SIGKILL), $runtimeException->getMessage());
+
+            /** @var list<string> $outputFiles */
+            $outputFiles = $GLOBALS['mock_tracked_tempnam_files'];
+            $outputFile  = (string) end($outputFiles);
+            $result      = unserialize((string) file_get_contents($outputFile));
+
+            unlink($outputFile);
+
+            $this->assertIsArray($result);
+            $this->assertNull($result['error']);
+            $this->assertIsArray($result['nodes']);
+            $this->assertInstanceOf(ClassNode::class, $result['nodes'][0]);
+            $this->assertSame('ForkedWorkerFixture', $result['nodes'][0]->className);
+        } finally {
+            $GLOBALS['mock_pcntl_fork']            = null;
+            $GLOBALS['mock_posix_kill']            = false;
+            $GLOBALS['mock_tracked_tempnam_files'] = [];
+        }
+    }
+
+    public function testExtractReportsForkedWorkerThatDidNotKillItself(): void
+    {
+        // The forked child is replaced by a process that exits or is signalled without writing a payload.
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        foreach (['exit(3);' => 3, 'posix_kill(getmypid(), SIGTERM);' => 143] as $code => $exitCode) {
+            $GLOBALS['mock_pcntl_fork'] = [PHP_BINARY, '-r', $code];
+
+            try {
+                (new ParallelAnalysisNodeExtractor($dir, [], [], 2))->extract([$file]);
+                $this->fail('Expected RuntimeException was not thrown.');
+            } catch (RuntimeException $runtimeException) {
+                $this->assertSame(
+                    sprintf('[worker #1] Parallel analysis worker failed: worker exited with code %d', $exitCode),
+                    $runtimeException->getMessage(),
+                );
+            } finally {
+                $GLOBALS['mock_pcntl_fork'] = null;
+            }
+        }
+    }
+
+    public function testExtractReportsErrorPayloadOfForkedWorkerExitingNonZero(): void
+    {
+        $GLOBALS['mock_pcntl_fork']                = [PHP_BINARY, '-r', 'exit(1);'];
+        $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => 'simulated payload error'];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('[worker #1] Parallel analysis worker failed: simulated payload error');
+
+        try {
+            (new ParallelAnalysisNodeExtractor($dir, [], [], 2))->extract([$file]);
+        } finally {
+            $GLOBALS['mock_pcntl_fork']                = null;
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
         }
