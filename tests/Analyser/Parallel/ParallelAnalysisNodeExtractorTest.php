@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RequiresFunction;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -648,6 +649,8 @@ PHP);
         }
     }
 
+    #[RequiresFunction('pcntl_fork')]
+    #[RequiresFunction('posix_kill')]
     public function testExtractThrowsWhenForkedWorkerCannotStart(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
@@ -669,6 +672,8 @@ PHP);
         }
     }
 
+    #[RequiresFunction('pcntl_fork')]
+    #[RequiresFunction('posix_kill')]
     public function testForkedWorkerWritesPayloadThenKillsItself(): void
     {
         // pcntl_fork() returning 0 runs the child branch in this process; the mocked
@@ -705,6 +710,8 @@ PHP);
         }
     }
 
+    #[RequiresFunction('pcntl_fork')]
+    #[RequiresFunction('posix_kill')]
     public function testExtractReportsForkedWorkerThatDidNotKillItself(): void
     {
         // The forked child is replaced by a process that exits or is signalled without writing a payload.
@@ -729,6 +736,8 @@ PHP);
         }
     }
 
+    #[RequiresFunction('pcntl_fork')]
+    #[RequiresFunction('posix_kill')]
     public function testExtractReportsErrorPayloadOfForkedWorkerExitingNonZero(): void
     {
         $GLOBALS['mock_pcntl_fork']                = [PHP_BINARY, '-r', 'exit(1);'];
