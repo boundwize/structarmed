@@ -24,6 +24,7 @@ use function file_put_contents;
 use function getmypid;
 use function glob;
 use function is_dir;
+use function pcntl_waitpid;
 use function random_bytes;
 use function rmdir;
 use function sort;
@@ -32,8 +33,11 @@ use function sys_get_temp_dir;
 use function unlink;
 use function unserialize;
 
+use const PCNTL_ECHILD;
+use const PCNTL_EINTR;
 use const PHP_BINARY;
 use const SIGKILL;
+use const WNOHANG;
 
 #[CoversClass(ParallelAnalysisNodeExtractor::class)]
 final class ParallelAnalysisNodeExtractorTest extends TestCase
@@ -783,18 +787,26 @@ PHP);
 
     #[RequiresFunction('pcntl_fork')]
     #[RequiresFunction('posix_kill')]
-    public function testForkedWorkerPayloadDecidesWhenItsStatusWasCollectedElsewhere(): void
+    public function testForkedWorkerIsReapedAcrossWaitFailures(): void
     {
-        $GLOBALS['mock_pcntl_waitpid'] = true;
-
         $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
         $file = $dir . '/Foo.php';
         file_put_contents($file, '<?php class Foo {}');
 
-        try {
-            $this->assertCount(1, (new ParallelAnalysisNodeExtractor($dir, [], [], 2))->extract([$file])->classNodes);
-        } finally {
-            $GLOBALS['mock_pcntl_waitpid'] = false;
+        // ECHILD: the status was collected elsewhere, the payload decides;
+        // EINTR: the wait is retried until the child is reaped.
+        foreach ([[PCNTL_ECHILD], [PCNTL_EINTR, PCNTL_EINTR]] as $errors) {
+            $GLOBALS['mock_pcntl_waitpid_errors'] = $errors;
+
+            try {
+                $extractionResult = (new ParallelAnalysisNodeExtractor($dir, [], [], 2))->extract([$file]);
+            } finally {
+                $GLOBALS['mock_pcntl_waitpid_errors'] = [];
+                $GLOBALS['mock_pcntl_last_error']     = null;
+            }
+
+            $this->assertCount(1, $extractionResult->classNodes);
+            $this->assertSame(-1, pcntl_waitpid(-1, $status, WNOHANG), 'no child is left unreaped');
         }
     }
 }

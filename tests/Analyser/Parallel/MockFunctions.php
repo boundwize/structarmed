@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use RuntimeException;
 
+use function array_shift;
 use function array_slice;
 use function in_array;
 use function is_int;
@@ -13,6 +14,8 @@ use function pcntl_exec;
 use function serialize;
 use function sprintf;
 use function str_replace;
+
+use const PCNTL_EINTR;
 
 // phpcs:disable
 $GLOBALS['mock_proc_open']                 = false;
@@ -24,7 +27,8 @@ $GLOBALS['mock_tracked_tempnam_files']     = [];
 $GLOBALS['mock_stream_socket_pair']        = false;
 $GLOBALS['mock_pcntl_fork']                = null;
 $GLOBALS['mock_posix_kill']                = false;
-$GLOBALS['mock_pcntl_waitpid']             = false;
+$GLOBALS['mock_pcntl_waitpid_errors']      = [];
+$GLOBALS['mock_pcntl_last_error']          = null;
 $GLOBALS['mock_missing_functions']         = [];
 // phpcs:enable
 
@@ -163,11 +167,33 @@ function posix_kill(int $processId, int $signal): bool
 }
 
 /**
- * Reaps the child for real, then reports the status as already collected elsewhere.
+ * Each queued error fails one call with -1: EINTR leaves the child for the retry,
+ * any other error reaps it for real first, as if its status was collected elsewhere.
  */
 function pcntl_waitpid(int $processId, mixed &$status): int
 {
-    $result = \pcntl_waitpid($processId, $status);
+    /** @var list<int> $errors */
+    $errors = $GLOBALS['mock_pcntl_waitpid_errors'];
+    $error  = array_shift($errors);
 
-    return $GLOBALS['mock_pcntl_waitpid'] === true ? -1 : $result;
+    $GLOBALS['mock_pcntl_waitpid_errors'] = $errors;
+    $GLOBALS['mock_pcntl_last_error']     = $error;
+
+    if ($error === null) {
+        return \pcntl_waitpid($processId, $status);
+    }
+
+    if ($error !== PCNTL_EINTR) {
+        \pcntl_waitpid($processId, $status);
+    }
+
+    return -1;
+}
+
+function pcntl_get_last_error(): int
+{
+    /** @var int|null $error */
+    $error = $GLOBALS['mock_pcntl_last_error'];
+
+    return $error ?? \pcntl_get_last_error();
 }

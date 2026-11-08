@@ -52,6 +52,7 @@ use function unlink;
 use function unserialize;
 use function usleep;
 
+use const PCNTL_EINTR;
 use const PHP_BINARY;
 use const PHP_OS_FAMILY;
 use const PHP_VERSION_ID;
@@ -70,6 +71,7 @@ final readonly class ParallelAnalysisNodeExtractor
      */
     private const FORK_REQUIRED_FUNCTIONS = [
         'pcntl_fork',
+        'pcntl_get_last_error',
         'pcntl_waitpid',
         'pcntl_wifsignaled',
         'pcntl_wtermsig',
@@ -506,12 +508,17 @@ final readonly class ParallelAnalysisNodeExtractor
      */
     private function reapForkedWorker(int $pid): int
     {
-        // -1: the status was already collected elsewhere (e.g. a host SIGCHLD handler); the
-        // worker has written its payload before the socket EOF, so that payload decides
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
-        if (pcntl_waitpid($pid, $waitStatus) === -1) {
-            // phpcs:enable
+        do {
+            $reapedPid = pcntl_waitpid($pid, $waitStatus);
+        } while ($reapedPid === -1 && pcntl_get_last_error() === PCNTL_EINTR);
+
+        // phpcs:enable
+
+        // Any other failure (ECHILD: the status was collected elsewhere, e.g. a host SIGCHLD handler):
+        // the worker has written its payload before the socket EOF, so that payload decides.
+        if ($reapedPid === -1) {
             return 0;
         }
 
