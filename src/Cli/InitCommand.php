@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Cli;
 
+use Boundwize\StructArmed\Config\ConfigLoader;
+use RuntimeException;
+
+use function basename;
 use function count;
-use function file_exists;
 use function file_put_contents;
 use function sprintf;
 use function str_starts_with;
@@ -53,13 +56,16 @@ final class InitCommand
             return 1;
         }
 
-        $target = $basePath . '/structarmed.php';
-
-        if (file_exists($target)) {
-            echo "structarmed.php already exists.\n";
+        // Any discoverable config stops init: a new structarmed.php would shadow
+        // an existing structarmed.dist.php, since discovery prefers it.
+        try {
+            echo sprintf("%s already exists.\n", basename(ConfigLoader::discover($basePath)));
 
             return 0;
+        } catch (RuntimeException) {
         }
+
+        $target = $basePath . '/structarmed.php';
 
         file_put_contents($target, <<<'PHP'
 <?php

@@ -15,6 +15,7 @@ use function escapeshellarg;
 use function exec;
 use function file_exists;
 use function file_get_contents;
+use function file_put_contents;
 use function getcwd;
 use function implode;
 use function is_dir;
@@ -145,6 +146,25 @@ final class InitCommandTest extends TestCase
             $this->assertStringContainsString('Invalid preset: unknown', $output);
             $this->assertFileDoesNotExist($basePath . '/structarmed.php');
         } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testInitKeepsExistingDistConfig(): void
+    {
+        $basePath = $this->createTempDirectory();
+        $distFile = $basePath . '/structarmed.dist.php';
+
+        file_put_contents($distFile, '<?php');
+
+        try {
+            [$exitCode, $output] = $this->runInit($basePath, []);
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('structarmed.dist.php already exists.', $output);
+            $this->assertFileDoesNotExist($basePath . '/structarmed.php');
+        } finally {
+            unlink($distFile);
             $this->removeTempDirectory($basePath);
         }
     }
