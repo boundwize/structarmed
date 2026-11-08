@@ -314,6 +314,54 @@ PHP);
         $this->assertSame($files, $progress->files);
     }
 
+    public function testExtractSpawnsNoMoreWorkersThanTheLargestFileShareAllows(): void
+    {
+        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $files = [$dir . '/Large.php'];
+
+        // larger than the three small files together: two byte shares fit the
+        // files, so a third and fourth worker would only add a process boot
+        file_put_contents($files[0], <<<'PHP'
+<?php
+
+namespace App;
+
+final class Large
+{
+    public function first(): string
+    {
+        return 'first';
+    }
+
+    public function second(): string
+    {
+        return 'second';
+    }
+}
+PHP);
+
+        for ($index = 0; $index < 3; ++$index) {
+            $file = sprintf('%s/Small%d.php', $dir, $index);
+            file_put_contents($file, sprintf('<?php namespace App; final class Small%d {}', $index));
+
+            $files[] = $file;
+        }
+
+        $GLOBALS['mock_tracked_tempnam_files'] = [];
+
+        try {
+            $extractionResult = (new ParallelAnalysisNodeExtractor($dir, [], [], 4))->extract($files);
+            $tempnamFiles     = $GLOBALS['mock_tracked_tempnam_files'];
+        } finally {
+            $GLOBALS['mock_tracked_tempnam_files'] = [];
+        }
+
+        $this->assertCount(4, $extractionResult->classNodes);
+        // input, output and stderr file per worker
+        $this->assertIsArray($tempnamFiles);
+        $this->assertCount(6, $tempnamFiles);
+    }
+
     public function testExtractBuffersProgressLineSplitAcrossReads(): void
     {
         // Simulates a worker whose progress lines reach the coordinator in pieces: index 10 arrives as "1" then

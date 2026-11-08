@@ -23,6 +23,7 @@ use function array_push;
 use function array_search;
 use function array_sum;
 use function arsort;
+use function ceil;
 use function count;
 use function dirname;
 use function explode;
@@ -36,9 +37,11 @@ use function implode;
 use function is_array;
 use function is_dir;
 use function is_string;
+use function max;
 use function min;
 use function mkdir;
 use function proc_close;
+use function reset;
 use function rmdir;
 use function serialize;
 use function sprintf;
@@ -363,12 +366,20 @@ final readonly class ParallelAnalysisNodeExtractor
 
         arsort($fileSizes);
 
+        // The largest file cannot be split, so a worker whose byte share is
+        // below it would only add a process boot without finishing sooner.
+        $totalSize   = array_sum($fileSizes);
+        $largestSize = reset($fileSizes);
+        if ($largestSize > 0) {
+            $workerCount = max(1, min($workerCount, (int) ceil($totalSize / $largestSize)));
+        }
+
         $buckets     = array_fill(0, $workerCount, []);
         $bucketSizes = array_fill(0, $workerCount, 0);
 
         // The largest files fill one worker up to an even byte share first, so
         // only that worker pays their AST peaks; the rest are balanced by LPT.
-        $share = array_sum($fileSizes) / $workerCount;
+        $share = $totalSize / $workerCount;
 
         foreach ($fileSizes as $file => $fileSize) {
             $minIdx = $bucketSizes[0] < $share
