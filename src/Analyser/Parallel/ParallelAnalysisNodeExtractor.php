@@ -489,9 +489,11 @@ final readonly class ParallelAnalysisNodeExtractor
      */
     private function reapForkedWorker(int $pid): int
     {
-        pcntl_waitpid($pid, $status);
+        pcntl_waitpid($pid, $waitStatus);
 
         /** @var int $status */
+        $status = $waitStatus;
+
         if (pcntl_wifsignaled($status)) {
             $signal = pcntl_wtermsig($status);
 
