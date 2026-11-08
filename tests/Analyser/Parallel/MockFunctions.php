@@ -24,6 +24,8 @@ $GLOBALS['mock_tracked_tempnam_files']     = [];
 $GLOBALS['mock_stream_socket_pair']        = false;
 $GLOBALS['mock_pcntl_fork']                = null;
 $GLOBALS['mock_posix_kill']                = false;
+$GLOBALS['mock_pcntl_waitpid']             = false;
+$GLOBALS['mock_missing_functions']         = [];
 // phpcs:enable
 
 /**
@@ -54,6 +56,10 @@ function function_exists(string $function): bool
         $function === 'pcntl_fork'
         && ($GLOBALS['mock_proc_open'] === true || $GLOBALS['mock_proc_open_command'] !== null)
     ) {
+        return false;
+    }
+
+    if (in_array($function, (array) $GLOBALS['mock_missing_functions'], true)) {
         return false;
     }
 
@@ -154,4 +160,14 @@ function posix_kill(int $processId, int $signal): bool
     }
 
     return \posix_kill($processId, $signal);
+}
+
+/**
+ * Reaps the child for real, then reports the status as already collected elsewhere.
+ */
+function pcntl_waitpid(int $processId, mixed &$status): int
+{
+    $result = \pcntl_waitpid($processId, $status);
+
+    return $GLOBALS['mock_pcntl_waitpid'] === true ? -1 : $result;
 }

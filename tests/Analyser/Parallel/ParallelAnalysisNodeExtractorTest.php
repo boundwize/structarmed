@@ -17,6 +17,7 @@ use RuntimeException;
 
 use function array_map;
 use function bin2hex;
+use function count;
 use function end;
 use function file_get_contents;
 use function file_put_contents;
@@ -756,6 +757,44 @@ PHP);
             $GLOBALS['mock_pcntl_fork']                = null;
             $GLOBALS['mock_file_get_contents_payload'] = null;
             $GLOBALS['mock_tracked_tempnam_files']     = [];
+        }
+    }
+
+    public function testExtractUsesProcOpenWorkerWhenAnyForkFunctionIsDisabled(): void
+    {
+        $GLOBALS['mock_missing_functions'] = ['pcntl_waitpid'];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $trackedFiles = count((array) $GLOBALS['mock_tracked_tempnam_files']);
+
+        try {
+            $this->assertCount(1, (new ParallelAnalysisNodeExtractor($dir, [], [], 2))->extract([$file])->classNodes);
+
+            // input, output and stderr files: only an exec'd worker needs all three
+            $this->assertCount($trackedFiles + 3, (array) $GLOBALS['mock_tracked_tempnam_files']);
+        } finally {
+            $GLOBALS['mock_missing_functions']     = [];
+            $GLOBALS['mock_tracked_tempnam_files'] = [];
+        }
+    }
+
+    #[RequiresFunction('pcntl_fork')]
+    #[RequiresFunction('posix_kill')]
+    public function testForkedWorkerPayloadDecidesWhenItsStatusWasCollectedElsewhere(): void
+    {
+        $GLOBALS['mock_pcntl_waitpid'] = true;
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        try {
+            $this->assertCount(1, (new ParallelAnalysisNodeExtractor($dir, [], [], 2))->extract([$file])->classNodes);
+        } finally {
+            $GLOBALS['mock_pcntl_waitpid'] = false;
         }
     }
 }

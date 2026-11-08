@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
 use function array_fill;
+use function array_filter;
 use function array_key_exists;
 use function array_map;
 use function array_pop;
@@ -38,7 +39,6 @@ use function is_dir;
 use function is_string;
 use function min;
 use function mkdir;
-use function pcntl_waitpid;
 use function pcntl_wexitstatus;
 use function pcntl_wifsignaled;
 use function pcntl_wtermsig;
@@ -65,6 +65,20 @@ use const STREAM_SOCK_STREAM;
  */
 final readonly class ParallelAnalysisNodeExtractor
 {
+    /**
+     * Every function the fork path calls: disable_functions can remove any of them on its own.
+     */
+    private const FORK_REQUIRED_FUNCTIONS = [
+        'pcntl_fork',
+        'pcntl_waitpid',
+        'pcntl_wifsignaled',
+        'pcntl_wtermsig',
+        'pcntl_wexitstatus',
+        'posix_getpid',
+        'posix_kill',
+        'stream_socket_pair',
+    ];
+
     /**
      * @param array<string, string|list<string>> $layers
      * @param array<string, array<string, mixed>> $layerPatterns
@@ -114,10 +128,13 @@ final readonly class ParallelAnalysisNodeExtractor
 
         // A forked child inherits the loaded code, config and cache, so it skips the PHP
         // boot, autoload and payload (un)serialisation an exec'd worker pays for.
-        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
-        // to avoid error in test that mock it
-        $canFork = function_exists('pcntl_fork') && function_exists('posix_kill');
-        // phpcs:enable
+        $canFork = array_filter(
+            self::FORK_REQUIRED_FUNCTIONS,
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            // to avoid error in test that mock it
+            static fn (string $function): bool => ! function_exists($function),
+            // phpcs:enable
+        ) === [];
 
         foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             $payload = [
@@ -489,7 +506,14 @@ final readonly class ParallelAnalysisNodeExtractor
      */
     private function reapForkedWorker(int $pid): int
     {
-        pcntl_waitpid($pid, $waitStatus);
+        // -1: the status was already collected elsewhere (e.g. a host SIGCHLD handler); the
+        // worker has written its payload before the socket EOF, so that payload decides
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
+        if (pcntl_waitpid($pid, $waitStatus) === -1) {
+            // phpcs:enable
+            return 0;
+        }
 
         /** @var int $status */
         $status = $waitStatus;
