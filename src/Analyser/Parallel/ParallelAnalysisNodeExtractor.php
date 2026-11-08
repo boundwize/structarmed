@@ -16,6 +16,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use RuntimeException;
 
 use function array_fill;
+use function array_filter;
 use function array_key_exists;
 use function array_map;
 use function array_pop;
@@ -38,6 +39,10 @@ use function is_dir;
 use function is_string;
 use function min;
 use function mkdir;
+use function pcntl_wexitstatus;
+use function pcntl_wifsignaled;
+use function pcntl_wtermsig;
+use function posix_getpid;
 use function proc_close;
 use function rmdir;
 use function serialize;
@@ -47,15 +52,35 @@ use function unlink;
 use function unserialize;
 use function usleep;
 
+use const PCNTL_EINTR;
 use const PHP_BINARY;
 use const PHP_OS_FAMILY;
 use const PHP_VERSION_ID;
+use const SIGKILL;
+use const STREAM_IPPROTO_IP;
+use const STREAM_PF_UNIX;
+use const STREAM_SOCK_STREAM;
 
 /**
  * @internal
  */
 final readonly class ParallelAnalysisNodeExtractor
 {
+    /**
+     * Every function the fork path calls: disable_functions can remove any of them on its own.
+     */
+    private const FORK_REQUIRED_FUNCTIONS = [
+        'pcntl_fork',
+        'pcntl_get_last_error',
+        'pcntl_waitpid',
+        'pcntl_wifsignaled',
+        'pcntl_wtermsig',
+        'pcntl_wexitstatus',
+        'posix_getpid',
+        'posix_kill',
+        'stream_socket_pair',
+    ];
+
     /**
      * @param array<string, string|list<string>> $layers
      * @param array<string, array<string, mixed>> $layerPatterns
@@ -103,14 +128,18 @@ final readonly class ParallelAnalysisNodeExtractor
             mkdir($cacheDirectory, 0777, true);
         }
 
-        foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
-            [
-                'inputFile'  => $inputFile,
-                'outputFile' => $outputFile,
-                'stderrFile' => $stderrFile,
-            ] = $this->createWorkerFiles($cacheDirectory);
+        // A forked child inherits the loaded code, config and cache, so it skips the PHP
+        // boot, autoload and payload (un)serialisation an exec'd worker pays for.
+        $canFork = array_filter(
+            self::FORK_REQUIRED_FUNCTIONS,
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            // to avoid error in test that mock it
+            static fn (string $function): bool => ! function_exists($function),
+            // phpcs:enable
+        ) === [];
 
-            file_put_contents($inputFile, serialize([
+        foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
+            $payload = [
                 'basePath'          => $this->basePath,
                 'layers'            => $this->layers,
                 'layerPatterns'     => $this->layerPatterns,
@@ -119,9 +148,25 @@ final readonly class ParallelAnalysisNodeExtractor
                 'emitProgress'      => $emitProgress,
                 'withFileAnalysis'  => $withFileAnalysis,
                 'withSignatures'    => $withSignatures,
-                'cache'             => $this->analysisResultCache?->forFiles($chunk),
+                'cache'             => $canFork
+                    ? $this->analysisResultCache
+                    : $this->analysisResultCache?->forFiles($chunk),
                 'cacheNamespace'    => $this->analysisNodeCacheNamespace,
-            ]));
+            ];
+
+            if ($canFork) {
+                $pending[] = $this->forkWorker($cacheDirectory, $chunk, $payload);
+
+                continue;
+            }
+
+            [
+                'inputFile'  => $inputFile,
+                'outputFile' => $outputFile,
+                'stderrFile' => $stderrFile,
+            ] = $this->createWorkerFiles($cacheDirectory);
+
+            file_put_contents($inputFile, serialize($payload));
 
             // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
             // to avoid error in test that mock it
@@ -147,6 +192,7 @@ final readonly class ParallelAnalysisNodeExtractor
 
             $pending[] = [
                 'process'    => $process,
+                'pid'        => null,
                 'files'      => $chunk,
                 'buffer'     => '',
                 'inputFile'  => $inputFile,
@@ -238,9 +284,13 @@ final readonly class ParallelAnalysisNodeExtractor
                 // returns the real exit code (no double-waitpid race with proc_get_status).
                 fclose($stdoutPipe);
 
-                /** @phpstan-var resource $procResource */
-                $procResource = $worker['process'];
-                $exitCode     = proc_close($procResource);
+                if ($worker['pid'] !== null) {
+                    $exitCode = $this->reapForkedWorker($worker['pid']);
+                } else {
+                    /** @phpstan-var resource $procResource */
+                    $procResource = $worker['process'];
+                    $exitCode     = proc_close($procResource);
+                }
 
                 try {
                     // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
@@ -382,11 +432,113 @@ final readonly class ParallelAnalysisNodeExtractor
         return $buckets;
     }
 
+    /**
+     * @param list<string> $chunk
+     * @param array<string, mixed> $payload
+     * @return array{
+     *     process: null,
+     *     pid: int,
+     *     files: list<string>,
+     *     buffer: string,
+     *     inputFile: string,
+     *     outputFile: string,
+     *     stderrFile: string,
+     *     stdoutPipe: resource
+     * }
+     */
+    private function forkWorker(string $cacheDirectory, array $chunk, array $payload): array
+    {
+        $outputFile = $this->temporaryFile($cacheDirectory);
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
+        $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        // phpcs:enable
+
+        if ($sockets === false) {
+            $this->cleanup([$outputFile]);
+
+            throw new RuntimeException('Unable to start parallel analysis worker.');
+        }
+
+        [$parentSocket, $childSocket] = $sockets;
+
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
+        $pid = pcntl_fork();
+        // phpcs:enable
+
+        if ($pid === -1) {
+            fclose($parentSocket);
+            fclose($childSocket);
+            $this->cleanup([$outputFile]);
+
+            throw new RuntimeException('Unable to start parallel analysis worker.');
+        }
+
+        if ($pid === 0) {
+            fclose($parentSocket);
+            AnalysisNodeWorker::run($payload, $outputFile, $childSocket);
+            fclose($childSocket);
+
+            // The child shares the coordinator's state: exiting normally would run its
+            // shutdown functions, destructors and output buffers a second time.
+            // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+            // to avoid error in test that mock it
+            posix_kill(posix_getpid(), SIGKILL);
+            // phpcs:enable
+        }
+
+        fclose($childSocket);
+
+        return [
+            'process'    => null,
+            'pid'        => $pid,
+            'files'      => $chunk,
+            'buffer'     => '',
+            'inputFile'  => '',
+            'outputFile' => $outputFile,
+            'stderrFile' => '',
+            'stdoutPipe' => $parentSocket,
+        ];
+    }
+
+    /**
+     * A forked worker always ends by SIGKILL-ing itself after writing its payload, so that
+     * signal counts as a normal exit; the payload then tells success from failure.
+     */
+    private function reapForkedWorker(int $pid): int
+    {
+        // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
+        // to avoid error in test that mock it
+        do {
+            $reapedPid = pcntl_waitpid($pid, $waitStatus);
+        } while ($reapedPid === -1 && pcntl_get_last_error() === PCNTL_EINTR);
+
+        // phpcs:enable
+
+        // Any other failure (ECHILD: the status was collected elsewhere, e.g. a host SIGCHLD handler):
+        // the worker has written its payload before the socket EOF, so that payload decides.
+        if ($reapedPid === -1) {
+            return 0;
+        }
+
+        /** @var int $status */
+        $status = $waitStatus;
+
+        if (pcntl_wifsignaled($status)) {
+            $signal = pcntl_wtermsig($status);
+
+            return $signal === SIGKILL ? 0 : 128 + $signal;
+        }
+
+        return (int) pcntl_wexitstatus($status);
+    }
+
     private function workerFailure(string $error, string $stderrFile): RuntimeException
     {
         // phpcs:disable SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly.ReferenceViaFallbackGlobalName
         // to avoid error in test that mock it
-        $stderr = (string) file_get_contents($stderrFile);
+        $stderr = $stderrFile !== '' ? (string) file_get_contents($stderrFile) : '';
         // phpcs:enable
 
         return new RuntimeException(sprintf(

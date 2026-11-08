@@ -9,12 +9,10 @@ use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Throwable;
 
-use function file_get_contents;
 use function file_put_contents;
 use function is_array;
 use function serialize;
 use function sprintf;
-use function unserialize;
 
 use const STDOUT;
 
@@ -24,11 +22,9 @@ use const STDOUT;
 final readonly class AnalysisNodeWorker
 {
     /** @param resource|null $outputStream */
-    public static function run(string $inputFile, string $outputFile, mixed $outputStream = null): int
+    public static function run(mixed $payload, string $outputFile, mixed $outputStream = null): int
     {
         try {
-            $payload = unserialize((string) file_get_contents($inputFile));
-
             if (! is_array($payload)) {
                 throw new WorkerFailedException('Invalid worker payload.');
             }
