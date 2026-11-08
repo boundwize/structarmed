@@ -97,6 +97,7 @@ use function is_finite;
 use function is_int;
 use function is_string;
 use function preg_match;
+use function sprintf;
 use function str_contains;
 use function str_starts_with;
 use function strcasecmp;
@@ -145,6 +146,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * 'App\Handler::run'.
      */
     private const METHOD_NAME_PATTERN = '/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*+\z/';
+
+    /**
+     * A docblock tag at the start of a line, e.g. `@api`; %s is the tag name.
+     */
+    private const DOC_BLOCK_TAG_PATTERN = '#^[/*\s]*@%s(?![\w-])#m';
 
     /**
      * Marks the name string passed to function_exists(): the check probes for
@@ -1831,11 +1837,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     private function collectClassLike(ClassLike $classLike, ClassLikeAnalysis $classLikeAnalysis): void
     {
-        $analysis         = $this->collectClassLikeAnalysis($classLikeAnalysis);
-        $className        = $this->resolveClassName($classLike);
-        [$layer, $layers] = $this->resolveLayerData($className);
-        $implements       = $this->collectImplements($classLike);
-        $interfaceExtends = $this->collectInterfaceExtends($classLike);
+        $analysis             = $this->collectClassLikeAnalysis($classLikeAnalysis);
+        $className            = $this->resolveClassName($classLike);
+        [$layer, $layers]     = $this->resolveLayerData($className);
+        $implements           = $this->collectImplements($classLike);
+        $interfaceExtends     = $this->collectInterfaceExtends($classLike);
+        [$isApi, $isInternal] = $this->detectDocBlockTags($classLike);
 
         $this->classNodes[] = new ClassNode(
             className:          $className,
@@ -1868,8 +1875,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                                     : null,
             nonClassDependencies: $analysis['nonClassDependencies'],
             constantFetches:    $analysis['constantFetches'],
-            isApi:              $this->hasDocBlockTag($classLike, 'api'),
-            isInternal:         $this->hasDocBlockTag($classLike, 'internal'),
+            isApi:              $isApi,
+            isInternal:         $isInternal,
             signatures:         $analysis['signatures'],
         );
     }
@@ -2012,17 +2019,24 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
-     * Whether the docblock carries the $tag tag, e.g. `@api`. A tag starts a
-     * docblock line, so the tag name mentioned in the description, a longer
-     * tag such as `@api-version`, or an inline `{@internal ...}` comment does
-     * not count.
+     * Whether the docblock carries the `@api` and `@internal` tags.
+     *
+     * @return array{bool, bool} [isApi, isInternal]
      */
-    private function hasDocBlockTag(ClassLike $classLike, string $tag): bool
+    private function detectDocBlockTags(ClassLike $classLike): array
     {
         $docComment = $classLike->getDocComment();
 
-        return $docComment instanceof Doc
-            && preg_match('#^[/*\s]*@' . $tag . '(?![\w-])#m', $docComment->getText()) === 1;
+        if (! $docComment instanceof Doc) {
+            return [false, false];
+        }
+
+        $text = $docComment->getText();
+
+        return [
+            preg_match(sprintf(self::DOC_BLOCK_TAG_PATTERN, 'api'), $text) === 1,
+            preg_match(sprintf(self::DOC_BLOCK_TAG_PATTERN, 'internal'), $text) === 1,
+        ];
     }
 
     /**
