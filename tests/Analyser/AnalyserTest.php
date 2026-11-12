@@ -4647,6 +4647,31 @@ final class AnalyserTest extends TestCase
         $this->assertSame([], $analyser->filesForAnalysis($architecture, ['nested/composer.json']));
     }
 
+    public function testFilesForAnalysisIncludesEmptyFiles(): void
+    {
+        $basePath = $this->makeTempProject([
+            'empty.php'     => '',
+            'src/Empty.php' => '',
+            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/');
+
+        $analyser = new Analyser($basePath);
+        $files    = array_map($this->normalisePath(...), $analyser->filesForAnalysis($architecture));
+        sort($files);
+
+        $this->assertCount(2, $files);
+        $this->assertStringEndsWith('/src/Empty.php', $files[0]);
+        $this->assertStringEndsWith('/src/Foo.php', $files[1]);
+
+        $files = $analyser->filesForAnalysis($architecture, ['empty.php']);
+
+        $this->assertCount(1, $files);
+        $this->assertStringEndsWith('/empty.php', $this->normalisePath($files[0]));
+    }
+
     public function testFilesForAnalysisUsesPreResolvedLayersWhenProvided(): void
     {
         $basePath = $this->makeTempProject([

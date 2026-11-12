@@ -408,7 +408,7 @@ final readonly class ParallelAnalysisNodeExtractor
     {
         $fileSizes = [];
         foreach ($files as $file) {
-            $fileSizes[$file] = @filesize($file) ?: 0;
+            $fileSizes[$file] = @filesize($file) ?: 1;
         }
 
         arsort($fileSizes);

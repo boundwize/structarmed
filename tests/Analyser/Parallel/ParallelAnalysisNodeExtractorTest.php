@@ -13,9 +13,12 @@ use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RequiresFunction;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use RuntimeException;
 
 use function array_map;
+use function array_merge;
+use function array_values;
 use function bin2hex;
 use function count;
 use function end;
@@ -29,6 +32,7 @@ use function random_bytes;
 use function rmdir;
 use function sort;
 use function sprintf;
+use function str_repeat;
 use function sys_get_temp_dir;
 use function unlink;
 use function unserialize;
@@ -323,6 +327,149 @@ PHP);
 
         $this->assertSame(6, $progress->total);
         $this->assertSame($files, $progress->files);
+    }
+
+    public function testBucketsSpreadZeroByteFilesEvenlyAcrossWorkers(): void
+    {
+        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-buckets');
+        $files = [];
+
+        for ($index = 0; $index < 1000; ++$index) {
+            $files[] = $this->createFileOfSize(sprintf('%s/Empty%04d.php', $dir, $index), 0);
+        }
+
+        $buckets = $this->buildWorkerBuckets($files, 4);
+
+        $this->assertSame([250, 250, 250, 250], array_map(count(...), $buckets));
+        $this->assertAssignedExactlyOnce($files, $buckets);
+    }
+
+    public function testBucketsBalanceZeroByteFilesByWeightAmongNonEmptyFiles(): void
+    {
+        $dir     = $this->makeTemporaryDirectory('structarmed-parallel-buckets');
+        $empties = [];
+
+        for ($index = 1; $index <= 6; ++$index) {
+            $empties[$index] = $this->createFileOfSize(sprintf('%s/Empty%d.php', $dir, $index), 0);
+        }
+
+        $small = $this->createFileOfSize($dir . '/Small.php', 2);
+        $large = $this->createFileOfSize($dir . '/Large.php', 4);
+        $files = [$empties[1], $small, $empties[2], $empties[3], $large, $empties[4], $empties[5], $empties[6]];
+
+        $buckets = $this->buildWorkerBuckets($files, 3);
+
+        // each bucket weighs 4: the zero-byte files count 1 each, where a weight of 0 would
+        // leave all six of them in the last bucket
+        $this->assertSame(
+            [
+                [$large],
+                [$small, $empties[3], $empties[5]],
+                [$empties[1], $empties[2], $empties[4], $empties[6]],
+            ],
+            $buckets
+        );
+        $this->assertAssignedExactlyOnce($files, $buckets);
+    }
+
+    public function testBucketsKeepLargestFilesInFirstWorkerForNonEmptyFiles(): void
+    {
+        $dir   = $this->makeTemporaryDirectory('structarmed-parallel-buckets');
+        $files = [];
+
+        foreach ([3, 9, 2, 5, 7, 4] as $size) {
+            $files[$size] = $this->createFileOfSize(sprintf('%s/Size%d.php', $dir, $size), $size);
+        }
+
+        $buckets = $this->buildWorkerBuckets(array_values($files), 3);
+
+        // an even share is 10 bytes: the first worker takes 9 and 7 before LPT balances the rest
+        $this->assertSame(
+            [
+                [$files[9], $files[7]],
+                [$files[5], $files[2]],
+                [$files[4], $files[3]],
+            ],
+            $buckets
+        );
+    }
+
+    public function testBucketsWeighFileOfUnknownSizeAsOne(): void
+    {
+        $dir     = $this->makeTemporaryDirectory('structarmed-parallel-buckets');
+        $first   = $this->createFileOfSize($dir . '/First.php', 1);
+        $missing = $dir . '/Missing.php';
+        $second  = $this->createFileOfSize($dir . '/Second.php', 1);
+        $third   = $this->createFileOfSize($dir . '/Third.php', 1);
+
+        // a weight of 0 sorts the missing file last, [[first, second], [third, missing]],
+        // and a weight above 1 sorts it first, [[missing, first], [second, third]]
+        $this->assertSame(
+            [[$first, $missing], [$second, $third]],
+            $this->buildWorkerBuckets([$first, $missing, $second, $third], 2)
+        );
+    }
+
+    public function testExtractZeroByteFilesAcrossWorkersWithProgressAndCache(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-parallel-cache');
+        $files    = [];
+
+        for ($index = 0; $index < 6; ++$index) {
+            $files[] = $this->createFileOfSize(sprintf('%s/Empty%d.php', $dir, $index), 0);
+        }
+
+        $files[] = $fooFile = $dir . '/Foo.php';
+        file_put_contents($fooFile, '<?php namespace App; final class Foo {}');
+
+        $progress = new class implements ProgressHandlerInterface {
+            public int $total = -1;
+
+            /** @var list<string> */
+            public array $files = [];
+
+            public function start(int $total): void
+            {
+                $this->total = $total;
+            }
+
+            public function advance(string $file): void
+            {
+                $this->files[] = $file;
+            }
+
+            public function finish(): void
+            {
+            }
+        };
+
+        $extractor = static fn (): ParallelAnalysisNodeExtractor => new ParallelAnalysisNodeExtractor(
+            basePath: $dir,
+            layers: [],
+            layerPatterns: [],
+            workerCount: 3,
+            cacheDirectory: $cacheDir,
+            analysisResultCache: new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
+            analysisNodeCacheNamespace: 'config',
+        );
+
+        $extractionResult = $extractor()->extract($files, $progress);
+
+        sort($progress->files);
+
+        $this->assertCount(1, $extractionResult->classNodes);
+        $this->assertSame(7, $progress->total);
+        $this->assertSame($files, $progress->files);
+
+        $progress->total = -1;
+        $progress->files = [];
+
+        $cachedExtractionResult = $extractor()->extract($files, $progress);
+
+        $this->assertCount(1, $cachedExtractionResult->classNodes);
+        $this->assertSame(0, $progress->total);
+        $this->assertSame([], $progress->files);
     }
 
     public function testExtractBuffersProgressLineSplitAcrossReads(): void
@@ -808,5 +955,45 @@ PHP);
             $this->assertCount(1, $extractionResult->classNodes);
             $this->assertSame(-1, pcntl_waitpid(-1, $status, WNOHANG), 'no child is left unreaped');
         }
+    }
+
+    /**
+     * @param list<string> $files
+     * @param positive-int $workerCount
+     * @return list<list<string>>
+     */
+    private function buildWorkerBuckets(array $files, int $workerCount): array
+    {
+        $reflectionMethod = new ReflectionMethod(ParallelAnalysisNodeExtractor::class, 'buildWorkerBuckets');
+
+        /** @var list<list<string>> $buckets */
+        $buckets = $reflectionMethod->invoke(
+            new ParallelAnalysisNodeExtractor('/tmp', [], [], $workerCount),
+            $files,
+            $workerCount
+        );
+
+        return $buckets;
+    }
+
+    /**
+     * @param list<string> $files
+     * @param list<list<string>> $buckets
+     */
+    private function assertAssignedExactlyOnce(array $files, array $buckets): void
+    {
+        $assigned = array_merge(...$buckets);
+
+        sort($files);
+        sort($assigned);
+
+        $this->assertSame($files, $assigned);
+    }
+
+    private function createFileOfSize(string $file, int $size): string
+    {
+        file_put_contents($file, str_repeat(' ', $size));
+
+        return $file;
     }
 }
