@@ -9,7 +9,6 @@ use FilesystemIterator;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use RuntimeException;
 use SplFileInfo;
 
 use function dirname;
@@ -46,18 +45,8 @@ final readonly class PhpFileCollector
                         return false;
                     }
 
-                    if (! $file->isDir()) {
-                        if ($file->getExtension() !== 'php') {
-                            return false;
-                        }
-
-                        try {
-                            if ($file->getSize() <= 0) {
-                                return false;
-                            }
-                        } catch (RuntimeException) {
-                            return false;
-                        }
+                    if (! $file->isDir() && ($file->getExtension() !== 'php' || $file->getSize() <= 0)) {
+                        return false;
                     }
 
                     return ! $skipPathMatcher->isSkipped($file->getPathname(), $isCanonical);

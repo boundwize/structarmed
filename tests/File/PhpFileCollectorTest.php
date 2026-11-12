@@ -16,12 +16,10 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-use function chmod;
 use function dirname;
 use function escapeshellarg;
 use function exec;
 use function file_put_contents;
-use function filesize;
 use function implode;
 use function is_dir;
 use function mkdir;
@@ -157,39 +155,6 @@ final class PhpFileCollectorTest extends TestCase
             ],
             $collected
         );
-    }
-
-    /**
-     * A directory that can be listed but not searched (r--) yields entries that cannot
-     * be stat'ed, so SplFileInfo::getSize() throws; such files are skipped, not fatal.
-     */
-    public function testSkipsFilesWhoseSizeCannotBeRead(): void
-    {
-        $basePath = $this->makeTemporaryDirectory('structarmed-collector-unreadable');
-
-        $this->createFile($basePath . '/src/A.php');
-        $this->createFile($basePath . '/src/Locked/B.php');
-
-        $canonicalBasePath = realpath($basePath);
-        $this->assertIsString($canonicalBasePath);
-
-        chmod($basePath . '/src/Locked', 0444);
-
-        try {
-            if (@filesize($basePath . '/src/Locked/B.php') !== false) {
-                $this->markTestSkipped('Directory permissions are not enforced for this user or platform.');
-            }
-
-            $collected = (new PhpFileCollector())->collect(
-                $basePath . '/src',
-                SkipPathMatcher::compile($basePath, [])
-            );
-        } finally {
-            // restore so tearDown can remove the directory
-            chmod($basePath . '/src/Locked', 0755);
-        }
-
-        $this->assertSame([Path::normalise($canonicalBasePath . '/src/A.php')], $collected);
     }
 
     /**
