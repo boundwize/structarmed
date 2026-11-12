@@ -58,4 +58,22 @@ final readonly class MustBeStaticAnonymousFunctionRule extends AbstractPhpParser
     {
         return new AddStaticAnonymousFunctionVisitor($ruleViolation->line);
     }
+
+    /**
+     * A single visitor for all lines: each visitor records the bindings of
+     * the whole file first, which one per violation would repeat.
+     *
+     * @param non-empty-array<RuleViolation> $ruleViolations
+     * @return non-empty-list<AddStaticAnonymousFunctionVisitor>
+     */
+    protected function createFixerVisitors(array $ruleViolations): array
+    {
+        $lines = [];
+
+        foreach ($ruleViolations as $ruleViolation) {
+            $lines[] = $ruleViolation->line;
+        }
+
+        return [new AddStaticAnonymousFunctionVisitor(...$lines)];
+    }
 }

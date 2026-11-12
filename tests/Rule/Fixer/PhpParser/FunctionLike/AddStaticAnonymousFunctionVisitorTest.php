@@ -55,6 +55,19 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         $this->assertFalse($closure->static);
     }
 
+    public function testAddsStaticOnEveryGivenLine(): void
+    {
+        $first  = new Closure([], ['startLine' => 12]);
+        $second = new ArrowFunction(['expr' => new Int_(1)], ['startLine' => 20]);
+        $other  = new Closure([], ['startLine' => 30]);
+
+        (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(12, 20)))->traverse([$first, $second, $other]);
+
+        $this->assertTrue($first->static);
+        $this->assertTrue($second->static);
+        $this->assertFalse($other->static);
+    }
+
     public function testDoesNotChangeAlreadyStaticClosure(): void
     {
         $closure = new Closure(['static' => true], ['startLine' => 12]);

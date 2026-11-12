@@ -14,9 +14,11 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
 
+use function array_fill_keys;
+
 /**
  * Adds the `static` modifier to the anonymous functions starting on the given
- * line that neither read `$this` nor require object binding.
+ * lines that neither read `$this` nor require object binding.
  *
  * An anonymous function has no name, so its start line is the only identity
  * a violation can carry, and several may start on one line. Re-applying the
@@ -30,9 +32,12 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 {
     private readonly ObjectBoundAnonymousFunctions $objectBoundAnonymousFunctions;
 
-    public function __construct(
-        private readonly int $line,
-    ) {
+    /** @var array<int, true> */
+    private readonly array $lines;
+
+    public function __construct(int ...$lines)
+    {
+        $this->lines                         = array_fill_keys($lines, true);
         $this->objectBoundAnonymousFunctions = new ObjectBoundAnonymousFunctions();
     }
 
@@ -50,7 +55,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
             return null;
         }
 
-        if ($node->static || $node->getStartLine() !== $this->line) {
+        if ($node->static || ! isset($this->lines[$node->getStartLine()])) {
             return null;
         }
 

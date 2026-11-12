@@ -18,24 +18,40 @@ abstract readonly class AbstractPhpParserFixableRule implements FixableInterface
     {
         $ruleViolations = [$ruleViolation, ...$additionalViolations];
         $file           = $ruleViolation->file;
-        $nodeVisitors   = [];
 
-        foreach ($ruleViolations as $ruleViolation) {
-            if ($ruleViolation->file !== $file) {
+        foreach ($additionalViolations as $additionalViolation) {
+            if ($additionalViolation->file !== $file) {
                 return false;
             }
-
-            $nodeVisitors[] = $this->createFixerVisitor($ruleViolation);
         }
 
         return $this->fixerProcessor()->process(
             $file,
-            $nodeVisitors,
+            $this->createFixerVisitors($ruleViolations),
             $this->shouldRemoveFileWhenEmpty(),
         );
     }
 
     abstract protected function createFixerVisitor(RuleViolation $ruleViolation): NodeVisitor;
+
+    /**
+     * One visitor per violation, each traversing the file once. A rule whose
+     * visitor can fix every violation of the file in one traversal overrides
+     * this.
+     *
+     * @param non-empty-array<RuleViolation> $ruleViolations All in one file
+     * @return non-empty-list<NodeVisitor>
+     */
+    protected function createFixerVisitors(array $ruleViolations): array
+    {
+        $nodeVisitors = [];
+
+        foreach ($ruleViolations as $ruleViolation) {
+            $nodeVisitors[] = $this->createFixerVisitor($ruleViolation);
+        }
+
+        return $nodeVisitors;
+    }
 
     /**
      * Whether the fixed file should be deleted when the fix leaves no code

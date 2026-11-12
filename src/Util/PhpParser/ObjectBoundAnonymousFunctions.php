@@ -170,10 +170,19 @@ final class ObjectBoundAnonymousFunctions extends NodeVisitorAbstract
 
     public function enterFunctionLike(FunctionLike $functionLike): void
     {
-        $captures = [];
+        $captures  = [];
+        $variables = [];
 
         if ($functionLike instanceof ArrowFunction) {
             $captures = null;
+
+            // A parameter shadows the enclosing variable of the same name,
+            // which an arrow function would otherwise read.
+            foreach ($functionLike->params as $param) {
+                if ($param->var instanceof Variable && is_string($param->var->name)) {
+                    $variables[$param->var->name] = [];
+                }
+            }
         } elseif ($functionLike instanceof Closure) {
             foreach ($functionLike->uses as $use) {
                 if (is_string($use->var->name)) {
@@ -184,22 +193,10 @@ final class ObjectBoundAnonymousFunctions extends NodeVisitorAbstract
 
         $scope = ++$this->scope;
 
-        $this->variables[$scope]             = [];
+        $this->variables[$scope]             = $variables;
         $this->laterAssignmentsBound[$scope] = [];
         $this->branched[$scope]              = false;
         $this->captures[$scope]              = $captures;
-
-        if (! $functionLike instanceof ArrowFunction) {
-            return;
-        }
-
-        // A parameter shadows the enclosing variable of the same name, which
-        // an arrow function would otherwise read.
-        foreach ($functionLike->params as $param) {
-            if ($param->var instanceof Variable && is_string($param->var->name)) {
-                $this->variables[$scope][$param->var->name] = [];
-            }
-        }
     }
 
     public function leaveFunctionLike(): void
