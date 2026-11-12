@@ -4647,29 +4647,6 @@ final class AnalyserTest extends TestCase
         $this->assertSame([], $analyser->filesForAnalysis($architecture, ['nested/composer.json']));
     }
 
-    public function testFilesForAnalysisSkipsEmptyFileScanPaths(): void
-    {
-        $basePath = $this->makeTempProject([
-            'composer.json' => '',
-            'empty.php'     => '',
-            'index.php'     => '<?php namespace App; final class Index {}',
-            'src/Foo.php'   => '<?php namespace App; final class Foo {}',
-        ]);
-
-        $architecture = Architecture::define()
-            ->layer('Source', 'src/');
-
-        $analyser = new Analyser($basePath);
-
-        $this->assertSame([], $analyser->filesForAnalysis($architecture, ['empty.php']));
-        $this->assertSame([], $analyser->filesForAnalysis($architecture, ['composer.json']));
-
-        $files = $analyser->filesForAnalysis($architecture, ['empty.php', 'index.php']);
-
-        $this->assertCount(1, $files);
-        $this->assertStringEndsWith('/index.php', $this->normalisePath($files[0]));
-    }
-
     public function testFilesForAnalysisUsesPreResolvedLayersWhenProvided(): void
     {
         $basePath = $this->makeTempProject([

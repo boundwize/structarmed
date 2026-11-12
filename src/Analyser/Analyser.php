@@ -41,7 +41,6 @@ use function array_keys;
 use function array_unique;
 use function array_values;
 use function count;
-use function filesize;
 use function gc_disable;
 use function gc_enable;
 use function gc_enabled;
@@ -1636,10 +1635,6 @@ final readonly class Analyser
 
             if (is_file($fullPath)) {
                 if (Path::isAnalysableFile($fullPath, $this->basePath)) {
-                    if (filesize($fullPath) <= 0) {
-                        continue;
-                    }
-
                     $files[] = $fullPath;
                 }
 
