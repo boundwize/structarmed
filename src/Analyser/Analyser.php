@@ -1636,7 +1636,7 @@ final readonly class Analyser
 
             if (is_file($fullPath)) {
                 if (Path::isAnalysableFile($fullPath, $this->basePath)) {
-                    if (filesize($fullPath) <= 0) {
+                    if (@filesize($fullPath) <= 0) {
                         continue;
                     }
 
