@@ -49,6 +49,10 @@ final readonly class PhpFileCollector
                         return false;
                     }
 
+                    if ($file->isFile() && $file->getSize() <= 0) {
+                        return false;
+                    }
+
                     return ! $skipPathMatcher->isSkipped($file->getPathname(), $isCanonical);
                 }
             ),
