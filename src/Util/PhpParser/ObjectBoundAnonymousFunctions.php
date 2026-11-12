@@ -96,7 +96,8 @@ final class ObjectBoundAnonymousFunctions extends NodeVisitorAbstract
 
     /**
      * Per scope: the anonymous functions each variable may hold; none for
-     * an arrow function's parameter, whose value is unknown.
+     * a variable whose value is unknown (an arrow function's parameter, or
+     * one assigned something else).
      *
      * @var array<int, array<string, list<Closure|ArrowFunction>>>
      */
@@ -239,9 +240,10 @@ final class ObjectBoundAnonymousFunctions extends NodeVisitorAbstract
 
         if (! $expr instanceof Closure && ! $expr instanceof ArrowFunction) {
             // Overwritten in straight code, the variable no longer holds what
-            // it was assigned before; after a branch, it still may.
+            // it was assigned before, nor what an enclosing scope gave it;
+            // after a branch, it still may.
             if (! $this->branched[$scope]) {
-                unset($this->variables[$scope][$name]);
+                $this->variables[$scope][$name] = [];
             }
 
             return;

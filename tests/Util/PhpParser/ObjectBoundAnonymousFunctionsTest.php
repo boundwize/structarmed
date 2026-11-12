@@ -141,6 +141,23 @@ final class ObjectBoundAnonymousFunctionsTest extends TestCase
                 . ' $bind = fn (Closure $callback, object $object) => $callback->bindTo($object);',
             [false, false],
         ];
+        yield 'imported variable reassigned before the binding' => [
+            '$callback = fn () => 1;'
+                . ' $bind = function (object $object) use ($callback) {'
+                . ' $callback = make(); return $callback->bindTo($object); };',
+            [false, false],
+        ];
+        yield 'arrow function variable reassigned before the binding' => [
+            '$callback = fn () => 1;'
+                . ' $bind = fn (object $object) => [$callback = make(), $callback->bindTo($object)];',
+            [false, false],
+        ];
+        yield 'arrow function parameter reassigned before the binding' => [
+            '$callback = fn () => 1;'
+                . ' $bind = fn (Closure $callback, object $object)'
+                . ' => [$callback = make(), $callback->bindTo($object)];',
+            [false, false],
+        ];
         yield 'nested arrow function reading an arrow function parameter' => [
             '$callback = fn () => 1;'
                 . ' $bind = fn (Closure $callback) => fn (object $object) => $callback->bindTo($object);',
