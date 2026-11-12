@@ -36,7 +36,7 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
 
     private ?string $projectBasePath = null;
 
-    /** @var array<string, array<string, list<string>>> */
+    /** @var array<string, array<string, list<string>>> Base path => namespace => canonical path prefixes */
     private array $mappingsByBasePath = [];
 
     /** @var array<string, string|null> */
@@ -102,10 +102,8 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
                 continue;
             }
 
-            foreach ($this->mappingsFor($basePath) as $namespace => $paths) {
-                foreach ($paths as $path) {
-                    $prefix = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
-
+            foreach ($this->mappingsFor($basePath) as $namespace => $prefixes) {
+                foreach ($prefixes as $prefix) {
                     if (! str_starts_with($file, $prefix . '/')) {
                         continue;
                     }
@@ -172,12 +170,24 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
     }
 
     /**
-     * @return array<string, list<string>>
+     * PSR-4 paths are resolved once per base path, not once per class.
+     *
+     * @return array<string, list<string>> Namespace => canonical path prefixes
      */
     private function mappingsFor(string $basePath): array
     {
-        $this->mappingsByBasePath[$basePath] ??= $this->psr4PathResolver->namespacePaths($basePath);
+        if (isset($this->mappingsByBasePath[$basePath])) {
+            return $this->mappingsByBasePath[$basePath];
+        }
 
-        return $this->mappingsByBasePath[$basePath];
+        $mappings = [];
+
+        foreach ($this->psr4PathResolver->namespacePaths($basePath) as $namespace => $paths) {
+            foreach ($paths as $path) {
+                $mappings[$namespace][] = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
+            }
+        }
+
+        return $this->mappingsByBasePath[$basePath] = $mappings;
     }
 }
