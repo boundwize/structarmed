@@ -95,9 +95,10 @@ final class ObjectBoundAnonymousFunctions extends NodeVisitorAbstract
     private int $scope = 0;
 
     /**
-     * Per scope: the anonymous functions each variable may hold.
+     * Per scope: the anonymous functions each variable may hold; none for
+     * an arrow function's parameter, whose value is unknown.
      *
-     * @var array<int, array<string, non-empty-list<Closure|ArrowFunction>>>
+     * @var array<int, array<string, list<Closure|ArrowFunction>>>
      */
     private array $variables = [[]];
 
@@ -186,6 +187,18 @@ final class ObjectBoundAnonymousFunctions extends NodeVisitorAbstract
         $this->laterAssignmentsBound[$scope] = [];
         $this->branched[$scope]              = false;
         $this->captures[$scope]              = $captures;
+
+        if (! $functionLike instanceof ArrowFunction) {
+            return;
+        }
+
+        // A parameter shadows the enclosing variable of the same name, which
+        // an arrow function would otherwise read.
+        foreach ($functionLike->params as $param) {
+            if ($param->var instanceof Variable && is_string($param->var->name)) {
+                $this->variables[$scope][$param->var->name] = [];
+            }
+        }
     }
 
     public function leaveFunctionLike(): void

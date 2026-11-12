@@ -136,6 +136,16 @@ final class ObjectBoundAnonymousFunctionsTest extends TestCase
             '$callback = fn () => 1; $bind = function (object $o) { $callback->bindTo($o); };',
             [false, false],
         ];
+        yield 'arrow function parameter shadowing an outer variable' => [
+            '$callback = fn () => 1;'
+                . ' $bind = fn (Closure $callback, object $object) => $callback->bindTo($object);',
+            [false, false],
+        ];
+        yield 'nested arrow function reading an arrow function parameter' => [
+            '$callback = fn () => 1;'
+                . ' $bind = fn (Closure $callback) => fn (object $object) => $callback->bindTo($object);',
+            [false, false, false],
+        ];
         yield 'variable assigned inside an arrow function' => [
             '$callback = fn () => 1; $reset = fn () => $callback = null; $callback->bindTo(new stdClass());',
             [true, false],
