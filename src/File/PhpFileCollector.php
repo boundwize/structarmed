@@ -45,7 +45,7 @@ final readonly class PhpFileCollector
                         return false;
                     }
 
-                    if (! $file->isDir() && $file->getExtension() !== 'php') {
+                    if (! $file->isDir() && ($file->getExtension() !== 'php' || $file->getSize() <= 0)) {
                         return false;
                     }
 
