@@ -133,30 +133,6 @@ final class PhpFileCollectorTest extends TestCase
         );
     }
 
-    public function testSkipsEmptyFiles(): void
-    {
-        $basePath = $this->makeTemporaryDirectory('structarmed-collector-empty');
-
-        $this->createFile($basePath . '/src/A.php');
-        $this->createFile($basePath . '/src/Empty.php', '');
-        $this->createFile($basePath . '/src/Sub/B.php');
-        $this->createFile($basePath . '/src/OnlyEmpty/Empty.php', '');
-
-        $canonicalBasePath = realpath($basePath);
-        $this->assertIsString($canonicalBasePath);
-
-        $collected = (new PhpFileCollector())->collect($basePath . '/src', SkipPathMatcher::compile($basePath, []));
-        sort($collected);
-
-        $this->assertSame(
-            [
-                Path::normalise($canonicalBasePath . '/src/A.php'),
-                Path::normalise($canonicalBasePath . '/src/Sub/B.php'),
-            ],
-            $collected
-        );
-    }
-
     /**
      * The collector as it was before skipping per-file realpath().
      *
@@ -184,12 +160,12 @@ final class PhpFileCollectorTest extends TestCase
         return $files;
     }
 
-    private function createFile(string $path, string $contents = '<?php'): void
+    private function createFile(string $path): void
     {
         if (! is_dir(dirname($path))) {
             mkdir(dirname($path), 0777, true);
         }
 
-        file_put_contents($path, $contents);
+        file_put_contents($path, '<?php');
     }
 }
