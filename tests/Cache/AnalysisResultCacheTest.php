@@ -11,7 +11,6 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\ConstantNode;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
-use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
@@ -635,68 +634,6 @@ final class AnalysisResultCacheTest extends TestCase
             );
         } finally {
             $this->removeTempDirectory($basePath);
-        }
-    }
-
-    public function testStoreExtractionResultStoresOnePayloadPerFile(): void
-    {
-        $cacheDirectory      = $this->createTempDirectory();
-        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
-        $fileWithNodes       = __FILE__;
-        $fileWithoutNodes    = __DIR__ . '/FileHashProviderTest.php';
-
-        try {
-            $analysisResultCache->storeExtractionResult(
-                [$fileWithNodes, $fileWithoutNodes],
-                'namespace',
-                new ExtractionResult(
-                    classNodes: [$this->makeClassNode($fileWithNodes)],
-                    fileAnalyses: [],
-                    anonymousClassNodes: [new AnonymousClassNode(file: $fileWithNodes, line: 7, extends: null)],
-                    functionNodes: [
-                        new FunctionNode(
-                            functionName:         'App\\format',
-                            file:                 $fileWithNodes,
-                            line:                 3,
-                            layer:                'Source',
-                            hasReturnType:        true,
-                            paramCount:           0,
-                            cyclomaticComplexity: 1,
-                            lineCount:            1,
-                        ),
-                    ],
-                    anonymousFunctionNodes: [
-                        new AnonymousFunctionNode(
-                            file:                  $fileWithNodes,
-                            line:                  5,
-                            layer:                 null,
-                            isArrowFunction:       true,
-                            isStatic:              true,
-                            enclosingFunctionName: 'App\\format',
-                            usesThis:              false,
-                            hasReturnType:         false,
-                            paramCount:            0,
-                            cyclomaticComplexity:  1,
-                            lineCount:             1,
-                            requiresObjectBinding: true,
-                        ),
-                    ],
-                )
-            );
-
-            $withNodes    = $analysisResultCache->loadAnalysisNodes($fileWithNodes, 'namespace');
-            $withoutNodes = $analysisResultCache->loadAnalysisNodes($fileWithoutNodes, 'namespace');
-
-            $this->assertNotNull($withNodes);
-            $this->assertCount(1, $withNodes['classNodes']);
-            $this->assertCount(1, $withNodes['anonymousClassNodes']);
-            $this->assertCount(1, $withNodes['functionNodes']);
-            $this->assertCount(1, $withNodes['anonymousFunctionNodes']);
-            $this->assertNotNull($withoutNodes);
-            $this->assertSame([], $withoutNodes['classNodes']);
-            $this->assertSame([], $withoutNodes['functionNodes']);
-        } finally {
-            $this->removeTempDirectory($cacheDirectory);
         }
     }
 
@@ -1702,12 +1639,7 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertNotNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'empty', withSignatures: true));
 
             // A file without any class-like records the capability as well.
-            $analysisResultCache->storeExtractionResult(
-                [$sourceFile],
-                'no-nodes',
-                new ExtractionResult(classNodes: [], fileAnalyses: []),
-                withSignatures: true,
-            );
+            $analysisResultCache->storeAnalysisNodes($sourceFile, 'no-nodes', [], withSignatures: true);
 
             $this->assertNotNull(
                 $analysisResultCache->loadAnalysisNodes($sourceFile, 'no-nodes', withSignatures: true)
