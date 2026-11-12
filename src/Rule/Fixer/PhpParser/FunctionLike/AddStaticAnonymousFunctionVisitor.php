@@ -24,14 +24,11 @@ use PhpParser\NodeVisitorAbstract;
  * every function this visitor changes is one the rule flags, so an unsafe
  * anonymous function sharing the line with a flagged one is left untouched.
  * A binding through a variable may follow the anonymous function, so the
- * modifier is only added once the whole file has been traversed.
+ * bindings of the whole file are recorded before the traversal starts.
  */
 final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 {
     private readonly ObjectBoundAnonymousFunctions $objectBoundAnonymousFunctions;
-
-    /** @var list<Closure|ArrowFunction> */
-    private array $candidates = [];
 
     public function __construct(
         private readonly int $line,
@@ -42,48 +39,28 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     /** @param Node[] $nodes */
     public function beforeTraverse(array $nodes): null
     {
-        $this->objectBoundAnonymousFunctions->reset();
-        $this->candidates = [];
+        (new NodeTraverser($this->objectBoundAnonymousFunctions))->traverse($nodes);
 
         return null;
     }
 
-    public function enterNode(Node $node): null
+    public function enterNode(Node $node): ?Node
     {
-        $this->objectBoundAnonymousFunctions->enterNode($node);
-
-        if (
-            ($node instanceof Closure || $node instanceof ArrowFunction)
-            && ! $node->static
-            && $node->getStartLine() === $this->line
-            && ! $this->usesThis($node)
-        ) {
-            $this->candidates[] = $node;
+        if (! $node instanceof Closure && ! $node instanceof ArrowFunction) {
+            return null;
         }
 
-        return null;
-    }
-
-    public function leaveNode(Node $node): null
-    {
-        $this->objectBoundAnonymousFunctions->leaveNode($node);
-
-        return null;
-    }
-
-    /** @param Node[] $nodes */
-    public function afterTraverse(array $nodes): null
-    {
-        foreach ($this->candidates as $candidate) {
-            if (! $this->objectBoundAnonymousFunctions->isObjectBound($candidate)) {
-                $candidate->static = true;
-            }
+        if ($node->static || $node->getStartLine() !== $this->line) {
+            return null;
         }
 
-        $this->objectBoundAnonymousFunctions->reset();
-        $this->candidates = [];
+        if ($this->objectBoundAnonymousFunctions->isObjectBound($node) || $this->usesThis($node)) {
+            return null;
+        }
 
-        return null;
+        $node->static = true;
+
+        return $node;
     }
 
     /**
