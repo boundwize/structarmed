@@ -76,16 +76,19 @@ final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
     private function normalisePaths(array $paths, string $basePath): array
     {
         $normalisedBase = Path::normalise($basePath);
+        $canonicalBase  = Path::normalise($basePath, canonicalise: true);
 
         return array_map(
-            static function (string $path) use ($normalisedBase): string {
+            static function (string $path) use ($normalisedBase, $canonicalBase): string {
                 $path = Path::normalise(trim($path));
 
                 if ($normalisedBase !== '' && str_starts_with($path, $normalisedBase . '/')) {
-                    return substr($path, strlen($normalisedBase) + 1);
+                    $path = substr($path, strlen($normalisedBase) + 1);
                 }
 
-                return $path;
+                // Express every spelling relative to the canonical base path, so absolute,
+                // relative, out-of-project ("../shared/src") and symlinked forms compare equal.
+                return Path::relativeTo($path, $canonicalBase) ?: $path;
             },
             $paths
         );
