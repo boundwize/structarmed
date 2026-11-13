@@ -309,6 +309,8 @@ final class FileAnalysisProviderTest extends TestCase
         yield 'echo tag' => ['<?= "echo";', false, true, null];
         yield 'XML declaration' => ['<?xml version="1.0"?>', false, true, null];
         yield 'XML stylesheet' => ['<?xml-stylesheet href="style.xsl"?>', false, true, null];
+        yield 'XML model' => ['<?xml-model href="schema.rng"?>', false, true, null];
+        yield 'XML model lookalike' => ['<?xml-models href="schema.rng"?>', false, true, 1];
         yield 'arbitrary XML processing instruction' => ['<?xml-custom value="x"?>', false, true, 1];
         yield 'plain text' => ['plain text', false, true, null];
     }
