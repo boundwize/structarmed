@@ -14,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 use function file_put_contents;
 use function json_encode;
 use function mkdir;
+use function symlink;
 
 use const JSON_THROW_ON_ERROR;
 
@@ -277,6 +278,30 @@ JSON);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertStringContainsString('[../other/src, .]', $violation->message);
+    }
+
+    public function testPassesWhenAbsoluteSourcePathIsInProjectSymlinkToOutsideDirectory(): void
+    {
+        $workspace = $this->makeTempDir();
+        mkdir($workspace . '/app');
+        mkdir($workspace . '/shared/src', 0777, true);
+        symlink($workspace . '/shared/src', $workspace . '/app/src');
+        file_put_contents($workspace . '/app/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}
+JSON);
+
+        $psr4SourcePathsRule = new Psr4SourcePathsRule([$workspace . '/app/src', 'src']);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($workspace . '/app', Architecture::define())
+        );
     }
 
     private function makeTempProject(string $composerJson): string
