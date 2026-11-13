@@ -13,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 
 use function file_put_contents;
 use function json_encode;
+use function mkdir;
 
 use const JSON_THROW_ON_ERROR;
 
@@ -229,6 +230,53 @@ JSON);
             RuleViolation::class,
             $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
         );
+    }
+
+    public function testPassesWhenAbsoluteSourcePathOutsideProjectMatchesRelativeComposerPsr4Path(): void
+    {
+        $workspace = $this->makeTempDir();
+        mkdir($workspace . '/app');
+        mkdir($workspace . '/shared/src', 0777, true);
+        file_put_contents($workspace . '/app/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Shared\\": "../shared/src/"
+        }
+    }
+}
+JSON);
+
+        $psr4SourcePathsRule = new Psr4SourcePathsRule([$workspace . '/shared/src']);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($workspace . '/app', Architecture::define())
+        );
+    }
+
+    public function testFailsWhenSourcePathOutsideProjectIsMissingFromComposerPsr4Autoloads(): void
+    {
+        $workspace = $this->makeTempDir();
+        mkdir($workspace . '/app');
+        mkdir($workspace . '/shared/src', 0777, true);
+        mkdir($workspace . '/other/src', 0777, true);
+        file_put_contents($workspace . '/app/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Shared\\": "../shared/src/"
+        }
+    }
+}
+JSON);
+
+        $psr4SourcePathsRule = new Psr4SourcePathsRule([$workspace . '/other/src', '.']);
+
+        $violation = $psr4SourcePathsRule->evaluateProject($workspace . '/app', Architecture::define());
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('[../other/src, .]', $violation->message);
     }
 
     private function makeTempProject(string $composerJson): string
