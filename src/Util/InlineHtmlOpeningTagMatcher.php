@@ -11,7 +11,7 @@ use const PREG_OFFSET_CAPTURE;
 
 final class InlineHtmlOpeningTagMatcher
 {
-    private const ALLOWED_TAGS = 'php|xml|xml\-stylesheet';
+    private const ALLOWED_TAGS = 'php|xml|xml-stylesheet|xml-model';
 
     public static function invalidInlineHtmlTagOffset(string $text, int $offset = 0): ?int
     {
