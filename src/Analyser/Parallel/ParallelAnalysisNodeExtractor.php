@@ -108,6 +108,7 @@ final readonly class ParallelAnalysisNodeExtractor
         ?ProgressHandlerInterface $progressHandler = null,
         bool $withFileAnalysis = true,
         bool $withSignatures = false,
+        bool $withFileReferences = true,
     ): ExtractionResult {
         if ($files === []) {
             $progressHandler?->start(0);
@@ -140,18 +141,19 @@ final readonly class ParallelAnalysisNodeExtractor
 
         foreach ($this->buildWorkerBuckets($files, $workerCount) as $chunk) {
             $payload = [
-                'basePath'          => $this->basePath,
-                'layers'            => $this->layers,
-                'layerPatterns'     => $this->layerPatterns,
-                'layerExcludePaths' => $this->layerExcludePaths,
-                'files'             => $chunk,
-                'emitProgress'      => $emitProgress,
-                'withFileAnalysis'  => $withFileAnalysis,
-                'withSignatures'    => $withSignatures,
-                'cache'             => $canFork
+                'basePath'           => $this->basePath,
+                'layers'             => $this->layers,
+                'layerPatterns'      => $this->layerPatterns,
+                'layerExcludePaths'  => $this->layerExcludePaths,
+                'files'              => $chunk,
+                'emitProgress'       => $emitProgress,
+                'withFileAnalysis'   => $withFileAnalysis,
+                'withSignatures'     => $withSignatures,
+                'withFileReferences' => $withFileReferences,
+                'cache'              => $canFork
                     ? $this->analysisResultCache
                     : $this->analysisResultCache?->forFiles($chunk),
-                'cacheNamespace'    => $this->analysisNodeCacheNamespace,
+                'cacheNamespace'     => $this->analysisNodeCacheNamespace,
             ];
 
             if ($canFork) {

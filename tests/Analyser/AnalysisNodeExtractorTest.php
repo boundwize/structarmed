@@ -297,6 +297,48 @@ PHP);
         $this->assertSame([0, 0], $extract(false));
     }
 
+    public function testFileReferenceCacheTransitionsBetweenCollectionEnabledAndDisabled(): void
+    {
+        $dir      = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $cacheDir = $this->makeTemporaryDirectory('structarmed-extractor-cache');
+        $file     = $dir . '/bootstrap.php';
+
+        file_put_contents($file, <<<'PHP'
+<?php
+
+new \App\Kernel();
+PHP);
+
+        $analysisNodeExtractor = new AnalysisNodeExtractor(
+            new NamespaceLayerResolver(['Source' => ''], $dir),
+            analysisResultCache: new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir),
+            analysisNodeCacheNamespace: 'config',
+        );
+        $extract               = static function (bool $withFileReferences) use ($analysisNodeExtractor, $file): array {
+            $extractionResult = $analysisNodeExtractor->extract(
+                [$file],
+                withFileAnalysis: false,
+                withFileReferences: $withFileReferences,
+            );
+
+            return [$extractionResult->fileReferences[$file] ?? [], $extractionResult->fileInstantiations[$file] ?? []];
+        };
+        $isCached              = static fn (bool $withFileReferences): bool
+            => (new AnalysisResultCache($dir, new FileHashProvider(), $cacheDir))
+                ->loadAnalysisNodes($file, 'config', withFileReferences: $withFileReferences) !== null;
+
+        // Not collected: a run that needs them must extract again.
+        $this->assertSame([[], []], $extract(false));
+        $this->assertTrue($isCached(false));
+        $this->assertFalse($isCached(true));
+
+        // Collected: reused whether or not the run needs them.
+        $this->assertSame([['App\Kernel'], ['App\Kernel']], $extract(true));
+        $this->assertTrue($isCached(true));
+        $this->assertSame([['App\Kernel'], ['App\Kernel']], $extract(true));
+        $this->assertSame([[], []], $extract(false));
+    }
+
     public function testExtractAdvancesProgressHandler(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');

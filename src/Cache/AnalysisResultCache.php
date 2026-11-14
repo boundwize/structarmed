@@ -263,12 +263,19 @@ final class AnalysisResultCache
         string $namespace,
         bool $withFileAnalysis = false,
         bool $withSignatures = false,
+        bool $withFileReferences = true,
     ): ?array {
         $payload = $this->analysisNodePayload($file, $namespace);
 
         // An empty signature list cannot tell "none declared" from "not
         // collected", so the payload records that it was collected.
         if ($payload === null || ($withSignatures && ($payload['hasSignatures'] ?? null) !== true)) {
+            return null;
+        }
+
+        // File references and instantiations are collected unless a run opts
+        // out, so the payload records when they were left out instead.
+        if ($withFileReferences && ($payload['withoutFileReferences'] ?? null) === true) {
             return null;
         }
 
@@ -286,8 +293,8 @@ final class AnalysisResultCache
 
         $classNodes             = $this->classNodesFromPayload($payload, $file, $withSignatures);
         $anonymousClassNodes    = $this->anonymousClassNodesFromPayload($payload);
-        $fileReferences         = $this->fileReferencesFromPayload($payload);
-        $fileInstantiations     = $this->fileInstantiationsFromPayload($payload);
+        $fileReferences         = $withFileReferences ? $this->fileReferencesFromPayload($payload) : [];
+        $fileInstantiations     = $withFileReferences ? $this->fileInstantiationsFromPayload($payload) : [];
         $functionNodes          = $this->functionNodesFromPayload($payload, $file);
         $anonymousFunctionNodes = $this->anonymousFunctionNodesFromPayload($payload, $file);
 
@@ -379,6 +386,7 @@ final class AnalysisResultCache
         array $functionNodes = [],
         array $anonymousFunctionNodes = [],
         bool $withSignatures = false,
+        bool $withFileReferences = true,
     ): void {
         $this->ensureCacheInitialised();
 
@@ -391,6 +399,10 @@ final class AnalysisResultCache
 
         if ($withSignatures) {
             $payload['hasSignatures'] = true;
+        }
+
+        if (! $withFileReferences) {
+            $payload['withoutFileReferences'] = true;
         }
 
         // Most files have none of these; leave their keys out entirely.
