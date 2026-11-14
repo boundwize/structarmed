@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Analyser;
 
 use App\Foo;
+use BackedEnum;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\MethodNode;
 use DateTime;
@@ -12,6 +13,7 @@ use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use UnitEnum;
 
 #[CoversClass(ClassNode::class)]
 final class ClassNodeTest extends TestCase
@@ -109,6 +111,28 @@ final class ClassNodeTest extends TestCase
         $this->assertTrue($this->makeEnumNode('int')->isBackedEnum());
         $this->assertFalse($this->makeEnumNode(null)->isBackedEnum());
         $this->assertFalse($this->makeEnumNode('int', isEnum: false)->isBackedEnum());
+    }
+
+    public function testEnumImplementsImplicitEnumInterfaces(): void
+    {
+        $pureEnum = $this->makeEnumNode(null);
+
+        $this->assertTrue($pureEnum->implementsInterface('UnitEnum'));
+        $this->assertTrue($pureEnum->implementsInterface('\\' . UnitEnum::class));
+        $this->assertTrue($pureEnum->implementsInterface('unitenum'));
+        $this->assertFalse($pureEnum->implementsInterface('BackedEnum'));
+
+        $backedEnum = $this->makeEnumNode('string');
+
+        $this->assertTrue($backedEnum->implementsInterface('UnitEnum'));
+        $this->assertTrue($backedEnum->implementsInterface('BackedEnum'));
+        $this->assertTrue($backedEnum->implementsInterface('\\' . BackedEnum::class));
+        $this->assertTrue($backedEnum->implementsInterface('backedenum'));
+
+        $class = $this->makeEnumNode('string', isEnum: false);
+
+        $this->assertFalse($class->implementsInterface('UnitEnum'));
+        $this->assertFalse($class->implementsInterface('BackedEnum'));
     }
 
     public function testGetTypeReturnsClassLikeKind(): void
