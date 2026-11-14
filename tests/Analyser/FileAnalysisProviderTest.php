@@ -366,6 +366,85 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertFalse($fileAnalysis->hasSideEffects);
     }
 
+    /**
+     * @return iterable<string, array{string, bool, int}>
+     */
+    public static function shebangFileProvider(): iterable
+    {
+        yield 'shebang only' => [
+            <<<'PHP'
+                #!/usr/bin/env php
+                <?php
+
+                final class Tool {}
+                PHP,
+            false,
+            1,
+        ];
+
+        yield 'shebang followed by a blank line' => [
+            <<<'PHP'
+                #!/usr/bin/env php
+
+                <?php
+
+                final class Tool {}
+                PHP,
+            false,
+            1,
+        ];
+
+        yield 'shebang with CRLF line endings' => [
+            "#!/usr/bin/env php\r\n<?php\r\n\r\nfinal class Tool {}\r\n",
+            false,
+            1,
+        ];
+
+        yield 'shebang before a real side effect' => [
+            <<<'PHP'
+                #!/usr/bin/env php
+                <?php
+
+                final class Tool {}
+
+                echo 'run';
+                PHP,
+            true,
+            6,
+        ];
+
+        yield 'shebang followed by inline HTML' => [
+            <<<'PHP'
+                #!/usr/bin/env php
+                <html>
+                <?php
+
+                final class Tool {}
+                PHP,
+            true,
+            1,
+        ];
+
+        yield 'shebang-like text after the first line' => [
+            <<<'PHP'
+                <?php final class Tool {} ?>
+                #!/usr/bin/env php
+                PHP,
+            true,
+            2,
+        ];
+    }
+
+    #[DataProvider('shebangFileProvider')]
+    public function testShebangLineIsNotASideEffect(string $code, bool $hasSideEffects, int $sideEffectLine): void
+    {
+        $fileAnalysis = (new FileAnalysisProvider())->analyse($this->source($code));
+
+        $this->assertTrue($fileAnalysis->declaresSymbols);
+        $this->assertSame($hasSideEffects, $fileAnalysis->hasSideEffects);
+        $this->assertSame($sideEffectLine, $fileAnalysis->sideEffectLine);
+    }
+
     public function testTreatsNamespaceConstantAsSymbolDeclaration(): void
     {
         $file = $this->source(<<<'PHP'

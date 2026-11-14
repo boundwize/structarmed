@@ -662,6 +662,17 @@ final class FileAnalysisProvider
             || $stmt instanceof Use_
             || $stmt instanceof GroupUse
             || $stmt instanceof Nop
-            || ($stmt instanceof InlineHTML && trim($stmt->value) === '');
+            || ($stmt instanceof InlineHTML && (trim($stmt->value) === '' || $this->isShebangLine($stmt)));
+    }
+
+    /**
+     * PHP skips a `#!` line that opens a file, whether the file is run or
+     * included, so it is never output. Only that first line is skipped:
+     * anything but whitespace after it is still inline HTML.
+     */
+    private function isShebangLine(InlineHTML $inlineHtml): bool
+    {
+        return $inlineHtml->getStartFilePos() === 0
+            && preg_match('/^#![^\n]*(?:\n\s*)?$/D', $inlineHtml->value) === 1;
     }
 }
