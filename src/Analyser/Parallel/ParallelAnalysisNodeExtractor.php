@@ -553,10 +553,22 @@ final readonly class ParallelAnalysisNodeExtractor
      */
     private function createWorkerFiles(string $dir): array
     {
+        $created = [];
+
+        try {
+            $created[]  = $inputFile = $this->temporaryFile($dir);
+            $created[]  = $outputFile = $this->temporaryFile($dir);
+            $stderrFile = $this->temporaryFile($dir);
+        } catch (RuntimeException $runtimeException) {
+            $this->cleanup($created);
+
+            throw $runtimeException;
+        }
+
         return [
-            'inputFile'  => $this->temporaryFile($dir),
-            'outputFile' => $this->temporaryFile($dir),
-            'stderrFile' => $this->temporaryFile($dir),
+            'inputFile'  => $inputFile,
+            'outputFile' => $outputFile,
+            'stderrFile' => $stderrFile,
         ];
     }
 

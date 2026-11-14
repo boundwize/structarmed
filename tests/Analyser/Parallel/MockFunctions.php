@@ -76,6 +76,11 @@ function tempnam(string $directory, string $prefix): string|false
         return false;
     }
 
+    // an int allows that many successful calls before failing
+    if (is_int($GLOBALS['mock_tempnam']) && $GLOBALS['mock_tempnam']-- <= 0) {
+        return false;
+    }
+
     $result = \tempnam($directory, $prefix);
 
     if ($result !== false) {
