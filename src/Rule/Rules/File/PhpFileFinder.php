@@ -46,17 +46,17 @@ final readonly class PhpFileFinder
         foreach ($sourcePaths as $sourcePath) {
             $fullPath = Path::resolve($sourcePath, $basePath);
 
-            if (! is_dir($fullPath)) {
-                // a source path may point to a single PHP file
-                if (is_file($fullPath) && str_ends_with($fullPath, '.php') && ! $skipPathMatcher->isSkipped($fullPath)) {
-                    $files[] = Path::normalise($fullPath, canonicalise: true);
+            if (is_dir($fullPath)) {
+                foreach ($this->phpFileCollector->collect($fullPath, $skipPathMatcher) as $file) {
+                    $files[] = $file;
                 }
 
                 continue;
             }
 
-            foreach ($this->phpFileCollector->collect($fullPath, $skipPathMatcher) as $file) {
-                $files[] = $file;
+            // a source path may point to a single PHP file
+            if (is_file($fullPath) && str_ends_with($fullPath, '.php') && ! $skipPathMatcher->isSkipped($fullPath)) {
+                $files[] = Path::normalise($fullPath, canonicalise: true);
             }
         }
 
