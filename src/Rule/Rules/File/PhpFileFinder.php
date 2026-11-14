@@ -14,6 +14,7 @@ use function array_keys;
 use function array_unique;
 use function array_values;
 use function is_dir;
+use function is_file;
 use function str_ends_with;
 use function str_starts_with;
 
@@ -46,6 +47,11 @@ final readonly class PhpFileFinder
             $fullPath = Path::resolve($sourcePath, $basePath);
 
             if (! is_dir($fullPath)) {
+                // a source path may point to a single PHP file
+                if (is_file($fullPath) && str_ends_with($fullPath, '.php') && ! $skipPathMatcher->isSkipped($fullPath)) {
+                    $files[] = Path::normalise($fullPath, canonicalise: true);
+                }
+
                 continue;
             }
 
@@ -74,9 +80,14 @@ final readonly class PhpFileFinder
     ): array {
         $skipPathMatcher   = SkipPathMatcher::compile($basePath, $skipPaths);
         $directoryPrefixes = [];
+        $sourceFiles       = [];
 
         foreach ($this->sourcePaths($basePath, $architecture) as $sourcePath) {
-            $directoryPrefixes[] = Path::normalise(Path::resolve($sourcePath, $basePath), canonicalise: true) . '/';
+            $normalisedSourcePath = Path::normalise(Path::resolve($sourcePath, $basePath), canonicalise: true);
+
+            // a source path may point to a single PHP file, matched exactly
+            $sourceFiles[$normalisedSourcePath] = true;
+            $directoryPrefixes[]                = $normalisedSourcePath . '/';
         }
 
         $files = [];
@@ -93,6 +104,11 @@ final readonly class PhpFileFinder
             }
 
             if ($skipPathMatcher->isSkipped($scopeFile)) {
+                continue;
+            }
+
+            if (isset($sourceFiles[$scopeFile])) {
+                $files[$scopeFile] = true;
                 continue;
             }
 
