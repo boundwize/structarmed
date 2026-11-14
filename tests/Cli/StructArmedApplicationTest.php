@@ -1040,6 +1040,65 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandFixReadsUpdatedComposerJson(): void
+    {
+        $basePath = $this->createProjectDirectoryWithMissingComposerPsr4PathInList();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('1 violation has been fixed.', $this->withoutAnsi($output));
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertStringNotContainsString('declared in composer.json do not exist on disk', $output);
+            $this->assertStringNotContainsString(
+                'missing/',
+                (string) file_get_contents($basePath . '/composer.json')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandFixReadsUpdatedComposerJsonWithNoCacheOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithMissingComposerPsr4PathInList();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('1 violation has been fixed.', $this->withoutAnsi($output));
+            $this->assertStringContainsString('No violations found', $output);
+            $this->assertStringNotContainsString('declared in composer.json do not exist on disk', $output);
+            $this->assertStringNotContainsString(
+                'missing/',
+                (string) file_get_contents($basePath . '/composer.json')
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandCountsEveryViolationResolvedByOneFix(): void
     {
         $basePath = $this->createProjectDirectory();
@@ -2239,6 +2298,34 @@ JSON);
         mkdir($basePath . '/src');
         mkdir($basePath . '/nested');
         file_put_contents($basePath . '/nested/composer.json', '{}');
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+
+return Architecture::define()
+    ->withPreset(Preset::PSR4(sourcePaths: ['src/']));
+PHP);
+
+        return $basePath;
+    }
+
+    private function createProjectDirectoryWithMissingComposerPsr4PathInList(): string
+    {
+        $basePath = $this->createTempDirectory();
+        file_put_contents($basePath . '/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": ["src/", "missing/"]
+        }
+    }
+}
+JSON);
+        mkdir($basePath . '/src');
         file_put_contents($basePath . '/structarmed.php', <<<'PHP'
 <?php
 
