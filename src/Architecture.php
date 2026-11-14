@@ -355,7 +355,17 @@ final class Architecture
      */
     public function withPreset(PresetInterface $preset): self
     {
+        $layerExcludePaths = $this->layerExcludePaths;
+
         $preset->apply($this);
+
+        // A preset registers the layer it reuses again, without the
+        // excludePath that layer was defined with, so it is put back.
+        foreach ($layerExcludePaths as $name => $excludePaths) {
+            if ($this->layerExcludePaths[$name] === []) {
+                $this->layerExcludePaths[$name] = $excludePaths;
+            }
+        }
 
         return $this;
     }

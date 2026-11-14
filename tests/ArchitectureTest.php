@@ -224,6 +224,22 @@ final class ArchitectureTest extends TestCase
         $this->assertArrayHasKey(DddPreset::DOMAIN_NO_DATETIME, $architecture->getRules());
     }
 
+    public function testWithPresetKeepsExcludePathOfLayerThePresetReuses(): void
+    {
+        $architecture = Architecture::define()
+            ->layer('Logger', 'src/Logger/', excludePath: 'src/Logger/Factory/')
+            ->layer('Source', 'src/', excludePath: 'src/Legacy/')
+            ->withPreset(Preset::PSR12(sourcePaths: ['src/']));
+
+        $this->assertSame(
+            [
+                'Logger' => ['src/Logger/Factory/'],
+                'Source' => ['src/Legacy/'],
+            ],
+            $architecture->getLayerExcludePaths()
+        );
+    }
+
     public function testWithPresetsAddsAllRules(): void
     {
         $architecture = Architecture::define()
