@@ -912,7 +912,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private function startClassLikeAnalysis(ClassLike $classLike): void
     {
-        $classLikeAnalysis = new ClassLikeAnalysis($classLike instanceof Interface_);
+        $classLikeAnalysis = new ClassLikeAnalysis(
+            $classLike instanceof Interface_,
+            $classLike instanceof Class_ && $classLike->extends instanceof Name
+                ? $classLike->extends->toString()
+                : null,
+        );
 
         if ($classLike->name instanceof Identifier) {
             $classLikeAnalysis->dependencies      = $this->currentNamespaceUses;
@@ -1239,9 +1244,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         bool $isPromoted = false,
     ): void {
         if ($type instanceof Name) {
-            if (! $type->isSpecialClassName()) {
+            // `parent` exposes the direct parent class just as its name would;
+            // self and static name the class-like itself, which exposes nothing
+            $typeName = match (true) {
+                ! $type->isSpecialClassName()        => $type->toString(),
+                $type->toLowerString() === 'parent' => $classLikeAnalysis->parent,
+                default                              => null,
+            };
+
+            if ($typeName !== null) {
                 $classLikeAnalysis->signatures[] = new ClassSignature(
-                    $type->toString(),
+                    $typeName,
                     $name,
                     $kind,
                     $visibility,

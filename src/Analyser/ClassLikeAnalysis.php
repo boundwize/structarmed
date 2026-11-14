@@ -62,6 +62,8 @@ final class ClassLikeAnalysis
 
     public function __construct(
         public readonly bool $isInterface,
+        /** The direct parent class a `parent` signature type resolves to. */
+        public readonly ?string $parent = null,
     ) {
     }
 }

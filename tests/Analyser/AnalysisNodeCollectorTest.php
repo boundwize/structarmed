@@ -1064,7 +1064,7 @@ PHP);
                     {
                     }
 
-                    public function keywords(self $self, parent $parent, int $int): static
+                    public function keywords(self $self, int $int): static
                     {
                     }
                 }
@@ -1096,6 +1096,57 @@ PHP);
                         Left&Right $intersection,
                         (Dnf&Form)|null $dnf,
                     ): void {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testResolvesParentSignatureTypeToTheDirectParentClass(): void
+    {
+        $this->assertSame(
+            [
+                ['App\Base', 'property', ClassSignature::PROPERTY, 'protected', 7, false],
+                ['App\Base', 'param', ClassSignature::PARAM, 'public', 9, false],
+                ['App\Base', 'run', ClassSignature::METHOD, 'public', 9, false],
+                ['App\Base', 'promoted', ClassSignature::PROPERTY, 'public', 13, true],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                namespace App;
+
+                class Foo extends Base
+                {
+                    protected ?parent $property;
+
+                    public function run(parent $param, self $self): ?parent
+                    {
+                    }
+
+                    public function __construct(public PARENT|null $promoted)
+                    {
+                    }
+
+                    public function fluent(): static
+                    {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testSkipsParentSignatureTypeWithoutADirectParentClass(): void
+    {
+        $this->assertSame(
+            [],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                trait Foo
+                {
+                    public function run(parent $param): parent
+                    {
                     }
                 }
                 CODE_SAMPLE)
