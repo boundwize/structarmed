@@ -1650,6 +1650,57 @@ final class AnalysisResultCacheTest extends TestCase
         }
     }
 
+    public function testFileReferencesFollowTheCapabilityOfThePayload(): void
+    {
+        $cacheDirectory      = $this->createTempDirectory();
+        $sourceFile          = $cacheDirectory . '/Foo.php';
+        $analysisResultCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
+        $store               = static function (
+            string $namespace,
+            bool $withFileReferences
+        ) use (
+            $analysisResultCache,
+            $sourceFile,
+        ): void {
+            $analysisResultCache->storeAnalysisNodes(
+                $sourceFile,
+                $namespace,
+                [],
+                fileReferences: $withFileReferences ? ['App\Referenced'] : [],
+                fileInstantiations: $withFileReferences ? ['App\Instantiated'] : [],
+                withFileReferences: $withFileReferences,
+            );
+        };
+
+        file_put_contents($sourceFile, '<?php new App\Instantiated();');
+
+        try {
+            // Collected: reused whether or not the run needs them.
+            $store('with', true);
+
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'with');
+            $this->assertNotNull($loaded);
+            $this->assertSame(['App\Referenced'], $loaded['fileReferences']);
+            $this->assertSame(['App\Instantiated'], $loaded['fileInstantiations']);
+
+            $loaded = $analysisResultCache->loadAnalysisNodes($sourceFile, 'with', withFileReferences: false);
+            $this->assertNotNull($loaded);
+            $this->assertSame([], $loaded['fileReferences']);
+            $this->assertSame([], $loaded['fileInstantiations']);
+
+            // Not collected: a run that needs them must extract again.
+            $store('without', false);
+
+            $this->assertNotNull(
+                $analysisResultCache->loadAnalysisNodes($sourceFile, 'without', withFileReferences: false)
+            );
+            $this->assertNull($analysisResultCache->loadAnalysisNodes($sourceFile, 'without'));
+        } finally {
+            unlink($sourceFile);
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
     public function testMalformedSignatureTupleIsACacheMissOnlyWhenSignaturesAreNeeded(): void
     {
         $cacheDirectory      = $this->createTempDirectory();

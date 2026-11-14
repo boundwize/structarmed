@@ -42,6 +42,9 @@ final readonly class AnalysisNodeExtractor
      * Only files without a valid node-cache payload are parsed, and only those
      * count towards the progress total.
      *
+     * @param bool $withFileReferences Whether the result carries the per-file references and instantiations;
+     *                                 only the rules that track class-like or function usage read them, and
+     *                                 they are about a third of the node graph.
      * @param list<string> $files
      */
     public function extract(
@@ -49,8 +52,14 @@ final readonly class AnalysisNodeExtractor
         ?ProgressHandlerInterface $progressHandler = null,
         bool $withFileAnalysis = true,
         bool $withSignatures = false,
+        bool $withFileReferences = true,
     ): ExtractionResult {
-        [$cachedResult, $filesToParse] = $this->loadFromCache($files, $withFileAnalysis, $withSignatures);
+        [$cachedResult, $filesToParse] = $this->loadFromCache(
+            $files,
+            $withFileAnalysis,
+            $withSignatures,
+            $withFileReferences,
+        );
 
         $progressHandler?->start(count($filesToParse));
 
@@ -58,7 +67,12 @@ final readonly class AnalysisNodeExtractor
             return $cachedResult;
         }
 
-        $analysisNodeCollector = new AnalysisNodeCollector($this->layerResolver, $withFileAnalysis, $withSignatures);
+        $analysisNodeCollector = new AnalysisNodeCollector(
+            $this->layerResolver,
+            $withFileAnalysis,
+            $withSignatures,
+            $withFileReferences,
+        );
         $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
         $fileAnalyses          = [];
         $storedCounts          = [0, 0, 0, 0];
@@ -113,6 +127,7 @@ final readonly class AnalysisNodeExtractor
                     $fileAnalyses[$fileToParse] ?? null,
                     $storedCounts,
                     $withSignatures,
+                    $withFileReferences,
                 );
             }
         }
@@ -144,6 +159,7 @@ final readonly class AnalysisNodeExtractor
         ?FileAnalysis $fileAnalysis,
         array $storedCounts,
         bool $withSignatures,
+        bool $withFileReferences,
     ): array {
         [$classNodeCount, $anonymousClassNodeCount, $functionNodeCount, $anonymousFunctionNodeCount] = $storedCounts;
 
@@ -163,6 +179,7 @@ final readonly class AnalysisNodeExtractor
             array_slice($functionNodes, $functionNodeCount),
             array_slice($anonymousFunctionNodes, $anonymousFunctionNodeCount),
             $withSignatures,
+            $withFileReferences,
         );
 
         return [
@@ -179,8 +196,12 @@ final readonly class AnalysisNodeExtractor
      * @param list<string> $files
      * @return array{ExtractionResult, list<string>}
      */
-    private function loadFromCache(array $files, bool $withFileAnalysis, bool $withSignatures): array
-    {
+    private function loadFromCache(
+        array $files,
+        bool $withFileAnalysis,
+        bool $withSignatures,
+        bool $withFileReferences,
+    ): array {
         $classNodes             = [];
         $fileAnalyses           = [];
         $anonymousClassNodes    = [];
@@ -195,7 +216,8 @@ final readonly class AnalysisNodeExtractor
                 $file,
                 $this->analysisNodeCacheNamespace,
                 $withFileAnalysis,
-                $withSignatures
+                $withSignatures,
+                $withFileReferences,
             );
 
             if ($cachedResult === null) {

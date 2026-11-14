@@ -228,6 +228,10 @@ final readonly class Analyser
             $withFileAnalysis,
             $layerExcludePaths,
             $withSignatures,
+            $hasExtendedClassAwareRule
+                || $hasUsedInterfaceAwareRule
+                || $hasUsedTraitAwareRule
+                || $hasUsedFunctionAwareRule,
         );
         $classNodes       = $extractionResult->classNodes;
 
@@ -1557,6 +1561,7 @@ final readonly class Analyser
         bool $withFileAnalysis = true,
         array $layerExcludePaths = [],
         bool $withSignatures = false,
+        bool $withFileReferences = true,
     ): ExtractionResult {
         $options = $analyserOptions ?? AnalyserOptions::parallel();
 
@@ -1573,13 +1578,13 @@ final readonly class Analyser
                 $this->analysisResultCache,
                 $this->analysisNodeCacheNamespace,
                 $layerExcludePaths,
-            ))->extract($files, $progressHandler, $withFileAnalysis, $withSignatures);
+            ))->extract($files, $progressHandler, $withFileAnalysis, $withSignatures, $withFileReferences);
         } else {
             $extractionResult = (new AnalysisNodeExtractor(
                 $chainLayerResolver,
                 analysisResultCache: $this->analysisResultCache,
                 analysisNodeCacheNamespace: $this->analysisNodeCacheNamespace,
-            ))->extract($files, $progressHandler, $withFileAnalysis, $withSignatures);
+            ))->extract($files, $progressHandler, $withFileAnalysis, $withSignatures, $withFileReferences);
         }
 
         $progressHandler?->finish();

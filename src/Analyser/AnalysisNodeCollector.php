@@ -461,11 +461,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *                               rules read ({@see getNonCanonicalKeywordConstants()},
      *                               {@see getNumericLiterals()}); an architecture-only
      *                               run never reads them
+     * @param bool $withFileReferences Whether to keep the per-file references and
+     *                                 instantiations ({@see getFileReferences()},
+     *                                 {@see getFileInstantiations()}); only the rules
+     *                                 that track class-like or function usage read them
      */
     public function __construct(
         private readonly LayerResolverInterface $layerResolver,
         private readonly bool $withFileAnalysis = true,
         private readonly bool $withSignatures = false,
+        private readonly bool $withFileReferences = true,
     ) {
         $this->constExprEvaluator = new ConstExprEvaluator($this->evaluateClassNameFetch(...));
     }
@@ -876,15 +881,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFileFallbackNames       = [];
         $this->currentFileGlobalFunctionCalls = [];
 
-        if ($this->currentFileReferences !== []) {
+        if ($this->withFileReferences && $this->currentFileReferences !== []) {
             $this->fileReferences[$this->currentFile] = array_keys($this->currentFileReferences);
-            $this->currentFileReferences              = [];
         }
 
-        if ($this->currentFileInstantiations !== []) {
+        if ($this->withFileReferences && $this->currentFileInstantiations !== []) {
             $this->fileInstantiations[$this->currentFile] = array_keys($this->currentFileInstantiations);
-            $this->currentFileInstantiations              = [];
         }
+
+        $this->currentFileReferences     = [];
+        $this->currentFileInstantiations = [];
 
         $this->fileClassLikes                    = [];
         $this->activeClassLikeAnalyses           = [];
