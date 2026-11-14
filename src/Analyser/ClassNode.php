@@ -224,11 +224,20 @@ final class ClassNode
 
     /**
      * Implemented directly, extended directly (for interfaces), or via any parent class or interface.
-     * Overrides the trait method to also look at `$interfaceExtends`, which only a named interface has.
+     * Overrides the trait method to also look at `$interfaceExtends`, which only a named interface has,
+     * and at the interfaces PHP gives every enum implicitly: `UnitEnum`, plus `BackedEnum` when backed.
      */
     public function implementsInterface(string $interface): bool
     {
         $interface = ltrim($interface, '\\');
+
+        if ($this->isEnum && strcasecmp($interface, 'UnitEnum') === 0) {
+            return true;
+        }
+
+        if ($this->isBackedEnum() && strcasecmp($interface, 'BackedEnum') === 0) {
+            return true;
+        }
 
         return $this->matchesAnyClassLike($interface, $this->implements)
             || $this->matchesAnyClassLike($interface, $this->interfaceExtends)
