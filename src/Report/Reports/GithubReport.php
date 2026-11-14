@@ -38,12 +38,15 @@ final readonly class GithubReport implements ReportInterface
         $output             = '';
 
         foreach ($ruleViolationCollection as $violation) {
+            // A project-level violation has no file: keep it empty instead of
+            // resolving it to the project directory.
+            $file = $violation->file === ''
+                ? ''
+                : Path::relativeTo(Path::resolve($violation->file, $normalisedBasePath), $normalisedRootPath);
+
             $output .= sprintf(
                 '::error file=%s,line=%d,title=%s::%s' . PHP_EOL,
-                $this->escapeProperty(Path::relativeTo(
-                    Path::resolve($violation->file, $normalisedBasePath),
-                    $normalisedRootPath
-                )),
+                $this->escapeProperty($file),
                 $violation->line,
                 $this->escapeProperty($violation->ruleKey),
                 $this->escapeData($violation->message)

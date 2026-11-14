@@ -196,6 +196,24 @@ final class ReportTest extends TestCase
         );
     }
 
+    public function testGithubReportKeepsEmptyFileForProjectInWorkspaceSubdirectory(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add(new RuleViolation(
+            message:   'Something failed',
+            file:      '',
+            line:      0,
+            className: '',
+            ruleKey:   'rule.key',
+        ));
+
+        $this->assertSame(
+            '::error file=,line=0,title=rule.key::Something failed' . PHP_EOL
+                . (new ConsoleReport())->render($ruleViolationCollection, 0.34),
+            (new GithubReport('/repository/packages/api', '/repository'))->render($ruleViolationCollection, 0.34)
+        );
+    }
+
     private function violation(): RuleViolation
     {
         return new RuleViolation(
