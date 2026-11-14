@@ -63,9 +63,11 @@ final readonly class PhpParserFixerProcessor
             if ($nodeVisitor instanceof AbstractTokenAwareVisitor) {
                 $nodeVisitor->setTokens($tokens);
             }
-
-            $statements = (new NodeTraverser($nodeVisitor))->traverse($statements);
         }
+
+        // One traversal for every visitor: a traversal per visitor makes a
+        // file with many violations cost violations × nodes × traverser setup.
+        $statements = (new NodeTraverser(...$nodeVisitors))->traverse($statements);
 
         // A fix that removes the last declaration leaves only boilerplate
         // (declare/namespace/use); the whole file is dead weight at that point.
