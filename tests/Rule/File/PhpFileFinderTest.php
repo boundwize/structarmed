@@ -164,4 +164,52 @@ final class PhpFileFinderTest extends TestCase
             ),
         );
     }
+
+    public function testSupportsSourcePathPointingToSinglePhpFile(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-php-file-finder');
+        mkdir($basePath . '/src/Nested', 0777, true);
+
+        foreach (
+            [
+                '/src/Foo.php',
+                '/src/Bar.php',
+                '/src/Skipped.php',
+                '/src/notes.txt',
+                '/src/Nested/Baz.php',
+            ] as $file
+        ) {
+            file_put_contents($basePath . $file, '<?php');
+        }
+
+        $fooFile       = Path::normalise($basePath . '/src/Foo.php', canonicalise: true);
+        $bazFile       = Path::normalise($basePath . '/src/Nested/Baz.php', canonicalise: true);
+        $architecture  = Architecture::define()->layer('Source', [
+            'src/Foo.php',
+            'src/Skipped.php',
+            'src/notes.txt',
+            'src/Missing.php',
+            'src/Nested',
+            'src/Nested/Baz.php',
+        ]);
+        $skipPaths     = ['src/Skipped.php'];
+        $phpFileFinder = new PhpFileFinder();
+
+        $this->assertSame([$fooFile, $bazFile], $phpFileFinder->files($basePath, $architecture, $skipPaths));
+        $this->assertSame(
+            [$fooFile, $bazFile],
+            $phpFileFinder->filesFromScope(
+                $basePath,
+                $architecture,
+                [
+                    $basePath . '/src/Foo.php',
+                    $basePath . '/src/Bar.php',
+                    $basePath . '/src/Skipped.php',
+                    $basePath . '/src/notes.txt',
+                    $basePath . '/src/Nested/Baz.php',
+                ],
+                $skipPaths,
+            ),
+        );
+    }
 }
