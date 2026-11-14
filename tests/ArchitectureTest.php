@@ -8,6 +8,7 @@ use App\Foo;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Exception\RuleNotFoundException;
 use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\PresetInterface;
 use Boundwize\StructArmed\Preset\Presets\DddPreset;
 use Boundwize\StructArmed\Preset\Presets\Psr1Preset;
 use Boundwize\StructArmed\Preset\Presets\Psr4Preset;
@@ -229,7 +230,8 @@ final class ArchitectureTest extends TestCase
         $architecture = Architecture::define()
             ->layer('Logger', 'src/Logger/', excludePath: 'src/Logger/Factory/')
             ->layer('Source', 'src/', excludePath: 'src/Legacy/')
-            ->withPreset(Preset::PSR12(sourcePaths: ['src/']));
+            // every preset registers the layer again, each spelling the path its own way
+            ->withPresets(Preset::PSR12(sourcePaths: ['src/']), Preset::YAGNI(sourcePaths: ['src']));
 
         $this->assertSame(
             [
@@ -238,6 +240,23 @@ final class ArchitectureTest extends TestCase
             ],
             $architecture->getLayerExcludePaths()
         );
+    }
+
+    public function testWithPresetDropsExcludePathOfLayerThePresetRedefines(): void
+    {
+        $preset = new class implements PresetInterface {
+            public function apply(Architecture $architecture): void
+            {
+                $architecture->layer('Source', 'app/');
+            }
+        };
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/', excludePath: 'src/Legacy/')
+            ->withPreset($preset);
+
+        $this->assertSame('app/', $architecture->getLayers()['Source']);
+        $this->assertSame(['Source' => []], $architecture->getLayerExcludePaths());
     }
 
     public function testWithPresetsAddsAllRules(): void

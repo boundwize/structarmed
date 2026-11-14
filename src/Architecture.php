@@ -11,17 +11,20 @@ use Boundwize\StructArmed\Rule\AnonymousFunctionRuleInterface;
 use Boundwize\StructArmed\Rule\FunctionRuleInterface;
 use Boundwize\StructArmed\Rule\ProjectRuleInterface;
 use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Util\SourceLayerName;
 use InvalidArgumentException;
 
 use function array_filter;
 use function array_key_exists;
+use function array_map;
 use function array_merge;
 use function array_unique;
 use function array_values;
 use function is_callable;
 use function is_int;
 use function realpath;
+use function sort;
 use function sprintf;
 
 /**
@@ -355,19 +358,39 @@ final class Architecture
      */
     public function withPreset(PresetInterface $preset): self
     {
+        $layers            = $this->layers;
         $layerExcludePaths = $this->layerExcludePaths;
 
         $preset->apply($this);
 
         // A preset registers the layer it reuses again, without the
-        // excludePath that layer was defined with, so it is put back.
+        // excludePath that layer was defined with, so it is put back. A
+        // preset that gives the layer other paths redefines it instead.
         foreach ($layerExcludePaths as $name => $excludePaths) {
-            if ($this->layerExcludePaths[$name] === []) {
+            if (
+                $this->layerExcludePaths[$name] === []
+                && $this->normalisedLayerPaths($this->layers[$name]) === $this->normalisedLayerPaths($layers[$name])
+            ) {
                 $this->layerExcludePaths[$name] = $excludePaths;
             }
         }
 
         return $this;
+    }
+
+    /**
+     * The same paths compare equal however they are spelled: as a string or
+     * a list, in any order, with either separator or a trailing slash.
+     *
+     * @param string|list<string> $paths
+     * @return list<string>
+     */
+    private function normalisedLayerPaths(string|array $paths): array
+    {
+        $normalisedPaths = array_map(Path::normalise(...), (array) $paths);
+        sort($normalisedPaths);
+
+        return $normalisedPaths;
     }
 
     public function withPresets(PresetInterface ...$presets): self
