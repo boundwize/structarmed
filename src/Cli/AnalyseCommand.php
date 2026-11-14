@@ -232,7 +232,8 @@ final readonly class AnalyseCommand
         }
 
         if (isset($options['fix']) && ! $ruleViolationCollection->isEmpty()) {
-            // to manually clear the composer.json memo when fixer edits composer.json
+            // To clear the in-memory Composer configuration between fix passes
+            // when the persistent analysis cache is disabled.
             $composerJsonProvider = new ComposerJsonProvider();
             // Removal fixers can cascade: deleting an unused child abstraction
             // may leave its parent unused, so fix and re-analyse until a pass
