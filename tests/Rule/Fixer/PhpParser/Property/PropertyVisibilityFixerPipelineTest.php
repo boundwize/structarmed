@@ -91,6 +91,33 @@ PHP);
         }
     }
 
+    public function testProcessLeavesSetOnlyVisibilityPropertiesUnchanged(): void
+    {
+        $code = <<<'PHP'
+<?php
+
+namespace App;
+
+class Order
+{
+    private(set) string $status = 'new';
+
+    public function __construct(protected(set) string $title)
+    {
+    }
+}
+PHP;
+        $file = $this->temporaryPhpFile($code);
+
+        try {
+            $this->assertFalse($this->process($file, 'App\\Order', 'status'));
+            $this->assertFalse($this->process($file, 'App\\Order', 'title'));
+            $this->assertSame($code, (string) file_get_contents($file));
+        } finally {
+            unlink($file);
+        }
+    }
+
     public function testProcessReturnsFalseForRegularConstructorParameter(): void
     {
         $file = $this->temporaryPhpFile(<<<'PHP'
