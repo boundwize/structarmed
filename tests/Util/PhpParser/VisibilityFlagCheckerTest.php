@@ -24,6 +24,10 @@ final class VisibilityFlagCheckerTest extends TestCase
         yield 'protected' => [Modifiers::PROTECTED, true];
         yield 'private' => [Modifiers::PRIVATE, true];
         yield 'public readonly' => [Modifiers::PUBLIC | Modifiers::READONLY, true];
+        yield 'public(set) only' => [Modifiers::PUBLIC_SET, true];
+        yield 'protected(set) only' => [Modifiers::PROTECTED_SET, true];
+        yield 'private(set) only' => [Modifiers::PRIVATE_SET, true];
+        yield 'public private(set)' => [Modifiers::PUBLIC | Modifiers::PRIVATE_SET, true];
         yield 'readonly only' => [Modifiers::READONLY, false];
         yield 'static only' => [Modifiers::STATIC, false];
         yield 'final only' => [Modifiers::FINAL, false];

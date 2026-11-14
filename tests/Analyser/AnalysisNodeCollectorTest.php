@@ -1938,6 +1938,29 @@ PHP);
         $this->assertFalse($classNode->properties[0]->hasExplicitVisibility);
     }
 
+    public function testSetVisibilityAloneIsExplicitPropertyVisibility(): void
+    {
+        $classNode = $this->collect(<<<'PHP'
+            <?php
+
+            class Foo
+            {
+                private(set) string $name = 'a';
+
+                public function __construct(
+                    protected(set) string $title,
+                ) {
+                }
+            }
+            PHP);
+
+        $this->assertSame(['name', 'title'], array_column($classNode->properties, 'name'));
+        $this->assertSame('public', $classNode->properties[0]->visibility);
+        $this->assertTrue($classNode->properties[0]->hasExplicitVisibility);
+        $this->assertSame('public', $classNode->properties[1]->visibility);
+        $this->assertTrue($classNode->properties[1]->hasExplicitVisibility);
+    }
+
     public function testCollectsPromotedProperties(): void
     {
         $classNode = $this->collect(
