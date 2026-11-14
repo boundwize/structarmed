@@ -112,7 +112,7 @@ vendor/bin/structarmed analyze --report=json
 vendor/bin/structarmed analyse --report=github
 ```
 
-The `github` report prints one `::error file=...,line=...,title=...::message` workflow command per violation, so GitHub Actions shows each violation inline on the pull request. File paths are relative to the project root. The console report follows the workflow commands, so an annotation's "View details" link lands on a readable job log.
+The `github` report prints one `::error file=...,line=...,title=...::message` workflow command per violation, so GitHub Actions shows each violation inline on the pull request. File paths are relative to `GITHUB_WORKSPACE` (the repository root) when the project lives inside it, so a project in a repository subdirectory such as `packages/api` is annotated correctly; otherwise they are relative to the project root. The console report follows the workflow commands, so an annotation's "View details" link lands on a readable job log.
 
 The `github` report always exits with `0`: violations surface as annotations instead of failing the job. Use the `console` or `json` report when the job must fail on violations.
 

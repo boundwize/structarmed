@@ -150,6 +150,52 @@ final class ReportTest extends TestCase
         );
     }
 
+    public function testGithubReportRendersWorkspaceRelativePathsForProjectInWorkspaceSubdirectory(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add(new RuleViolation(
+            message:   'Something failed',
+            file:      '/repository/packages/api/src/Service.php',
+            line:      10,
+            className: 'App\\Service',
+            ruleKey:   'rule.key',
+        ));
+        $ruleViolationCollection->add(new RuleViolation(
+            message:   'Something failed',
+            file:      'src/Relative.php',
+            line:      3,
+            className: 'App\\Relative',
+            ruleKey:   'rule.key',
+        ));
+
+        $expectedConsoleReport = (new ConsoleReport())->render($ruleViolationCollection, 0.34);
+
+        $this->assertSame(
+            '::error file=packages/api/src/Service.php,line=10,title=rule.key::Something failed' . PHP_EOL
+                . '::error file=packages/api/src/Relative.php,line=3,title=rule.key::Something failed' . PHP_EOL
+                . $expectedConsoleReport,
+            (new GithubReport('/repository/packages/api', '/repository'))->render($ruleViolationCollection, 0.34)
+        );
+
+        // Project base is the workspace itself.
+        $this->assertSame(
+            '::error file=src/Service.php,line=10,title=rule.key::Something failed' . PHP_EOL
+                . '::error file=src/Relative.php,line=3,title=rule.key::Something failed' . PHP_EOL
+                . $expectedConsoleReport,
+            (new GithubReport('/repository/packages/api', '/repository/packages/api'))
+                ->render($ruleViolationCollection, 0.34)
+        );
+
+        // Project outside the workspace (sibling sharing a name prefix): base-relative paths.
+        $this->assertSame(
+            '::error file=src/Service.php,line=10,title=rule.key::Something failed' . PHP_EOL
+                . '::error file=src/Relative.php,line=3,title=rule.key::Something failed' . PHP_EOL
+                . $expectedConsoleReport,
+            (new GithubReport('/repository/packages/api', '/repository/packages/ap'))
+                ->render($ruleViolationCollection, 0.34)
+        );
+    }
+
     private function violation(): RuleViolation
     {
         return new RuleViolation(

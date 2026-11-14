@@ -27,6 +27,7 @@ use RuntimeException;
 
 use function count;
 use function explode;
+use function getenv;
 use function in_array;
 use function is_dir;
 use function is_file;
@@ -321,7 +322,10 @@ final readonly class AnalyseCommand
 
         echo match ($reportType) {
             'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
-            'github' => (new GithubReport($basePath))->render($ruleViolationCollection, $elapsed),
+            'github' => (new GithubReport($basePath, getenv('GITHUB_WORKSPACE') ?: null))->render(
+                $ruleViolationCollection,
+                $elapsed
+            ),
             default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
         };
 
