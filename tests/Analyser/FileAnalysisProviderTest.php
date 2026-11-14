@@ -394,6 +394,12 @@ final class FileAnalysisProviderTest extends TestCase
             1,
         ];
 
+        yield 'shebang with CRLF line endings' => [
+            "#!/usr/bin/env php\r\n<?php\r\n\r\nfinal class Tool {}\r\n",
+            false,
+            1,
+        ];
+
         yield 'shebang before a real side effect' => [
             <<<'PHP'
                 #!/usr/bin/env php
