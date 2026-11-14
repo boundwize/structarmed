@@ -736,6 +736,38 @@ PHP);
         }
     }
 
+    public function testExtractRemovesCreatedWorkerFilesWhenLaterTempnamFails(): void
+    {
+        $GLOBALS['mock_missing_functions']     = ['pcntl_fork'];
+        $GLOBALS['mock_tempnam']               = 1;
+        $GLOBALS['mock_tracked_tempnam_files'] = [];
+
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
+        file_put_contents($file, '<?php class Foo {}');
+
+        $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor($dir, [], [], 2);
+
+        try {
+            $parallelAnalysisNodeExtractor->extract([$file]);
+            $this->fail('Expected RuntimeException was not thrown.');
+        } catch (RuntimeException $runtimeException) {
+            $this->assertSame(
+                'Unable to create temporary file for parallel analysis.',
+                $runtimeException->getMessage()
+            );
+
+            /** @var list<string> $created */
+            $created = $GLOBALS['mock_tracked_tempnam_files'];
+            $this->assertCount(1, $created);
+            $this->assertFileDoesNotExist($created[0]);
+        } finally {
+            $GLOBALS['mock_missing_functions']     = [];
+            $GLOBALS['mock_tempnam']               = false;
+            $GLOBALS['mock_tracked_tempnam_files'] = [];
+        }
+    }
+
     public function testExtractThrowsWhenPayloadIsInvalid(): void
     {
         $GLOBALS['mock_file_get_contents_payload'] = ['invalid' => 'payload'];
