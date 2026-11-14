@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;
+use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
@@ -231,6 +232,8 @@ final readonly class AnalyseCommand
         }
 
         if (isset($options['fix']) && ! $ruleViolationCollection->isEmpty()) {
+            // to manually clear the composer.json memo when fixer edits composer.json
+            $composerJsonProvider = new ComposerJsonProvider();
             // Removal fixers can cascade: deleting an unused child abstraction
             // may leave its parent unused, so fix and re-analyse until a pass
             // fixes nothing. The pass cap only guards against a fixer that
@@ -243,7 +246,14 @@ final readonly class AnalyseCommand
                 }
 
                 $violationCountBeforePass = $ruleViolationCollection->count();
-                $analysisResultCache?->clear();
+                if ($analysisResultCache instanceof AnalysisResultCache) {
+                    $analysisResultCache->clear();
+                } else {
+                    // With --no-cache there is no result cache to drop the composer.json
+                    // memo, so a fixer that rewrote composer.json would be re-analysed
+                    // against its old contents.
+                    $composerJsonProvider->clear();
+                }
 
                 $files                             = $analyser->filesForAnalysis($architecture, $scanPaths);
                 $unfilteredRuleViolationCollection = $analyser->analyse(
