@@ -182,6 +182,8 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Usage`.
 
 `MayNotUseClassRule` and `MayNotUseNamespaceRule` also accept `classNamePattern` when only matching classes should be checked.
 
+`MayNotCallFunctionRule` matches the function name case-insensitively. The backtick operator (`` `ls` ``) is identical to `shell_exec()`, so banning `shell_exec` catches it too.
+
 `MayNotUseConstantRule` takes a global or namespaced constant name, such as `'PHP_EOL'` or `'Vendor\\Config\\DEBUG'`. An unqualified constant inside a namespace counts as both the constant of that namespace and the global constant of that name, as PHP only resolves it at runtime.
 
 `MayNotUseLanguageConstructRule` accepts one of the following `construct` names: `echo`, `print`, `eval`, `isset`, `empty`, `unset`, `list`, `exit`, `die`, `include`, `include_once`, `require`, `require_once`. `die` is a pure alias of `exit`, so banning either spelling catches both. The `include` / `include_once` / `require` / `require_once` constructs are distinct and are matched exactly.

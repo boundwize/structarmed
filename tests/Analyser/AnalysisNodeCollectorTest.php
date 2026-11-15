@@ -2099,6 +2099,30 @@ PHP;
         $this->assertContains('var_dump', $classNode->functionCalls);
     }
 
+    public function testCollectsBacktickOperatorAsShellExecCall(): void
+    {
+        $classNode = $this->collect('<?php class Foo { public function bar(): ?string { return `ls`; } }');
+
+        $this->assertContains('shell_exec', $classNode->functionCalls);
+    }
+
+    public function testCollectsBacktickOperatorAsShellExecCallInNamespace(): void
+    {
+        $code      = <<<'PHP'
+<?php
+namespace App\Support;
+
+class Foo {
+    public function bar(string $directory): ?string {
+        return `ls {$directory}`;
+    }
+}
+PHP;
+        $classNode = $this->collect($code);
+
+        $this->assertSame(['shell_exec'], $classNode->functionCalls);
+    }
+
     public function testCollectsImportedFunctionCalls(): void
     {
         $code      = <<<'PHP'
