@@ -1353,6 +1353,18 @@ final class AnalyserTest extends TestCase
                     return $value;
                 }
                 PHP,
+            'src/globals.php'    => <<<'PHP'
+                <?php
+
+                function double(int $value): int
+                {
+                    return $value * 2;
+                }
+
+                function probed(): void
+                {
+                }
+                PHP,
             'src/Calculator.php' => <<<'PHP'
                 <?php
 
@@ -1362,6 +1374,10 @@ final class AnalyserTest extends TestCase
                 {
                     public function run(array $values): array
                     {
+                        if (! function_exists(__NAMESPACE__ . '\probed')) {
+                            return [];
+                        }
+
                         return array_map(__NAMESPACE__ . '\double', $values);
                     }
                 }
@@ -1375,7 +1391,9 @@ final class AnalyserTest extends TestCase
             ->analyse($architecture, [], null, AnalyserOptions::sequential())
             ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
 
-        $this->assertSame(['App\unused'], $this->violationClassNames($violations));
+        // The '\name' fragment names App\name only: the global functions
+        // sharing the short name stay unused.
+        $this->assertSame(['App\unused', 'double', 'probed'], $this->violationClassNames($violations));
     }
 
     public function testMustBeUsedFunctionRuleRecognizesGlobalFallbackCallFromNamespacedTopLevel(): void
