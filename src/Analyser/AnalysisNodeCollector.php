@@ -1465,7 +1465,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         if ($node instanceof FuncCall && $node->name instanceof Name) {
             $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
 
-            if ($node->name instanceof FullyQualified && $this->activeClassLikeAnalyses === []) {
+            // Inside a function-like the call is one of that scope's function
+            // calls instead: recorded here as well, a function calling only
+            // itself by resolved name would keep itself alive.
+            if (
+                $node->name instanceof FullyQualified
+                && $this->activeClassLikeAnalyses === []
+                && $this->activeFunctionLikeAnalyses === []
+            ) {
                 $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $node->name->toString()] = true;
             }
         }

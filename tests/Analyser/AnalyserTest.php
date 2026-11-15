@@ -1520,6 +1520,68 @@ final class AnalyserTest extends TestCase
         }
     }
 
+    public function testMustBeUsedFunctionRuleIgnoresSelfCallByResolvedName(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/helpers.php'   => <<<'PHP'
+                <?php
+
+                function global_recursive(int $depth): int
+                {
+                    return $depth > 0 ? global_recursive($depth - 1) : 0;
+                }
+
+                function called_from_function(): void {}
+
+                function caller(): void
+                {
+                    called_from_function();
+                }
+
+                caller();
+                PHP,
+            'src/A/helpers.php' => <<<'PHP'
+                <?php
+
+                namespace A;
+
+                use function A\imported_recursive;
+
+                function qualified_recursive(int $depth): int
+                {
+                    return $depth > 0 ? \A\qualified_recursive($depth - 1) : 0;
+                }
+
+                function imported_recursive(int $depth): int
+                {
+                    return $depth > 0 ? imported_recursive($depth - 1) : 0;
+                }
+
+                function closure_recursive(int $depth): int
+                {
+                    $closure = static fn (): int => \A\closure_recursive($depth - 1);
+
+                    return $depth > 0 ? $closure() : 0;
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+        // A self-call is no usage however it is spelled: unqualified in the
+        // global namespace, fully qualified, imported, or made from a closure
+        // of the function. A resolved call from another function still is.
+        $this->assertSame(
+            ['A\closure_recursive', 'A\imported_recursive', 'A\qualified_recursive', 'global_recursive'],
+            $this->violationClassNames($violations)
+        );
+    }
+
     public function testNamespacedNativeFunctionCallFallsBackToNativeFunction(): void
     {
         $basePath = $this->makeTempProject([
