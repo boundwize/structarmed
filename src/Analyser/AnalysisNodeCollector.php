@@ -179,110 +179,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         'newlazyproxy'                  => true,
     ];
 
-    /**
-     * Node classes counted as cyclomatic-complexity branches. The parser only
-     * ever instantiates these exact classes, so a single ::class hash lookup
-     * replaces an instanceof chain on the per-node hot path.
-     */
-    private const COMPLEXITY_BRANCH_NODES = [
-        If_::class                   => true,
-        ElseIf_::class               => true,
-        For_::class                  => true,
-        Foreach_::class              => true,
-        While_::class                => true,
-        Do_::class                   => true,
-        Case_::class                 => true,
-        Catch_::class                => true,
-        Ternary::class               => true,
-        BooleanAnd::class            => true,
-        BooleanOr::class             => true,
-        LogicalAnd::class            => true,
-        LogicalOr::class             => true,
-        Coalesce::class              => true,
-        AssignCoalesce::class        => true,
-        NullsafeMethodCall::class    => true,
-        NullsafePropertyFetch::class => true,
-        MatchArm::class              => true,
-    ];
-
-    /**
-     * Node classes that map to a fixed language-construct name. Exit_ and
-     * Include_ are handled separately: their names depend on node data.
-     */
-    private const LANGUAGE_CONSTRUCT_NODES = [
-        Echo_::class  => 'echo',
-        Print_::class => 'print',
-        Isset_::class => 'isset',
-        Empty_::class => 'empty',
-        Unset_::class => 'unset',
-        Eval_::class  => 'eval',
-        List_::class  => 'list',
-    ];
-
-    /**
-     * Class-like member statements collected on enter, see collectMember().
-     * Enum cases are collected on leaving the enum instead, see
-     * collectEnumCases().
-     */
-    private const MEMBER_NODES = [
-        Property::class   => true,
-        ClassConst::class => true,
-        TraitUse::class   => true,
-    ];
-
-    /**
-     * Every node class enterNode() acts on: the scope-tracking statements,
-     * function-likes, and everything collectNodeAnalysis() records. The
-     * parser only ever instantiates these exact classes, so a single ::class
-     * hash lookup lets the large majority of nodes (identifiers, arguments,
-     * most scalars, assignments, ...) return before any instanceof check.
-     */
-    private const ENTER_NODES = self::COMPLEXITY_BRANCH_NODES
-        + self::LANGUAGE_CONSTRUCT_NODES
-        + self::MEMBER_NODES
-        + [
-            Namespace_::class     => true,
-            Use_::class           => true,
-            GroupUse::class       => true,
-            Function_::class      => true,
-            Class_::class         => true,
-            Interface_::class     => true,
-            Trait_::class         => true,
-            Enum_::class          => true,
-            ClassMethod::class    => true,
-            Closure::class        => true,
-            ArrowFunction::class  => true,
-            String_::class        => true,
-            Concat::class         => true,
-            Int_::class           => true,
-            Float_::class         => true,
-            FullyQualified::class => true,
-            ConstFetch::class     => true,
-            Variable::class       => true,
-            FuncCall::class       => true,
-            Exit_::class          => true,
-            Include_::class       => true,
-            Attribute::class      => true,
-        ];
-
-    /**
-     * Every node class leaveNode() acts on, see ENTER_NODES.
-     */
-    private const LEAVE_NODES = [
-        Closure::class            => true,
-        ArrowFunction::class      => true,
-        New_::class               => true,
-        StaticCall::class         => true,
-        MethodCall::class         => true,
-        NullsafeMethodCall::class => true,
-        ClassMethod::class        => true,
-        Function_::class          => true,
-        Class_::class             => true,
-        Interface_::class         => true,
-        Trait_::class             => true,
-        Enum_::class              => true,
-    ];
-
     /** @var list<ClassNode> */
     private array $classNodes = [];
 
@@ -647,42 +543,73 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             : null;
     }
 
+    /**
+     * Dispatches on the exact node class. The parser only ever instantiates
+     * these classes, so a single jump reaches the node's own case and every
+     * other node (identifiers, arguments, assignments, ...) falls out of the
+     * switch at once. A node class pays for its own case only, however many
+     * cases there are: collecting a new fact is a new case here, not another
+     * check in front of the existing ones.
+     *
+     * The case order carries no meaning and no cost. The traverser still
+     * enters a statement before the expressions inside it.
+     */
     public function enterNode(Node $node): null
     {
-        if (! isset(self::ENTER_NODES[$node::class])) {
-            return null;
-        }
+        switch ($node::class) {
+            // Only `$this` and superglobals are recorded; outside a class-like
+            // or function-like scope both handlers record nothing, so no
+            // scope check is needed.
+            case Variable::class:
+                if ($node->name === 'this') {
+                    $this->markThisUsage();
+                } elseif (is_string($node->name) && isset(self::SUPERGLOBALS[$node->name])) {
+                    $this->addSuperglobal('$' . $node->name);
+                }
 
-        // This ordering is about the instanceof tests in this method, not the
-        // traversal: the traverser still enters a statement before the
-        // expressions inside it. Variable is the most frequent node class, so
-        // testing it first spares every variable the Stmt and FunctionLike
-        // checks and the collectNodeAnalysis() call. Only `$this` and
-        // superglobals are recorded; outside a class-like or function-like
-        // scope both handlers record nothing, so no scope check is needed.
-        if ($node instanceof Variable) {
-            if ($node->name === 'this') {
-                $this->markThisUsage();
-            } elseif (is_string($node->name) && isset(self::SUPERGLOBALS[$node->name])) {
-                $this->addSuperglobal('$' . $node->name);
-            }
+                break;
 
-            return null;
-        }
+            case String_::class:
+                $this->collectStringReference($node);
 
-        // The scope-tracking node types are all statements, so the far more
-        // frequent expression/name/identifier nodes skip their checks with a
-        // single instanceof.
-        if ($node instanceof Stmt) {
-            if ($node instanceof Namespace_) {
+                break;
+
+            case FullyQualified::class:
+                $this->collectFullyQualifiedName($node);
+
+                break;
+
+            case Int_::class:
+            case Float_::class:
+                if ($this->withFileAnalysis) {
+                    $this->collectNumericLiteral($node);
+                }
+
+                break;
+
+            case ConstFetch::class:
+                $this->collectConstantFetch($node);
+
+                break;
+
+            case FuncCall::class:
+                $this->collectFunctionCall($node);
+
+                break;
+
+            case Concat::class:
+                $this->collectNamespaceConcatReference($node);
+
+                break;
+
+            case Namespace_::class:
                 $this->currentNamespace          = (string) $node->name;
                 $this->currentNamespaceUses      = [];
                 $this->currentNamespaceClassUses = [];
 
-                return null;
-            }
+                break;
 
-            if ($node instanceof Use_) {
+            case Use_::class:
                 foreach ($node->uses as $use) {
                     $name = $use->name->toString();
 
@@ -693,10 +620,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     }
                 }
 
-                return null;
-            }
+                break;
 
-            if ($node instanceof GroupUse) {
+            case GroupUse::class:
                 $prefix = $node->prefix->toString();
 
                 foreach ($node->uses as $use) {
@@ -713,17 +639,24 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     }
                 }
 
-                return null;
-            }
+                break;
 
-            if ($node instanceof Function_) {
+            case Function_::class:
                 $this->activeFunctionNames[] = $this->resolveFunctionDeclarationName($node);
                 $this->startFunctionLikeAnalysis($node);
 
-                return null;
-            }
+                break;
 
-            if ($node instanceof ClassLike) {
+            case Closure::class:
+            case ArrowFunction::class:
+                $this->startFunctionLikeAnalysis($node);
+
+                break;
+
+            case Class_::class:
+            case Interface_::class:
+            case Trait_::class:
+            case Enum_::class:
                 $classLikeName = $node->name instanceof Identifier
                     ? $this->resolveClassName($node)
                     : null;
@@ -733,126 +666,221 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $this->functionLikeDepthAtClassLikeEntry[] = count($this->activeFunctionLikeAnalyses);
                 $this->startClassLikeAnalysis($node);
 
-                return null;
-            }
+                break;
 
-            if ($node instanceof ClassMethod) {
+            case ClassMethod::class:
                 $this->startMethodAnalysis();
 
-                return null;
-            }
+                break;
 
-            if (isset(self::MEMBER_NODES[$node::class])) {
+            // Class-like member statements. Enum cases are collected on
+            // leaving the enum instead, see collectEnumCases().
+            case Property::class:
+            case ClassConst::class:
+            case TraitUse::class:
                 $this->collectMember($node);
 
-                return null;
-            }
-        } elseif ($node instanceof FunctionLike) {
-            $this->startFunctionLikeAnalysis($node);
+                break;
 
-            return null;
+            // Cyclomatic-complexity branches. Outside a method and a
+            // function-like there is nothing to count them for.
+            case If_::class:
+            case ElseIf_::class:
+            case For_::class:
+            case Foreach_::class:
+            case While_::class:
+            case Do_::class:
+            case Case_::class:
+            case Catch_::class:
+            case Ternary::class:
+            case BooleanAnd::class:
+            case BooleanOr::class:
+            case LogicalAnd::class:
+            case LogicalOr::class:
+            case Coalesce::class:
+            case AssignCoalesce::class:
+            case NullsafeMethodCall::class:
+            case NullsafePropertyFetch::class:
+            case MatchArm::class:
+                foreach ($this->activeMethodComplexities as &$activeMethodComplexity) {
+                    $activeMethodComplexity++;
+                }
+
+                unset($activeMethodComplexity);
+
+                $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
+
+                if ($activeFunctionLikeCount > 0) {
+                    $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->cyclomaticComplexity++;
+                }
+
+                break;
+
+            // Language constructs. Outside a class-like and a function-like
+            // addLanguageConstruct() records nothing.
+            case Echo_::class:
+                $this->addLanguageConstruct('echo');
+
+                break;
+
+            case Print_::class:
+                $this->addLanguageConstruct('print');
+
+                break;
+
+            case Isset_::class:
+                $this->addLanguageConstruct('isset');
+
+                break;
+
+            case Empty_::class:
+                $this->addLanguageConstruct('empty');
+
+                break;
+
+            case Unset_::class:
+                $this->addLanguageConstruct('unset');
+
+                break;
+
+            case Eval_::class:
+                $this->addLanguageConstruct('eval');
+
+                break;
+
+            case List_::class:
+                $this->addLanguageConstruct('list');
+
+                break;
+
+            case Exit_::class:
+                $this->addLanguageConstruct(
+                    $node->getAttribute('kind') === Exit_::KIND_DIE
+                        ? 'die'
+                        : 'exit'
+                );
+
+                break;
+
+            case Include_::class:
+                $this->addLanguageConstruct(match ($node->type) {
+                    Include_::TYPE_REQUIRE      => 'require',
+                    Include_::TYPE_INCLUDE_ONCE => 'include_once',
+                    Include_::TYPE_REQUIRE_ONCE => 'require_once',
+                    default                     => 'include',
+                });
+
+                break;
+
+            // ReflectionAttribute::newInstance() instantiates the attribute
+            // class, which is fatal on an abstract class, so an attribute
+            // counts as an instantiation. The NameResolver resolved its name
+            // on entering the node carrying the attribute.
+            case Attribute::class:
+                if ($this->activeClassLikeAnalyses !== [] || $this->activeFunctionLikeAnalyses !== []) {
+                    $this->currentFileInstantiations[$node->name->toString()] = true;
+                }
+
+                break;
         }
-
-        $this->collectNodeAnalysis($node);
 
         return null;
     }
 
+    /**
+     * Dispatches on the exact node class, see enterNode(). Everything here
+     * runs on leave because it needs the node's children visited first: the
+     * NameResolver has resolved the nested name nodes by then (e.g.
+     * Base::class inside a class expression), and a scope's facts are complete.
+     */
     public function leaveNode(Node $node): null
     {
-        if (! isset(self::LEAVE_NODES[$node::class])) {
-            return null;
-        }
-
-        // Both instantiation handlers run on leave, once the NameResolver
-        // has resolved the nested name nodes (e.g. Base::class inside the
-        // class expression). They only match expressions, and ClassMethod /
-        // ClassLike are statements, so one instanceof splits the two groups.
-        if ($node instanceof Expr) {
-            if ($node instanceof Closure || $node instanceof ArrowFunction) {
+        switch ($node::class) {
+            case Closure::class:
+            case ArrowFunction::class:
                 $this->finishFunctionLikeAnalysis();
 
-                return null;
-            }
+                break;
 
             // Instantiations are tracked separately from plain references:
             // `new` on an abstract class is fatal, so instantiation is the one
             // usage that requires an extended class to stay concrete — type
             // hints, instanceof checks, and ::class constants all keep working
             // once a class becomes abstract.
-            if ($node instanceof New_) {
+            case New_::class:
                 $this->collectInstantiation($node);
 
-                return null;
-            }
+                break;
 
-            // The exact-class LEAVE_NODES filter and the returns above leave
-            // only these three call nodes on this path.
-            /** @phpstan-var StaticCall|MethodCall|NullsafeMethodCall $node */
-            $this->collectObjectBindingRequirement($node);
+            case StaticCall::class:
+                $this->collectObjectBindingRequirement($node);
 
-            if ($node instanceof StaticCall) {
-                return null;
-            }
+                break;
 
-            // A ReflectionClass construction call instantiates the reflected
-            // class when the reflection target is statically resolvable. The
-            // `new` receiver is checked first: it is the rare shape, so the
-            // common method call skips the name lowering entirely.
-            if (
-                $node->var instanceof New_
-                && $node->name instanceof Identifier
-                && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
-            ) {
-                $this->collectReflectionInstantiation($node->var);
-            }
+            case MethodCall::class:
+            case NullsafeMethodCall::class:
+                $this->collectObjectBindingRequirement($node);
 
-            return null;
-        }
+                // A ReflectionClass construction call instantiates the
+                // reflected class when the reflection target is statically
+                // resolvable. The `new` receiver is checked first: it is the
+                // rare shape, so the common method call skips the name
+                // lowering entirely.
+                if (
+                    $node->var instanceof New_
+                    && $node->name instanceof Identifier
+                    && isset(self::REFLECTION_CONSTRUCTION_METHODS[$node->name->toLowerString()])
+                ) {
+                    $this->collectReflectionInstantiation($node->var);
+                }
 
-        if ($node instanceof ClassMethod) {
-            $this->finishMethodAnalysis($node);
+                break;
 
-            return null;
-        }
+            case ClassMethod::class:
+                $this->finishMethodAnalysis($node);
 
-        if ($node instanceof Function_) {
-            $this->finishFunctionLikeAnalysis();
-            array_pop($this->activeFunctionNames);
+                break;
 
-            return null;
-        }
+            case Function_::class:
+                $this->finishFunctionLikeAnalysis();
+                array_pop($this->activeFunctionNames);
 
-        // Every remaining LEAVE_NODES entry is a class-like statement.
-        /** @phpstan-var ClassLike $node */
+                break;
 
-        if ($node instanceof Enum_) {
-            $this->collectEnumCases($node);
-        }
+            case Class_::class:
+            case Interface_::class:
+            case Trait_::class:
+            case Enum_::class:
+                if ($node instanceof Enum_) {
+                    $this->collectEnumCases($node);
+                }
 
-        array_pop($this->activeClassLikeScopes);
-        array_pop($this->activeClassLikeNames);
-        array_pop($this->functionLikeDepthAtClassLikeEntry);
+                array_pop($this->activeClassLikeScopes);
+                array_pop($this->activeClassLikeNames);
+                array_pop($this->functionLikeDepthAtClassLikeEntry);
 
-        /** @var ClassLikeAnalysis $analysis */
-        $analysis = array_pop($this->activeClassLikeAnalyses);
+                /** @var ClassLikeAnalysis $analysis */
+                $analysis = array_pop($this->activeClassLikeAnalyses);
 
-        // Anonymous classes never become ClassNodes, but the class they
-        // extend, the interfaces they implement, and the traits they use
-        // are still used within the scanned paths, and their members and
-        // body facts are collected like a named class's.
-        if ($node instanceof Class_ && $node->isAnonymous()) {
-            // Its own (nameless) entry is already popped, so the innermost
-            // active names are the named scopes declaring it; they also
-            // resolve its layer, as they do for an anonymous function.
-            $this->fileClassLikes[] = [
-                $node,
-                $analysis,
-                $this->innermostActiveClassLikeName(),
-                $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
-            ];
-        } else {
-            $this->fileClassLikes[] = [$node, $analysis, null, null];
+                // Anonymous classes never become ClassNodes, but the class they
+                // extend, the interfaces they implement, and the traits they use
+                // are still used within the scanned paths, and their members and
+                // body facts are collected like a named class's.
+                if ($node instanceof Class_ && $node->isAnonymous()) {
+                    // Its own (nameless) entry is already popped, so the innermost
+                    // active names are the named scopes declaring it; they also
+                    // resolve its layer, as they do for an anonymous function.
+                    $this->fileClassLikes[] = [
+                        $node,
+                        $analysis,
+                        $this->innermostActiveClassLikeName(),
+                        $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
+                    ];
+                } else {
+                    $this->fileClassLikes[] = [$node, $analysis, null, null];
+                }
+
+                break;
         }
 
         return null;
@@ -1320,253 +1348,190 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
     }
 
-    private function collectNodeAnalysis(Node $node): void
+    /**
+     * Parser-created scalar nodes always carry rawValue. Programmatic nodes
+     * may not, and non-finite floats cannot be cache-serialized.
+     */
+    private function collectNumericLiteral(Int_|Float_ $node): void
     {
-        if ($node instanceof Int_ || $node instanceof Float_) {
-            if (! $this->withFileAnalysis) {
-                return;
-            }
+        $rawValue = $node->getAttribute('rawValue');
 
-            $rawValue = $node->getAttribute('rawValue');
+        if (
+            is_string($rawValue)
+            && ($node instanceof Int_ || is_finite($node->value))
+        ) {
+            $this->numericLiterals[] = [$node->getStartLine(), $rawValue, $node->value];
+        }
+    }
 
-            // Parser-created scalar nodes always carry rawValue. Programmatic
-            // nodes may not, and non-finite floats cannot be cache-serialized.
+    /**
+     * `__NAMESPACE__ . '\name'` spells a namespaced class-like or callable
+     * name as the string literal would, so it is the same reference, see
+     * collectStringReference(). The name passed to function_exists() stays a
+     * probe here as well.
+     */
+    private function collectNamespaceConcatReference(Concat $concat): void
+    {
+        if (
+            ! $concat->left instanceof NamespaceMagicConst
+            || ! $concat->right instanceof String_
+            || $concat->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)
+        ) {
+            return;
+        }
+
+        $value = $this->stripLeadingNamespaceSeparator($this->currentNamespace . $concat->right->value);
+
+        if (preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1) {
+            $this->currentFileReferences[$value]                                   = true;
+            $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
+        }
+    }
+
+    /**
+     * A class-name-shaped string literal may feed `new $class`,
+     * `$obj instanceof $class`, class_exists(), container ids, and so on.
+     * Whether it appears inside a class-like or in procedural code, treat it
+     * as a file-level reference so the named class-like stays alive.
+     */
+    private function collectStringReference(String_ $string): void
+    {
+        if ($string->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)) {
+            return;
+        }
+
+        // A leading `\` is a valid fully-qualified spelling
+        // (`'\App\Contract'`); strip it so the stored name matches the
+        // ClassNode::$className form used for usage lookups.
+        $value = $this->stripLeadingNamespaceSeparator($string->value);
+
+        // A static callable string ('App\Handler::run') references its
+        // class only: the method name is neither a class nor a function.
+        $separatorPosition = strpos($value, '::');
+
+        if ($separatorPosition !== false) {
+            $staticCallableClass = substr($value, 0, $separatorPosition);
+
+            // A method part that is not an identifier ('App\A::',
+            // 'App\A::123', 'App\A::B::run') is not a callable.
             if (
-                is_string($rawValue)
-                && ($node instanceof Int_ || is_finite($node->value))
+                preg_match(self::METHOD_NAME_PATTERN, substr($value, $separatorPosition + 2)) === 1
+                && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
             ) {
-                $this->numericLiterals[] = [$node->getStartLine(), $rawValue, $node->value];
+                $this->currentFileReferences[$staticCallableClass] = true;
             }
 
             return;
         }
 
-        // `__NAMESPACE__ . '\name'` spells a namespaced class-like or callable
-        // name as the string literal below would, so it is the same reference.
-        // The name passed to function_exists() stays a probe here as well.
-        if ($node instanceof Concat) {
-            if (
-                $node->left instanceof NamespaceMagicConst
-                && $node->right instanceof String_
-                && ! $node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)
-            ) {
-                $value = $this->stripLeadingNamespaceSeparator($this->currentNamespace . $node->right->value);
+        if (
+            preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1
+            && ! isset(self::KEYWORD_CONSTANTS[strtolower($value)])
+        ) {
+            $this->currentFileReferences[$value] = true;
+            // A name-shaped string can also be invoked as a callable.
+            $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
+        }
+    }
 
-                if (preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1) {
-                    $this->currentFileReferences[$value]                                   = true;
-                    $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
-                }
-            }
+    private function collectFullyQualifiedName(FullyQualified $fullyQualified): void
+    {
+        $name = $fullyQualified->toString();
 
+        if (isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
             return;
         }
 
-        // A class-name-shaped string literal may feed `new $class`,
-        // `$obj instanceof $class`, class_exists(), container ids, and so on.
-        // Whether it appears inside a class-like or in procedural code, treat
-        // it as a file-level reference so the named class-like stays alive.
-        if ($node instanceof String_) {
-            if ($node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)) {
-                return;
-            }
+        // Its FuncCall or ConstFetch is entered first, so the mark is set
+        // by now.
+        $isClassName = ! $fullyQualified->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE);
 
-            // A leading `\` is a valid fully-qualified spelling
-            // (`'\App\Contract'`); strip it so the stored name matches the
-            // ClassNode::$className form used for usage lookups.
-            $value = $this->stripLeadingNamespaceSeparator($node->value);
+        if ($isClassName && $this->activeClassLikeAnalyses === []) {
+            // Outside any class-like scope — procedural functions and
+            // top-level statements — a class-like reference still keeps
+            // the referenced class-like alive.
+            $this->currentFileReferences[$name] = true;
+        }
 
-            // A static callable string ('App\Handler::run') references its
-            // class only: the method name is neither a class nor a function.
-            $separatorPosition = strpos($value, '::');
+        $this->addDependency($name, $isClassName);
+    }
 
-            if ($separatorPosition !== false) {
-                $staticCallableClass = substr($value, 0, $separatorPosition);
+    private function collectConstantFetch(ConstFetch $constFetch): void
+    {
+        $name = $constFetch->name;
+        $name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
 
-                // A method part that is not an identifier ('App\A::',
-                // 'App\A::123', 'App\A::B::run') is not a callable.
-                if (
-                    preg_match(self::METHOD_NAME_PATTERN, substr($value, $separatorPosition + 2)) === 1
-                    && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
-                ) {
-                    $this->currentFileReferences[$staticCallableClass] = true;
-                }
+        if ($this->withFileAnalysis) {
+            $this->collectKeywordConstant($name);
+        }
 
-                return;
-            }
-
-            if (
-                preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1
-                && ! isset(self::KEYWORD_CONSTANTS[strtolower($value)])
-            ) {
-                $this->currentFileReferences[$value] = true;
-                // A name-shaped string can also be invoked as a callable.
-                $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
-            }
-
+        if ($this->activeClassLikeAnalyses === [] || isset(self::KEYWORD_CONSTANTS[$name->toLowerString()])) {
             return;
         }
 
-        if ($node instanceof FullyQualified) {
-            $name = $node->toString();
+        // An unqualified fetch in a namespace is not a FullyQualified node:
+        // PHP fetches the namespaced constant when it exists and the global
+        // one otherwise, which is not known here, so both candidates are
+        // recorded.
+        $namespacedName = $name->getAttribute('namespacedName');
+        $constant       = $name->toString();
 
-            if (isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
-                return;
+        foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
+            if ($namespacedName instanceof Name) {
+                $activeClassLikeAnalysis->constantFetches[$namespacedName->toString()] = true;
             }
 
-            if ($this->activeClassLikeAnalyses === [] && ! $node->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE)) {
-                // Outside any class-like scope — procedural functions and
-                // top-level statements — a class-like reference still keeps
-                // the referenced class-like alive.
-                $this->currentFileReferences[$name] = true;
-            }
+            $activeClassLikeAnalysis->constantFetches[$constant] = true;
+        }
+    }
 
-            $this->addDependency($name, ! $node->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE));
+    private function collectFunctionCall(FuncCall $funcCall): void
+    {
+        $name = $funcCall->name;
 
+        if (! $name instanceof Name) {
             return;
         }
 
-        // Entered before its name, so the FullyQualified branch above sees
-        // the mark.
-        if ($node instanceof ConstFetch) {
-            $name = $node->name;
-            $name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
+        $name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
 
-            if ($this->withFileAnalysis) {
-                $this->collectKeywordConstant($name);
-            }
-
-            if ($this->activeClassLikeAnalyses !== [] && ! isset(self::KEYWORD_CONSTANTS[$name->toLowerString()])) {
-                // An unqualified fetch in a namespace is not a FullyQualified
-                // node: PHP fetches the namespaced constant when it exists and
-                // the global one otherwise, which is not known here, so both
-                // candidates are recorded.
-                $namespacedName = $name->getAttribute('namespacedName');
-                $constant       = $name->toString();
-
-                foreach ($this->activeClassLikeAnalyses as $activeClassLikeAnalysis) {
-                    if ($namespacedName instanceof Name) {
-                        $activeClassLikeAnalysis->constantFetches[$namespacedName->toString()] = true;
-                    }
-
-                    $activeClassLikeAnalysis->constantFetches[$constant] = true;
-                }
-            }
-
-            return;
+        if ($name instanceof FullyQualified && $this->activeClassLikeAnalyses === []) {
+            $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $name->toString()] = true;
         }
 
-        if ($node instanceof FuncCall && $node->name instanceof Name) {
-            $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
-
-            if ($node->name instanceof FullyQualified && $this->activeClassLikeAnalyses === []) {
-                $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $node->name->toString()] = true;
-            }
-        }
+        $functionName = $name->toLowerString();
 
         // Entered before its arguments, so the name string is marked before
-        // the String_ branch sees it — also outside any scope, where a
+        // collectStringReference() sees it — also outside any scope, where a
         // top-level `if (! function_exists(...))` guard usually sits.
-        if (
-            $node instanceof FuncCall
-            && $node->name instanceof Name
-            && $node->name->toLowerString() === 'function_exists'
-            && ! $node->isFirstClassCallable()
-        ) {
-            ($node->getArgs()[0] ?? null)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+        if ($functionName === 'function_exists' && ! $funcCall->isFirstClassCallable()) {
+            ($funcCall->getArgs()[0] ?? null)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
         }
 
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
             // A top-level unqualified call in a namespace is not a FullyQualified
             // node, so it is recorded here as a fallback marker, keeping the
             // function PHP calls alive.
-            if (
-                $node instanceof FuncCall
-                && $node->name instanceof Name
-                && ! $node->name instanceof FullyQualified
-            ) {
-                $namespacedName = $node->name->getAttribute('namespacedName');
+            if (! $name instanceof FullyQualified) {
+                $namespacedName = $name->getAttribute('namespacedName');
 
                 if ($namespacedName instanceof Name) {
-                    $this->addFunctionFallback($node->name, $namespacedName);
+                    $this->addFunctionFallback($name, $namespacedName);
                 }
             }
 
             return;
         }
 
-        // Branch nodes (conditions, loops, boolean operators) are among the
-        // most frequent remaining node types, so they dispatch on one hash
-        // lookup before the rarer per-type checks below.
-        $nodeClass = $node::class;
-
-        if (isset(self::COMPLEXITY_BRANCH_NODES[$nodeClass])) {
-            foreach ($this->activeMethodComplexities as &$activeMethodComplexity) {
-                $activeMethodComplexity++;
-            }
-
-            unset($activeMethodComplexity);
-
-            $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
-
-            if ($activeFunctionLikeCount > 0) {
-                $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->cyclomaticComplexity++;
-            }
+        // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
+        // FuncCall instead of Exit_, but remain language constructs
+        if ($functionName === 'exit' || $functionName === 'die') {
+            $this->addLanguageConstruct($functionName);
 
             return;
         }
 
-        if ($node instanceof FuncCall) {
-            if ($node->name instanceof Name) {
-                $functionName = $node->name->toLowerString();
-
-                // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
-                // FuncCall instead of Exit_, but remain language constructs
-                if ($functionName === 'exit' || $functionName === 'die') {
-                    $this->addLanguageConstruct($functionName);
-                } else {
-                    $this->addFunctionCallName($node->name);
-                }
-            }
-
-            return;
-        }
-
-        if ($node instanceof Exit_) {
-            $this->addLanguageConstruct(
-                $node->getAttribute('kind') === Exit_::KIND_DIE
-                    ? 'die'
-                    : 'exit'
-            );
-
-            return;
-        }
-
-        if ($node instanceof Include_) {
-            $this->addLanguageConstruct(match ($node->type) {
-                Include_::TYPE_REQUIRE      => 'require',
-                Include_::TYPE_INCLUDE_ONCE => 'include_once',
-                Include_::TYPE_REQUIRE_ONCE => 'require_once',
-                default                     => 'include',
-            });
-
-            return;
-        }
-
-        // ReflectionAttribute::newInstance() instantiates the attribute class,
-        // which is fatal on an abstract class, so an attribute counts as an
-        // instantiation. The NameResolver resolved its name on entering the
-        // node carrying the attribute.
-        if ($node instanceof Attribute) {
-            $this->currentFileInstantiations[$node->name->toString()] = true;
-
-            return;
-        }
-
-        $languageConstruct = self::LANGUAGE_CONSTRUCT_NODES[$nodeClass] ?? null;
-
-        if ($languageConstruct !== null) {
-            $this->addLanguageConstruct($languageConstruct);
-        }
+        $this->addFunctionCallName($name);
     }
 
     /**
