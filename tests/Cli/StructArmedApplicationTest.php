@@ -18,12 +18,15 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+use function basename;
 use function bin2hex;
 use function chdir;
+use function dirname;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
 use function getcwd;
+use function getenv;
 use function glob;
 use function is_dir;
 use function json_decode;
@@ -32,6 +35,7 @@ use function ob_end_clean;
 use function ob_get_contents;
 use function ob_start;
 use function preg_replace;
+use function putenv;
 use function random_bytes;
 use function realpath;
 use function rename;
@@ -961,7 +965,10 @@ PHP);
 
     public function testAnalyseCommandRendersGithubReport(): void
     {
-        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+        $basePath        = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+        $githubWorkspace = getenv('GITHUB_WORKSPACE');
+
+        putenv('GITHUB_WORKSPACE');
 
         try {
             [$exitCode, $output] = $this->runApplication(
@@ -976,6 +983,33 @@ PHP);
             );
             $this->assertStringContainsString('1 violation(s) found', $output);
         } finally {
+            putenv($githubWorkspace === false ? 'GITHUB_WORKSPACE' : 'GITHUB_WORKSPACE=' . $githubWorkspace);
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandRendersGithubReportRelativeToGithubWorkspace(): void
+    {
+        $basePath        = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+        $githubWorkspace = getenv('GITHUB_WORKSPACE');
+
+        // The analysed project is a sub directory of the repository root.
+        putenv('GITHUB_WORKSPACE=' . dirname($basePath));
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--report=github'],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                '::error file=' . basename($basePath) . '/src/Foo.php,line=7,'
+                    . 'title=source.must_declare_method_visibility::',
+                $output
+            );
+        } finally {
+            putenv($githubWorkspace === false ? 'GITHUB_WORKSPACE' : 'GITHUB_WORKSPACE=' . $githubWorkspace);
             $this->removeTempDirectory($basePath);
         }
     }
