@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Rule\Fixer\PhpParser\Function_;
 
 use PhpParser\Node;
+use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
+use PhpParser\Node\Scalar\MagicConst\Namespace_ as NamespaceMagicConst;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\If_;
+use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
 
@@ -27,9 +31,21 @@ final class RemoveFunctionVisitor extends NodeVisitorAbstract
     /** @var list<string> */
     private array $removedFunctionNames = [];
 
+    /** The namespace being traversed, as `__NAMESPACE__` evaluates to: empty in the global namespace */
+    private string $currentNamespace = '';
+
     public function __construct(
         private readonly string $functionName,
     ) {
+    }
+
+    public function enterNode(Node $node): null
+    {
+        if ($node instanceof Namespace_) {
+            $this->currentNamespace = (string) $node->name;
+        }
+
+        return null;
     }
 
     public function leaveNode(Node $node): ?int
@@ -76,13 +92,11 @@ final class RemoveFunctionVisitor extends NodeVisitorAbstract
             return false;
         }
 
-        $functionNameArg = $funcCall->getArgs()[0]->value ?? null;
+        $guardedFunctionName = $this->guardedFunctionName($funcCall->getArgs()[0]->value ?? null);
 
-        if (! $functionNameArg instanceof String_) {
+        if ($guardedFunctionName === null) {
             return false;
         }
-
-        $guardedFunctionName = ltrim($functionNameArg->value, '\\');
 
         foreach ($this->removedFunctionNames as $removedFunctionName) {
             if (strcasecmp($guardedFunctionName, $removedFunctionName) === 0) {
@@ -91,5 +105,19 @@ final class RemoveFunctionVisitor extends NodeVisitorAbstract
         }
 
         return false;
+    }
+
+    /**
+     * The function a guard argument names: a string literal, or
+     * `__NAMESPACE__ . '\name'`, which spells a function of the namespace
+     * being traversed. Null for any other expression.
+     */
+    private function guardedFunctionName(?Expr $expr): ?string
+    {
+        if ($expr instanceof Concat && $expr->left instanceof NamespaceMagicConst && $expr->right instanceof String_) {
+            return ltrim($this->currentNamespace . $expr->right->value, '\\');
+        }
+
+        return $expr instanceof String_ ? ltrim($expr->value, '\\') : null;
     }
 }

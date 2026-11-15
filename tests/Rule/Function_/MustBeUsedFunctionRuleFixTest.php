@@ -122,6 +122,49 @@ final class MustBeUsedFunctionRuleFixTest extends TestCase
             PHP, file_get_contents($file));
     }
 
+    public function testFixRemovesEmptiedNamespaceConcatFunctionExistsGuard(): void
+    {
+        $temporaryDirectory = $this->makeTemporaryDirectory('structarmed-yagni-function');
+        $file               = $temporaryDirectory . '/functions.php';
+
+        file_put_contents($file, <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace App;
+
+            if (! function_exists(__NAMESPACE__ . '\unused')) {
+                function unused(): void
+                {
+                }
+            }
+
+            if (! function_exists(__NAMESPACE__ . '\used')) {
+                function used(): void
+                {
+                }
+            }
+
+            PHP);
+
+        $this->assertTrue((new MustBeUsedFunctionRule(layer: 'Source'))->fix($this->violation($file, 'App\\unused')));
+        $this->assertSame(<<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace App;
+
+            if (! function_exists(__NAMESPACE__ . '\used')) {
+                function used(): void
+                {
+                }
+            }
+
+            PHP, file_get_contents($file));
+    }
+
     public function testFixKeepsFunctionExistsGuardWithElse(): void
     {
         $temporaryDirectory = $this->makeTemporaryDirectory('structarmed-yagni-function');

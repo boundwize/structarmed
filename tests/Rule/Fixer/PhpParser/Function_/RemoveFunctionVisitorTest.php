@@ -9,12 +9,14 @@ use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\BooleanNot;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\MagicConst\Namespace_;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\If_;
+use PhpParser\Node\Stmt\Namespace_ as NamespaceStmt;
 use PhpParser\NodeTraverser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -127,9 +129,7 @@ final class RemoveFunctionVisitorTest extends TestCase
         $function->namespacedName = new Name('App\\unused');
 
         $if = new If_(
-            new BooleanNot(new FuncCall(new Name('function_exists'), [
-                new Arg(new Concat(new Namespace_(), new String_('\\unused'))),
-            ])),
+            new BooleanNot(new FuncCall(new Name('function_exists'), [new Arg(new Variable('name'))])),
             ['stmts' => [$function]]
         );
 
@@ -137,6 +137,43 @@ final class RemoveFunctionVisitorTest extends TestCase
             ->traverse([$if]);
 
         $this->assertSame([$if], $statements);
+    }
+
+    public function testRemovesNamespaceConcatFunctionExistsGuardNamingRemovedFunction(): void
+    {
+        $function                 = new Function_('unused');
+        $function->namespacedName = new Name('App\\unused');
+
+        $namespace = new NamespaceStmt(new Name('App'), [$this->namespaceConcatGuard([$function])]);
+
+        (new NodeTraverser(new RemoveFunctionVisitor('App\\unused')))->traverse([$namespace]);
+
+        $this->assertSame([], $namespace->stmts);
+    }
+
+    public function testKeepsNamespaceConcatFunctionExistsGuardOfAnotherNamespace(): void
+    {
+        $function                 = new Function_('unused');
+        $function->namespacedName = new Name('App\\unused');
+
+        $if        = $this->namespaceConcatGuard([$function]);
+        $namespace = new NamespaceStmt(new Name('Other'), [$if]);
+
+        (new NodeTraverser(new RemoveFunctionVisitor('App\\unused')))->traverse([$namespace]);
+
+        $this->assertSame([$if], $namespace->stmts);
+        $this->assertSame([], $if->stmts);
+    }
+
+    /** @param list<Function_> $stmts */
+    private function namespaceConcatGuard(array $stmts): If_
+    {
+        return new If_(
+            new BooleanNot(new FuncCall(new Name('function_exists'), [
+                new Arg(new Concat(new Namespace_(), new String_('\\unused'))),
+            ])),
+            ['stmts' => $stmts]
+        );
     }
 
     /** @param list<Function_> $stmts */
