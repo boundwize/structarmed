@@ -53,6 +53,7 @@ use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
 use PhpParser\Node\Scalar\Float_;
 use PhpParser\Node\Scalar\Int_;
+use PhpParser\Node\Scalar\MagicConst\Namespace_ as NamespaceMagicConst;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Case_;
@@ -252,6 +253,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             Closure::class        => true,
             ArrowFunction::class  => true,
             String_::class        => true,
+            Concat::class         => true,
             Int_::class           => true,
             Float_::class         => true,
             FullyQualified::class => true,
@@ -335,6 +337,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /** @var array<string, string> Resolved unqualified calls, keyed by their namespaced spelling */
     private array $resolvedFunctionNames = [];
+
+    /** The namespace being traversed, as `__NAMESPACE__` evaluates to: empty in the global namespace */
+    private string $currentNamespace = '';
 
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
@@ -486,6 +491,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFileFallbackNames          = [];
         $this->currentFileGlobalFunctionCalls    = [];
         $this->resolvedFunctionNames             = [];
+        $this->currentNamespace                  = '';
         $this->currentFileInstantiations         = [];
         $this->nonCanonicalKeywordConstants      = [];
         $this->numericLiterals                   = [];
@@ -669,6 +675,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // single instanceof.
         if ($node instanceof Stmt) {
             if ($node instanceof Namespace_) {
+                $this->currentNamespace          = (string) $node->name;
                 $this->currentNamespaceUses      = [];
                 $this->currentNamespaceClassUses = [];
 
@@ -1329,6 +1336,26 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 && ($node instanceof Int_ || is_finite($node->value))
             ) {
                 $this->numericLiterals[] = [$node->getStartLine(), $rawValue, $node->value];
+            }
+
+            return;
+        }
+
+        // `__NAMESPACE__ . '\name'` spells a namespaced class-like or callable
+        // name as the string literal below would, so it is the same reference.
+        // The name passed to function_exists() stays a probe here as well.
+        if ($node instanceof Concat) {
+            if (
+                $node->left instanceof NamespaceMagicConst
+                && $node->right instanceof String_
+                && ! $node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)
+            ) {
+                $value = $this->stripLeadingNamespaceSeparator($this->currentNamespace . $node->right->value);
+
+                if (preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1) {
+                    $this->currentFileReferences[$value]                                   = true;
+                    $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
+                }
             }
 
             return;

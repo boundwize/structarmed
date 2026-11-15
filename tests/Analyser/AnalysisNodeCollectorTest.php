@@ -336,6 +336,52 @@ PHP);
         );
     }
 
+    public function testCollectsNamespaceMagicConstantConcatenationsAsFileReferences(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+
+            final class Mapper
+            {
+                public function map(array $values): array
+                {
+                    // the function_exists() probe and the non-name-shaped value are no references
+                    if (! function_exists(__NAMESPACE__ . '\probed')) {
+                        return [__NAMESPACE__ . '\not a name'];
+                    }
+
+                    return array_map(__NAMESPACE__ . '\double', $values);
+                }
+            }
+            PHP);
+
+        $fileReferences = $analysisNodeCollector->getFileReferences()['/fake/path/Foo.php'];
+
+        $this->assertContains('App\double', $fileReferences);
+        $this->assertContains('!App\double', $fileReferences);
+        $this->assertNotContains('App\probed', $fileReferences);
+        $this->assertNotContains('App\not a name', $fileReferences);
+    }
+
+    public function testCollectsNamespaceMagicConstantConcatenationInGlobalNamespace(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App {
+            }
+
+            namespace {
+                array_map(__NAMESPACE__ . '\double', []);
+            }
+            PHP);
+
+        $fileReferences = $analysisNodeCollector->getFileReferences()['/fake/path/Foo.php'];
+
+        $this->assertContains('double', $fileReferences);
+        $this->assertNotContains('App\double', $fileReferences);
+    }
+
     public function testCollectsClassOfStaticCallableStringsAsFileReferences(): void
     {
         $code = <<<'PHP'
