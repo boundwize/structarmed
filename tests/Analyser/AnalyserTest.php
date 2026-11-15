@@ -1335,6 +1335,49 @@ final class AnalyserTest extends TestCase
         $this->assertSame(['unused_helper'], $this->violationClassNames($violations));
     }
 
+    public function testMustBeUsedFunctionRuleRecognizesNamespaceMagicConstantCallableString(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/functions.php'  => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                function double(int $value): int
+                {
+                    return $value * 2;
+                }
+
+                function unused(int $value): int
+                {
+                    return $value;
+                }
+                PHP,
+            'src/Calculator.php' => <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Calculator
+                {
+                    public function run(array $values): array
+                    {
+                        return array_map(__NAMESPACE__ . '\double', $values);
+                    }
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+        $this->assertSame(['App\unused'], $this->violationClassNames($violations));
+    }
+
     public function testMustBeUsedFunctionRuleRecognizesGlobalFallbackCallFromNamespacedTopLevel(): void
     {
         $basePath = $this->makeTempProject([
