@@ -15,6 +15,7 @@ use PhpParser\ConstExprEvaluationException;
 use PhpParser\ConstExprEvaluator;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
+use PhpParser\Node\Attribute;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\AssignOp\Coalesce as AssignCoalesce;
@@ -259,6 +260,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             FuncCall::class       => true,
             Exit_::class          => true,
             Include_::class       => true,
+            Attribute::class      => true,
         ];
 
     /**
@@ -1519,6 +1521,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 Include_::TYPE_REQUIRE_ONCE => 'require_once',
                 default                     => 'include',
             });
+
+            return;
+        }
+
+        // ReflectionAttribute::newInstance() instantiates the attribute class,
+        // which is fatal on an abstract class, so an attribute counts as an
+        // instantiation. The NameResolver resolved its name on entering the
+        // node carrying the attribute.
+        if ($node instanceof Attribute) {
+            $this->currentFileInstantiations[$node->name->toString()] = true;
 
             return;
         }

@@ -607,6 +607,32 @@ PHP);
         $this->assertSame([], $analysisNodeCollector->getFileReferences());
     }
 
+    public function testCollectsAttributesAsInstantiations(): void
+    {
+        $code = <<<'PHP'
+<?php
+namespace App;
+
+use App\Attribute\Route;
+
+#[Tag]
+final class HomeController
+{
+    #[Route('/home'), \Vendor\Cached]
+    public function home(#[Inject] object $service): void
+    {
+    }
+}
+PHP;
+
+        $analysisNodeCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\Tag', 'App\Attribute\Route', 'Vendor\Cached', 'App\Inject']],
+            $analysisNodeCollector->getFileInstantiations()
+        );
+    }
+
     public function testResolvesSelfStaticAndParentInstantiations(): void
     {
         $code = '<?php namespace App;' . "\n"

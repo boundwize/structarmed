@@ -2757,6 +2757,39 @@ final class AnalyserTest extends TestCase
         $this->assertCount(0, $violations);
     }
 
+    public function testExtendedClassMustBeAbstractOrInstantiatedRulePassesOnAttributeUsage(): void
+    {
+        // ReflectionAttribute::newInstance() instantiates App\Base, so making
+        // it abstract would break reading the attribute.
+        $controller = <<<'PHP'
+<?php
+namespace App;
+
+final class Controller
+{
+    #[Base]
+    public function home(): void
+    {
+    }
+}
+PHP;
+
+        $basePath = $this->makeTempProject([
+            'src/Base.php'       => '<?php namespace App; #[\Attribute] class Base {}',
+            'src/Child.php'      => '<?php namespace App; #[\Attribute] final class Child extends Base {}',
+            'src/Controller.php' => $controller,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::EXTENDED_CLASS_MUST_BE_ABSTRACT_OR_INSTANTIATED);
+
+        $this->assertCount(0, $violations);
+    }
+
     public function testExtendedClassMustBeAbstractOrInstantiatedRuleStillFlagsWithUnresolvableReflection(): void
     {
         // Reflection over a runtime-named class is outside the scanned-code
