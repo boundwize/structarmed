@@ -1520,6 +1520,100 @@ final class AnalyserTest extends TestCase
         }
     }
 
+    public function testMustBeUsedFunctionRuleIgnoresSelfCallByResolvedName(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/helpers.php'   => <<<'PHP'
+                <?php
+
+                function global_recursive(int $depth): int
+                {
+                    return $depth > 0 ? global_recursive($depth - 1) : 0;
+                }
+
+                function called_from_function(): void {}
+                function called_from_other_file(): void {}
+
+                function caller(): void
+                {
+                    called_from_function();
+                }
+
+                caller();
+                PHP,
+            'src/caller.php'    => <<<'PHP'
+                <?php
+
+                function cross_file_caller(): void
+                {
+                    \called_from_other_file();
+                }
+
+                cross_file_caller();
+                PHP,
+            'src/A/helpers.php' => <<<'PHP'
+                <?php
+
+                namespace A;
+
+                use function A\imported_recursive;
+
+                function qualified_recursive(int $depth): int
+                {
+                    return $depth > 0 ? \A\qualified_recursive($depth - 1) : 0;
+                }
+
+                function imported_recursive(int $depth): int
+                {
+                    return $depth > 0 ? imported_recursive($depth - 1) : 0;
+                }
+
+                function closure_recursive(int $depth): int
+                {
+                    $closure = static fn (): int => \A\closure_recursive($depth - 1);
+
+                    return $depth > 0 ? $closure() : 0;
+                }
+
+                function relative_recursive(int $depth): int
+                {
+                    return $depth > 0 ? namespace\relative_recursive($depth - 1) : 0;
+                }
+
+                function called_by_relative_name(): void {}
+
+                function relative_caller(): void
+                {
+                    namespace\called_by_relative_name();
+                }
+
+                namespace\relative_caller();
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->withPreset(Preset::YAGNI(sourcePaths: ['src/']));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
+
+        // A self-call is no usage however it is spelled: unqualified in the
+        // global namespace, fully qualified, imported, namespace-relative, or
+        // made from a closure of the function. A resolved call from another
+        // function, in the same file or not, or from the top level still is.
+        $this->assertSame(
+            [
+                'A\closure_recursive',
+                'A\imported_recursive',
+                'A\qualified_recursive',
+                'A\relative_recursive',
+                'global_recursive',
+            ],
+            $this->violationClassNames($violations)
+        );
+    }
+
     public function testNamespacedNativeFunctionCallFallsBackToNativeFunction(): void
     {
         $basePath = $this->makeTempProject([

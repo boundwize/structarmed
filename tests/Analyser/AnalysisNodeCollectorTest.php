@@ -268,7 +268,6 @@ PHP);
                 '!App\Direct',
                 '!Other\Imported',
                 'App\Contract',
-                '!App\Inside',
                 'App\Checked',
                 'App\Named',
                 'App\Created',
