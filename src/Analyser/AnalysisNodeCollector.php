@@ -1347,11 +1347,18 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // name as the string literal below would, so it is the same reference.
         // The name passed to function_exists() stays a probe here as well.
         if ($node instanceof Concat) {
-            if (
-                $node->left instanceof NamespaceMagicConst
-                && $node->right instanceof String_
-                && ! $node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)
-            ) {
+            if ($node->left instanceof NamespaceMagicConst && $node->right instanceof String_) {
+                $isFunctionExistsCheck = $node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE);
+
+                // Entered before its operands: the '\name' fragment alone
+                // spells the global name, which this expression never names,
+                // so the String_ branch must skip it.
+                $node->right->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+
+                if ($isFunctionExistsCheck) {
+                    return;
+                }
+
                 $value = $this->stripLeadingNamespaceSeparator($this->currentNamespace . $node->right->value);
 
                 if (preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1) {
