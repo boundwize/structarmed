@@ -40,6 +40,7 @@ use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\Print_;
+use PhpParser\Node\Expr\ShellExec;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
@@ -261,6 +262,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             Variable::class       => true,
             FuncCall::class       => true,
             Exit_::class          => true,
+            ShellExec::class      => true,
             Include_::class       => true,
             Attribute::class      => true,
         ];
@@ -1527,6 +1529,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     $this->addFunctionCallName($node->name);
                 }
             }
+
+            return;
+        }
+
+        // The backtick operator is identical to shell_exec(), so a ban on that
+        // function covers it too.
+        if ($node instanceof ShellExec) {
+            $this->addFunctionCallName(new FullyQualified('shell_exec'));
 
             return;
         }

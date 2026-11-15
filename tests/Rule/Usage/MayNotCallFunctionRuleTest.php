@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\Usage;
 
+use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
+use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -108,5 +113,55 @@ final class MayNotCallFunctionRuleTest extends TestCase
         $classNode              = $this->makeNode([]);
 
         $this->assertTrue($mayNotCallFunctionRule->appliesTo($classNode));
+    }
+
+    public function testViolatesWhenBacktickOperatorIsUsedAndShellExecIsForbidden(): void
+    {
+        $classNode = $this->collectNode(<<<'PHP'
+            <?php
+
+            namespace App\Domain;
+
+            final class OrderService
+            {
+                public function files(string $directory): ?string
+                {
+                    return `ls {$directory}`;
+                }
+            }
+            PHP);
+
+        $mayNotCallFunctionRule = new MayNotCallFunctionRule(layer: 'Domain', function: 'shell_exec');
+
+        $this->assertTrue($mayNotCallFunctionRule->appliesTo($classNode));
+
+        $violation = $mayNotCallFunctionRule->evaluate($classNode);
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertSame(
+            'Class [App\\Domain\\OrderService] must not call function [shell_exec()]',
+            $violation->message
+        );
+
+        // only shell_exec is the operator's alias: other bans stay unaffected
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new MayNotCallFunctionRule(layer: 'Domain', function: 'exec'))->evaluate($classNode)
+        );
+    }
+
+    private function collectNode(string $code): ClassNode
+    {
+        $analysisNodeCollector = new AnalysisNodeCollector(
+            new NamespaceLayerResolver(['Domain' => 'src/Domain/'], '/fake')
+        );
+        $parser                = (new ParserFactory())->createForNewestSupportedVersion();
+        $ast                   = $parser->parse($code);
+
+        $analysisNodeCollector->setCurrentFile('/fake/src/Domain/OrderService.php', $parser->getTokens());
+
+        (new NodeTraverser(new NameResolver(), $analysisNodeCollector))->traverse($ast ?? []);
+
+        return $analysisNodeCollector->getClassNodes()[0];
     }
 }
