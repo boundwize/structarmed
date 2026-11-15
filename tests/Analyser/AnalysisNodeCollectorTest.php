@@ -364,6 +364,46 @@ PHP);
         $this->assertNotContains('App\not a name', $fileReferences);
     }
 
+    public function testDoesNotCollectNamespaceMagicConstantConcatenationFragmentAsGlobalReference(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+
+            final class Mapper
+            {
+                public function map(array $values): array
+                {
+                    if (! function_exists(__NAMESPACE__ . '\probed')) {
+                        return [];
+                    }
+
+                    array_map('\standalone', $values);
+
+                    return array_map(__NAMESPACE__ . '\double', $values);
+                }
+            }
+            PHP);
+
+        // The '\name' fragment of the concatenation is not the global name:
+        // only the namespaced name is referenced, and a probe references none.
+        // A standalone '\name' string still references the global name. The
+        // calls themselves are recorded as fallback markers.
+        $this->assertSame(
+            [
+                '/fake/path/Foo.php' => [
+                    'standalone',
+                    '!standalone',
+                    'App\double',
+                    '!App\double',
+                    '?App\function_exists',
+                    '?App\array_map',
+                ],
+            ],
+            $analysisNodeCollector->getFileReferences()
+        );
+    }
+
     public function testCollectsNamespaceMagicConstantConcatenationInGlobalNamespace(): void
     {
         $analysisNodeCollector = $this->makeCollector(<<<'PHP'
