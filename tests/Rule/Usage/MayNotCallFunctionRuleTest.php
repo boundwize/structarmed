@@ -142,6 +142,12 @@ final class MayNotCallFunctionRuleTest extends TestCase
             'Class [App\\Domain\\OrderService] must not call function [shell_exec()]',
             $violation->message
         );
+
+        // only shell_exec is the operator's alias: other bans stay unaffected
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            (new MayNotCallFunctionRule(layer: 'Domain', function: 'exec'))->evaluate($classNode)
+        );
     }
 
     private function collectNode(string $code): ClassNode
