@@ -85,14 +85,12 @@ use PhpParser\Node\UnionType;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
-use function array_diff_ukey;
+use function array_change_key_case;
 use function array_intersect_key;
 use function array_key_exists;
 use function array_keys;
 use function array_pop;
 use function array_push;
-use function array_unique;
-use function array_values;
 use function count;
 use function end;
 use function in_array;
@@ -1994,11 +1992,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $functionCalls = [];
 
         foreach ($functionLikeAnalysis->functionCallNames as $functionCallName) {
-            $functionCalls[] = $this->resolveFunctionName($functionCallName);
+            $functionCalls[$this->resolveFunctionName($functionCallName)] = true;
         }
 
         $dependencies       = array_keys($functionLikeAnalysis->dependencies);
-        $functionCalls      = array_values(array_unique($functionCalls));
+        $functionCalls      = array_keys($functionCalls);
         $superglobals       = array_keys($functionLikeAnalysis->superglobals);
         $languageConstructs = array_keys($functionLikeAnalysis->languageConstructs);
         $hasReturnType      = $functionLike->getReturnType() instanceof Node;
@@ -2135,21 +2133,26 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $functionCalls = [];
 
         foreach ($classLikeAnalysis->functionCallNames as $functionCallName) {
-            $functionCalls[] = $this->resolveFunctionName($functionCallName);
+            $functionCalls[$this->resolveFunctionName($functionCallName)] = true;
+        }
+
+        // Class names are case-insensitive. A normalized set avoids sorting
+        // both dependency arrays and invoking a comparator for each match.
+        $classDependencies    = array_change_key_case($classLikeAnalysis->classDependencies);
+        $nonClassDependencies = [];
+
+        foreach ($classLikeAnalysis->dependencies as $dependency => $isDependency) {
+            if (! isset($classDependencies[strtolower($dependency)])) {
+                $nonClassDependencies[] = $dependency;
+            }
         }
 
         return [
             'dependencies'         => array_keys($classLikeAnalysis->dependencies),
-            'nonClassDependencies' => array_keys(
-                array_diff_ukey(
-                    $classLikeAnalysis->dependencies,
-                    $classLikeAnalysis->classDependencies,
-                    strcasecmp(...)
-                )
-            ),
+            'nonClassDependencies' => $nonClassDependencies,
             'constantFetches'      => array_keys($classLikeAnalysis->constantFetches),
             'signatures'           => $classLikeAnalysis->signatures,
-            'functionCalls'        => array_values(array_unique($functionCalls)),
+            'functionCalls'        => array_keys($functionCalls),
             'superglobals'         => array_keys($classLikeAnalysis->superglobals),
             'languageConstructs'   => array_keys($classLikeAnalysis->languageConstructs),
             'traits'               => $classLikeAnalysis->traits,
