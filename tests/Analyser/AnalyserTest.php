@@ -1532,6 +1532,7 @@ final class AnalyserTest extends TestCase
                 }
 
                 function called_from_function(): void {}
+                function called_from_other_file(): void {}
 
                 function caller(): void
                 {
@@ -1539,6 +1540,16 @@ final class AnalyserTest extends TestCase
                 }
 
                 caller();
+                PHP,
+            'src/caller.php'    => <<<'PHP'
+                <?php
+
+                function cross_file_caller(): void
+                {
+                    \called_from_other_file();
+                }
+
+                cross_file_caller();
                 PHP,
             'src/A/helpers.php' => <<<'PHP'
                 <?php
@@ -1563,6 +1574,20 @@ final class AnalyserTest extends TestCase
 
                     return $depth > 0 ? $closure() : 0;
                 }
+
+                function relative_recursive(int $depth): int
+                {
+                    return $depth > 0 ? namespace\relative_recursive($depth - 1) : 0;
+                }
+
+                function called_by_relative_name(): void {}
+
+                function relative_caller(): void
+                {
+                    namespace\called_by_relative_name();
+                }
+
+                namespace\relative_caller();
                 PHP,
         ]);
 
@@ -1574,10 +1599,17 @@ final class AnalyserTest extends TestCase
             ->forRule(YagniPreset::FUNCTION_MUST_BE_USED);
 
         // A self-call is no usage however it is spelled: unqualified in the
-        // global namespace, fully qualified, imported, or made from a closure
-        // of the function. A resolved call from another function still is.
+        // global namespace, fully qualified, imported, namespace-relative, or
+        // made from a closure of the function. A resolved call from another
+        // function, in the same file or not, or from the top level still is.
         $this->assertSame(
-            ['A\closure_recursive', 'A\imported_recursive', 'A\qualified_recursive', 'global_recursive'],
+            [
+                'A\closure_recursive',
+                'A\imported_recursive',
+                'A\qualified_recursive',
+                'A\relative_recursive',
+                'global_recursive',
+            ],
             $this->violationClassNames($violations)
         );
     }
