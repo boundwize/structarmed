@@ -578,6 +578,31 @@ PHP);
         );
     }
 
+    public function testNonClassDependenciesPreserveOrderAndExcludeClassNamesIgnoringCase(): void
+    {
+        $nodes = $this->collectNodes(<<<'PHP'
+            <?php
+
+            final class Caller
+            {
+                public function run(): void
+                {
+                    \Vendor\helper();
+                    \Vendor\SHARED();
+                    new \Vendor\Shared();
+                    echo \Vendor\VALUE;
+                    \Vendor\HELPER();
+                    \Vendor\helper();
+                }
+            }
+            PHP);
+
+        $this->assertSame(
+            ['Vendor\helper', 'Vendor\VALUE', 'Vendor\HELPER'],
+            $nodes[0]->nonClassDependencies,
+        );
+    }
+
     public function testRepeatedFunctionCallsKeepTheirNamespaceAndSpelling(): void
     {
         $nodes = $this->collectNodes(<<<'PHP'
