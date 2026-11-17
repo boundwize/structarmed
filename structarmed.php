@@ -20,6 +20,7 @@ return Architecture::define()
         'src/Version.php',
     ])
     ->layer('Exception', 'src/Exception/')
+    ->layer('File', 'src/File/')
     ->layer('LayerResolver', 'src/LayerResolver/')
     ->layer('PHPUnit', 'src/PHPUnit/')
     ->layer('Preset', 'src/Preset/')
@@ -28,7 +29,7 @@ return Architecture::define()
     ->layer('Rule', 'src/Rule/')
     ->layer('Util', 'src/Util/')
     ->ruleset([
-        'Analyser'      => ['+Cache', 'Composer', 'LayerResolver', 'Progress'],
+        'Analyser'      => ['+Cache', 'Composer', 'File', 'LayerResolver', 'Progress'],
         'Baseline'      => ['Core', 'Rule', 'Util'],
         'Cache'         => ['Analyser', 'Composer', 'Core', 'Rule', 'Util'],
         'Cli'           => ['Baseline', '+Cache', 'Config', 'Progress', 'Report', 'Util'],
@@ -36,12 +37,13 @@ return Architecture::define()
         'Config'        => ['Core'],
         'Core'          => ['Exception', 'Preset', 'Rule', 'Util'],
         'Exception'     => [],
+        'File'          => ['Util'],
         'LayerResolver' => ['Util'],
         'PHPUnit'       => ['Analyser', 'Baseline', 'Cache', 'Config', 'Exception', 'Progress', 'Report', 'Rule'],
         'Preset'        => ['Core', 'Rule', 'Util'],
         'Progress'      => ['Cli'],
         'Report'        => ['Cli', 'Core', 'Rule', 'Util'],
-        'Rule'          => ['Analyser', 'Composer', 'Core', 'Util'],
+        'Rule'          => ['Analyser', 'Composer', 'Core', 'File', 'Util'],
         'Util'          => [],
     ])
     ->skip([
