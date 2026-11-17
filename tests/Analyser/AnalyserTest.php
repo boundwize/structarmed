@@ -7121,12 +7121,13 @@ PHP;
         $this->assertSame([], $ruleViolationCollection->forRule('ruleset.Entity'));
     }
 
-    public function testAnalyserRulesetMatchesOnlyClassLikeReferencesAgainstScannedClasses(): void
+    public function testAnalyserRulesetDoesNotMatchDifferentlyCasedConstantOrFunctionAgainstScannedClass(): void
     {
         // Database is a path-based layer, so only a scanned class resolves to
-        // it. A function or constant named like the scanned QueryBuilder class,
-        // in any casing, is not a reference to that class, also when the
-        // same class references the scanned class itself.
+        // it. A differently cased spelling of the scanned QueryBuilder class
+        // still names it, unless that spelling is fetched as a constant or
+        // called as a function, also by a class that references the class
+        // itself.
         $basePath            = $this->makeTempProject([
             'src/Database/QueryBuilder.php'    => <<<'PHP'
                 <?php
@@ -7146,9 +7147,8 @@ PHP;
                     public function run(): array
                     {
                         return [
-                            \App\Database\QueryBuilder,
                             \App\Database\QUERYBUILDER,
-                            \App\Database\querybuilder(),
+                            \App\Database\queryBuilder(),
                         ];
                     }
                 }
