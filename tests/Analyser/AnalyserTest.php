@@ -6975,6 +6975,240 @@ PHP;
         $this->assertSame($this->violationTuples($coldViolations), $this->violationTuples($warmViolations));
     }
 
+    public function testAnalyserRulesetResolvesDirectClassLikeDependenciesRegardlessOfCasing(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                class QueryBuilder {}
+                PHP,
+            'src/Database/Connection.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                interface Connection {}
+                PHP,
+            'src/Database/Loggable.php'     => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                trait Loggable {}
+                PHP,
+            'src/Database/Driver.php'       => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                enum Driver
+                {
+                    case Mysql;
+                }
+                PHP,
+            'src/Database/Schema.php'       => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class Schema {}
+                PHP,
+            'src/HTTP/Controller.php'       => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                class Controller
+                {
+                    use \App\Database\loggable;
+
+                    private \App\Database\querybuilder $db;
+
+                    private \App\Database\Schema $schema;
+
+                    public function connect(\App\Database\CONNECTION $connection): \App\Database\driver
+                    {
+                        return \App\Database\driver::Mysql;
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', 'src/HTTP/')
+            ->layer('Database', 'src/Database/')
+            ->ruleset(['HTTP' => []]);
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+
+        $this->assertSame([
+            'App\HTTP\Controller' => [
+                'App\Database\CONNECTION',
+                'App\Database\Schema',
+                'App\Database\driver',
+                'App\Database\loggable',
+                'App\Database\querybuilder',
+            ],
+        ], $this->rulesetDependenciesByClass($coldViolations, 'ruleset.HTTP'));
+        $this->assertSame($this->violationTuples($coldViolations), $this->violationTuples($warmViolations));
+    }
+
+    public function testAnalyserRulesetKeepsScannedLayersOfDifferentlyCasedDependency(): void
+    {
+        // DateFormatter has primary layer Formatter and secondary layer System.
+        // Entity allows System, so the differently cased reference is permitted
+        // through the secondary layer; Http allows nothing, so the same class
+        // is reported there with its primary layer.
+        $basePath = $this->makeTempProject([
+            'src/System/Entity/User.php'             => <<<'PHP'
+                <?php
+
+                namespace App\System\Entity;
+
+                final class User
+                {
+                    public function __construct(private \App\System\Formatter\dateformatter $formatter) {}
+                }
+                PHP,
+            'src/System/Formatter/DateFormatter.php' => <<<'PHP'
+                <?php
+
+                namespace App\System\Formatter;
+
+                final class DateFormatter {}
+                PHP,
+            'src/Http/Controller.php'                => <<<'PHP'
+                <?php
+
+                namespace App\Http;
+
+                final class Controller
+                {
+                    public function __construct(private \App\System\Formatter\DATEFORMATTER $formatter) {}
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layer('System', 'src/System/')
+            ->layer('Entity', 'src/System/Entity/')
+            ->layer('Formatter', 'src/System/Formatter/')
+            ->layer('Http', 'src/Http/')
+            ->ruleset([
+                'Entity' => ['System'],
+                'Http'   => [],
+            ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture);
+
+        $this->assertSame(
+            [
+                'Class [App\Http\Controller] in layer [Http] must not depend on '
+                . '[App\System\Formatter\DATEFORMATTER] which belongs to layer [Formatter]',
+            ],
+            array_map(
+                static fn (RuleViolation $ruleViolation): string => $ruleViolation->message,
+                $ruleViolationCollection->forRule('ruleset.Http')
+            )
+        );
+        $this->assertSame([], $ruleViolationCollection->forRule('ruleset.Entity'));
+    }
+
+    public function testAnalyserRulesetMatchesOnlyClassLikeReferencesAgainstScannedClasses(): void
+    {
+        // Database is a path-based layer, so only a scanned class resolves to
+        // it. A function or constant named like the scanned QueryBuilder class,
+        // in any casing, is not a reference to that class.
+        $basePath            = $this->makeTempProject([
+            'src/Database/QueryBuilder.php'   => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                class QueryBuilder {}
+                PHP,
+            'src/HTTP/SymbolController.php'   => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class SymbolController
+                {
+                    /** @return list<mixed> */
+                    public function run(): array
+                    {
+                        return [
+                            \App\Database\QueryBuilder,
+                            \App\Database\QUERYBUILDER,
+                            \App\Database\querybuilder(),
+                        ];
+                    }
+                }
+                PHP,
+            'src/HTTP/MixedController.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use function App\Support\query;
+
+                final class MixedController
+                {
+                    public function __construct(private \App\Database\querybuilder $db) {}
+
+                    public function run(): string
+                    {
+                        query();
+
+                        return \App\Config\STATUS . \App\Config\status;
+                    }
+                }
+                PHP,
+            'src/HTTP/ConstantController.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class ConstantController
+                {
+                    public function run(): string
+                    {
+                        return \App\Config\status;
+                    }
+                }
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layer('HTTP', 'src/HTTP/')
+            ->layer('Database', 'src/Database/')
+            ->layerPattern('Config', '/^App\\\\Config\\\\[A-Z]+$/')
+            ->layerPattern('Support', '/^App\\\\Support\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+
+        $this->assertSame([
+            'App\HTTP\MixedController' => [
+                'App\Config\STATUS',
+                'App\Database\querybuilder',
+                'App\Support\query',
+            ],
+        ], $this->rulesetDependenciesByClass($coldViolations, 'ruleset.HTTP'));
+        $this->assertSame($this->violationTuples($coldViolations), $this->violationTuples($warmViolations));
+    }
+
     /**
      * Dependency names reported by a ruleset key, per class, with the spelling
      * used in the violation message.

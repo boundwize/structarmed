@@ -362,29 +362,34 @@ final readonly class Analyser
                 $resolvedInheritedDependencies
             );
 
-            foreach ($dependencies as $dependency) {
+            foreach ($dependencies as $dependency => $isClassLike) {
                 if (
                     isset($skippedDepsForClass[$dependency])
-                    || isset($allowedDependencies[$classNode->layer][$dependency])
+                    || isset($allowedDependencies[$classNode->layer][(int) $isClassLike][$dependency])
                 ) {
                     continue;
                 }
 
-                $primaryLayer = $classPrimaryLayerMap[$dependency] ?? null;
+                // Only a class-like reference is matched against the scanned
+                // classes, by lowercase name; a function or constant of the same
+                // name is resolved by its own name below. The dependency keeps
+                // the spelling it was written with for the report.
+                $dependencyKey = $isClassLike ? strtolower((string) $dependency) : null;
+                $primaryLayer  = $dependencyKey === null ? null : $classPrimaryLayerMap[$dependencyKey] ?? null;
 
                 // Same primary layer is always allowed. This check is not redundant
                 // with the loop below: for a dep whose primary layer is a PSR-4
                 // catch-all, $depLayers is re-resolved without its file path and
                 // therefore need not contain the primary layer.
                 if ($primaryLayer === $classNode->layer) {
-                    $allowedDependencies[$classNode->layer][$dependency] = true;
+                    $allowedDependencies[$classNode->layer][(int) $isClassLike][$dependency] = true;
                     continue;
                 }
 
                 if ($primaryLayer !== null && ! array_key_exists($primaryLayer, $scanScopeLayerMap)) {
                     // Scanned dep in a specific layer (not a PSR4 catch-all): keep every
                     // layer collected at scan time, including path-based ones.
-                    $depLayers = $classLayerMap[$dependency] ?? [$primaryLayer];
+                    $depLayers = $classLayerMap[$dependencyKey] ?? [$primaryLayer];
                 } else {
                     // Unscanned or catch-all dep: resolve layers without a known file path.
                     $depLayers = $chainLayerResolver->resolveAll($dependency, '');
@@ -392,7 +397,7 @@ final readonly class Analyser
 
                 if ($depLayers === []) {
                     // External / unregistered dependency — not restricted.
-                    $allowedDependencies[$classNode->layer][$dependency] = true;
+                    $allowedDependencies[$classNode->layer][(int) $isClassLike][$dependency] = true;
                     continue;
                 }
 
@@ -401,12 +406,12 @@ final readonly class Analyser
                 // of whether the dependency was scanned or resolved without a file path.
                 foreach ($depLayers as $depLayer) {
                     if ($classNode->layer === $depLayer) {
-                        $allowedDependencies[$classNode->layer][$dependency] = true;
+                        $allowedDependencies[$classNode->layer][(int) $isClassLike][$dependency] = true;
                         continue 2;
                     }
 
                     if (isset($allowedLayerMap[$depLayer])) {
-                        $allowedDependencies[$classNode->layer][$dependency] = true;
+                        $allowedDependencies[$classNode->layer][(int) $isClassLike][$dependency] = true;
                         continue 2;
                     }
                 }
@@ -670,7 +675,7 @@ final readonly class Analyser
     /**
      * @param list<ClassNode> $classNodes
      * @return array{
-     *     dependencies: array<string, list<string>>,
+     *     dependencies: array<string, array<string, bool>>,
      *     inheritanceDependencies: array<string, array<string, string>>,
      *     classLayerMap: array<string, list<string>>,
      *     classPrimaryLayerMap: array<string, string>,
@@ -707,13 +712,21 @@ final readonly class Analyser
                 continue;
             }
 
-            // Class-like names are case-insensitive, so both maps are keyed by
+            // Class-like names are case-insensitive, so every map is keyed by
             // the lowercase name, and each inheritance target carries its
             // lowercase lookup key next to the spelling it was written with.
-            // Dependency values themselves are never normalised: they may name
-            // constants, which are case-sensitive.
-            $classNameKey                 = strtolower($classNode->className);
-            $dependencyMap[$classNameKey] = $classNode->dependencies;
+            // Dependency names themselves are never normalised: they may name
+            // constants, which are case-sensitive. Each one is flagged with
+            // whether the class uses it as a class-like, so only those are
+            // matched against the scanned classes.
+            $classNameKey = strtolower($classNode->className);
+            $dependencies = array_fill_keys($classNode->dependencies, true);
+
+            foreach ($classNode->nonClassDependencies as $nonClassDependency) {
+                $dependencies[$nonClassDependency] = false;
+            }
+
+            $dependencyMap[$classNameKey] = $dependencies;
             $inheritanceDependencies      = [];
 
             foreach ($classNode->implements as $interface) {
@@ -735,11 +748,11 @@ final readonly class Analyser
             $inheritanceDependencyMap[$classNameKey] = $inheritanceDependencies;
 
             if ($classNode->layers !== []) {
-                $classLayerMap[$classNode->className] = $classNode->layers;
+                $classLayerMap[$classNameKey] = $classNode->layers;
             }
 
             if ($classNode->layer !== null) {
-                $classPrimaryLayerMap[$classNode->className] = $classNode->layer;
+                $classPrimaryLayerMap[$classNameKey] = $classNode->layer;
             }
         }
 
@@ -753,10 +766,13 @@ final readonly class Analyser
     }
 
     /**
-     * @param array<string, list<string>>          $dependencyMap            Keyed by lowercase class-like name
+     * Own and inherited dependencies of a class, each flagged with whether it
+     * is used as a class-like anywhere along the way.
+     *
+     * @param array<string, array<string, bool>>   $dependencyMap            Keyed by lowercase class-like name
      * @param array<string, array<string, string>> $inheritanceDependencyMap Keyed by lowercase class-like name
-     * @param array<string, list<string>>          $resolvedInheritedDependencies
-     * @return list<string>
+     * @param array<string, array<string, bool>>   $resolvedInheritedDependencies
+     * @return array<string, bool>
      */
     private function dependenciesForClass(
         string $className,
@@ -768,10 +784,10 @@ final readonly class Analyser
         $dependencies = $dependencyMap[$classNameKey] ?? [];
 
         foreach ($inheritanceDependencyMap[$classNameKey] ?? [] as $dependencyKey => $dependency) {
-            $cycleDetected = false;
-            $resolved      = $this->dependenciesForInheritanceDependency(
+            $cycleDetected             = false;
+            $dependencies[$dependency] = true;
+            $resolved                  = $this->dependenciesForInheritanceDependency(
                 $dependencyKey,
-                $dependency,
                 $dependencyMap,
                 $inheritanceDependencyMap,
                 $resolvedInheritedDependencies,
@@ -779,66 +795,53 @@ final readonly class Analyser
                 $cycleDetected
             );
 
-            foreach ($resolved as $resolvedDependency) {
-                $dependencies[] = $resolvedDependency;
+            foreach ($resolved as $resolvedDependency => $isClassLike) {
+                $dependencies[$resolvedDependency] = $isClassLike || ($dependencies[$resolvedDependency] ?? false);
             }
         }
 
-        return array_values(array_unique($dependencies));
+        return $dependencies;
     }
 
     /**
-     * `$dependencyKey` is the lowercase lookup key of the inheritance target;
-     * `$dependency` is the spelling it was written with, reported as is.
+     * Dependencies reached through the inheritance target with the lowercase
+     * lookup key `$dependencyKey`. The target itself is left to the caller,
+     * which reports it with the spelling it was written with.
      *
-     * @param array<string, list<string>>          $dependencyMap            Keyed by lowercase class-like name
+     * @param array<string, array<string, bool>>   $dependencyMap            Keyed by lowercase class-like name
      * @param array<string, array<string, string>> $inheritanceDependencyMap Keyed by lowercase class-like name
-     * @param array<string, list<string>>          $resolvedInheritedDependencies
+     * @param array<string, array<string, bool>>   $resolvedInheritedDependencies
      * @param array<string, true>                  $seen
-     * @return list<string>
+     * @return array<string, bool>
      */
     private function dependenciesForInheritanceDependency(
         string $dependencyKey,
-        string $dependency,
         array $dependencyMap,
         array $inheritanceDependencyMap,
         array &$resolvedInheritedDependencies,
         array $seen,
         bool &$cycleDetected
     ): array {
-        $resolvedDependencies = [$dependency];
-
         if (isset($seen[$dependencyKey])) {
             $cycleDetected = true;
 
-            return $resolvedDependencies;
+            return [];
         }
 
         if (isset($resolvedInheritedDependencies[$dependencyKey])) {
-            $resolvedDependencies = $resolvedInheritedDependencies[$dependencyKey];
-
-            // The memoised list starts with the spelling of whichever class
-            // resolved this target first; keep the one written here.
-            if ($resolvedDependencies[0] !== $dependency) {
-                $resolvedDependencies[0] = $dependency;
-            }
-
-            return $resolvedDependencies;
+            return $resolvedInheritedDependencies[$dependencyKey];
         }
 
-        $hasCycle = false;
-
-        foreach ($dependencyMap[$dependencyKey] ?? [] as $mappedDependency) {
-            $resolvedDependencies[] = $mappedDependency;
-        }
+        $hasCycle             = false;
+        $resolvedDependencies = $dependencyMap[$dependencyKey] ?? [];
 
         $seen += [$dependencyKey => true];
 
         foreach ($inheritanceDependencyMap[$dependencyKey] ?? [] as $inheritedDependencyKey => $inheritedDependency) {
-            $childHasCycle = false;
-            $resolved      = $this->dependenciesForInheritanceDependency(
+            $childHasCycle                              = false;
+            $resolvedDependencies[$inheritedDependency] = true;
+            $resolved                                   = $this->dependenciesForInheritanceDependency(
                 $inheritedDependencyKey,
-                $inheritedDependency,
                 $dependencyMap,
                 $inheritanceDependencyMap,
                 $resolvedInheritedDependencies,
@@ -846,14 +849,13 @@ final readonly class Analyser
                 $childHasCycle
             );
 
-            foreach ($resolved as $resolvedDependency) {
-                $resolvedDependencies[] = $resolvedDependency;
+            foreach ($resolved as $resolvedDependency => $isClassLike) {
+                $resolvedDependencies[$resolvedDependency] = $isClassLike
+                    || ($resolvedDependencies[$resolvedDependency] ?? false);
             }
 
             $hasCycle = $hasCycle || $childHasCycle;
         }
-
-        $resolvedDependencies = array_values(array_unique($resolvedDependencies));
 
         if (! $hasCycle) {
             $resolvedInheritedDependencies[$dependencyKey] = $resolvedDependencies;
