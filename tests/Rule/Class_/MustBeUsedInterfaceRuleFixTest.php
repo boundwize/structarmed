@@ -177,4 +177,58 @@ final class MustBeUsedInterfaceRuleFixTest extends TestCase
         $this->assertStringNotContainsString('interface UnusedInterface', $fixedCode);
         $this->assertStringContainsString('final class Order', $fixedCode);
     }
+
+    public function testFixKeepsBracesOfEmptiedBracketedNamespace(): void
+    {
+        $temporaryDirectory = $this->makeTemporaryDirectory('structarmed-yagni-interface');
+        $file               = $temporaryDirectory . '/Contracts.php';
+
+        file_put_contents(
+            $file,
+            <<<'PHP'
+            <?php
+
+            namespace App\Contract {
+                interface UnusedInterface
+                {
+                }
+            }
+
+            namespace App {
+                final class Order
+                {
+                }
+            }
+
+            PHP
+        );
+
+        $mustBeUsedInterfaceRule = new MustBeUsedInterfaceRule(layer: 'Domain');
+
+        $this->assertTrue($mustBeUsedInterfaceRule->fix(new RuleViolation(
+            message:   'Interface [App\\Contract\\UnusedInterface] must be used',
+            file:      $file,
+            line:      4,
+            className: 'App\\Contract\\UnusedInterface',
+            layer:     'Domain',
+        )));
+
+        // `namespace App\Contract;` next to a bracketed namespace is a compile error
+        $this->assertSame(
+            <<<'PHP'
+            <?php
+
+            namespace App\Contract {
+            }
+
+            namespace App {
+                final class Order
+                {
+                }
+            }
+
+            PHP,
+            (string) file_get_contents($file)
+        );
+    }
 }
