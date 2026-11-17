@@ -11,6 +11,7 @@ use function array_values;
 use function fnmatch;
 use function implode;
 use function realpath;
+use function rtrim;
 use function sort;
 use function str_starts_with;
 use function strlen;
@@ -81,7 +82,7 @@ final class SkipPathMatcher
     private function __construct(string $basePath, array $skipPaths)
     {
         $normalisedBasePath                = Path::normalise($basePath, canonicalise: true);
-        $this->normalisedBasePathWithSlash = $normalisedBasePath . '/';
+        $this->normalisedBasePathWithSlash = rtrim($normalisedBasePath, '/') . '/';
 
         $pathPrefixes = [];
         $patterns     = [];
@@ -109,7 +110,7 @@ final class SkipPathMatcher
 
         $pathPrefixesWithSlash = [];
         foreach (array_unique($pathPrefixes) as $pathPrefix) {
-            $pathPrefixesWithSlash[] = $pathPrefix . '/';
+            $pathPrefixesWithSlash[] = rtrim($pathPrefix, '/') . '/';
         }
 
         $this->pathPrefixesWithSlash = $pathPrefixesWithSlash;

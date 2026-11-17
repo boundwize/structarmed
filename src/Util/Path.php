@@ -60,7 +60,22 @@ final class Path
             }
         }
 
-        return self::$normalisedPaths[$cacheKey] = rtrim($path, '/');
+        $trimmedPath = rtrim($path, '/');
+
+        // A filesystem root keeps its separator: "" and "C:" are not the roots "/" and "C:/".
+        if ($trimmedPath === '') {
+            if ($path !== '') {
+                $trimmedPath = '/';
+            }
+        } elseif (
+            strlen($trimmedPath) === 2
+            && $trimmedPath !== $path
+            && preg_match('#^[A-Za-z]:$#', $trimmedPath) === 1
+        ) {
+            $trimmedPath .= '/';
+        }
+
+        return self::$normalisedPaths[$cacheKey] = $trimmedPath;
     }
 
     public static function resolve(string $path, string $basePath): string
@@ -101,8 +116,11 @@ final class Path
             return '';
         }
 
-        if (str_starts_with($normalisedPath, $normalisedBasePath . '/')) {
-            return substr($normalisedPath, strlen($normalisedBasePath) + 1);
+        // a filesystem root base ("/", "C:/") already ends with its separator
+        $basePathPrefix = rtrim($normalisedBasePath, '/') . '/';
+
+        if (str_starts_with($normalisedPath, $basePathPrefix)) {
+            return substr($normalisedPath, strlen($basePathPrefix));
         }
 
         // Out-of-tree file (e.g. a PSR-4 path such as "../shared/src/"): walk up to the

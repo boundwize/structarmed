@@ -28,6 +28,26 @@ final class PathTest extends TestCase
         yield 'windows absolute' => ['C:\\project\\src\\', 'C:/project/src'];
         yield 'windows UNC backslashes' => ['\\\\server\\share\\src\\', '//server/share/src'];
         yield 'windows UNC forward slashes' => ['//server/share//src/', '//server/share/src'];
+        yield 'empty' => ['', ''];
+        yield 'relative without trailing separator' => ['src/Domain', 'src/Domain'];
+        yield 'parent-relative' => ['../shared/src/', '../shared/src'];
+        yield 'unix root' => ['/', '/'];
+        yield 'unix root backslash' => ['\\', '/'];
+        yield 'unix top-level directory' => ['/project/', '/project'];
+        yield 'windows drive root forward slash' => ['C:/', 'C:/'];
+        yield 'windows drive root backslash' => ['C:\\', 'C:/'];
+        yield 'windows drive root repeated separators' => ['C:\\\\', 'C:/'];
+        yield 'windows lowercase drive root forward slash' => ['c:/', 'c:/'];
+        yield 'windows lowercase drive root backslash' => ['c:\\', 'c:/'];
+        yield 'windows drive-relative' => ['C:', 'C:'];
+        yield 'windows drive top-level directory' => ['C:/project/', 'C:/project'];
+        yield 'windows drive top-level directory backslashes' => ['C:\\project\\', 'C:/project'];
+        yield 'numeric drive-like segment' => ['1:/', '1:'];
+        yield 'relative drive-like segment' => ['src/C:/', 'src/C:'];
+        yield 'windows UNC share root backslashes' => ['\\\\server\\share\\', '//server/share'];
+        yield 'windows UNC share root forward slashes' => ['//server/share/', '//server/share'];
+        yield 'windows UNC share root without trailing separator' => ['\\\\server\\share', '//server/share'];
+        yield 'windows UNC drive-like share' => ['//server/C:/', '//server/C:'];
     }
 
     #[DataProvider('provideNormalise')]
@@ -95,6 +115,13 @@ final class PathTest extends TestCase
         // resolved against the base path, never the working directory
         yield 'relative to base' => ['src/Foo.php', '/project', 'src/Foo.php'];
         yield 'empty is the base' => ['', '/project', ''];
+        yield 'inside unix root' => ['/project/src/Foo.php', '/', 'project/src/Foo.php'];
+        yield 'unix root itself' => ['/', '/', ''];
+        yield 'relative to unix root' => ['project/Foo.php', '/', 'project/Foo.php'];
+        yield 'inside windows drive root' => ['C:/project/src/Foo.php', 'C:/', 'project/src/Foo.php'];
+        yield 'windows drive root itself' => ['C:\\', 'C:/', ''];
+        yield 'other windows drive' => ['D:/project/Foo.php', 'C:/', 'D:/project/Foo.php'];
+        yield 'unix root from a nested base' => ['/', '/project/src', '../../'];
     }
 
     #[DataProvider('provideRelativeTo')]
