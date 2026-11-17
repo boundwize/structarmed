@@ -613,6 +613,70 @@ final class Psr1PhpTagsRuleTest extends TestCase
         }
     }
 
+    public function testIgnoresShortTagInDataAfterHaltCompiler(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'PHP'
+                <?php
+
+                echo 'x';
+                __halt_compiler();<? raw data
+                PHP
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertNotInstanceOf(RuleViolation::class, $violation);
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
+    public function testFixKeepsShortTagInDataAfterHaltCompilerUntouched(): void
+    {
+        $basePath = $this->makeTempDir();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents(
+                $basePath . '/src/Foo.php',
+                <<<'CODE'
+                <?PHP
+
+                echo 'x';
+                __halt_compiler();<? raw data
+                CODE
+            );
+
+            $psr1PhpTagsRule = new Psr1PhpTagsRule(['src/']);
+            $violation       = $psr1PhpTagsRule->evaluateProject($basePath, Architecture::define());
+
+            $this->assertInstanceOf(RuleViolation::class, $violation);
+            $this->assertTrue($psr1PhpTagsRule->fix($violation));
+            $this->assertSame(
+                <<<'PHP'
+                <?php
+
+                echo 'x';
+                __halt_compiler();<? raw data
+                PHP,
+                file_get_contents($basePath . '/src/Foo.php')
+            );
+        } finally {
+            unlink($basePath . '/src/Foo.php');
+            rmdir($basePath . '/src');
+            rmdir($basePath);
+        }
+    }
+
     public function testFixesUpperCaseLongOpenTag(): void
     {
         $basePath = $this->makeTempDir();

@@ -313,6 +313,13 @@ final class FileAnalysisProviderTest extends TestCase
         yield 'XML model lookalike' => ['<?xml-models href="schema.rng"?>', false, true, 1];
         yield 'arbitrary XML processing instruction' => ['<?xml-custom value="x"?>', false, true, 1];
         yield 'plain text' => ['plain text', false, true, null];
+        // What follows `__halt_compiler();` is raw data PHP never parses.
+        yield 'short tag in data after halt compiler' => [
+            "<?php\n\n__halt_compiler();<? raw data",
+            false,
+            true,
+            null,
+        ];
     }
 
     #[DataProvider('lightweightAnalysisProvider')]
