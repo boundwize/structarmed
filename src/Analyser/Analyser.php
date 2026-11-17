@@ -746,13 +746,14 @@ final readonly class Analyser
             $cycleDetected = false;
             $resolved      = $this->dependenciesForInheritanceDependency(
                 $dependencyKey,
-                $dependency,
                 $dependencyMap,
                 $inheritanceDependencyMap,
                 $resolvedInheritedDependencies,
                 [$classNameKey => true],
                 $cycleDetected
             );
+
+            $dependencies[] = $dependency;
 
             foreach ($resolved as $resolvedDependency) {
                 $dependencies[] = $resolvedDependency;
@@ -763,9 +764,11 @@ final readonly class Analyser
     }
 
     /**
-     * `$dependencyKey` is the lowercase lookup key of the inheritance target;
-     * `$dependency` is the spelling it was written with, reported as is and
-     * returned first, followed by the dependencies the target brings in.
+     * Returns the dependencies the inheritance target brings in, without the
+     * target itself: each caller adds the target in the spelling it was
+     * written with, so the cached list is shared as is.
+     *
+     * `$dependencyKey` is the lowercase lookup key of the inheritance target.
      *
      * @param array<string, list<string>>          $dependencyMap            Keyed by lowercase class-like name
      * @param array<string, array<string, string>> $inheritanceDependencyMap Keyed by lowercase class-like name
@@ -775,7 +778,6 @@ final readonly class Analyser
      */
     private function dependenciesForInheritanceDependency(
         string $dependencyKey,
-        string $dependency,
         array $dependencyMap,
         array $inheritanceDependencyMap,
         array &$resolvedInheritedDependencies,
@@ -785,36 +787,29 @@ final readonly class Analyser
         if (isset($seen[$dependencyKey])) {
             $cycleDetected = true;
 
-            return [$dependency];
+            return [];
         }
 
-        // Reuse the cached list without copying it when the spelling matches.
-        // A different spelling only changes this caller's copy.
         if (isset($resolvedInheritedDependencies[$dependencyKey])) {
-            $resolvedDependencies = $resolvedInheritedDependencies[$dependencyKey];
-
-            if ($resolvedDependencies[0] !== $dependency) {
-                $resolvedDependencies[0] = $dependency;
-            }
-
-            return $resolvedDependencies;
+            return $resolvedInheritedDependencies[$dependencyKey];
         }
 
         $hasCycle             = false;
-        $resolvedDependencies = [$dependency, ...$dependencyMap[$dependencyKey] ?? []];
+        $resolvedDependencies = $dependencyMap[$dependencyKey] ?? [];
         $seen[$dependencyKey] = true;
 
         foreach ($inheritanceDependencyMap[$dependencyKey] ?? [] as $inheritedDependencyKey => $inheritedDependency) {
             $childHasCycle = false;
             $resolved      = $this->dependenciesForInheritanceDependency(
                 $inheritedDependencyKey,
-                $inheritedDependency,
                 $dependencyMap,
                 $inheritanceDependencyMap,
                 $resolvedInheritedDependencies,
                 $seen,
                 $childHasCycle
             );
+
+            $resolvedDependencies[] = $inheritedDependency;
 
             foreach ($resolved as $resolvedDependency) {
                 $resolvedDependencies[] = $resolvedDependency;
