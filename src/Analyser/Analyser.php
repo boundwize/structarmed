@@ -671,7 +671,7 @@ final readonly class Analyser
      * @param list<ClassNode> $classNodes
      * @return array{
      *     dependencies: array<string, list<string>>,
-     *     inheritanceDependencies: array<string, list<string>>,
+     *     inheritanceDependencies: array<string, array<string, string>>,
      *     classLayerMap: array<string, list<string>>,
      *     classPrimaryLayerMap: array<string, string>,
      *     classNodeMap: array<string, ClassNode>
@@ -707,21 +707,32 @@ final readonly class Analyser
                 continue;
             }
 
-            $dependencyMap[$classNode->className] = $classNode->dependencies;
-            $dependencies                         = [
-                ...$classNode->implements,
-                ...$classNode->interfaceExtends,
-            ];
+            // Class-like names are case-insensitive, so both maps are keyed by
+            // the lowercase name, and each inheritance target carries its
+            // lowercase lookup key next to the spelling it was written with.
+            // Dependency values themselves are never normalised: they may name
+            // constants, which are case-sensitive.
+            $classNameKey                 = strtolower($classNode->className);
+            $dependencyMap[$classNameKey] = $classNode->dependencies;
+            $inheritanceDependencies      = [];
+
+            foreach ($classNode->implements as $interface) {
+                $inheritanceDependencies[strtolower($interface)] ??= $interface;
+            }
+
+            foreach ($classNode->interfaceExtends as $interface) {
+                $inheritanceDependencies[strtolower($interface)] ??= $interface;
+            }
 
             if ($classNode->extends !== null) {
-                $dependencies[] = $classNode->extends;
+                $inheritanceDependencies[strtolower($classNode->extends)] ??= $classNode->extends;
             }
 
             foreach ($classNode->traits as $trait) {
-                $dependencies[] = $trait;
+                $inheritanceDependencies[strtolower($trait)] ??= $trait;
             }
 
-            $inheritanceDependencyMap[$classNode->className] = array_values(array_unique($dependencies));
+            $inheritanceDependencyMap[$classNameKey] = $inheritanceDependencies;
 
             if ($classNode->layers !== []) {
                 $classLayerMap[$classNode->className] = $classNode->layers;
@@ -742,9 +753,9 @@ final readonly class Analyser
     }
 
     /**
-     * @param array<string, list<string>> $dependencyMap
-     * @param array<string, list<string>> $inheritanceDependencyMap
-     * @param array<string, list<string>> $resolvedInheritedDependencies
+     * @param array<string, list<string>>          $dependencyMap            Keyed by lowercase class-like name
+     * @param array<string, array<string, string>> $inheritanceDependencyMap Keyed by lowercase class-like name
+     * @param array<string, list<string>>          $resolvedInheritedDependencies
      * @return list<string>
      */
     private function dependenciesForClass(
@@ -753,16 +764,18 @@ final readonly class Analyser
         array $inheritanceDependencyMap,
         array &$resolvedInheritedDependencies
     ): array {
-        $dependencies = $dependencyMap[$className] ?? [];
+        $classNameKey = strtolower($className);
+        $dependencies = $dependencyMap[$classNameKey] ?? [];
 
-        foreach ($inheritanceDependencyMap[$className] ?? [] as $dependency) {
+        foreach ($inheritanceDependencyMap[$classNameKey] ?? [] as $dependencyKey => $dependency) {
             $cycleDetected = false;
             $resolved      = $this->dependenciesForInheritanceDependency(
+                $dependencyKey,
                 $dependency,
                 $dependencyMap,
                 $inheritanceDependencyMap,
                 $resolvedInheritedDependencies,
-                [$className => true],
+                [$classNameKey => true],
                 $cycleDetected
             );
 
@@ -775,13 +788,17 @@ final readonly class Analyser
     }
 
     /**
-     * @param array<string, list<string>> $dependencyMap
-     * @param array<string, list<string>> $inheritanceDependencyMap
-     * @param array<string, list<string>> $resolvedInheritedDependencies
-     * @param array<string, true>         $seen
+     * `$dependencyKey` is the lowercase lookup key of the inheritance target;
+     * `$dependency` is the spelling it was written with, reported as is.
+     *
+     * @param array<string, list<string>>          $dependencyMap            Keyed by lowercase class-like name
+     * @param array<string, array<string, string>> $inheritanceDependencyMap Keyed by lowercase class-like name
+     * @param array<string, list<string>>          $resolvedInheritedDependencies
+     * @param array<string, true>                  $seen
      * @return list<string>
      */
     private function dependenciesForInheritanceDependency(
+        string $dependencyKey,
         string $dependency,
         array $dependencyMap,
         array $inheritanceDependencyMap,
@@ -791,27 +808,36 @@ final readonly class Analyser
     ): array {
         $resolvedDependencies = [$dependency];
 
-        if (isset($seen[$dependency])) {
+        if (isset($seen[$dependencyKey])) {
             $cycleDetected = true;
 
             return $resolvedDependencies;
         }
 
-        if (isset($resolvedInheritedDependencies[$dependency])) {
-            return $resolvedInheritedDependencies[$dependency];
+        if (isset($resolvedInheritedDependencies[$dependencyKey])) {
+            $resolvedDependencies = $resolvedInheritedDependencies[$dependencyKey];
+
+            // The memoised list starts with the spelling of whichever class
+            // resolved this target first; keep the one written here.
+            if ($resolvedDependencies[0] !== $dependency) {
+                $resolvedDependencies[0] = $dependency;
+            }
+
+            return $resolvedDependencies;
         }
 
         $hasCycle = false;
 
-        foreach ($dependencyMap[$dependency] ?? [] as $mappedDependency) {
+        foreach ($dependencyMap[$dependencyKey] ?? [] as $mappedDependency) {
             $resolvedDependencies[] = $mappedDependency;
         }
 
-        $seen += [$dependency => true];
+        $seen += [$dependencyKey => true];
 
-        foreach ($inheritanceDependencyMap[$dependency] ?? [] as $inheritedDependency) {
+        foreach ($inheritanceDependencyMap[$dependencyKey] ?? [] as $inheritedDependencyKey => $inheritedDependency) {
             $childHasCycle = false;
             $resolved      = $this->dependenciesForInheritanceDependency(
+                $inheritedDependencyKey,
                 $inheritedDependency,
                 $dependencyMap,
                 $inheritanceDependencyMap,
@@ -830,7 +856,7 @@ final readonly class Analyser
         $resolvedDependencies = array_values(array_unique($resolvedDependencies));
 
         if (! $hasCycle) {
-            $resolvedInheritedDependencies[$dependency] = $resolvedDependencies;
+            $resolvedInheritedDependencies[$dependencyKey] = $resolvedDependencies;
         }
 
         $cycleDetected = $cycleDetected || $hasCycle;
