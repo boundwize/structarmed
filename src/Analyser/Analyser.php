@@ -45,6 +45,7 @@ use function gc_disable;
 use function gc_enable;
 use function gc_enabled;
 use function getcwd;
+use function in_array;
 use function is_dir;
 use function is_file;
 use function sprintf;
@@ -724,6 +725,28 @@ final readonly class Analyser
 
             foreach ($classNode->nonClassDependencies as $nonClassDependency) {
                 $dependencies[$nonClassDependency] = false;
+            }
+
+            // nonClassDependencies compares names case-insensitively, so it
+            // misses a constant whose name differs only by case from a
+            // class-like the same class depends on. Constants are
+            // case-sensitive: such a fetch is not the class-like when another
+            // spelling, itself no constant fetch, stands for it.
+            foreach ($classNode->constantFetches as $constantFetch) {
+                if (! ($dependencies[$constantFetch] ?? false)) {
+                    continue;
+                }
+
+                foreach ($classNode->dependencies as $dependency) {
+                    if (
+                        $dependency !== $constantFetch
+                        && strcasecmp($dependency, $constantFetch) === 0
+                        && ! in_array($dependency, $classNode->constantFetches, true)
+                    ) {
+                        $dependencies[$constantFetch] = false;
+                        break;
+                    }
+                }
             }
 
             $dependencyMap[$classNameKey] = $dependencies;

@@ -7125,16 +7125,17 @@ PHP;
     {
         // Database is a path-based layer, so only a scanned class resolves to
         // it. A function or constant named like the scanned QueryBuilder class,
-        // in any casing, is not a reference to that class.
+        // in any casing, is not a reference to that class, also when the
+        // same class references the scanned class itself.
         $basePath            = $this->makeTempProject([
-            'src/Database/QueryBuilder.php'   => <<<'PHP'
+            'src/Database/QueryBuilder.php'    => <<<'PHP'
                 <?php
 
                 namespace App\Database;
 
                 class QueryBuilder {}
                 PHP,
-            'src/HTTP/SymbolController.php'   => <<<'PHP'
+            'src/HTTP/SymbolController.php'    => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -7152,7 +7153,7 @@ PHP;
                     }
                 }
                 PHP,
-            'src/HTTP/MixedController.php'    => <<<'PHP'
+            'src/HTTP/MixedController.php'     => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -7171,7 +7172,7 @@ PHP;
                     }
                 }
                 PHP,
-            'src/HTTP/ConstantController.php' => <<<'PHP'
+            'src/HTTP/ConstantController.php'  => <<<'PHP'
                 <?php
 
                 namespace App\HTTP;
@@ -7181,6 +7182,21 @@ PHP;
                     public function run(): string
                     {
                         return \App\Config\status;
+                    }
+                }
+                PHP,
+            'src/HTTP/CollisionController.php' => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class CollisionController
+                {
+                    public function __construct(private \App\Database\QueryBuilder $db) {}
+
+                    public function run(): string
+                    {
+                        return \App\Database\QUERYBUILDER;
                     }
                 }
                 PHP,
@@ -7200,7 +7216,8 @@ PHP;
             ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
 
         $this->assertSame([
-            'App\HTTP\MixedController' => [
+            'App\HTTP\CollisionController' => ['App\Database\QueryBuilder'],
+            'App\HTTP\MixedController'     => [
                 'App\Config\STATUS',
                 'App\Database\querybuilder',
                 'App\Support\query',
