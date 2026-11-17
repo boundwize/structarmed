@@ -111,7 +111,7 @@ final readonly class Analyser
         $rules           = $architecture->getRules();
         $globalSkipPaths = $architecture->getSkipPaths();
         $ruleSkipPaths   = $architecture->getRuleSkipPaths();
-        $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
+        $skippedRuleKeys = array_fill_keys($architecture->getSkippedRuleKeys(), true);
 
         $projectRuleViolations      = [];
         $fileAnalysisRules          = [];
@@ -192,19 +192,16 @@ final readonly class Analyser
             $projectRuleSkipPaths = $this->mergedSkipPaths($globalSkipPaths, $ruleSkipPaths[$key] ?? []);
 
             if ($rule instanceof MultipleProjectRuleViolationInterface) {
-                $projectRuleViolations[$key] = $this->withoutSkippedProjectViolations(
-                    $rule->evaluateProjectAll($this->basePath, $architecture, $projectRuleSkipPaths),
-                    $projectRuleSkipPaths,
-                );
+                $violations = $rule->evaluateProjectAll($this->basePath, $architecture, $projectRuleSkipPaths);
             } else {
                 $single     = $rule->evaluateProject($this->basePath, $architecture, $projectRuleSkipPaths);
                 $violations = $single instanceof RuleViolation ? [$single] : [];
-
-                $projectRuleViolations[$key] = $this->withoutSkippedProjectViolations(
-                    $violations,
-                    $projectRuleSkipPaths,
-                );
             }
+
+            $projectRuleViolations[$key] = $this->withoutSkippedProjectViolations(
+                $violations,
+                $projectRuleSkipPaths,
+            );
         }
 
         $layerPatterns      = $architecture->getLayerPatterns();
@@ -216,9 +213,10 @@ final readonly class Analyser
             $layerExcludePaths
         );
 
-        $files          ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
-        $withFileAnalysis = $fileAnalysisRules !== [];
-        $extractionResult = $this->collectAnalysisNodes(
+        $files               ??= $this->filesForAnalysis($architecture, $scanPaths, $layers);
+        $withFileAnalysis      = $fileAnalysisRules !== [];
+        $hasClassLikeUsageRule = $hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule;
+        $extractionResult      = $this->collectAnalysisNodes(
             $files,
             $progressHandler,
             $layers,
@@ -228,17 +226,14 @@ final readonly class Analyser
             $withFileAnalysis,
             $layerExcludePaths,
             $withSignatures,
-            $hasExtendedClassAwareRule
-                || $hasUsedInterfaceAwareRule
-                || $hasUsedTraitAwareRule
-                || $hasUsedFunctionAwareRule,
+            $hasClassLikeUsageRule || $hasUsedFunctionAwareRule,
         );
-        $classNodes       = $extractionResult->classNodes;
+        $classNodes            = $extractionResult->classNodes;
 
         // Node rules may query inheritance and resolved function calls.
         // Declarative ruleset checks use separate dependency resolution.
         if ($nodeRules !== []) {
-            $classNodes = $this->withRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
+            $this->resolveRecursiveParents($classNodes, $extractionResult->anonymousClassNodes);
 
             $this->resolveFunctionFallbackCalls(
                 [
@@ -251,7 +246,7 @@ final readonly class Analyser
             );
         }
 
-        if ($hasExtendedClassAwareRule || $hasUsedInterfaceAwareRule || $hasUsedTraitAwareRule) {
+        if ($hasClassLikeUsageRule) {
             $this->markClassLikeUsage(
                 $classNodes,
                 $extractionResult,
@@ -400,12 +395,7 @@ final readonly class Analyser
                 // layer (shared secondary layer) or is explicitly allowed, regardless
                 // of whether the dependency was scanned or resolved without a file path.
                 foreach ($depLayers as $depLayer) {
-                    if ($classNode->layer === $depLayer) {
-                        $allowedDependencies[$classNode->layer][$dependency] = true;
-                        continue 2;
-                    }
-
-                    if (isset($allowedLayerMap[$depLayer])) {
+                    if ($classNode->layer === $depLayer || isset($allowedLayerMap[$depLayer])) {
                         $allowedDependencies[$classNode->layer][$dependency] = true;
                         continue 2;
                     }
@@ -576,21 +566,6 @@ final readonly class Analyser
         }
 
         return $allowedLayerMap;
-    }
-
-    /**
-     * @param list<string> $skippedRuleKeys
-     * @return array<string, true>
-     */
-    private function skippedRuleKeyMap(array $skippedRuleKeys): array
-    {
-        $keyMap = [];
-
-        foreach ($skippedRuleKeys as $skippedRuleKey) {
-            $keyMap[$skippedRuleKey] = true;
-        }
-
-        return $keyMap;
     }
 
     /**
@@ -789,7 +764,8 @@ final readonly class Analyser
 
     /**
      * `$dependencyKey` is the lowercase lookup key of the inheritance target;
-     * `$dependency` is the spelling it was written with, reported as is.
+     * `$dependency` is the spelling it was written with, reported as is and
+     * returned first, followed by the dependencies the target brings in.
      *
      * @param array<string, list<string>>          $dependencyMap            Keyed by lowercase class-like name
      * @param array<string, array<string, string>> $inheritanceDependencyMap Keyed by lowercase class-like name
@@ -806,19 +782,17 @@ final readonly class Analyser
         array $seen,
         bool &$cycleDetected
     ): array {
-        $resolvedDependencies = [$dependency];
-
         if (isset($seen[$dependencyKey])) {
             $cycleDetected = true;
 
-            return $resolvedDependencies;
+            return [$dependency];
         }
 
+        // Reuse the cached list without copying it when the spelling matches.
+        // A different spelling only changes this caller's copy.
         if (isset($resolvedInheritedDependencies[$dependencyKey])) {
             $resolvedDependencies = $resolvedInheritedDependencies[$dependencyKey];
 
-            // The memoised list starts with the spelling of whichever class
-            // resolved this target first; keep the one written here.
             if ($resolvedDependencies[0] !== $dependency) {
                 $resolvedDependencies[0] = $dependency;
             }
@@ -826,13 +800,9 @@ final readonly class Analyser
             return $resolvedDependencies;
         }
 
-        $hasCycle = false;
-
-        foreach ($dependencyMap[$dependencyKey] ?? [] as $mappedDependency) {
-            $resolvedDependencies[] = $mappedDependency;
-        }
-
-        $seen += [$dependencyKey => true];
+        $hasCycle             = false;
+        $resolvedDependencies = [$dependency, ...$dependencyMap[$dependencyKey] ?? []];
+        $seen[$dependencyKey] = true;
 
         foreach ($inheritanceDependencyMap[$dependencyKey] ?? [] as $inheritedDependencyKey => $inheritedDependency) {
             $childHasCycle = false;
@@ -899,7 +869,7 @@ final readonly class Analyser
     /**
      * Collect and apply class-like usage flags with one collection pass and one
      * application pass over the class nodes. Extended classes use the recursive
-     * parent chain resolved by {@see withRecursiveParents()}; instantiated
+     * parent chain resolved by {@see resolveRecursiveParents()}; instantiated
      * classes come from resolved `new` expressions collected per file.
      *
      * @param list<ClassNode> $classNodes
@@ -1072,6 +1042,10 @@ final readonly class Analyser
 
         foreach ($nodeGroups as $nodeGroup) {
             foreach ($nodeGroup as $node) {
+                if ($node->functionCalls === []) {
+                    continue;
+                }
+
                 $functionCalls = $this->resolveNodeFunctionCalls($node->functionCalls, $declared, $resolvedCalls);
 
                 if ($functionCalls !== null) {
@@ -1148,11 +1122,17 @@ final readonly class Analyser
      */
     private function markFunctionUsage(array $classNodes, ExtractionResult $extractionResult): void
     {
+        if ($extractionResult->functionNodes === []) {
+            return;
+        }
+
         $used = [];
 
-        foreach ([...$classNodes, ...$extractionResult->anonymousClassNodes] as $classLikeNode) {
-            foreach ($classLikeNode->functionCalls as $functionCall) {
-                $used[$functionCall] = true;
+        foreach ([$classNodes, $extractionResult->anonymousClassNodes] as $classLikeNodes) {
+            foreach ($classLikeNodes as $classLikeNode) {
+                foreach ($classLikeNode->functionCalls as $functionCall) {
+                    $used[$functionCall] = true;
+                }
             }
         }
 
@@ -1372,9 +1352,8 @@ final readonly class Analyser
     /**
      * @param list<ClassNode>          $classNodes
      * @param list<AnonymousClassNode> $anonymousClassNodes
-     * @return list<ClassNode>
      */
-    private function withRecursiveParents(array $classNodes, array $anonymousClassNodes): array
+    private function resolveRecursiveParents(array $classNodes, array $anonymousClassNodes): void
     {
         $parentClassMap     = [];
         $parentInterfaceMap = [];
@@ -1433,8 +1412,6 @@ final readonly class Analyser
 
             $anonymousClassNode->setRecursiveParents($result['classes'], $result['interfaces']);
         }
-
-        return $classNodes;
     }
 
     /**
@@ -1583,14 +1560,12 @@ final readonly class Analyser
         array $layers,
         array $layerPatterns,
         ChainLayerResolver $chainLayerResolver,
-        ?AnalyserOptions $analyserOptions = null,
-        bool $withFileAnalysis = true,
-        array $layerExcludePaths = [],
-        bool $withSignatures = false,
-        bool $withFileReferences = true,
+        AnalyserOptions $options,
+        bool $withFileAnalysis,
+        array $layerExcludePaths,
+        bool $withSignatures,
+        bool $withFileReferences,
     ): ExtractionResult {
-        $options = $analyserOptions ?? AnalyserOptions::parallel();
-
         // Each extractor hydrates its files' node-cache payloads itself, so in
         // parallel mode that work is split across the workers instead of being
         // done serially here before any worker starts.
@@ -1686,7 +1661,7 @@ final readonly class Analyser
 
     private function shouldAnalyseComposerJson(Architecture $architecture): bool
     {
-        $skippedRuleKeys = $this->skippedRuleKeyMap($architecture->getSkippedRuleKeys());
+        $skippedRuleKeys = array_fill_keys($architecture->getSkippedRuleKeys(), true);
         $globalSkipPaths = $architecture->getSkipPaths();
         $ruleSkipPaths   = $architecture->getRuleSkipPaths();
 
