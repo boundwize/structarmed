@@ -68,7 +68,9 @@ use function gc_disable;
 use function gc_enable;
 use function gc_enabled;
 use function is_dir;
+use function ksort;
 use function mkdir;
+use function preg_match;
 use function realpath;
 use function rename;
 use function sort;
@@ -6725,6 +6727,281 @@ PHP;
         $this->assertCount(2, $secondControllerViolations);
         $this->assertStringContainsString('App\\Database\\Connection', $secondControllerViolations[0]->message);
         $this->assertStringContainsString('App\\Database\\QueryBuilder', $secondControllerViolations[1]->message);
+    }
+
+    public function testAnalyserRulesetResolvesInheritedDependenciesRegardlessOfClassNameCasing(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/HTTP/BaseController.php'   => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                abstract class BaseController
+                {
+                    protected \App\Database\QueryBuilder $db;
+                }
+                PHP,
+            'src/HTTP/ChildController.php'  => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class ChildController extends basecontroller
+                {
+                }
+                PHP,
+            'src/Database/QueryBuilder.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                final class QueryBuilder
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse($architecture, ['src/']);
+
+        $this->assertSame([
+            'App\HTTP\BaseController'  => ['App\Database\QueryBuilder'],
+            'App\HTTP\ChildController' => ['App\Database\QueryBuilder'],
+        ], $this->rulesetDependenciesByClass($ruleViolationCollection, 'ruleset.HTTP'));
+    }
+
+    public function testAnalyserRulesetKeepsEachSpellingOfSharedInheritanceTarget(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Database/BaseModel.php' => <<<'PHP'
+                <?php
+
+                namespace App\Database;
+
+                abstract class BaseModel
+                {
+                    protected Connection $connection;
+                }
+                PHP,
+            'src/HTTP/FirstModel.php'    => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class FirstModel extends \App\Database\basemodel
+                {
+                }
+                PHP,
+            'src/HTTP/SecondModel.php'   => <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                final class SecondModel extends \App\Database\BaseModel
+                {
+                }
+                PHP,
+        ]);
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            $architecture,
+            ['src/'],
+            null,
+            AnalyserOptions::sequential(),
+            [
+                $basePath . '/src/Database/BaseModel.php',
+                $basePath . '/src/HTTP/FirstModel.php',
+                $basePath . '/src/HTTP/SecondModel.php',
+            ]
+        );
+
+        $this->assertSame([
+            'App\HTTP\FirstModel'  => ['App\Database\Connection', 'App\Database\basemodel'],
+            'App\HTTP\SecondModel' => ['App\Database\BaseModel', 'App\Database\Connection'],
+        ], $this->rulesetDependenciesByClass($ruleViolationCollection, 'ruleset.HTTP'));
+    }
+
+    /**
+     * @return iterable<string, array{string, string, list<string>}>
+     */
+    public static function inheritedSymbolDependencyProvider(): iterable
+    {
+        yield 'constant' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use const App\Config\STATUS;
+
+                abstract class BaseController
+                {
+                    public function status(): string
+                    {
+                        return STATUS;
+                    }
+                }
+                PHP,
+            'BaseController',
+            ['App\Config\STATUS'],
+        ];
+
+        yield 'constants differing only by case' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                abstract class BaseController
+                {
+                    /** @return list<string> */
+                    public function statuses(): array
+                    {
+                        return [\App\Config\STATUS, \App\Config\status];
+                    }
+                }
+                PHP,
+            'BaseController',
+            ['App\Config\STATUS', 'App\Config\status'],
+        ];
+
+        yield 'function' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use function App\Support\query;
+
+                abstract class BaseController
+                {
+                    public function run(): void
+                    {
+                        query();
+                    }
+                }
+                PHP,
+            'BaseController',
+            ['App\Support\query'],
+        ];
+
+        yield 'class, function and constants through differently cased parent' => [
+            <<<'PHP'
+                <?php
+
+                namespace App\HTTP;
+
+                use App\Database\QueryBuilder;
+
+                use function App\Support\query;
+
+                use const App\Config\STATUS;
+                use const App\Config\status;
+
+                abstract class BaseController
+                {
+                    public function __construct(protected QueryBuilder $db) {}
+
+                    public function run(): string
+                    {
+                        query();
+
+                        return STATUS . status;
+                    }
+                }
+                PHP,
+            'BASECONTROLLER',
+            [
+                'App\Config\STATUS',
+                'App\Config\status',
+                'App\Database\QueryBuilder',
+                'App\Support\query',
+            ],
+        ];
+    }
+
+    /**
+     * @param list<string> $dependencies
+     */
+    #[DataProvider('inheritedSymbolDependencyProvider')]
+    public function testAnalyserRulesetInheritsSymbolDependenciesWithOriginalSpelling(
+        string $parentSourceCode,
+        string $parentReference,
+        array $dependencies
+    ): void {
+        $basePath            = $this->makeTempProject([
+            'src/HTTP/BaseController.php'  => $parentSourceCode,
+            'src/HTTP/ChildController.php' => sprintf(
+                '<?php namespace App\HTTP; final class ChildController extends %s {}',
+                $parentReference
+            ),
+            'src/Config/constants.php'     => <<<'PHP'
+                <?php
+
+                namespace App\Config;
+
+                const STATUS = 'active';
+                const status = 'inactive';
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+
+        $architecture = Architecture::define()
+            ->layerPattern('HTTP', '/^App\\\\HTTP\\\\.*$/')
+            ->layerPattern('Database', '/^App\\\\Database\\\\.*$/')
+            ->layerPattern('Config', '/^App\\\\Config\\\\.*$/')
+            ->layerPattern('Support', '/^App\\\\Support\\\\.*$/')
+            ->ruleset(['HTTP' => []]);
+
+        $coldViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+        $warmViolations = (new Analyser($basePath, $analysisResultCache, 'config'))
+            ->analyse($architecture, ['src/'], null, AnalyserOptions::sequential());
+
+        $this->assertSame([
+            'App\HTTP\BaseController'  => $dependencies,
+            'App\HTTP\ChildController' => $dependencies,
+        ], $this->rulesetDependenciesByClass($coldViolations, 'ruleset.HTTP'));
+        $this->assertSame($this->violationTuples($coldViolations), $this->violationTuples($warmViolations));
+    }
+
+    /**
+     * Dependency names reported by a ruleset key, per class, with the spelling
+     * used in the violation message.
+     *
+     * @return array<string, list<string>>
+     */
+    private function rulesetDependenciesByClass(
+        RuleViolationCollection $ruleViolationCollection,
+        string $ruleKey
+    ): array {
+        $dependenciesByClass = [];
+
+        foreach ($ruleViolationCollection->forRule($ruleKey) as $ruleViolation) {
+            preg_match('/must not depend on \[([^\]]+)\]/', $ruleViolation->message, $matches);
+
+            $dependenciesByClass[(string) $ruleViolation->className][] = $matches[1] ?? $ruleViolation->message;
+        }
+
+        ksort($dependenciesByClass);
+
+        foreach ($dependenciesByClass as $className => $dependencies) {
+            sort($dependencies);
+
+            $dependenciesByClass[$className] = $dependencies;
+        }
+
+        return $dependenciesByClass;
     }
 
     public function testAnalyserRulesetStopsResolvingCyclicInheritanceDependencies(): void
