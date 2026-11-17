@@ -85,6 +85,20 @@ final readonly class PhpParserFixerProcessor
 
                 return parent::pScalar_Float($node);
             }
+
+            /**
+             * A namespace emptied by a fix is printed anew, and the printer
+             * picks the `namespace N;` form unless told otherwise; next to
+             * another bracketed namespace that is a compile error, so one
+             * written with braces keeps them.
+             */
+            // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps -- PHP-Parser extension hook.
+            protected function pStmt_Namespace(Namespace_ $node): string
+            {
+                $this->canUseSemicolonNamespaces = $node->getAttribute('kind') !== Namespace_::KIND_BRACED;
+
+                return parent::pStmt_Namespace($node);
+            }
         };
         $fixedCode     = $prettyPrinter->printFormatPreserving($statements, $originalStatements, $tokens);
 
