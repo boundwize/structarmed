@@ -23,6 +23,7 @@ use function strlen;
 use function substr;
 use function substr_count;
 
+use const T_HALT_COMPILER;
 use const T_INLINE_HTML;
 use const T_OPEN_TAG;
 
@@ -139,6 +140,11 @@ final readonly class Psr1PhpTagsRule implements FileAnalysisRuleInterface, Fixab
         }
 
         foreach ($this->parser->getTokens() as $token) {
+            // What follows `__halt_compiler();` is raw data PHP never parses.
+            if ($token->id === T_HALT_COMPILER) {
+                break;
+            }
+
             $replacement = $this->replacementForInvalidTag($token->id, $token->text, $token->line, $line);
 
             if ($replacement !== null) {

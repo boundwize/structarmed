@@ -61,6 +61,7 @@ use function substr;
 use function substr_count;
 use function trim;
 
+use const T_HALT_COMPILER;
 use const T_INLINE_HTML;
 use const T_OPEN_TAG;
 
@@ -356,6 +357,11 @@ final class FileAnalysisProvider
 
         foreach ($this->parser->getTokens() as $token) {
             $id = $token->id;
+
+            // What follows `__halt_compiler();` is raw data PHP never parses.
+            if ($id === T_HALT_COMPILER) {
+                break;
+            }
 
             if ($id !== T_OPEN_TAG && $id !== T_INLINE_HTML) {
                 continue;
