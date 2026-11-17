@@ -102,8 +102,9 @@ final class SkipPathMatcher
                 $pathPrefixes[] = Path::normalise($canonicalSkipPath);
             }
 
+            // a root skip path ("/") stays base-relative: it covers the whole base path
             $pathPrefixes[] = Path::normalise(
-                Path::resolve($normalisedSkipPath, $normalisedBasePath),
+                Path::resolve(rtrim($normalisedSkipPath, '/'), $normalisedBasePath),
                 canonicalise: true
             );
         }

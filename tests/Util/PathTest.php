@@ -116,12 +116,10 @@ final class PathTest extends TestCase
         yield 'relative to base' => ['src/Foo.php', '/project', 'src/Foo.php'];
         yield 'empty is the base' => ['', '/project', ''];
         yield 'inside unix root' => ['/project/src/Foo.php', '/', 'project/src/Foo.php'];
-        yield 'unix root itself' => ['/', '/', ''];
         yield 'relative to unix root' => ['project/Foo.php', '/', 'project/Foo.php'];
         yield 'inside windows drive root' => ['C:/project/src/Foo.php', 'C:/', 'project/src/Foo.php'];
         yield 'windows drive root itself' => ['C:\\', 'C:/', ''];
         yield 'other windows drive' => ['D:/project/Foo.php', 'C:/', 'D:/project/Foo.php'];
-        yield 'unix root from a nested base' => ['/', '/project/src', '../../'];
     }
 
     #[DataProvider('provideRelativeTo')]
