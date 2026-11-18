@@ -447,6 +447,58 @@ PHP);
         $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
     }
 
+    public function testCollectsClassOfNamespaceMagicConstantStaticCallableConcatenations(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+
+            call_user_func(__NAMESPACE__ . '\Handler::run');
+            $nested   = __NAMESPACE__ . '\Nested::Other::run';
+            $noMethod = __NAMESPACE__ . '\NoMethod::';
+            $digits   = __NAMESPACE__ . '\Digits::123';
+            $invalid  = __NAMESPACE__ . '\not-a-class::run';
+            $plain    = __NAMESPACE__ . '\Plain';
+
+            if (! function_exists(__NAMESPACE__ . '\Probed::run')) {
+                return;
+            }
+            PHP);
+
+        // As with the literal 'App\Handler::run', only the class part is a
+        // reference; an invalid method part references nothing, and the plain
+        // class-name concatenation keeps its class and function markers.
+        $this->assertSame(
+            [
+                '/fake/path/Foo.php' => [
+                    '?App\call_user_func',
+                    'App\Handler',
+                    'App\Plain',
+                    '!App\Plain',
+                    '?App\function_exists',
+                ],
+            ],
+            $analysisNodeCollector->getFileReferences()
+        );
+        $this->assertSame([], $analysisNodeCollector->getFileInstantiations());
+    }
+
+    public function testCollectsClassOfNamespaceMagicConstantStaticCallableInGlobalNamespace(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+
+            call_user_func(__NAMESPACE__ . '\Handler::run');
+            $digits = __NAMESPACE__ . '\Digits::123';
+            PHP);
+
+        // The leading separator left by the empty namespace is stripped.
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['!call_user_func', 'Handler']],
+            $analysisNodeCollector->getFileReferences()
+        );
+    }
+
     public function testCollectsLeadingBackslashStringInstantiationsNormalized(): void
     {
         $code = '<?php namespace App;' . "\n"
