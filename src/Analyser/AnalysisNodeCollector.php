@@ -1359,6 +1359,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
                 $value = $this->stripLeadingNamespaceSeparator($this->currentNamespace . $node->right->value);
 
+                if ($this->collectStaticCallableClass($value)) {
+                    return;
+                }
+
                 if (preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1) {
                     $this->currentFileReferences[$value]                                   = true;
                     $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
@@ -1382,22 +1386,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // ClassNode::$className form used for usage lookups.
             $value = $this->stripLeadingNamespaceSeparator($node->value);
 
-            // A static callable string ('App\Handler::run') references its
-            // class only: the method name is neither a class nor a function.
-            $separatorPosition = strpos($value, '::');
-
-            if ($separatorPosition !== false) {
-                $staticCallableClass = substr($value, 0, $separatorPosition);
-
-                // A method part that is not an identifier ('App\A::',
-                // 'App\A::123', 'App\A::B::run') is not a callable.
-                if (
-                    preg_match(self::METHOD_NAME_PATTERN, substr($value, $separatorPosition + 2)) === 1
-                    && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
-                ) {
-                    $this->currentFileReferences[$staticCallableClass] = true;
-                }
-
+            if ($this->collectStaticCallableClass($value)) {
                 return;
             }
 
@@ -1839,6 +1828,35 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function stripLeadingNamespaceSeparator(string $name): string
     {
         return str_starts_with($name, '\\') ? substr($name, 1) : $name;
+    }
+
+    /**
+     * A static callable string ('App\Handler::run') references its class
+     * only: the method name is neither a class nor a function.
+     *
+     * @return bool whether $value is spelled as a static callable, valid or
+     *              not, so it is no plain class-like or function name
+     */
+    private function collectStaticCallableClass(string $value): bool
+    {
+        $separatorPosition = strpos($value, '::');
+
+        if ($separatorPosition === false) {
+            return false;
+        }
+
+        $staticCallableClass = substr($value, 0, $separatorPosition);
+
+        // A method part that is not an identifier ('App\A::',
+        // 'App\A::123', 'App\A::B::run') is not a callable.
+        if (
+            preg_match(self::METHOD_NAME_PATTERN, substr($value, $separatorPosition + 2)) === 1
+            && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
+        ) {
+            $this->currentFileReferences[$staticCallableClass] = true;
+        }
+
+        return true;
     }
 
     private function addDependency(string $dependency, bool $isClassName): void
