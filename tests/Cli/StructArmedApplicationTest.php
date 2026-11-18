@@ -12,6 +12,7 @@ use Boundwize\StructArmed\Cli\ClearCacheCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
 use Boundwize\StructArmed\Cli\StructArmedApplication;
 use Boundwize\StructArmed\Cli\Usage;
+use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Version;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -1070,6 +1071,76 @@ PHP);
                 (string) file_get_contents($basePath . '/src/Foo.php')
             );
         } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReanalysesWhenOnlyNestedComposerJsonChanges(): void
+    {
+        $basePath = $this->createTempDirectory();
+        mkdir($basePath . '/nested/src', 0777, true);
+        file_put_contents($basePath . '/nested/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Acme\\Billing\\": "src/"
+        }
+    }
+}
+JSON);
+        file_put_contents($basePath . '/nested/src/Invoice.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace Acme\Billing;
+
+final class Invoice
+{
+}
+PHP);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Composer\Psr4NamespaceRule;
+
+return Architecture::define()
+    ->layer('Packages', 'nested/')
+    ->rule('packages.classes.must_match_composer', new Psr4NamespaceRule('Packages'));
+PHP);
+
+        $argv = ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--no-progress'];
+
+        try {
+            [$firstExitCode, $firstOutput] = $this->runApplication($argv, $basePath);
+
+            file_put_contents($basePath . '/nested/composer.json', <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Acme\\Invoicing\\": "src/"
+        }
+    }
+}
+JSON);
+            // every CLI run is its own process, so it starts without the composer.json memo
+            (new ComposerJsonProvider())->clear();
+
+            [$secondExitCode, $secondOutput] = $this->runApplication($argv, $basePath);
+
+            $this->assertSame(0, $firstExitCode, $firstOutput);
+            $this->assertStringContainsString('No violations found', $firstOutput);
+            $this->assertSame(1, $secondExitCode, $secondOutput);
+            $this->assertStringContainsString(
+                'Class [Acme\Billing\Invoice] must match PSR-4 class [Acme\Invoicing\Invoice]',
+                $secondOutput
+            );
+        } finally {
+            unlink($basePath . '/nested/src/Invoice.php');
+            rmdir($basePath . '/nested/src');
             $this->removeTempDirectory($basePath);
         }
     }
