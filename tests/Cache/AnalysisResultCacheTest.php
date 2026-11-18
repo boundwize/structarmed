@@ -18,6 +18,7 @@ use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;
+use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Composer\InstalledVersions;
@@ -128,14 +129,18 @@ final class AnalysisResultCacheTest extends TestCase
             numericLiteral: '10000',
         ));
 
+        // the composer.json memo is shared by the whole process
+        (new ComposerJsonProvider())->clear();
+
         try {
             $analysisResultCache->store('key', $metadata, $ruleViolationCollection);
             $loaded = $analysisResultCache->load('key', $metadata);
 
             $this->assertSame(
                 json_encode([
-                    'metadata'   => $metadata,
-                    'violations' => $ruleViolationCollection->toArray(),
+                    'metadata'      => $metadata,
+                    'composerFiles' => [],
+                    'violations'    => $ruleViolationCollection->toArray(),
                 ], JSON_THROW_ON_ERROR),
                 file_get_contents($cacheDirectory . '/key.json')
             );
@@ -221,6 +226,53 @@ final class AnalysisResultCacheTest extends TestCase
                 $analysisResultCache->load('key', [])
             );
         } finally {
+            $this->removeTempDirectory($cacheDirectory);
+        }
+    }
+
+    public function testMissesWhenConsultedComposerJsonChangesOrIsNotRecorded(): void
+    {
+        $metadata             = ['configHash' => 'same'];
+        $cacheDirectory       = $this->createTempDirectory();
+        $packageDirectory     = $this->createTempDirectory();
+        $composerFile         = $packageDirectory . '/composer.json';
+        $composerJsonProvider = new ComposerJsonProvider();
+
+        file_put_contents($composerFile, '{"name": "app/first"}');
+
+        $composerJsonProvider->clear();
+        $composerJsonProvider->config($packageDirectory);
+
+        try {
+            (new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory))
+                ->store('key', $metadata, new RuleViolationCollection());
+
+            $this->assertInstanceOf(
+                RuleViolationCollection::class,
+                (new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory))->load('key', $metadata)
+            );
+
+            file_put_contents($composerFile, '{"name": "app/other"}');
+
+            $this->assertNotInstanceOf(
+                RuleViolationCollection::class,
+                (new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory))->load('key', $metadata)
+            );
+
+            // a payload stored before consulted composer.json files were recorded
+            $this->writeCachePayload($cacheDirectory, [
+                'metadata'   => $metadata,
+                'violations' => [],
+            ]);
+
+            $this->assertNotInstanceOf(
+                RuleViolationCollection::class,
+                (new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory))->load('key', $metadata)
+            );
+        } finally {
+            $composerJsonProvider->clear();
+            unlink($composerFile);
+            $this->removeTempDirectory($packageDirectory);
             $this->removeTempDirectory($cacheDirectory);
         }
     }

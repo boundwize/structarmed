@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Tests\Composer;
 
 use Boundwize\StructArmed\Composer\ComposerJsonProvider;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use Boundwize\StructArmed\Util\Path;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -41,6 +42,29 @@ final class ComposerJsonProviderTest extends TestCase
         $composerJsonProvider->clear();
 
         $this->assertSame(['name' => 'app/other'], $composerJsonProvider->config($basePath));
+    }
+
+    public function testListsEveryConsultedComposerJsonUntilCleared(): void
+    {
+        $basePath             = $this->makeTempProject('{"name": "app/first"}');
+        $missingBasePath      = $this->makeTempDir();
+        $composerJsonProvider = new ComposerJsonProvider();
+
+        $composerJsonProvider->clear();
+        $composerJsonProvider->config($basePath);
+        $composerJsonProvider->config($missingBasePath);
+
+        $this->assertSame(
+            [
+                Path::normalise($basePath . '/composer.json', canonicalise: true),
+                Path::normalise($missingBasePath . '/composer.json', canonicalise: true),
+            ],
+            $composerJsonProvider->files()
+        );
+
+        $composerJsonProvider->clear();
+
+        $this->assertSame([], $composerJsonProvider->files());
     }
 
     private function makeTempProject(string $composerJson): string

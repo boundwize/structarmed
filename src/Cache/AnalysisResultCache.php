@@ -124,6 +124,10 @@ final class AnalysisResultCache
             $ruleViolationCollection->add($ruleViolation);
         }
 
+        if (! $this->areComposerFilesUnchanged($payload['composerFiles'] ?? null)) {
+            return null;
+        }
+
         return $ruleViolationCollection;
     }
 
@@ -134,10 +138,35 @@ final class AnalysisResultCache
     {
         $this->ensureCacheInitialised();
 
+        // Rules may read a composer.json nested below the project one, which
+        // the metadata does not hash: record every one consulted by the
+        // analysis so that load() notices when any of them changes.
+        $composerFiles = [];
+
+        foreach ($this->composerJsonProvider->files() as $composerFile) {
+            $composerFiles[$composerFile] = $this->fileHashProvider->hash($composerFile);
+        }
+
         file_put_contents($this->path($key), json_encode([
-            'metadata'   => $metadata,
-            'violations' => $ruleViolationCollection->toArray(),
+            'metadata'      => $metadata,
+            'composerFiles' => $composerFiles,
+            'violations'    => $ruleViolationCollection->toArray(),
         ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
+    }
+
+    private function areComposerFilesUnchanged(mixed $composerFiles): bool
+    {
+        if (! is_array($composerFiles)) {
+            return false;
+        }
+
+        foreach ($composerFiles as $composerFile => $hash) {
+            if ($this->fileHashProvider->hash((string) $composerFile) !== $hash) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function clear(): void
