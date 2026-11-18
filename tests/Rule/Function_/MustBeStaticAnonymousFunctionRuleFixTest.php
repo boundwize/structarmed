@@ -301,4 +301,80 @@ PHP,
                 ->forRule('source.static_closures')
         );
     }
+
+    public function testAnalyseThenFixSkipsParentMethodCallsOutsideStaticMethods(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-parent-method-closure');
+        mkdir($basePath . '/src');
+
+        $file = $basePath . '/src/Handler.php';
+
+        file_put_contents(
+            $file,
+            <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace App;
+
+                final class Handler extends Base
+                {
+                    public function run(): array
+                    {
+                        return [fn () => parent::run(), fn () => 1];
+                    }
+
+                    public static function create(): callable
+                    {
+                        return fn () => parent::create();
+                    }
+                }
+
+                PHP
+        );
+
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+
+        $violations = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.static_closures');
+
+        $this->assertCount(2, $violations);
+        $this->assertSame([11, 16], [$violations[0]->line, $violations[1]->line]);
+
+        $rule = $architecture->getRules()['source.static_closures'];
+        $this->assertInstanceOf(MustBeStaticAnonymousFunctionRule::class, $rule);
+
+        foreach ($violations as $violation) {
+            $this->assertTrue($rule->fix($violation));
+        }
+
+        $this->assertSame(
+            <<<'PHP'
+                <?php
+
+                declare(strict_types=1);
+
+                namespace App;
+
+                final class Handler extends Base
+                {
+                    public function run(): array
+                    {
+                        return [fn () => parent::run(), static fn () => 1];
+                    }
+
+                    public static function create(): callable
+                    {
+                        return static fn () => parent::create();
+                    }
+                }
+
+                PHP,
+            file_get_contents($file)
+        );
+    }
 }

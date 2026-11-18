@@ -431,6 +431,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private array $activeMethodComplexities = [];
 
     /**
+     * Lowercased name of each method currently being entered and whether it
+     * is static, innermost last.
+     *
+     * @var list<array{string, bool}>
+     */
+    private array $activeMethodStaticFlags = [];
+
+    /**
      * Names of the class-likes currently being entered, innermost last; an
      * anonymous class contributes null.
      *
@@ -501,6 +509,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->fileFunctions                     = [];
         $this->activeClassLikeAnalyses           = [];
         $this->activeMethodComplexities          = [];
+        $this->activeMethodStaticFlags           = [];
         $this->activeClassLikeNames              = [];
         $this->activeFunctionNames               = [];
         $this->activeFunctionLikeAnalyses        = [];
@@ -737,6 +746,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof ClassMethod) {
+                $this->activeMethodStaticFlags[] = [$node->name->toLowerString(), $node->isStatic()];
                 $this->startMethodAnalysis();
 
                 return null;
@@ -792,6 +802,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $this->collectObjectBindingRequirement($node);
 
             if ($node instanceof StaticCall) {
+                $this->collectParentMethodCall($node);
+
                 return null;
             }
 
@@ -811,6 +823,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($node instanceof ClassMethod) {
+            array_pop($this->activeMethodStaticFlags);
             $this->finishMethodAnalysis($node);
 
             return null;
@@ -905,6 +918,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeClassLikeAnalyses           = [];
         $this->activeClassLikeScopes             = [];
         $this->activeMethodComplexities          = [];
+        $this->activeMethodStaticFlags           = [];
         $this->activeClassLikeNames              = [];
         $this->activeFunctionNames               = [];
         $this->activeFunctionLikeAnalyses        = [];
@@ -1916,6 +1930,31 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         for ($index = count($this->activeFunctionLikeAnalyses) - 1; $index >= $depth; $index--) {
             $this->activeFunctionLikeAnalyses[$index]->usesThis = true;
+        }
+    }
+
+    /**
+     * `parent::method()` forwards `$this` to a non-static parent method. The
+     * parent class may live in another file, so only a call to the method
+     * the enclosing method overrides is decided here: an override is static
+     * exactly when the method it overrides is, so inside a non-static method
+     * such a call counts as `$this` usage.
+     */
+    private function collectParentMethodCall(StaticCall $staticCall): void
+    {
+        if (
+            ! $staticCall->class instanceof Name
+            || $staticCall->class->toLowerString() !== 'parent'
+            || ! $staticCall->name instanceof Identifier
+            || $this->activeMethodStaticFlags === []
+        ) {
+            return;
+        }
+
+        [$methodName, $isStatic] = end($this->activeMethodStaticFlags);
+
+        if (! $isStatic && $staticCall->name->toLowerString() === $methodName) {
+            $this->markThisUsage();
         }
     }
 
