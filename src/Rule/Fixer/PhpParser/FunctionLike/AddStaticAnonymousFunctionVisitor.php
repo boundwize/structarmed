@@ -12,16 +12,21 @@ use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\ClassLike;
+use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
 
+use function array_pop;
+use function end;
 use function in_array;
 
 /**
  * Adds the `static` modifier to the anonymous functions starting on the given
- * line that neither read `$this` nor require object binding.
+ * line that neither read `$this`, call a parent method from a non-static
+ * method, nor require object binding.
  *
  * An anonymous function has no name, so its start line is the only identity
  * a violation can carry, and several may start on one line. Re-applying the
@@ -34,6 +39,9 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     /** @var list<Closure|ArrowFunction> */
     private array $objectBoundAnonymousFunctions = [];
 
+    /** @var list<bool> whether each method being entered is static, innermost last */
+    private array $activeMethodStaticFlags = [];
+
     public function __construct(
         private readonly int $line,
     ) {
@@ -43,12 +51,19 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     public function beforeTraverse(array $nodes): null
     {
         $this->objectBoundAnonymousFunctions = [];
+        $this->activeMethodStaticFlags       = [];
 
         return null;
     }
 
     public function enterNode(Node $node): ?Node
     {
+        if ($node instanceof ClassMethod) {
+            $this->activeMethodStaticFlags[] = $node->isStatic();
+
+            return null;
+        }
+
         if (
             $node instanceof StaticCall
             || $node instanceof MethodCall
@@ -82,6 +97,15 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
         return $node;
     }
 
+    public function leaveNode(Node $node): null
+    {
+        if ($node instanceof ClassMethod) {
+            array_pop($this->activeMethodStaticFlags);
+        }
+
+        return null;
+    }
+
     private function requiresObjectBinding(Closure|ArrowFunction $anonymousFunction): bool
     {
         return in_array($anonymousFunction, $this->objectBoundAnonymousFunctions, true);
@@ -93,11 +117,20 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
      * `$this` inside a nested class-like body (an anonymous class, or a class,
      * trait, or enum declared in the body) is that class-like's own, so
      * class-likes are not descended into.
+     * A `parent::method()` call forwards `$this` to a non-static parent
+     * method, so it counts unless the enclosing method is static: with no
+     * `$this` to forward, the parent method called there is static too.
      */
     private function usesThis(Closure|ArrowFunction $anonymousFunction): bool
     {
-        $thisFinder = new class extends NodeVisitorAbstract {
+        $parentCallForwardsThis = ! end($this->activeMethodStaticFlags);
+        $thisFinder             = new class ($parentCallForwardsThis) extends NodeVisitorAbstract {
             public bool $found = false;
+
+            public function __construct(
+                private readonly bool $parentCallForwardsThis,
+            ) {
+            }
 
             public function enterNode(Node $node): ?int
             {
@@ -105,7 +138,13 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
                     return NodeVisitor::DONT_TRAVERSE_CHILDREN;
                 }
 
-                if ($node instanceof Variable && $node->name === 'this') {
+                if (
+                    ($node instanceof Variable && $node->name === 'this')
+                    || ($this->parentCallForwardsThis
+                        && $node instanceof StaticCall
+                        && $node->class instanceof Name
+                        && $node->class->toLowerString() === 'parent')
+                ) {
                     $this->found = true;
 
                     return NodeVisitor::STOP_TRAVERSAL;

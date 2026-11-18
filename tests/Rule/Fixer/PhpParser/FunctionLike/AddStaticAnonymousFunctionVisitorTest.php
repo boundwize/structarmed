@@ -6,13 +6,16 @@ namespace Boundwize\StructArmed\Tests\Rule\Fixer\PhpParser\FunctionLike;
 
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\FunctionLike\AddStaticAnonymousFunctionVisitor;
 use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
+use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\PropertyFetch;
+use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
@@ -77,6 +80,43 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
 
         $this->assertTrue($plain->static);
         $this->assertFalse($usingThis->static);
+    }
+
+    public function testDoesNotChangeAnonymousFunctionCallingParentMethodOutsideStaticMethod(): void
+    {
+        $callingParent = new ArrowFunction(
+            ['expr' => new StaticCall(new Name('parent'), 'save')],
+            ['startLine' => 12]
+        );
+        $callingSelf   = new ArrowFunction(
+            ['expr' => new StaticCall(new Name('self'), 'save')],
+            ['startLine' => 12]
+        );
+        $dynamicClass  = new ArrowFunction(
+            ['expr' => new StaticCall(new Variable('class'), 'save')],
+            ['startLine' => 12]
+        );
+        $inStatic      = new ArrowFunction(
+            ['expr' => new StaticCall(new Name('parent'), 'create')],
+            ['startLine' => 12]
+        );
+        $afterStatic   = new ArrowFunction(
+            ['expr' => new StaticCall(new Name('parent'), 'save')],
+            ['startLine' => 12]
+        );
+
+        (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(12)))->traverse([
+            new ClassMethod('run', ['stmts' => [new Return_($callingParent), new Return_($callingSelf)]]),
+            new ClassMethod('create', ['flags' => Modifiers::STATIC, 'stmts' => [new Return_($inStatic)]]),
+            new Return_($dynamicClass),
+            new Return_($afterStatic),
+        ]);
+
+        $this->assertFalse($callingParent->static, 'non-static method: the parent method needs $this');
+        $this->assertTrue($callingSelf->static);
+        $this->assertTrue($dynamicClass->static);
+        $this->assertTrue($inStatic->static, 'static method: the parent method is static too');
+        $this->assertFalse($afterStatic->static, 'the static method has been left');
     }
 
     public function testDoesNotChangeClosureWhoseNestedClosureReadsThis(): void
