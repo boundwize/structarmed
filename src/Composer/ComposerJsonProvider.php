@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Composer;
 use Boundwize\StructArmed\Util\Path;
 
 use function array_key_exists;
+use function array_keys;
 use function file_exists;
 use function file_get_contents;
 use function is_array;
@@ -40,6 +41,17 @@ final class ComposerJsonProvider
         return self::$decodedByFile[$composerFile] = file_exists($composerFile)
             ? $this->decode((string) file_get_contents($composerFile))
             : null;
+    }
+
+    /**
+     * Every composer.json consulted since the last clear(): the project one and
+     * any nested one a rule read, whether or not the file exists.
+     *
+     * @return list<string>
+     */
+    public function files(): array
+    {
+        return array_keys(self::$decodedByFile);
     }
 
     public function clear(): void
