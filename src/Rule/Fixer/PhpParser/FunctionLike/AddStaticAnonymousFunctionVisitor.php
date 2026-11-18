@@ -12,6 +12,7 @@ use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
@@ -25,7 +26,7 @@ use function in_array;
 
 /**
  * Adds the `static` modifier to the anonymous functions starting on the given
- * line that neither read `$this`, call a parent method from a non-static
+ * line that neither read `$this`, call the parent of the enclosing non-static
  * method, nor require object binding.
  *
  * An anonymous function has no name, so its start line is the only identity
@@ -39,7 +40,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     /** @var list<Closure|ArrowFunction> */
     private array $objectBoundAnonymousFunctions = [];
 
-    /** @var list<bool> whether each method being entered is static, innermost last */
+    /** @var list<array{string, bool}> lowercased name and static flag of each method being entered, innermost last */
     private array $activeMethodStaticFlags = [];
 
     public function __construct(
@@ -59,7 +60,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     public function enterNode(Node $node): ?Node
     {
         if ($node instanceof ClassMethod) {
-            $this->activeMethodStaticFlags[] = $node->isStatic();
+            $this->activeMethodStaticFlags[] = [$node->name->toLowerString(), $node->isStatic()];
 
             return null;
         }
@@ -118,17 +119,18 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
      * trait, or enum declared in the body) is that class-like's own, so
      * class-likes are not descended into.
      * A `parent::method()` call forwards `$this` to a non-static parent
-     * method, so it counts unless the enclosing method is static: with no
-     * `$this` to forward, the parent method called there is static too.
+     * method. It counts when it calls the method the enclosing non-static
+     * method overrides: an override is static exactly when the method it
+     * overrides is.
      */
     private function usesThis(Closure|ArrowFunction $anonymousFunction): bool
     {
-        $parentCallForwardsThis = ! end($this->activeMethodStaticFlags);
-        $thisFinder             = new class ($parentCallForwardsThis) extends NodeVisitorAbstract {
+        [$methodName, $isStatic] = end($this->activeMethodStaticFlags) ?: [null, true];
+        $thisFinder              = new class ($isStatic ? null : $methodName) extends NodeVisitorAbstract {
             public bool $found = false;
 
             public function __construct(
-                private readonly bool $parentCallForwardsThis,
+                private readonly ?string $nonStaticMethodName,
             ) {
             }
 
@@ -140,10 +142,11 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 
                 if (
                     ($node instanceof Variable && $node->name === 'this')
-                    || ($this->parentCallForwardsThis
-                        && $node instanceof StaticCall
+                    || ($node instanceof StaticCall
                         && $node->class instanceof Name
-                        && $node->class->toLowerString() === 'parent')
+                        && $node->class->toLowerString() === 'parent'
+                        && $node->name instanceof Identifier
+                        && $node->name->toLowerString() === $this->nonStaticMethodName)
                 ) {
                     $this->found = true;
 

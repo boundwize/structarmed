@@ -431,9 +431,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private array $activeMethodComplexities = [];
 
     /**
-     * Whether each method currently being entered is static, innermost last.
+     * Lowercased name of each method currently being entered and whether it
+     * is static, innermost last.
      *
-     * @var list<bool>
+     * @var list<array{string, bool}>
      */
     private array $activeMethodStaticFlags = [];
 
@@ -745,7 +746,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof ClassMethod) {
-                $this->activeMethodStaticFlags[] = $node->isStatic();
+                $this->activeMethodStaticFlags[] = [$node->name->toLowerString(), $node->isStatic()];
                 $this->startMethodAnalysis();
 
                 return null;
@@ -1934,17 +1935,25 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * `parent::method()` forwards `$this` to a non-static parent method. The
-     * parent class may live in another file, so the enclosing method decides:
-     * a static method has no `$this` to forward, so the parent method it
-     * calls is static too; anywhere else the call counts as `$this` usage.
+     * parent class may live in another file, so only a call to the method
+     * the enclosing method overrides is decided here: an override is static
+     * exactly when the method it overrides is, so inside a non-static method
+     * such a call counts as `$this` usage.
      */
     private function collectParentMethodCall(StaticCall $staticCall): void
     {
         if (
-            $staticCall->class instanceof Name
-            && $staticCall->class->toLowerString() === 'parent'
-            && ! end($this->activeMethodStaticFlags)
+            ! $staticCall->class instanceof Name
+            || $staticCall->class->toLowerString() !== 'parent'
+            || ! $staticCall->name instanceof Identifier
+            || $this->activeMethodStaticFlags === []
         ) {
+            return;
+        }
+
+        [$methodName, $isStatic] = end($this->activeMethodStaticFlags);
+
+        if (! $isStatic && $staticCall->name->toLowerString() === $methodName) {
             $this->markThisUsage();
         }
     }

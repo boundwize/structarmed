@@ -373,7 +373,7 @@ final class FunctionLikeCollectionTest extends TestCase
         $this->assertTrue($anonymousFunctionNodes[4]->isStatic);
     }
 
-    public function testParentMethodCallCountsAsThisUsageUnlessEnclosingMethodIsStatic(): void
+    public function testParentCallOfEnclosingNonStaticMethodCountsAsThisUsage(): void
     {
         $anonymousFunctionNodes = $this->makeCollector(
             <<<'PHP'
@@ -383,12 +383,14 @@ final class FunctionLikeCollectionTest extends TestCase
 
                 final class Handler extends Base
                 {
-                    public function run(): array
+                    public function run(string $method): array
                     {
                         return [
-                            fn () => parent::run(),
+                            fn () => parent::RUN(),
                             function () { return fn () => parent::run(); },
                             fn () => self::run(),
+                            fn () => parent::other(),
+                            fn () => parent::$method(),
                         ];
                     }
 
@@ -396,7 +398,7 @@ final class FunctionLikeCollectionTest extends TestCase
                     {
                         return fn () => new class extends Other {
                             public function run(): callable { return fn () => parent::run(); }
-                            public static function make(): callable { return fn () => parent::make(); }
+                            public function create(): callable { return fn () => parent::make(); }
                         };
                     }
 
@@ -411,16 +413,18 @@ final class FunctionLikeCollectionTest extends TestCase
                 PHP
         )->getAnonymousFunctionNodes();
 
-        $this->assertCount(9, $anonymousFunctionNodes);
-        $this->assertTrue($anonymousFunctionNodes[0]->usesThis, 'non-static method');
+        $this->assertCount(11, $anonymousFunctionNodes);
+        $this->assertTrue($anonymousFunctionNodes[0]->usesThis, 'method names are case-insensitive');
         $this->assertTrue($anonymousFunctionNodes[1]->usesThis, 'outer closure captures $this for the inner one');
         $this->assertTrue($anonymousFunctionNodes[2]->usesThis, 'inner arrow function');
         $this->assertFalse($anonymousFunctionNodes[3]->usesThis, 'self:: is not a parent call');
-        $this->assertFalse($anonymousFunctionNodes[4]->usesThis, 'the call belongs to the anonymous class');
-        $this->assertTrue($anonymousFunctionNodes[5]->usesThis, 'non-static method of the anonymous class');
-        $this->assertFalse($anonymousFunctionNodes[6]->usesThis, 'static method of the anonymous class');
-        $this->assertFalse($anonymousFunctionNodes[7]->usesThis, 'static method');
-        $this->assertTrue($anonymousFunctionNodes[8]->usesThis, 'no enclosing method');
+        $this->assertFalse($anonymousFunctionNodes[4]->usesThis, 'another parent method');
+        $this->assertFalse($anonymousFunctionNodes[5]->usesThis, 'dynamic method name');
+        $this->assertFalse($anonymousFunctionNodes[6]->usesThis, 'the call belongs to the anonymous class');
+        $this->assertTrue($anonymousFunctionNodes[7]->usesThis, 'non-static method of the anonymous class');
+        $this->assertFalse($anonymousFunctionNodes[8]->usesThis, 'another parent method of the anonymous class');
+        $this->assertFalse($anonymousFunctionNodes[9]->usesThis, 'static method');
+        $this->assertFalse($anonymousFunctionNodes[10]->usesThis, 'no enclosing method');
     }
 
     public function testIgnoresVariableVariablesWhenTrackingThisAndSuperglobals(): void
