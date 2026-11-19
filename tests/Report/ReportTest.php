@@ -254,11 +254,11 @@ final class ReportTest extends TestCase
         $ruleViolationCollection->add($this->violation());
 
         $this->assertDoesNotMatchRegularExpression(
-            '/^rule\.key\s+1$/m',
+            '/^rule\.key +1\R/m',
             (new GithubReport('/project'))->render($ruleViolationCollection, 0.34)
         );
         $this->assertMatchesRegularExpression(
-            '/^rule\.key\s+1$/m',
+            '/^rule\.key +1\R/m',
             (new GithubReport('/project', withSummary: true))->render($ruleViolationCollection, 0.34)
         );
     }
