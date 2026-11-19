@@ -19,6 +19,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\GithubReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
+use Boundwize\StructArmed\Report\Reports\SummaryReport;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
@@ -46,6 +47,7 @@ use const PHP_EOL;
  *     basepath?: string,
  *     generate-baseline?: string,
  *     no-progress?: true,
+ *     summary?: true,
  *     clear-cache?: true,
  *     no-cache?: true,
  *     disable-parallel?: true,
@@ -64,6 +66,7 @@ final readonly class AnalyseCommand
 
     private const FLAG_OPTIONS = [
         '--no-progress'      => 'no-progress',
+        '--summary'          => 'summary',
         '--clear-cache'      => 'clear-cache',
         '--no-cache'         => 'no-cache',
         '--disable-parallel' => 'disable-parallel',
@@ -97,7 +100,7 @@ final readonly class AnalyseCommand
         [$options, $scanPaths] = $parsedArguments;
         $reportType            = $options['report'] ?? 'console';
 
-        if (! in_array($reportType, ['console', 'json', 'github'], true)) {
+        if (! in_array($reportType, ['console', 'json', 'github', 'summary'], true)) {
             echo sprintf("Invalid report type: %s\n\n", $reportType);
             echo Usage::render();
 
@@ -185,7 +188,7 @@ final readonly class AnalyseCommand
 
         $analyser        = new Analyser($basePath, $analysisResultCache, $analysisNodeCacheNamespace);
         $files           = $analyser->filesForAnalysis($architecture, $scanPaths);
-        $progress        = $reportType === 'console' && ! isset($options['no-progress'])
+        $progress        = in_array($reportType, ['console', 'summary'], true) && ! isset($options['no-progress'])
             ? $this->progressHandler ?? new ConsoleProgressBar()
             : null;
         $analyserOptions = isset($options['disable-parallel']) ? AnalyserOptions::sequential() : null;
@@ -331,13 +334,16 @@ final readonly class AnalyseCommand
             return 0;
         }
 
+        $withSummary = isset($options['summary']);
+
         echo match ($reportType) {
-            'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
+            'json' => (new JsonReport($withSummary))->render($ruleViolationCollection, $elapsed),
             // GitHub resolves annotation paths against the repository root, which
             // differs from the base path when a sub directory is analysed.
-            'github' => (new GithubReport(getenv('GITHUB_WORKSPACE') ?: $basePath))
+            'github' => (new GithubReport(getenv('GITHUB_WORKSPACE') ?: $basePath, $withSummary))
                 ->render($ruleViolationCollection, $elapsed),
-            default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
+            'summary' => (new SummaryReport())->render($ruleViolationCollection, $elapsed),
+            default => (new ConsoleReport($withSummary))->render($ruleViolationCollection, $elapsed),
         };
 
         // The github report surfaces violations as pull request annotations,

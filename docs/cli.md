@@ -110,15 +110,54 @@ vendor/bin/structarmed analyze --report=json
 
 # GitHub Actions annotations.
 vendor/bin/structarmed analyse --report=github
+
+# Number of violations per rule.
+vendor/bin/structarmed analyse --report=summary
 ```
 
 The `github` report prints one `::error file=...,line=...,title=...::message` workflow command per violation, so GitHub Actions shows each violation inline on the pull request. File paths are relative to `GITHUB_WORKSPACE` (the repository root) when it is set, so annotations still attach when `--basepath` points at a sub directory; otherwise they are relative to the project root. The console report follows the workflow commands, so an annotation's "View details" link lands on a readable job log.
 
 The `github` report always exits with `0`: violations surface as annotations instead of failing the job. Use the `console` or `json` report when the job must fail on violations.
 
+The `summary` report prints the number of violations per rule instead of every violation, most violated rule first:
+
+```text
+Rule                                   Count
+────────────────────────────────────────────
+source.must_declare_method_visibility     12
+layer.may_not_depend_on                    3
+────────────────────────────────────────────
+15 violation(s) found in 2 rule(s)  •  0.34s
+```
+
+It exits with `1` when violations are found, like the `console` report. Without violations the table holds a single `(none)` row with a count of `0`.
+
+Pass `--summary` to keep the full report and add the counts to it:
+
+```bash
+vendor/bin/structarmed analyse --summary
+vendor/bin/structarmed analyse --report=github --summary
+vendor/bin/structarmed analyse --report=json --summary
+```
+
+The `console` and `github` reports then end with the same table, after the list of violations. The `json` report carries the counts under a `summary` key:
+
+```json
+{
+    "violations": [],
+    "summary": {
+        "source.must_declare_method_visibility": 12,
+        "layer.may_not_depend_on": 3
+    },
+    "total": 15,
+    "passed": false,
+    "elapsed": 0.34
+}
+```
+
 ## Progress Output
 
-The console report shows a progress bar on stderr while files are parsed. Disable it for CI logs or when piping output:
+The `console` and `summary` reports show a progress bar on stderr while files are parsed. Disable it for CI logs or when piping output:
 
 ```bash
 vendor/bin/structarmed analyse --no-progress
