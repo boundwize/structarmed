@@ -64,6 +64,12 @@ vendor/bin/structarmed init --preset=all
 
 The generated `structarmed.php` file lives in your project root.
 
+To add another preset later, use `append` instead of `init`:
+
+```bash
+vendor/bin/structarmed append --preset=codequality
+```
+
 ## Analyse The Project
 
 ```bash

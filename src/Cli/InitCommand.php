@@ -7,13 +7,17 @@ namespace Boundwize\StructArmed\Cli;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use RuntimeException;
 
+use function array_map;
 use function basename;
 use function count;
 use function file_put_contents;
+use function implode;
+use function in_array;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
 use function strtolower;
+use function strtoupper;
 use function substr;
 
 use const FILE_APPEND;
@@ -59,7 +63,11 @@ final class InitCommand
         // Any discoverable config stops init: a new structarmed.php would shadow
         // an existing structarmed.dist.php, since discovery prefers it.
         try {
-            echo sprintf("%s already exists.\n", basename(ConfigLoader::discover($basePath)));
+            echo sprintf(
+                "%s already exists, use `append` instead\n\nvendor/bin/structarmed append --preset=%s\n",
+                basename(ConfigLoader::discover($basePath)),
+                $preset
+            );
 
             return 0;
         } catch (RuntimeException) {
@@ -86,32 +94,16 @@ PHP);
 
     private function presetConfig(string $preset): ?string
     {
-        return match ($preset) {
-            'ddd' => '    ->withPreset(Preset::DDD());',
-            'mvc' => '    ->withPreset(Preset::MVC());',
-            'psr4' => '    ->withPreset(Preset::PSR4());',
-            'psr1' => '    ->withPreset(Preset::PSR1());',
-            'psr12' => '    ->withPreset(Preset::PSR12());',
-            'per' => '    ->withPreset(Preset::PER());',
-            'psr15' => '    ->withPreset(Preset::PSR15());',
-            'yagni' => '    ->withPreset(Preset::YAGNI());',
-            'codequality' => '    ->withPreset(Preset::CODEQUALITY());',
-            'stability' => '    ->withPreset(Preset::STABILITY());',
-            'enum' => '    ->withPreset(Preset::ENUM());',
-            'all' => "    ->withPresets(\n"
-                . "        Preset::PSR4(),\n"
-                . "        Preset::PSR1(),\n"
-                . "        Preset::PSR12(),\n"
-                . "        Preset::PER(),\n"
-                . "        Preset::PSR15(),\n"
-                . "        Preset::DDD(),\n"
-                . "        Preset::MVC(),\n"
-                . "        Preset::YAGNI(),\n"
-                . "        Preset::CODEQUALITY(),\n"
-                . "        Preset::STABILITY(),\n"
-                . "        Preset::ENUM()\n"
-                . "    );",
-            default => null,
-        };
+        if ($preset === 'all') {
+            return "    ->withPresets(\n        Preset::"
+                . implode("(),\n        Preset::", array_map(strtoupper(...), PresetName::ALL))
+                . "()\n    );";
+        }
+
+        if (in_array($preset, PresetName::ALL, true)) {
+            return sprintf('    ->withPreset(Preset::%s());', strtoupper($preset));
+        }
+
+        return null;
     }
 }

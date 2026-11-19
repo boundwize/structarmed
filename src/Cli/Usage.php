@@ -12,6 +12,7 @@ final class Usage
 Usage:
   structarmed --version
   structarmed init [--preset=ddd|mvc|psr4|psr1|psr12|per|psr15|yagni|codequality|stability|enum|all]
+  structarmed append --preset=ddd|mvc|psr4|psr1|psr12|per|psr15|yagni|codequality|stability|enum|all
   structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php]
     [-d|--basepath=path/to/project] [--report=console|json|github|summary] [--summary]
     [--no-progress] [--clear-cache] [--no-cache] [--disable-parallel] [--fix]

@@ -32,6 +32,19 @@ vendor/bin/structarmed init --preset=enum
 vendor/bin/structarmed init --preset=all
 ```
 
+`init` only creates a new config file. When `structarmed.php` or `structarmed.dist.php` already exists, it leaves the file untouched and points to `append`.
+
+## Append Commands
+
+Add a preset to the existing config file:
+
+```bash
+vendor/bin/structarmed append --preset=codequality
+vendor/bin/structarmed append --preset=all
+```
+
+`append` adds a `->withPreset(...)` call at the end of the returned `Architecture` chain and leaves the rest of the file as is. Presets that the config already enables are skipped, so `--preset=all` adds only the missing ones.
+
 ## Analyse Commands
 
 ```bash

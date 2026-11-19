@@ -289,7 +289,11 @@ PHP);
             [$exitCode, $output] = $this->runApplication(['structarmed', 'init'], $basePath);
 
             $this->assertSame(0, $exitCode);
-            $this->assertStringContainsString('structarmed.php already exists.', $output);
+            $this->assertStringContainsString(
+                "structarmed.php already exists, use `append` instead\n\n"
+                . 'vendor/bin/structarmed append --preset=psr4',
+                $output
+            );
         } finally {
             $this->removeTempDirectory($basePath);
         }

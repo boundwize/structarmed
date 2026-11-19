@@ -17,7 +17,17 @@ use function unserialize;
 
 final readonly class StructArmedApplication
 {
-    private const COMMANDS = ['init', 'analyse', 'analyze', '--clear-cache', '--version', '-V', '--help', '-h'];
+    private const COMMANDS = [
+        'init',
+        'append',
+        'analyse',
+        'analyze',
+        '--clear-cache',
+        '--version',
+        '-V',
+        '--help',
+        '-h',
+    ];
 
     /**
      * @param list<string> $argv
@@ -57,6 +67,10 @@ final readonly class StructArmedApplication
 
         if ($command === 'init') {
             return (new InitCommand())->run($arguments, $basePath);
+        }
+
+        if ($command === 'append') {
+            return (new AppendCommand())->run($arguments, $basePath);
         }
 
         if ($command === '--clear-cache') {
