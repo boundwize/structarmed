@@ -964,6 +964,46 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandRendersSummaryReport(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--report=summary'],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertMatchesRegularExpression('/^source\.must_declare_method_visibility +1\R/m', $output);
+            $this->assertStringContainsString('1 violation(s) found in 1 rule(s)', $output);
+            $this->assertStringNotContainsString('src/Foo.php', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandAppendsSummaryToConsoleReportWithSummaryOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            $arguments = ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--no-progress'];
+
+            [, $output] = $this->runApplication($arguments, $basePath);
+
+            $this->assertDoesNotMatchRegularExpression('/^source\.must_declare_method_visibility +1\R/m', $output);
+
+            [$exitCode, $output] = $this->runApplication([...$arguments, '--summary'], $basePath);
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('src/Foo.php', $output);
+            $this->assertMatchesRegularExpression('/^source\.must_declare_method_visibility +1\R/m', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandRendersGithubReport(): void
     {
         $basePath        = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
