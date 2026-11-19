@@ -582,23 +582,35 @@ PHP);
         $this->assertSame('App\\Domain\\FooService', $extractionResult->classNodes[0]->className);
     }
 
-    public function testExtractThrowsWhenWorkerFailsDueToNullByteInFilePath(): void
+    public function testExtractThrowsWhenWorkerFailsDueToInvalidLayerPath(): void
     {
-        $dir = $this->makeTemporaryDirectory('structarmed-parallel-test');
-        // A null byte in a file path causes PHP 8 to throw ValueError in file_get_contents,
-        // which is NOT caught by AnalysisNodeExtractor's catch(PhpParser\Error), so it
-        // propagates to AnalysisNodeWorker's catch(Throwable) → worker exits with code 1
-        $fileWithNullByte = $dir . "/foo\x00.php";
+        $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $file = $dir . '/Foo.php';
 
+        file_put_contents($file, <<<'PHP'
+<?php
+
+namespace App\Domain;
+
+final class Foo
+{
+}
+PHP);
+
+        // A non-string layer path makes the worker throw TypeError while it builds the
+        // layer resolver, which is caught by AnalysisNodeWorker's catch(Throwable)
+        // → worker exits with code 1
         $parallelAnalysisNodeExtractor = new ParallelAnalysisNodeExtractor(
             basePath: $dir,
-            layers: ['Domain' => 'App\\Domain'],
+            // @phpstan-ignore argument.type
+            layers: ['Domain' => 123],
             layerPatterns: [],
             workerCount: 2,
         );
 
         $this->expectException(RuntimeException::class);
-        $parallelAnalysisNodeExtractor->extract([$fileWithNullByte]);
+        $this->expectExceptionMessage('TypeError');
+        $parallelAnalysisNodeExtractor->extract([$file]);
     }
 
     public function testExtractWithNonExistentCacheDirectoryCreatesIt(): void

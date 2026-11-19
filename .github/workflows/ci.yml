@@ -15,12 +15,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        operating-system: [ubuntu-latest, macos-latest, windows-latest]
-        php-versions: ["8.2", "8.3", "8.4", "8.5"]
+        # every PHP version runs on ubuntu only, macos and windows run the
+        # lowest supported version to keep the number of jobs low
+        operating-system: [ubuntu-latest]
+        php-versions: ["8.2", "8.3", "8.4", "8.5", "8.6"]
         include:
           - operating-system: ubuntu-latest
             php-versions: "8.2"
             coverage: pcov
+          - operating-system: macos-latest
+            php-versions: "8.2"
+          - operating-system: windows-latest
+            php-versions: "8.2"
 
     steps:
       - name: Checkout
