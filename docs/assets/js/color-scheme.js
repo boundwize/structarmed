@@ -10,6 +10,14 @@
     }
   }
 
+  var systemDark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  function systemTheme() {
+    return systemDark && systemDark.matches ? "dark" : "light";
+  }
+
+  // The system appearance is the default; a stored choice only exists while
+  // the visitor has picked the opposite of it.
   function preferredTheme() {
     var stored = storedTheme();
 
@@ -17,7 +25,7 @@
       return stored;
     }
 
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return systemTheme();
   }
 
   function currentTheme() {
@@ -100,13 +108,31 @@
     currentChoice = theme;
 
     try {
-      window.localStorage.setItem(storageKey, theme);
+      // Picking what the system already shows goes back to following it.
+      if (theme === systemTheme()) {
+        window.localStorage.removeItem(storageKey);
+      } else {
+        window.localStorage.setItem(storageKey, theme);
+      }
     } catch (error) {
       // The choice still applies to this page view.
     }
 
     applyTheme(theme);
   });
+
+  // Follow a system appearance change while the page is open, unless the
+  // visitor picked a scheme themselves.
+  if (systemDark && systemDark.addEventListener) {
+    systemDark.addEventListener("change", function () {
+      if (storedTheme() !== null) {
+        return;
+      }
+
+      currentChoice = systemTheme();
+      applyTheme(currentChoice);
+    });
+  }
 
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(toggleSelector).forEach(updateToggle);

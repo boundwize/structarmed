@@ -77,6 +77,26 @@ html[data-sa-theme="dark"] {
   cursor: pointer;
 }
 
+// Below the theme's desktop breakpoint the opened header stacks its children,
+// which left the toggle on a row of its own. Keep search full width and put the
+// toggle on the same row as the auxiliary links.
+@media (max-width: 49.99rem) {
+  .side-bar + .main .main-header.nav-open {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .side-bar + .main .main-header.nav-open .search {
+    flex: 0 0 100%;
+  }
+
+  .sa-theme-toggle {
+    height: auto;
+    margin-left: 0;
+  }
+}
+
 html[data-sa-theme="dark"] div.highlighter-rouge div.highlight {
   border-color: var(--sa-border);
 }
