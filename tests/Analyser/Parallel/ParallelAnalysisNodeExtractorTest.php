@@ -285,6 +285,63 @@ PHP);
         $this->assertSame([], $progress->files);
     }
 
+    public function testConcatenationFileReferencesMatchAcrossSequentialParallelAndCachedRuns(): void
+    {
+        $dir           = $this->makeTemporaryDirectory('structarmed-parallel-test');
+        $cacheDir      = $this->makeTemporaryDirectory('structarmed-parallel-cache');
+        $functionsFile = $dir . '/functions.php';
+        $callablesFile = $dir . '/callables.php';
+
+        file_put_contents($functionsFile, <<<'PHP'
+<?php
+
+namespace App;
+
+if (! function_exists(__NAMESPACE__ . '\helper' . '')) {
+    function helper(): void
+    {
+    }
+}
+
+$service = '\\' . 'App\\' . 'Service';
+PHP);
+
+        file_put_contents($callablesFile, <<<'PHP'
+<?php
+
+namespace App;
+
+$handler = __NAMESPACE__ . '\\' . 'Handler::run';
+$dynamic = $prefix . 'Fragment';
+PHP);
+
+        // Sequential, then parallel on a cold cache, then hydrated from it.
+        // The probed name is no reference, a concatenation is the name its
+        // complete value spells, and only an unresolved one keeps its fragment.
+        foreach ([[1, null], [2, $cacheDir], [2, $cacheDir]] as [$workerCount, $cacheDirectory]) {
+            $extractionResult = (new ParallelAnalysisNodeExtractor(
+                basePath: $dir,
+                layers: [],
+                layerPatterns: [],
+                workerCount: $workerCount,
+                cacheDirectory: $cacheDirectory,
+                analysisResultCache: $cacheDirectory === null
+                    ? null
+                    : new AnalysisResultCache($dir, new FileHashProvider(), $cacheDirectory),
+                analysisNodeCacheNamespace: 'config',
+            ))->extract([$functionsFile, $callablesFile]);
+
+            $this->assertSame(
+                ['?App\function_exists', 'App\Service', '!App\Service'],
+                $extractionResult->fileReferences[$functionsFile]
+            );
+            $this->assertSame(
+                ['App\Handler', 'Fragment', '!Fragment'],
+                $extractionResult->fileReferences[$callablesFile]
+            );
+        }
+    }
+
     public function testExtractAcrossWorkersWithAndWithoutProgress(): void
     {
         $dir   = $this->makeTemporaryDirectory('structarmed-parallel-test');

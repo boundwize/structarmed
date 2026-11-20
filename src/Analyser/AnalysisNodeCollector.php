@@ -160,6 +160,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private const FUNCTION_EXISTS_CHECK_ATTRIBUTE = 'structarmedFunctionExistsCheck';
 
     /**
+     * Marks a concatenation that is an operand of another one: the outer
+     * concatenation collects the value, see collectConcatReference().
+     */
+    private const CONCAT_OPERAND_ATTRIBUTE = 'structarmedConcatOperand';
+
+    /** The value a concatenation operand resolved to, read by the outer concatenation. */
+    private const CONCAT_VALUE_ATTRIBUTE = 'structarmedConcatValue';
+
+    /**
      * Marks the fully-qualified name of a function call or constant fetch: it
      * is still a dependency, but not a use of a class of that name.
      */
@@ -272,6 +281,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         Closure::class            => true,
         ArrowFunction::class      => true,
         New_::class               => true,
+        Concat::class             => true,
         StaticCall::class         => true,
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
@@ -792,6 +802,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             // once a class becomes abstract.
             if ($node instanceof New_) {
                 $this->collectInstantiation($node);
+
+                return null;
+            }
+
+            // Left after its operands, once the NameResolver has resolved
+            // the names of the `X::class` operands.
+            if ($node instanceof Concat) {
+                $this->collectConcatReference($node);
 
                 return null;
             }
@@ -1355,31 +1373,22 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        // `__NAMESPACE__ . '\name'` spells a namespaced class-like or callable
-        // name as the string literal below would, so it is the same reference.
-        // The name passed to function_exists() stays a probe here as well.
+        // A concatenation spells one string, so its literal operands are
+        // fragments of a name, not names on their own. Entered before its
+        // operands, it keeps them from the String_ branch below; the whole
+        // value is collected on leave, see collectConcatReference(). The name
+        // passed to function_exists() stays a probe at every nesting level.
         if ($node instanceof Concat) {
-            if ($node->left instanceof NamespaceMagicConst && $node->right instanceof String_) {
-                $isFunctionExistsCheck = $node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE);
+            $isFunctionExistsCheck = $node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE);
 
-                // Entered before its operands: the '\name' fragment alone
-                // spells the global name, which this expression never names,
-                // so the String_ branch must skip it.
-                $node->right->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
-
-                if ($isFunctionExistsCheck) {
-                    return;
-                }
-
-                $value = $this->stripLeadingNamespaceSeparator($this->currentNamespace . $node->right->value);
-
-                if ($this->collectStaticCallableClass($value)) {
-                    return;
-                }
-
-                if (preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1) {
-                    $this->currentFileReferences[$value]                                   = true;
-                    $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
+            foreach ([$node->left, $node->right] as $operand) {
+                if ($operand instanceof String_) {
+                    $operand->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+                } elseif ($operand instanceof Concat) {
+                    $operand->setAttribute(
+                        $isFunctionExistsCheck ? self::FUNCTION_EXISTS_CHECK_ATTRIBUTE : self::CONCAT_OPERAND_ATTRIBUTE,
+                        true
+                    );
                 }
             }
 
@@ -1391,26 +1400,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // Whether it appears inside a class-like or in procedural code, treat
         // it as a file-level reference so the named class-like stays alive.
         if ($node instanceof String_) {
-            if ($node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)) {
-                return;
-            }
-
-            // A leading `\` is a valid fully-qualified spelling
-            // (`'\App\Contract'`); strip it so the stored name matches the
-            // ClassNode::$className form used for usage lookups.
-            $value = $this->stripLeadingNamespaceSeparator($node->value);
-
-            if ($this->collectStaticCallableClass($value)) {
-                return;
-            }
-
-            if (
-                preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1
-                && ! isset(self::KEYWORD_CONSTANTS[strtolower($value)])
-            ) {
-                $this->currentFileReferences[$value] = true;
-                // A name-shaped string can also be invoked as a callable.
-                $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
+            if (! $node->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)) {
+                $this->collectStringReference($node->value);
             }
 
             return;
@@ -1833,6 +1824,99 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         throw new ConstExprEvaluationException('Expression is not a resolvable class name.');
+    }
+
+    /**
+     * Collect the value of a concatenation as the string literal spelling it
+     * would be: `'App\\' . 'Service'` and `__NAMESPACE__ . '\Service'` both
+     * reference App\Service, never the name a fragment spells on its own.
+     *
+     * A concatenation that depends on a runtime value has no value to
+     * collect. Its literal operands, and the nested concatenations that did
+     * resolve, are then collected on their own.
+     */
+    private function collectConcatReference(Concat $concat): void
+    {
+        if ($concat->hasAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE)) {
+            return;
+        }
+
+        $left  = $this->resolveConcatOperand($concat->left);
+        $right = $left === null ? null : $this->resolveConcatOperand($concat->right);
+
+        if ($left !== null && $right !== null) {
+            if ($concat->hasAttribute(self::CONCAT_OPERAND_ATTRIBUTE)) {
+                $concat->setAttribute(self::CONCAT_VALUE_ATTRIBUTE, $left . $right);
+            } else {
+                $this->collectStringReference($left . $right);
+            }
+
+            return;
+        }
+
+        foreach ([$concat->left, $concat->right] as $operand) {
+            $value = $operand instanceof String_
+                ? $operand->value
+                : $operand->getAttribute(self::CONCAT_VALUE_ATTRIBUTE);
+
+            if (is_string($value)) {
+                $this->collectStringReference($value);
+            }
+        }
+    }
+
+    /**
+     * The string an operand of a concatenation spells: a literal,
+     * `__NAMESPACE__`, a nested concatenation, or a constant expression the
+     * evaluator supports, such as `X::class`. Null for anything else.
+     */
+    private function resolveConcatOperand(Expr $expr): ?string
+    {
+        if ($expr instanceof String_) {
+            return $expr->value;
+        }
+
+        if ($expr instanceof NamespaceMagicConst) {
+            return $this->currentNamespace;
+        }
+
+        // A nested concatenation is left before the outer one, which finds
+        // its value here.
+        if ($expr instanceof Concat) {
+            $value = $expr->getAttribute(self::CONCAT_VALUE_ATTRIBUTE);
+        } else {
+            try {
+                $value = $this->constExprEvaluator->evaluateSilently($expr);
+            } catch (ConstExprEvaluationException) {
+                return null;
+            }
+        }
+
+        return is_string($value) ? $value : null;
+    }
+
+    /**
+     * Record a class-name-shaped string as a file reference: the class-like
+     * it names, and the function, as it can also be invoked as a callable.
+     */
+    private function collectStringReference(string $value): void
+    {
+        // A leading `\` is a valid fully-qualified spelling
+        // (`'\App\Contract'`); strip it so the stored name matches the
+        // ClassNode::$className form used for usage lookups.
+        $value = $this->stripLeadingNamespaceSeparator($value);
+
+        if ($this->collectStaticCallableClass($value)) {
+            return;
+        }
+
+        if (
+            preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1
+            && ! isset(self::KEYWORD_CONSTANTS[strtolower($value)])
+        ) {
+            $this->currentFileReferences[$value]                                   = true;
+            $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
+        }
     }
 
     /**

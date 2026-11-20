@@ -499,6 +499,339 @@ PHP);
         );
     }
 
+    /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function concatenationFileReferenceProvider(): iterable
+    {
+        // A static concatenation is the name its complete value spells.
+        yield 'two fragments' => [
+            <<<'PHP'
+                <?php
+
+                $name = 'App\\' . 'Service';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'three fragments' => [
+            <<<'PHP'
+                <?php
+
+                $name = 'App' . '\\' . 'Service';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'fragment with leading separator' => [
+            <<<'PHP'
+                <?php
+
+                $name = 'App' . '\Service';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'trailing empty string' => [
+            <<<'PHP'
+                <?php
+
+                $name = 'App\Service' . '';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'leading empty string' => [
+            <<<'PHP'
+                <?php
+
+                $name = '' . 'App\Service';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'nested right operand' => [
+            <<<'PHP'
+                <?php
+
+                $name = 'App' . ('\\' . 'Service');
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'leading separator fragment' => [
+            <<<'PHP'
+                <?php
+
+                $name = '\\' . 'App\\' . 'Service';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'leading separator fragment before namespace constant' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                $name = '\\' . __NAMESPACE__ . '\\' . 'Service';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'namespace constant' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                $name = __NAMESPACE__ . '\Service';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'namespace constant and fragments' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                $name = __NAMESPACE__ . '\\' . 'Service';
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'standalone string next to a concatenation' => [
+            <<<'PHP'
+                <?php
+
+                $names = ['Lone\Standalone', 'App\\' . 'Service'];
+                PHP,
+            ['Lone\Standalone', '!Lone\Standalone', 'App\Service', '!App\Service'],
+        ];
+
+        // A value that is no name is no reference, and neither are its fragments.
+        yield 'not a name' => [
+            <<<'PHP'
+                <?php
+
+                $message = 'Hello ' . 'World';
+                PHP,
+            [],
+        ];
+
+        // A static callable references its class only.
+        yield 'static callable fragment' => [
+            <<<'PHP'
+                <?php
+
+                $callable = 'App\\' . 'Handler::run';
+                PHP,
+            ['App\Handler'],
+        ];
+
+        yield 'static callable after leading separator fragment' => [
+            <<<'PHP'
+                <?php
+
+                $callable = '\\' . 'App\\' . 'Handler::run';
+                PHP,
+            ['App\Handler'],
+        ];
+
+        yield 'static callable method fragment' => [
+            <<<'PHP'
+                <?php
+
+                $callable = 'App' . '\Handler' . '::run';
+                PHP,
+            ['App\Handler'],
+        ];
+
+        // The name probed by function_exists() is no reference at any nesting
+        // level; the top-level call itself is recorded as a fallback marker.
+        yield 'probe of two fragments' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists('App\\' . 'helper');
+                PHP,
+            ['?App\function_exists'],
+        ];
+
+        yield 'probe of fragment with leading separator' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists('App' . '\helper');
+                PHP,
+            ['?App\function_exists'],
+        ];
+
+        yield 'probe of nested namespace constant' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists(__NAMESPACE__ . '\helper' . '');
+                PHP,
+            ['?App\function_exists'],
+        ];
+
+        yield 'probe of namespace constant and fragments' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists(__NAMESPACE__ . '\\' . 'helper');
+                PHP,
+            ['?App\function_exists'],
+        ];
+
+        yield 'probe after leading separator fragment' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists('\\' . 'App\\' . 'helper');
+                PHP,
+            ['?App\function_exists'],
+        ];
+
+        yield 'probe of runtime prefix' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists($prefix . 'helper');
+                PHP,
+            ['?App\function_exists'],
+        ];
+
+        yield 'probe of runtime suffix' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists(__NAMESPACE__ . '\helper' . $suffix);
+                PHP,
+            ['?App\function_exists'],
+        ];
+
+        // A constant expression the evaluator supports is part of the value. The
+        // class it names is a reference of its own.
+        yield 'imported class name' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                use Other\SomeClass;
+
+                $name = SomeClass::class . 'Suffix';
+                PHP,
+            ['Other\SomeClass', 'Other\SomeClassSuffix', '!Other\SomeClassSuffix'],
+        ];
+
+        yield 'class name static callable' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                use Other\SomeClass;
+
+                $callable = SomeClass::class . '::run';
+                PHP,
+            ['Other\SomeClass'],
+        ];
+
+        yield 'self class name' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                final class Factory
+                {
+                    public function proxy(): string
+                    {
+                        return self::class . 'Proxy';
+                    }
+                }
+                PHP,
+            ['App\FactoryProxy', '!App\FactoryProxy'],
+        ];
+
+        // A runtime value leaves the concatenation unresolved: its literal
+        // fragments, and the nested concatenations that did resolve, are
+        // collected on their own.
+        yield 'runtime prefix' => [
+            <<<'PHP'
+                <?php
+
+                $name = $prefix . 'Service';
+                PHP,
+            ['Service', '!Service'],
+        ];
+
+        yield 'runtime suffix' => [
+            <<<'PHP'
+                <?php
+
+                $name = 'App\\' . $className;
+                PHP,
+            [],
+        ];
+
+        yield 'class constant prefix' => [
+            <<<'PHP'
+                <?php
+
+                $name = App::PREFIX . 'Service';
+                PHP,
+            ['App', 'Service', '!Service'],
+        ];
+
+        yield 'non-string constant operand' => [
+            <<<'PHP'
+                <?php
+
+                $name = 'App\Version' . 1;
+                PHP,
+            ['App\Version', '!App\Version'],
+        ];
+
+        yield 'resolved fragments before runtime suffix' => [
+            <<<'PHP'
+                <?php
+
+                $name = 'App\\' . 'Service' . $suffix;
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+
+        yield 'resolved namespace constant before runtime suffix' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                $name = __NAMESPACE__ . '\Service' . $suffix;
+                PHP,
+            ['App\Service', '!App\Service'],
+        ];
+    }
+
+    /**
+     * @param list<string> $expectedFileReferences
+     */
+    #[DataProvider('concatenationFileReferenceProvider')]
+    public function testCollectsConcatenationValueAsFileReference(string $code, array $expectedFileReferences): void
+    {
+        $analysisNodeCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            $expectedFileReferences,
+            $analysisNodeCollector->getFileReferences()['/fake/path/Foo.php'] ?? []
+        );
+    }
+
     public function testCollectsLeadingBackslashStringInstantiationsNormalized(): void
     {
         $code = '<?php namespace App;' . "\n"
