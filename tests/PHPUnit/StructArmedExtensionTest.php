@@ -122,7 +122,7 @@ final class StructArmedExtensionTest extends TestCase
         try {
             $this->expectOutputRegex(
                 '/^Configuration: ' . preg_quote(Path::normalise($basePath, canonicalise: true), '/')
-                . '\/structarmed\.php$/m'
+                . '\/structarmed\.php\R/m'
             );
 
             (new StructArmedExtension())->bootstrap(
