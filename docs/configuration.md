@@ -108,6 +108,12 @@ return static function (Architecture $architecture): void {
 
 Paths in imported files are still resolved from the project root. Imported files can import other files. Changing any imported file invalidates the analysis cache, just like changing the main config.
 
+A file that returns a callable can also be used as the main config, for example with `--config`. It is then applied to a fresh `Architecture::define()`:
+
+```bash
+vendor/bin/structarmed analyse --config=module/Foo/structarmed.php
+```
+
 ## Custom Extensions
 
 Use [Custom Rules And Presets](../custom-rules-and-presets/) when you want to add project-specific rules or package reusable rule sets.

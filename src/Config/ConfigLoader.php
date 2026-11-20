@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Architecture;
 use RuntimeException;
 
 use function file_exists;
+use function is_callable;
 use function sprintf;
 
 final class ConfigLoader
@@ -22,17 +23,26 @@ final class ConfigLoader
             ));
         }
 
-        $architecture = require $configPath;
+        $config = require $configPath;
 
-        if (! $architecture instanceof Architecture) {
-            throw new RuntimeException(sprintf(
-                'StructArmed config file [%s] must return an instance of %s.',
-                $configPath,
-                Architecture::class
-            ));
+        if ($config instanceof Architecture) {
+            return $config;
         }
 
-        return $architecture;
+        // a config file written for Architecture::import() returns a callable,
+        // so it can be used as the main config file as well
+        if (is_callable($config)) {
+            $architecture = Architecture::define();
+            $config($architecture);
+
+            return $architecture;
+        }
+
+        throw new RuntimeException(sprintf(
+            'StructArmed config file [%s] must return an instance of %s or a callable that configures one.',
+            $configPath,
+            Architecture::class
+        ));
     }
 
     /**
