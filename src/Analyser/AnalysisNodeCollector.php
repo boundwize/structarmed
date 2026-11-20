@@ -1867,8 +1867,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     /**
      * The string an operand of a concatenation spells: a literal,
-     * `__NAMESPACE__`, a nested concatenation, or a constant expression the
-     * evaluator supports, such as `X::class`. Null for anything else.
+     * `__NAMESPACE__`, a nested concatenation, or `X::class`. Null for
+     * anything else.
      */
     private function resolveConcatOperand(Expr $expr): ?string
     {
@@ -1884,15 +1884,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // its value here.
         if ($expr instanceof Concat) {
             $value = $expr->getAttribute(self::CONCAT_VALUE_ATTRIBUTE);
-        } else {
-            try {
-                $value = $this->constExprEvaluator->evaluateSilently($expr);
-            } catch (ConstExprEvaluationException) {
-                return null;
-            }
+
+            return is_string($value) ? $value : null;
         }
 
-        return is_string($value) ? $value : null;
+        // Most other operands are runtime values, which the evaluator can
+        // only reject by throwing, so it is asked for class constants only.
+        return $expr instanceof ClassConstFetch ? $this->resolveClassNameExpr($expr) : null;
     }
 
     /**
@@ -1906,7 +1904,22 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // ClassNode::$className form used for usage lookups.
         $value = $this->stripLeadingNamespaceSeparator($value);
 
-        if ($this->collectStaticCallableClass($value)) {
+        $separatorPosition = strpos($value, '::');
+
+        // A static callable string ('App\Handler::run') references its class
+        // only: the method name is neither a class nor a function. A method
+        // part that is not an identifier ('App\A::', 'App\A::123',
+        // 'App\A::B::run') is not a callable.
+        if ($separatorPosition !== false) {
+            $staticCallableClass = substr($value, 0, $separatorPosition);
+
+            if (
+                preg_match(self::METHOD_NAME_PATTERN, substr($value, $separatorPosition + 2)) === 1
+                && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
+            ) {
+                $this->currentFileReferences[$staticCallableClass] = true;
+            }
+
             return;
         }
 
@@ -1926,35 +1939,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     private function stripLeadingNamespaceSeparator(string $name): string
     {
         return str_starts_with($name, '\\') ? substr($name, 1) : $name;
-    }
-
-    /**
-     * A static callable string ('App\Handler::run') references its class
-     * only: the method name is neither a class nor a function.
-     *
-     * @return bool whether $value is spelled as a static callable, valid or
-     *              not, so it is no plain class-like or function name
-     */
-    private function collectStaticCallableClass(string $value): bool
-    {
-        $separatorPosition = strpos($value, '::');
-
-        if ($separatorPosition === false) {
-            return false;
-        }
-
-        $staticCallableClass = substr($value, 0, $separatorPosition);
-
-        // A method part that is not an identifier ('App\A::',
-        // 'App\A::123', 'App\A::B::run') is not a callable.
-        if (
-            preg_match(self::METHOD_NAME_PATTERN, substr($value, $separatorPosition + 2)) === 1
-            && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
-        ) {
-            $this->currentFileReferences[$staticCallableClass] = true;
-        }
-
-        return true;
     }
 
     private function addDependency(string $dependency, bool $isClassName): void
