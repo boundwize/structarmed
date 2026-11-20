@@ -10,7 +10,6 @@ use function fflush;
 use function fprintf;
 use function max;
 use function microtime;
-use function min;
 use function str_repeat;
 use function stream_isatty;
 
@@ -59,7 +58,19 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     public function advance(string $file): void
     {
-        $this->current = min($this->total, $this->current + 1);
+        if ($this->current < $this->total) {
+            ++$this->current;
+        }
+
+        // Throttled here, so a skipped redraw costs a clock read and nothing else.
+        if ($this->isTty) {
+            $now = microtime(true);
+            if ($now - $this->lastRenderTime < 0.016) {
+                return;
+            }
+
+            $this->lastRenderTime = $now;
+        }
 
         $this->render();
     }
@@ -84,16 +95,7 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
             ? (int) (($this->current / $this->total) * 100)
             : 100;
 
-        if ($this->isTty) {
-            if (! $final) {
-                $now = microtime(true);
-                if ($now - $this->lastRenderTime < 0.016) {
-                    return;
-                }
-
-                $this->lastRenderTime = $now;
-            }
-        } else {
+        if (! $this->isTty) {
             $isFirst = $this->lastRenderedPercent === -1;
             $gap     = $percent - $this->lastRenderedPercent;
 
