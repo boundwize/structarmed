@@ -82,8 +82,11 @@ final readonly class AnalyseCommand
      */
     private const MAX_FIX_PASSES = 10;
 
-    public function __construct(private ?ProgressHandlerInterface $progressHandler = null)
-    {
+    public function __construct(
+        private ?ProgressHandlerInterface $progressHandler = null,
+        private Baseline $baseline = new Baseline(),
+        private BaselineFilter $baselineFilter = new BaselineFilter()
+    ) {
     }
 
     /**
@@ -156,7 +159,7 @@ final readonly class AnalyseCommand
             return $this->reportError($runtimeException);
         }
 
-        $missingBaselineWarning = (new BaselineFilter())->missingWarning($architecture, $basePath);
+        $missingBaselineWarning = $this->baselineFilter->missingWarning($architecture, $basePath);
 
         // A warning would break the json output, and left out it would hide
         // that the baseline is not applied, so the json report keeps the error.
@@ -326,7 +329,7 @@ final readonly class AnalyseCommand
 
         if ($shouldGenerateBaseline) {
             try {
-                (new Baseline())->generate(
+                $this->baseline->generate(
                     $unfilteredRuleViolationCollection,
                     $options['generate-baseline'],
                     $basePath
@@ -427,7 +430,7 @@ final readonly class AnalyseCommand
             return $unfilteredRuleViolationCollection;
         }
 
-        return (new BaselineFilter())->apply($unfilteredRuleViolationCollection, $architecture, $basePath);
+        return $this->baselineFilter->apply($unfilteredRuleViolationCollection, $architecture, $basePath);
     }
 
     private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int
