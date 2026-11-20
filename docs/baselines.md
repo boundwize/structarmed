@@ -48,7 +48,7 @@ Baseline entries are matched against future analysis results, so existing violat
 
 ## Missing Baseline File
 
-A configured baseline file that does not exist does not block the analysis. Violations are reported without baseline filtering, followed by a warning:
+A configured baseline file that does not exist does not block the analysis for non-`json` reports. Violations are reported without baseline filtering, followed by a warning:
 
 ```text
 Warning: Baseline file [structarmed-baseline.php] does not exist, violations are reported without baseline filtering.
