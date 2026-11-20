@@ -82,8 +82,11 @@ final readonly class AnalyseCommand
      */
     private const MAX_FIX_PASSES = 10;
 
-    public function __construct(private ?ProgressHandlerInterface $progressHandler = null)
-    {
+    public function __construct(
+        private ?ProgressHandlerInterface $progressHandler = null,
+        private Baseline $baseline = new Baseline(),
+        private BaselineFilter $baselineFilter = new BaselineFilter()
+    ) {
     }
 
     /**
@@ -154,6 +157,17 @@ final readonly class AnalyseCommand
             $architecture = ConfigLoader::load($configFile);
         } catch (RuntimeException $runtimeException) {
             return $this->reportError($runtimeException);
+        }
+
+        $baseline               = $architecture->getBaseline();
+        $missingBaselineWarning = $this->baselineFilter->missingWarning($baseline, $basePath);
+
+        // A warning would break the json output, and left out it would hide
+        // that the baseline is not applied, so the json report keeps the error.
+        if ($reportType === 'json' && $missingBaselineWarning !== null && ! isset($options['generate-baseline'])) {
+            echo sprintf("Error: Baseline file [%s] does not exist.\n", $baseline);
+
+            return 1;
         }
 
         $start                        = microtime(true);
@@ -316,7 +330,7 @@ final readonly class AnalyseCommand
 
         if ($shouldGenerateBaseline) {
             try {
-                (new Baseline())->generate(
+                $this->baseline->generate(
                     $unfilteredRuleViolationCollection,
                     $options['generate-baseline'],
                     $basePath
@@ -345,6 +359,16 @@ final readonly class AnalyseCommand
             'summary' => (new SummaryReport($configFile))->render($ruleViolationCollection, $elapsed),
             default => (new ConsoleReport($withSummary, $configFile))->render($ruleViolationCollection, $elapsed),
         };
+
+        // Shown after the report, so it stays visible below a long violation
+        // list. The json report never gets here with a missing baseline.
+        if ($missingBaselineWarning !== null) {
+            echo PHP_EOL . sprintf(
+                '%s %s',
+                ColorSupport::wrap('Warning:', '33', ColorSupport::detect()),
+                $missingBaselineWarning
+            ) . PHP_EOL;
+        }
 
         // The github report surfaces violations as pull request annotations,
         // so the job itself is not failed on top of them.
@@ -407,7 +431,7 @@ final readonly class AnalyseCommand
             return $unfilteredRuleViolationCollection;
         }
 
-        return (new BaselineFilter())->apply($unfilteredRuleViolationCollection, $architecture, $basePath);
+        return $this->baselineFilter->apply($unfilteredRuleViolationCollection, $architecture, $basePath);
     }
 
     private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int

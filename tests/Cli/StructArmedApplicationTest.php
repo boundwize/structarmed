@@ -2122,7 +2122,7 @@ PHP;
         }
     }
 
-    public function testAnalyseCommandReportsConfiguredBaselineFailure(): void
+    public function testAnalyseCommandWarnsWithoutBlockingWhenConfiguredBaselineIsMissing(): void
     {
         $basePath = $this->createProjectDirectory();
 
@@ -2149,11 +2149,64 @@ PHP);
                 $basePath
             );
 
-            $this->assertSame(1, $exitCode);
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('No violations found', $output);
             $this->assertStringContainsString(
-                'Error: Baseline file [missing-baseline.php] does not exist.',
+                'Baseline file [missing-baseline.php] does not exist, '
+                    . 'violations are reported without baseline filtering.',
                 $output
             );
+            $this->assertStringNotContainsString('Error:', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsViolationsWhenConfiguredBaselineIsMissingExceptForJsonReport(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        try {
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->baseline('missing-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            [$jsonExitCode, $jsonOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--report=json',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('source.must_be_final', $output);
+            $this->assertStringContainsString('Baseline file [missing-baseline.php] does not exist', $output);
+            $this->assertSame(1, $jsonExitCode, $jsonOutput);
+            $this->assertSame("Error: Baseline file [missing-baseline.php] does not exist.\n", $jsonOutput);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -2164,6 +2217,7 @@ PHP);
         $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
 
         try {
+            file_put_contents($basePath . '/structarmed-baseline.php', "<?php return 'invalid';");
             file_put_contents($basePath . '/structarmed.php', <<<'PHP'
 <?php
 
@@ -2173,7 +2227,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
 
 return Architecture::define()
-    ->baseline('missing-baseline.php')
+    ->baseline('structarmed-baseline.php')
     ->layer('Source', 'src/')
     ->rule('source.must_declare_method_visibility', new MustDeclareMethodVisibilityRule('Source'));
 PHP);
@@ -2191,7 +2245,7 @@ PHP);
 
             $this->assertSame(1, $exitCode);
             $this->assertStringContainsString(
-                'Error: Baseline file [missing-baseline.php] does not exist.',
+                'Error: Baseline file [structarmed-baseline.php] must return an array.',
                 $output
             );
             $this->assertStringContainsString(
@@ -2249,7 +2303,7 @@ return Architecture::define()
 
         public function fix(RuleViolation $ruleViolation): bool
         {
-            unlink($this->baselineFile);
+            file_put_contents($this->baselineFile, "<?php return 'invalid';");
 
             return true;
         }
@@ -2271,7 +2325,7 @@ PHP);
 
             $this->assertSame(1, $exitCode);
             $this->assertStringContainsString(
-                'Error: Baseline file [structarmed-baseline.php] does not exist.',
+                'Error: Baseline file [structarmed-baseline.php] must return an array.',
                 $output
             );
         } finally {

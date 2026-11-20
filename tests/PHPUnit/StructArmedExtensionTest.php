@@ -18,7 +18,6 @@ use PHPUnit\Runner\Extension\Facade;
 use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
 use ReflectionClass;
-use RuntimeException;
 
 use function chdir;
 use function file_put_contents;
@@ -281,7 +280,7 @@ PHP);
         }
     }
 
-    public function testBootstrapPropagatesExceptionWhenBaselineFileMissing(): void
+    public function testBootstrapWarnsWithoutBlockingWhenBaselineFileMissing(): void
     {
         $configPath = $this->writeConfig(
             'return ' . Architecture::class . "::define()\n"
@@ -289,8 +288,9 @@ PHP);
             . $this->cacheDirectoryCall() . ';'
         );
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Baseline file [missing-baseline.php] does not exist.');
+        $this->expectOutputRegex(
+            '/No violations found.*Warning: Baseline file \\[missing-baseline\\.php\\] does not exist/s'
+        );
 
         (new StructArmedExtension())->bootstrap(
             $this->configuration(),

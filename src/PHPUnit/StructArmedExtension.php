@@ -97,6 +97,12 @@ final class StructArmedExtension implements Extension
         $report = (new ConsoleReport(configFile: $configFile))->render($ruleViolationCollection, $elapsed);
         echo $report . "\n";
 
+        $missingBaselineWarning = (new BaselineFilter())->missingWarning($architecture->getBaseline(), $basePath);
+
+        if ($missingBaselineWarning !== null) {
+            echo 'Warning: ' . $missingBaselineWarning . "\n";
+        }
+
         if ($ruleViolationCollection->hasViolations()) {
             throw new ViolationsFoundException(sprintf(
                 'StructArmed found %d architecture violation(s). Fix them before running tests.',
