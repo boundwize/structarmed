@@ -159,12 +159,13 @@ final readonly class AnalyseCommand
             return $this->reportError($runtimeException);
         }
 
-        $missingBaselineWarning = $this->baselineFilter->missingWarning($architecture, $basePath);
+        $baseline               = $architecture->getBaseline();
+        $missingBaselineWarning = $this->baselineFilter->missingWarning($baseline, $basePath);
 
         // A warning would break the json output, and left out it would hide
         // that the baseline is not applied, so the json report keeps the error.
         if ($reportType === 'json' && $missingBaselineWarning !== null && ! isset($options['generate-baseline'])) {
-            echo sprintf("Error: Baseline file [%s] does not exist.\n", $architecture->getBaseline());
+            echo sprintf("Error: Baseline file [%s] does not exist.\n", $baseline);
 
             return 1;
         }

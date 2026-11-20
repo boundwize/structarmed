@@ -97,7 +97,7 @@ final class StructArmedExtension implements Extension
         $report = (new ConsoleReport(configFile: $configFile))->render($ruleViolationCollection, $elapsed);
         echo $report . "\n";
 
-        $missingBaselineWarning = (new BaselineFilter())->missingWarning($architecture, $basePath);
+        $missingBaselineWarning = (new BaselineFilter())->missingWarning($architecture->getBaseline(), $basePath);
 
         if ($missingBaselineWarning !== null) {
             echo 'Warning: ' . $missingBaselineWarning . "\n";

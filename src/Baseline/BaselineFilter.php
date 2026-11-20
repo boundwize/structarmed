@@ -22,7 +22,7 @@ final readonly class BaselineFilter
 
         // A configured baseline that is not there yet must not block the
         // analysis: violations are reported unfiltered, next to a warning.
-        if ($baseline === null || $this->missingWarning($architecture, $basePath) !== null) {
+        if ($this->missingWarning($baseline, $basePath) !== null) {
             return $ruleViolationCollection;
         }
 
@@ -33,10 +33,8 @@ final readonly class BaselineFilter
      * The warning to show when the configured baseline file does not exist,
      * null when no baseline is configured or its file is there.
      */
-    public function missingWarning(Architecture $architecture, string $basePath): ?string
+    public function missingWarning(?string $baseline, string $basePath): ?string
     {
-        $baseline = $architecture->getBaseline();
-
         if ($baseline === null || file_exists(Path::resolve($baseline, $basePath))) {
             return null;
         }

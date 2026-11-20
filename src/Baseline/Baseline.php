@@ -33,9 +33,13 @@ final readonly class Baseline
 {
     public function filter(
         RuleViolationCollection $ruleViolationCollection,
-        string $baselinePath,
+        ?string $baselinePath,
         string $basePath
     ): RuleViolationCollection {
+        if ($baselinePath === null) {
+            return $ruleViolationCollection;
+        }
+
         $normalisedBasePath  = Path::normalise($basePath, canonicalise: true);
         $messagePathPrefixes = $this->messagePathPrefixes($basePath, $normalisedBasePath);
         $signatures          = $this->loadSignatures(
