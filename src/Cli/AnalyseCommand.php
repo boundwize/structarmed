@@ -340,10 +340,10 @@ final readonly class AnalyseCommand
             'json' => (new JsonReport($withSummary))->render($ruleViolationCollection, $elapsed),
             // GitHub resolves annotation paths against the repository root, which
             // differs from the base path when a sub directory is analysed.
-            'github' => (new GithubReport(getenv('GITHUB_WORKSPACE') ?: $basePath, $withSummary))
+            'github' => (new GithubReport(getenv('GITHUB_WORKSPACE') ?: $basePath, $withSummary, $configFile))
                 ->render($ruleViolationCollection, $elapsed),
-            'summary' => (new SummaryReport())->render($ruleViolationCollection, $elapsed),
-            default => (new ConsoleReport($withSummary))->render($ruleViolationCollection, $elapsed),
+            'summary' => (new SummaryReport($configFile))->render($ruleViolationCollection, $elapsed),
+            default => (new ConsoleReport($withSummary, $configFile))->render($ruleViolationCollection, $elapsed),
         };
 
         // The github report surfaces violations as pull request annotations,

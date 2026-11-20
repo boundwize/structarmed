@@ -22,8 +22,11 @@ use const PHP_EOL;
  */
 final readonly class GithubReport implements ReportInterface
 {
-    public function __construct(private string $basePath, private bool $withSummary = false)
-    {
+    public function __construct(
+        private string $basePath,
+        private bool $withSummary = false,
+        private ?string $configFile = null
+    ) {
     }
 
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
@@ -41,7 +44,8 @@ final readonly class GithubReport implements ReportInterface
             );
         }
 
-        return $output . (new ConsoleReport($this->withSummary))->render($ruleViolationCollection, $elapsedSeconds);
+        return $output . (new ConsoleReport($this->withSummary, $this->configFile))
+            ->render($ruleViolationCollection, $elapsedSeconds);
     }
 
     private function escapeData(string $value): string

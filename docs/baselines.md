@@ -38,6 +38,7 @@ vendor/bin/structarmed analyse
 
 StructArmed {version} - Architecture Enforcement
 ================================================
+Configuration: /path/to/project/structarmed.php
 
 No violations found. (0.01s)
 ```

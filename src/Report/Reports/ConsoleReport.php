@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Cli\ColorSupport;
 use Boundwize\StructArmed\Report\ReportInterface;
 use Boundwize\StructArmed\Report\SummaryTable;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Version;
 
 use function implode;
@@ -19,7 +20,7 @@ use const PHP_EOL;
 
 final readonly class ConsoleReport implements ReportInterface
 {
-    public function __construct(private bool $withSummary = false)
+    public function __construct(private bool $withSummary = false, private ?string $configFile = null)
     {
     }
 
@@ -33,6 +34,11 @@ final readonly class ConsoleReport implements ReportInterface
         $lines[] = '';
         $lines[] = $heading;
         $lines[] = str_repeat('=', $lineWidth);
+
+        if ($this->configFile !== null) {
+            // A relative config path is printed as the absolute path in effect.
+            $lines[] = 'Configuration: ' . Path::normalise($this->configFile, canonicalise: true);
+        }
 
         if ($ruleViolationCollection->isEmpty()) {
             $lines[] = '';

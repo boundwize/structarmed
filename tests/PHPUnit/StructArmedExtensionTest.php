@@ -10,6 +10,7 @@ use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\PHPUnit\StructArmedExtension;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use Boundwize\StructArmed\Util\Path;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -25,6 +26,7 @@ use function getcwd;
 use function getenv;
 use function json_encode;
 use function mkdir;
+use function preg_quote;
 use function putenv;
 use function var_export;
 
@@ -100,6 +102,33 @@ final class StructArmedExtensionTest extends TestCase
                 $this->configuration(),
                 new Facade(),
                 $this->parameters()
+            );
+        } finally {
+            chdir($previousPath);
+        }
+    }
+
+    public function testBootstrapPrintsAbsoluteConfigurationFileForRelativeConfigParameter(): void
+    {
+        $basePath     = $this->makeTempProjectConfig(
+            'return ' . Architecture::class . "::define()\n"
+            . $this->cacheDirectoryCall() . ';'
+        );
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
+
+        chdir($basePath);
+
+        try {
+            $this->expectOutputRegex(
+                '/^Configuration: ' . preg_quote(Path::normalise($basePath, canonicalise: true), '/')
+                . '\/structarmed\.php$/m'
+            );
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                $this->parameters('structarmed.php')
             );
         } finally {
             chdir($previousPath);

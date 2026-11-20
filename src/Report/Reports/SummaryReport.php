@@ -7,6 +7,7 @@ namespace Boundwize\StructArmed\Report\Reports;
 use Boundwize\StructArmed\Report\ReportInterface;
 use Boundwize\StructArmed\Report\SummaryTable;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Version;
 
 use function count;
@@ -21,8 +22,12 @@ use const PHP_EOL;
  * Renders the number of violations per rule instead of every violation, most
  * violated rule first, to show where a project stands at a glance.
  */
-final class SummaryReport implements ReportInterface
+final readonly class SummaryReport implements ReportInterface
 {
+    public function __construct(private ?string $configFile = null)
+    {
+    }
+
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
         $heading = sprintf('StructArmed %s — Architecture Enforcement', Version::current());
@@ -31,6 +36,10 @@ final class SummaryReport implements ReportInterface
             '',
             $heading,
             str_repeat('=', strlen($heading)),
+            // A relative config path is printed as the absolute path in effect.
+            ...$this->configFile !== null
+                ? ['Configuration: ' . Path::normalise($this->configFile, canonicalise: true)]
+                : [],
             '',
             ...SummaryTable::lines($ruleViolationCollection),
             $ruleViolationCollection->isEmpty()
