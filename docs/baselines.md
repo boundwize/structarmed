@@ -46,6 +46,16 @@ No violations found. (0.01s)
 {: .important }
 Baseline entries are matched against future analysis results, so existing violations stay quiet while new ones still fail the run. Treat the baseline as a migration aid for legacy findings, not as a way to silence issues you can fix now.
 
+## Missing Baseline File
+
+A configured baseline file that does not exist does not block the analysis. Violations are reported without baseline filtering, followed by a warning:
+
+```text
+Warning: Baseline file [structarmed-baseline.php] does not exist, violations are reported without baseline filtering.
+```
+
+The exit code still depends only on the reported violations. The `json` report omits the warning so its output stays parseable.
+
 ## When To Use A Baseline
 
 Use a baseline when a legacy project has known architecture violations that cannot be fixed in one pass.

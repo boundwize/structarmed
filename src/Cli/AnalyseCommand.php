@@ -346,6 +346,18 @@ final readonly class AnalyseCommand
             default => (new ConsoleReport($withSummary, $configFile))->render($ruleViolationCollection, $elapsed),
         };
 
+        // Shown after the report, so it stays visible below a long violation
+        // list. The json report is left alone to keep its output parseable.
+        $missingBaselineWarning = (new BaselineFilter())->missingWarning($architecture, $basePath);
+
+        if ($reportType !== 'json' && $missingBaselineWarning !== null) {
+            echo PHP_EOL . sprintf(
+                '%s %s',
+                ColorSupport::wrap('Warning:', '33', ColorSupport::detect()),
+                $missingBaselineWarning
+            ) . PHP_EOL;
+        }
+
         // The github report surfaces violations as pull request annotations,
         // so the job itself is not failed on top of them.
         if ($reportType === 'github') {
