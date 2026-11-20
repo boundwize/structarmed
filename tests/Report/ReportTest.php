@@ -39,6 +39,39 @@ final class ReportTest extends TestCase
         $this->assertStringContainsString('No violations found', $report);
     }
 
+    public function testConsoleReportRendersConfigurationFileBelowHeading(): void
+    {
+        $heading = 'StructArmed ' . Version::current() . ' — Architecture Enforcement';
+
+        $this->assertSame(
+            implode(PHP_EOL, [
+                '',
+                $heading,
+                str_repeat('=', strlen($heading)),
+                'Configuration: /project/structarmed.php',
+                '',
+                '✅  No violations found. (0.12s)',
+                '',
+            ]),
+            (new ConsoleReport(configFile: '/project/structarmed.php'))->render(new RuleViolationCollection(), 0.12)
+        );
+        $this->assertStringNotContainsString(
+            'Configuration:',
+            (new ConsoleReport())->render(new RuleViolationCollection(), 0.12)
+        );
+    }
+
+    public function testConsoleReportRendersConfigurationFileAboveViolations(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation());
+
+        $this->assertStringContainsString(
+            implode(PHP_EOL, ['Configuration: /project/structarmed.php', '', 'Found 1 violation(s):']),
+            (new ConsoleReport(configFile: '/project/structarmed.php'))->render($ruleViolationCollection, 0.34)
+        );
+    }
+
     public function testConsoleReportRendersViolationsWithLayer(): void
     {
         $ruleViolationCollection = new RuleViolationCollection();
@@ -211,6 +244,21 @@ final class ReportTest extends TestCase
         );
     }
 
+    public function testSummaryReportRendersConfigurationFileBelowHeading(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        $this->assertSame(
+            (new ConsoleReport(withSummary: true, configFile: '/project/structarmed.php'))
+                ->render($ruleViolationCollection, 0.12),
+            (new SummaryReport('/project/structarmed.php'))->render($ruleViolationCollection, 0.12)
+        );
+        $this->assertStringContainsString(
+            implode(PHP_EOL, ['Configuration: /project/structarmed.php', '', 'Rule    Count']),
+            (new SummaryReport('/project/structarmed.php'))->render($ruleViolationCollection, 0.12)
+        );
+    }
+
     public function testSummaryReportRendersViolationCountPerRule(): void
     {
         $ruleViolationCollection = new RuleViolationCollection();
@@ -245,6 +293,17 @@ final class ReportTest extends TestCase
         $this->assertSame(
             (new ConsoleReport())->render($ruleViolationCollection, 0.12),
             (new GithubReport('/project'))->render($ruleViolationCollection, 0.12)
+        );
+    }
+
+    public function testGithubReportRendersConfigurationFileInConsoleReport(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        $this->assertSame(
+            (new ConsoleReport(configFile: '/project/structarmed.php'))->render($ruleViolationCollection, 0.12),
+            (new GithubReport('/project', configFile: '/project/structarmed.php'))
+                ->render($ruleViolationCollection, 0.12)
         );
     }
 

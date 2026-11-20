@@ -113,6 +113,14 @@ When a violation is fixable, the console report adds a hint telling you to rerun
 
 ## Reports
 
+The `console`, `summary`, and `github` reports print the configuration file in effect as an absolute path below the heading, so a discovered config or a relative `--config` value is easy to verify:
+
+```text
+StructArmed {version} — Architecture Enforcement
+================================================
+Configuration: /path/to/project/structarmed.php
+```
+
 ```bash
 # Console output is the default.
 vendor/bin/structarmed analyse

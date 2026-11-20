@@ -299,6 +299,30 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandRendersDiscoveredConfigurationFileAsAbsolutePath(): void
+    {
+        $basePath = $this->createProjectDirectory();
+        $expected = 'Configuration: ' . $this->normalisePath((string) realpath($basePath)) . '/structarmed.php';
+
+        try {
+            foreach (['console', 'summary', 'github'] as $reportType) {
+                [$exitCode, $output] = $this->runApplication(
+                    ['structarmed', 'analyse', '--report=' . $reportType, '--no-progress'],
+                    $basePath
+                );
+
+                $this->assertSame(0, $exitCode, $output);
+                $this->assertStringContainsString($expected, $output);
+            }
+
+            [, $output] = $this->runApplication(['structarmed', 'analyse', '--report=json'], $basePath);
+
+            $this->assertStringNotContainsString('Configuration:', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandRendersConsoleReport(): void
     {
         $basePath = $this->createProjectDirectory();
@@ -974,7 +998,13 @@ PHP);
 
         try {
             [$exitCode, $output] = $this->runApplication(
-                ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--report=summary'],
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--report=summary',
+                    '--no-progress',
+                ],
                 $basePath
             );
 
