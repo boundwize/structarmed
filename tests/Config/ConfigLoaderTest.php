@@ -26,6 +26,19 @@ final class ConfigLoaderTest extends TestCase
         $this->assertInstanceOf(Architecture::class, ConfigLoader::load($path));
     }
 
+    public function testLoadInvokesCallableConfig(): void
+    {
+        $path = $this->writeTempConfig(<<<'PHP'
+        return static function (\Boundwize\StructArmed\Architecture $architecture): void {
+            $architecture->layer('Domain', 'src/Domain/');
+        };
+        PHP);
+
+        $architecture = ConfigLoader::load($path);
+
+        $this->assertSame(['Domain' => 'src/Domain/'], $architecture->getLayers());
+    }
+
     public function testLoadThrowsWhenConfigReturnsWrongType(): void
     {
         $path = $this->writeTempConfig('return [];');
