@@ -156,6 +156,18 @@ final readonly class AnalyseCommand
             return $this->reportError($runtimeException);
         }
 
+        // A warning would break the json output, and left out it would hide
+        // that the baseline is not applied, so the json report keeps the error.
+        if (
+            $reportType === 'json'
+            && ! isset($options['generate-baseline'])
+            && (new BaselineFilter())->missingWarning($architecture, $basePath) !== null
+        ) {
+            echo sprintf("Error: Baseline file [%s] does not exist.\n", $architecture->getBaseline());
+
+            return 1;
+        }
+
         $start                        = microtime(true);
         $fileHashProvider             = new FileHashProvider();
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
@@ -347,7 +359,7 @@ final readonly class AnalyseCommand
         };
 
         // Shown after the report, so it stays visible below a long violation
-        // list. The json report is left alone to keep its output parseable.
+        // list. Never added to the json report, to keep its output parseable.
         $missingBaselineWarning = (new BaselineFilter())->missingWarning($architecture, $basePath);
 
         if ($reportType !== 'json' && $missingBaselineWarning !== null) {

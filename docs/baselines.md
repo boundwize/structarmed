@@ -54,7 +54,13 @@ A configured baseline file that does not exist does not block the analysis. Viol
 Warning: Baseline file [structarmed-baseline.php] does not exist, violations are reported without baseline filtering.
 ```
 
-The exit code still depends only on the reported violations. The `json` report omits the warning so its output stays parseable.
+The exit code still depends only on the reported violations.
+
+The `json` report cannot carry a warning without breaking its output, so with `--report=json` a missing baseline file still stops the run:
+
+```text
+Error: Baseline file [structarmed-baseline.php] does not exist.
+```
 
 ## When To Use A Baseline
 

@@ -2162,7 +2162,7 @@ PHP);
         }
     }
 
-    public function testAnalyseCommandReportsViolationsWhenConfiguredBaselineIsMissing(): void
+    public function testAnalyseCommandReportsViolationsWhenConfiguredBaselineIsMissingExceptForJsonReport(): void
     {
         $basePath = $this->createProjectDirectoryWithViolation();
 
@@ -2206,8 +2206,7 @@ PHP);
             $this->assertStringContainsString('source.must_be_final', $output);
             $this->assertStringContainsString('Baseline file [missing-baseline.php] does not exist', $output);
             $this->assertSame(1, $jsonExitCode, $jsonOutput);
-            $this->assertStringNotContainsString('does not exist', $jsonOutput);
-            $this->assertJson($jsonOutput);
+            $this->assertSame("Error: Baseline file [missing-baseline.php] does not exist.\n", $jsonOutput);
         } finally {
             $this->removeTempDirectory($basePath);
         }
