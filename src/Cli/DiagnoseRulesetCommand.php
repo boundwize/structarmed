@@ -114,24 +114,24 @@ final readonly class DiagnoseRulesetCommand
             return 0;
         }
 
-        $counts     = [
+        $counts          = [
             RulesetDiagnostic::ERROR   => 0,
             RulesetDiagnostic::WARNING => 0,
         ];
-        $levelWidth = strlen(self::LEVEL_HEADING);
-        $layerWidth = strlen(self::LAYER_HEADING);
+        $levelWidth      = strlen(self::LEVEL_HEADING);
+        $layerWidth      = strlen(self::LAYER_HEADING);
         $dependencyWidth = strlen(self::DEPENDENCY_HEADING);
-        $issueWidth = strlen(self::ISSUE_HEADING);
-        $fixWidth   = strlen(self::FIX_HEADING);
+        $issueWidth      = strlen(self::ISSUE_HEADING);
+        $fixWidth        = strlen(self::FIX_HEADING);
 
         foreach ($diagnostics as $diagnostic) {
             $counts[$diagnostic->severity]++;
 
-            $levelWidth = max($levelWidth, strlen($diagnostic->severity));
-            $layerWidth = max($layerWidth, strlen($diagnostic->layer));
+            $levelWidth      = max($levelWidth, strlen($diagnostic->severity));
+            $layerWidth      = max($layerWidth, strlen($diagnostic->layer));
             $dependencyWidth = max($dependencyWidth, strlen($diagnostic->entry));
-            $issueWidth = max($issueWidth, strlen($diagnostic->issue));
-            $fixWidth   = max($fixWidth, strlen($diagnostic->fix));
+            $issueWidth      = max($issueWidth, strlen($diagnostic->issue));
+            $fixWidth        = max($fixWidth, strlen($diagnostic->fix));
         }
 
         $useColor = ColorSupport::detect();
