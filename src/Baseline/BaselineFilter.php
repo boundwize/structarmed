@@ -6,6 +6,10 @@ namespace Boundwize\StructArmed\Baseline;
 
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Util\Path;
+
+use function file_exists;
+use function sprintf;
 
 final readonly class BaselineFilter
 {
@@ -14,14 +18,30 @@ final readonly class BaselineFilter
         Architecture $architecture,
         string $basePath
     ): RuleViolationCollection {
-        if ($architecture->getBaseline() === null) {
+        $baseline = $architecture->getBaseline();
+
+        // A configured baseline that is not there yet must not block the
+        // analysis: violations are reported unfiltered, next to a warning.
+        if ($this->missingWarning($baseline, $basePath) !== null) {
             return $ruleViolationCollection;
         }
 
-        return (new Baseline())->filter(
-            $ruleViolationCollection,
-            $architecture->getBaseline(),
-            $basePath
+        return (new Baseline())->filter($ruleViolationCollection, $baseline, $basePath);
+    }
+
+    /**
+     * The warning to show when the configured baseline file does not exist,
+     * null when no baseline is configured or its file is there.
+     */
+    public function missingWarning(?string $baseline, string $basePath): ?string
+    {
+        if ($baseline === null || file_exists(Path::resolve($baseline, $basePath))) {
+            return null;
+        }
+
+        return sprintf(
+            'Baseline file [%s] does not exist, violations are reported without baseline filtering.',
+            $baseline
         );
     }
 }

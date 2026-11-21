@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Analyser\Parallel\AnalysisNodeWorker;
+use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Version;
 
 use function array_slice;
 use function array_values;
+use function file_exists;
 use function file_get_contents;
 use function getcwd;
 use function in_array;
@@ -17,7 +19,17 @@ use function unserialize;
 
 final readonly class StructArmedApplication
 {
-    private const COMMANDS = ['init', 'analyse', 'analyze', '--clear-cache', '--version', '-V', '--help', '-h'];
+    private const COMMANDS = [
+        'init',
+        'append',
+        'analyse',
+        'analyze',
+        '--clear-cache',
+        '--version',
+        '-V',
+        '--help',
+        '-h',
+    ];
 
     /**
      * @param list<string> $argv
@@ -49,14 +61,25 @@ final readonly class StructArmedApplication
             return 0;
         }
 
-        if (in_array($command, [null, '--help', '-h'], true)) {
-            echo Usage::render();
+        // A help option may follow the command: `structarmed analyse --help`. A file or directory
+        // named `-h` or `--help` is a path to analyse instead of a request for help.
+        foreach ($arguments as $argument) {
+            if (in_array($argument, ['--help', '-h'], true) && ! file_exists(Path::resolve($argument, $basePath))) {
+                $command = $argument;
+                break;
+            }
+        }
 
-            return 0;
+        if (in_array($command, [null, '--help', '-h'], true)) {
+            return (new HelpCommand())->run();
         }
 
         if ($command === 'init') {
             return (new InitCommand())->run($arguments, $basePath);
+        }
+
+        if ($command === 'append') {
+            return (new AppendCommand())->run($arguments, $basePath);
         }
 
         if ($command === '--clear-cache') {

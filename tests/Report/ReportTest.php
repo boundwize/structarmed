@@ -7,13 +7,18 @@ namespace Boundwize\StructArmed\Tests\Report;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\GithubReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
+use Boundwize\StructArmed\Report\Reports\SummaryReport;
+use Boundwize\StructArmed\Report\SummaryTable;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Version;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function implode;
 use function json_decode;
+use function str_repeat;
+use function strlen;
 
 use const PHP_EOL;
 use const PHP_FLOAT_EPSILON;
@@ -21,6 +26,8 @@ use const PHP_FLOAT_EPSILON;
 #[CoversClass(ConsoleReport::class)]
 #[CoversClass(GithubReport::class)]
 #[CoversClass(JsonReport::class)]
+#[CoversClass(SummaryReport::class)]
+#[CoversClass(SummaryTable::class)]
 #[CoversClass(Version::class)]
 final class ReportTest extends TestCase
 {
@@ -30,6 +37,39 @@ final class ReportTest extends TestCase
 
         $this->assertStringContainsString('StructArmed ' . Version::current(), $report);
         $this->assertStringContainsString('No violations found', $report);
+    }
+
+    public function testConsoleReportRendersConfigurationFileBelowHeading(): void
+    {
+        $heading = 'StructArmed ' . Version::current() . ' — Architecture Enforcement';
+
+        $this->assertSame(
+            implode(PHP_EOL, [
+                '',
+                $heading,
+                str_repeat('=', strlen($heading)),
+                'Configuration: /project/structarmed.php',
+                '',
+                '✅  No violations found. (0.12s)',
+                '',
+            ]),
+            (new ConsoleReport(configFile: '/project/structarmed.php'))->render(new RuleViolationCollection(), 0.12)
+        );
+        $this->assertStringNotContainsString(
+            'Configuration:',
+            (new ConsoleReport())->render(new RuleViolationCollection(), 0.12)
+        );
+    }
+
+    public function testConsoleReportRendersConfigurationFileAboveViolations(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation());
+
+        $this->assertStringContainsString(
+            implode(PHP_EOL, ['Configuration: /project/structarmed.php', '', 'Found 1 violation(s):']),
+            (new ConsoleReport(configFile: '/project/structarmed.php'))->render($ruleViolationCollection, 0.34)
+        );
     }
 
     public function testConsoleReportRendersViolationsWithLayer(): void
@@ -43,6 +83,36 @@ final class ReportTest extends TestCase
         $this->assertStringContainsString('[rule.key]', $report);
         $this->assertStringContainsString('Layer: Domain', $report);
         $this->assertStringContainsString('1 violation(s) found', $report);
+    }
+
+    public function testConsoleReportDoesNotRenderViolationCountPerRuleByDefault(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation());
+
+        $this->assertStringNotContainsString('Count', (new ConsoleReport())->render($ruleViolationCollection, 0.34));
+    }
+
+    public function testConsoleReportEndsWithViolationCountPerRuleWhenEnabled(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation('psr4'));
+        $ruleViolationCollection->add($this->violation('layer.may_not_depend_on'));
+        $ruleViolationCollection->add($this->violation('layer.may_not_depend_on'));
+
+        $this->assertStringEndsWith(
+            implode(PHP_EOL, [
+                '',
+                'Rule                     Count',
+                str_repeat('─', 30),
+                'layer.may_not_depend_on      2',
+                'psr4                         1',
+                str_repeat('─', 30),
+                '3 violation(s) found  •  0.34s',
+                '',
+            ]),
+            (new ConsoleReport(withSummary: true))->render($ruleViolationCollection, 0.34)
+        );
     }
 
     public function testConsoleReportRendersFixHintForFixableViolations(): void
@@ -93,6 +163,7 @@ final class ReportTest extends TestCase
         $this->assertIsArray($data['violations'][0]);
         $this->assertSame('rule.key', $data['violations'][0]['rule']);
         $this->assertArrayNotHasKey('fixable', $data['violations'][0]);
+        $this->assertArrayNotHasKey('summary', $data);
         $this->assertSame(1, $data['total']);
         $this->assertFalse($data['passed']);
         $this->assertEqualsWithDelta(1.23, $data['elapsed'], PHP_FLOAT_EPSILON);
@@ -119,6 +190,102 @@ final class ReportTest extends TestCase
         $this->assertStringContainsString("\xEF\xBF\xBD", $data['violations'][0]['message']);
     }
 
+    public function testJsonReportRendersSummaryWhenEnabled(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation());
+
+        $data = json_decode((new JsonReport(withSummary: true))->render($ruleViolationCollection, 1.23), true);
+
+        $this->assertIsArray($data);
+        $this->assertSame(['rule.key' => 1], $data['summary']);
+    }
+
+    public function testJsonReportRendersEmptySummaryAsObject(): void
+    {
+        $json = (new JsonReport(withSummary: true))->render(new RuleViolationCollection(), 0.0);
+
+        $this->assertStringContainsString('"summary": {}', $json);
+    }
+
+    public function testSummaryReportRendersZeroRowTableForPassingResult(): void
+    {
+        $heading = 'StructArmed ' . Version::current() . ' — Architecture Enforcement';
+
+        $this->assertSame(
+            implode(PHP_EOL, [
+                '',
+                $heading,
+                str_repeat('=', strlen($heading)),
+                '',
+                'Rule    Count',
+                str_repeat('─', 13),
+                '(none)      0',
+                str_repeat('─', 13),
+                '',
+                '✅  No violations found. (0.12s)',
+                '',
+            ]),
+            (new SummaryReport())->render(new RuleViolationCollection(), 0.12)
+        );
+    }
+
+    public function testConsoleReportRendersZeroRowTableForPassingResultWhenSummaryEnabled(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        $this->assertSame(
+            (new SummaryReport())->render($ruleViolationCollection, 0.12),
+            (new ConsoleReport(withSummary: true))->render($ruleViolationCollection, 0.12)
+        );
+        $this->assertStringNotContainsString(
+            'Count',
+            (new ConsoleReport())->render($ruleViolationCollection, 0.12)
+        );
+    }
+
+    public function testSummaryReportRendersConfigurationFileBelowHeading(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        $this->assertSame(
+            (new ConsoleReport(withSummary: true, configFile: '/project/structarmed.php'))
+                ->render($ruleViolationCollection, 0.12),
+            (new SummaryReport('/project/structarmed.php'))->render($ruleViolationCollection, 0.12)
+        );
+        $this->assertStringContainsString(
+            implode(PHP_EOL, ['Configuration: /project/structarmed.php', '', 'Rule    Count']),
+            (new SummaryReport('/project/structarmed.php'))->render($ruleViolationCollection, 0.12)
+        );
+    }
+
+    public function testSummaryReportRendersViolationCountPerRule(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation('layer.may_not_depend_on'));
+        $ruleViolationCollection->add($this->violation('psr4'));
+        $ruleViolationCollection->add($this->violation('layer.may_not_depend_on'));
+
+        $heading = 'StructArmed ' . Version::current() . ' — Architecture Enforcement';
+
+        $this->assertSame(
+            implode(PHP_EOL, [
+                '',
+                $heading,
+                str_repeat('=', strlen($heading)),
+                '',
+                'Rule                     Count',
+                str_repeat('─', 30),
+                'layer.may_not_depend_on      2',
+                'psr4                         1',
+                str_repeat('─', 30),
+                '3 violation(s) found in 2 rule(s)  •  0.34s',
+                '',
+            ]),
+            (new SummaryReport())->render($ruleViolationCollection, 0.34)
+        );
+    }
+
     public function testGithubReportRendersOnlyConsoleReportForPassingResult(): void
     {
         $ruleViolationCollection = new RuleViolationCollection();
@@ -126,6 +293,32 @@ final class ReportTest extends TestCase
         $this->assertSame(
             (new ConsoleReport())->render($ruleViolationCollection, 0.12),
             (new GithubReport('/project'))->render($ruleViolationCollection, 0.12)
+        );
+    }
+
+    public function testGithubReportRendersConfigurationFileInConsoleReport(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+
+        $this->assertSame(
+            (new ConsoleReport(configFile: '/project/structarmed.php'))->render($ruleViolationCollection, 0.12),
+            (new GithubReport('/project', configFile: '/project/structarmed.php'))
+                ->render($ruleViolationCollection, 0.12)
+        );
+    }
+
+    public function testGithubReportRendersViolationCountPerRuleWhenEnabled(): void
+    {
+        $ruleViolationCollection = new RuleViolationCollection();
+        $ruleViolationCollection->add($this->violation());
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/^rule\.key +1\R/m',
+            (new GithubReport('/project'))->render($ruleViolationCollection, 0.34)
+        );
+        $this->assertMatchesRegularExpression(
+            '/^rule\.key +1\R/m',
+            (new GithubReport('/project', withSummary: true))->render($ruleViolationCollection, 0.34)
         );
     }
 
@@ -150,7 +343,7 @@ final class ReportTest extends TestCase
         );
     }
 
-    private function violation(): RuleViolation
+    private function violation(string $ruleKey = 'rule.key'): RuleViolation
     {
         return new RuleViolation(
             message: 'Something failed',
@@ -158,7 +351,7 @@ final class ReportTest extends TestCase
             line: 10,
             className: 'App\\Domain\\Order',
             layer: 'Domain',
-            ruleKey: 'rule.key',
+            ruleKey: $ruleKey,
         );
     }
 }

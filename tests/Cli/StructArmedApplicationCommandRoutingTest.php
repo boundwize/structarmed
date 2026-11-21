@@ -6,11 +6,13 @@ namespace Boundwize\StructArmed\Tests\Cli;
 
 use Boundwize\StructArmed\Cli\AnalyseCommand;
 use Boundwize\StructArmed\Cli\ClearCacheCommand;
+use Boundwize\StructArmed\Cli\HelpCommand;
 use Boundwize\StructArmed\Cli\InitCommand;
 use Boundwize\StructArmed\Cli\StructArmedApplication;
 use Boundwize\StructArmed\Cli\Usage;
 use Boundwize\StructArmed\Version;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function ob_end_clean;
@@ -20,6 +22,7 @@ use function sprintf;
 
 #[CoversClass(AnalyseCommand::class)]
 #[CoversClass(ClearCacheCommand::class)]
+#[CoversClass(HelpCommand::class)]
 #[CoversClass(InitCommand::class)]
 #[CoversClass(StructArmedApplication::class)]
 #[CoversClass(Usage::class)]
@@ -39,6 +42,34 @@ final class StructArmedApplicationCommandRoutingTest extends TestCase
             $output
         );
         $this->assertStringContainsString('structarmed analyse|analyze', $output);
+    }
+
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function helpOptionProvider(): iterable
+    {
+        yield 'long option' => [['--help']];
+        yield 'short option' => [['-h']];
+        yield 'long option after analyse' => [['analyse', '--help']];
+        yield 'short option after analyse' => [['analyse', '-h']];
+        yield 'after analyze scan path and options' => [['analyze', 'src', '--no-progress', '-h']];
+        yield 'before analyse' => [['--help', 'analyse']];
+        yield 'after init' => [['init', '--help']];
+        yield 'after append' => [['append', '--preset=psr4', '-h']];
+        yield 'after clear cache' => [['--clear-cache', '--help']];
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    #[DataProvider('helpOptionProvider')]
+    public function testApplicationPrintsUsageForHelpOption(array $arguments): void
+    {
+        [$exitCode, $output] = $this->runApplication(['structarmed', ...$arguments], self::BASE_PATH);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(Usage::render(), $output);
     }
 
     public function testApplicationPrintsVersion(): void

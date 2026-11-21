@@ -1,4 +1,4 @@
-<svg width="1180" height="262" viewBox="0 0 1180 262" xmlns="http://www.w3.org/2000/svg">
+<svg width="1180" height="276" viewBox="0 0 1180 276" xmlns="http://www.w3.org/2000/svg">
     <rect width="100%" height="100%" fill="#1e1e1e" rx="8" ry="8" />
     <style>
         .text { font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, 'Courier New', monospace; font-size: 14px; fill: #cccccc; white-space: pre; }
@@ -20,28 +20,31 @@
         <!-- Line 4: Separator -->
         <text x="0" y="49" class="text">===============================================</text>
 
+        <!-- Line 5: Configuration file -->
+        <text x="0" y="63" class="text">Configuration: /var/www/prj-ddd/structarmed.php</text>
+
         <!-- Line 6: Found violations -->
-        <text x="0" y="80" class="text">Found 1 violation(s):</text>
+        <text x="0" y="94" class="text">Found 1 violation(s):</text>
 
         <!-- Line 7: Separator -->
-        <text x="0" y="94" class="text">───────────────────────────────────────────────</text>
+        <text x="0" y="108" class="text">───────────────────────────────────────────────</text>
 
         <!-- Line 9: Error Code -->
-        <text x="0" y="122" class="text"><tspan class="error">✗</tspan>  [ddd.layer.domain_not_depend_infrastructure]</text>
+        <text x="0" y="136" class="text"><tspan class="error">✗</tspan>  [ddd.layer.domain_not_depend_infrastructure]</text>
 
         <!-- Line 10: Error Detail -->
-        <text x="0" y="140" class="text">   Class [Domain\Album] in layer [Domain] must not depend on [Infrastructure\SQLAlbumRepository] which belongs to layer [Infrastructure]</text>
+        <text x="0" y="154" class="text">   Class [Domain\Album] in layer [Domain] must not depend on [Infrastructure\SQLAlbumRepository] which belongs to layer [Infrastructure]</text>
 
         <!-- Line 11: File Path -->
-        <text x="0" y="158" class="text">   → /Users/samsonasik/www/prj-ddd/src/Domain/Album.php:5</text>
+        <text x="0" y="172" class="text">   → /var/www/prj-ddd/src/Domain/Album.php:5</text>
 
         <!-- Line 12: Layer -->
-        <text x="0" y="176" class="text">   Layer: Domain</text>
+        <text x="0" y="190" class="text">   Layer: Domain</text>
 
         <!-- Line 14: Separator -->
-        <text x="0" y="193" class="text">───────────────────────────────────────────────</text>
+        <text x="0" y="207" class="text">───────────────────────────────────────────────</text>
 
         <!-- Line 15: Summary -->
-        <text x="0" y="207" class="text">1 violation(s) found  •  0.00s</text>
+        <text x="0" y="221" class="text">1 violation(s) found  •  0.00s</text>
     </g>
 </svg>

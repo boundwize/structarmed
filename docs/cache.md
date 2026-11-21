@@ -66,3 +66,5 @@ vendor/bin/structarmed analyse --no-cache
 Keep in mind that every run with `--no-cache` repeats the full analysis, so similar runs will take roughly the same amount of time. With caching enabled, later runs can reuse cached results and finish faster.
 
 The existing cache is left untouched. `--no-cache` cannot be combined with `--clear-cache`; clear the cache separately with `vendor/bin/structarmed --clear-cache`.
+
+The [PHPUnit extension](../phpunit-extension/) supports the same behaviour through its `no-cache` parameter.
