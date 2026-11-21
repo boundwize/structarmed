@@ -27,12 +27,13 @@ return Architecture::define()
     ->layer('Progress', 'src/Progress/')
     ->layer('Report', 'src/Report/')
     ->layer('Rule', 'src/Rule/')
+    ->layer('Ruleset', 'src/Ruleset/')
     ->layer('Util', 'src/Util/')
     ->ruleset([
         'Analyser'      => ['+Cache', 'Composer', 'File', 'LayerResolver', 'Progress'],
         'Baseline'      => ['Core', 'Rule', 'Util'],
         'Cache'         => ['Analyser', 'Composer', 'Core', 'Rule', 'Util'],
-        'Cli'           => ['Baseline', '+Cache', 'Config', 'Progress', 'Report', 'Util'],
+        'Cli'           => ['Baseline', '+Cache', 'Config', 'Progress', 'Report', 'Ruleset', 'Util'],
         'Composer'      => ['Util'],
         'Config'        => ['Core'],
         'Core'          => ['Exception', 'Preset', 'Rule', 'Util'],
@@ -44,6 +45,7 @@ return Architecture::define()
         'Progress'      => ['Cli'],
         'Report'        => ['Cli', 'Core', 'Rule', 'Util'],
         'Rule'          => ['Analyser', 'Composer', 'Core', 'File', 'Util'],
+        'Ruleset'       => ['Core', 'Util'],
         'Util'          => [],
     ])
     ->skip([

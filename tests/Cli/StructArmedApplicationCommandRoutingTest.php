@@ -58,6 +58,7 @@ final class StructArmedApplicationCommandRoutingTest extends TestCase
         yield 'after init' => [['init', '--help']];
         yield 'after append' => [['append', '--preset=psr4', '-h']];
         yield 'after clear cache' => [['--clear-cache', '--help']];
+        yield 'after diagnose ruleset' => [['diagnose-ruleset', '--help']];
     }
 
     /**

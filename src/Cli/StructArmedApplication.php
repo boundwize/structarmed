@@ -24,6 +24,7 @@ final readonly class StructArmedApplication
         'append',
         'analyse',
         'analyze',
+        'diagnose-ruleset',
         '--clear-cache',
         '--version',
         '-V',
@@ -84,6 +85,10 @@ final readonly class StructArmedApplication
 
         if ($command === '--clear-cache') {
             return (new ClearCacheCommand())->run($arguments, $basePath);
+        }
+
+        if ($command === 'diagnose-ruleset') {
+            return (new DiagnoseRulesetCommand())->run($arguments, $basePath);
         }
 
         if (in_array($command, ['analyse', 'analyze'], true)) {

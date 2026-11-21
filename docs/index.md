@@ -51,7 +51,7 @@ StructArmed turns architecture decisions into executable checks. Start with pres
 - [Available Rules](available-rules/) lists every built-in rule class you can register, replace, or reuse.
 - [Custom Rules And Presets](custom-rules-and-presets/) covers project-specific checks and reusable architecture presets.
 - [Presets](presets/) lists the included PSR, MVC, and DDD presets.
-- [CLI](cli/) documents analyse, report, version, and baseline commands.
+- [CLI](cli/) documents analyse, report, version, baseline, and ruleset diagnostics commands.
 - [PHPUnit Extension](phpunit-extension/) explains how to fail your test suite on architecture violations.
 - [Cache](cache/) covers analysis cache configuration.
 - [Baselines](baselines/) covers legacy-project adoption without hiding new violations.

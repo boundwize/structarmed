@@ -18,6 +18,7 @@ Usage:
     [-d|--basepath=path/to/project] [--report=console|json|github|summary] [--summary]
     [--no-progress] [--clear-cache] [--no-cache] [--disable-parallel] [--fix]
     [--generate-baseline=structarmed-baseline.php]
+  structarmed diagnose-ruleset [--config=path/to/structarmed.php] [-d|--basepath=path/to/project]
   structarmed --clear-cache [--config=path/to/structarmed.php] [-d|--basepath=path/to/project]
 
 TXT;

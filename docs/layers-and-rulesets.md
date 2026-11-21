@@ -154,6 +154,16 @@ Each `+LayerName` entry expands to that layer itself plus all layers it is allow
 
 When the allowed layers of `API` or `Controller` change, `RESTful` picks them up automatically. Unknown `+` references expand to nothing silently.
 
+### Diagnosing A Ruleset
+
+`diagnose-ruleset` reports entries that a `+` entry already inherits, repeated entries, layers that list themselves, and names that no layer defines, each with how to fix it. It reads the ruleset only, without analysing any source file.
+
+```bash
+vendor/bin/structarmed diagnose-ruleset
+```
+
+See [Diagnose Ruleset Commands](../cli/#diagnose-ruleset-commands) for the output.
+
 ### Skipping Class-Level Violations
 
 When a specific class-to-class dependency is a known exception, suppress it without disabling the whole layer rule.

@@ -7,7 +7,7 @@ nav_order: 8
 # CLI
 {: .no_toc }
 
-StructArmed provides commands for initialization, analysis, reports, baselines, help, and version output.
+StructArmed provides commands for initialization, analysis, reports, baselines, ruleset diagnostics, help, and version output.
 
 ## Contents
 {: .no_toc }
@@ -193,6 +193,57 @@ StructArmed runs in parallel by default. Disable parallel processing when debugg
 ```bash
 vendor/bin/structarmed analyse --disable-parallel
 ```
+
+## Diagnose Ruleset Commands
+
+```bash
+vendor/bin/structarmed diagnose-ruleset
+vendor/bin/structarmed diagnose-ruleset --config=path/to/structarmed.php
+```
+
+`diagnose-ruleset` checks the configured [ruleset](../layers-and-rulesets/#declarative-rulesets) itself. It loads the config file and reads its layers and ruleset: no source file is analysed, no cache is read or written, and the config file is left as is.
+
+```php
+->ruleset([
+    'Analyser' => ['+Cache', 'Composer', 'File'],
+    'Cache'    => ['Analyser', 'Composer', 'Util'],
+    'Composer' => ['Util'],
+])
+```
+
+```text
+StructArmed Ruleset Diagnostics
+===============================
+Configuration: /path/to/project/structarmed.php
+
++---------+----------+----------+------------------------------------+-------------------------------------------------------------+
+| Level   | Layer    | Entry    | Issue                              | Fix                                                         |
++---------+----------+----------+------------------------------------+-------------------------------------------------------------+
+| WARNING | Analyser | Composer | Already inherited through '+Cache' | Remove 'Composer' from the dependencies of layer 'Analyser' |
++---------+----------+----------+------------------------------------+-------------------------------------------------------------+
+1 warning, 0 errors
+```
+
+Each row points at one entry of the ruleset, by the `Layer` key and the `Entry` in its list, and says how to fix it.
+
+| Level | Issue | Meaning |
+|---|---|---|
+| `WARNING` | Already inherited through '+Layer' | Another entry of the same layer already [inherits](../layers-and-rulesets/#inheriting-allowed-layers) this one. Removing the entry keeps the same allowed layers. |
+| `WARNING` | Listed more than once | The layer repeats the entry. |
+| `WARNING` | Same layer, always allowed | The layer lists itself. |
+| `ERROR` | Undefined layer | No `layer()` or `layerPattern()` defines the name, so the entry allows nothing, or the entries of that layer are never checked. |
+
+Only a `+Layer` entry passes on the layers that `Layer` may depend on. `Analyser` above lists `+Cache`, so it may depend on `Composer` without listing it. `Cache` lists `Composer` without `+`, so `Cache` still needs its own `Util` entry, and that entry is not reported.
+
+All reported entries can be removed together: when two entries make each other redundant, one of them is reported.
+
+`Source` counts as defined even when the config leaves it to `composer.json`. So does a ruleset key that is only used as `+Key`, which groups allowed layers under a name.
+
+When nothing has to change, the command prints `No issues found.` instead of the table.
+
+The command exits with `1` when the config file cannot be loaded or an `ERROR` is reported. Warnings never fail it.
+
+`--config` and `--basepath` work as they do for `analyse`.
 
 ## Help Commands
 
