@@ -75,6 +75,7 @@ use function realpath;
 use function rename;
 use function sort;
 use function sprintf;
+use function str_contains;
 use function str_replace;
 use function symlink;
 use function unlink;
@@ -5354,6 +5355,116 @@ PHP;
             '/src/Foo.php',
             $this->normalisePath($ruleViolationCollection->forRule('source.must_be_final')[0]->file)
         );
+    }
+
+    public function testRuleImplementingClassAndFunctionRuleInterfacesHonoursRuleSpecificSkipPaths(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Application/LegacyPaymentService.php' => <<<'PHP'
+                <?php
+
+                namespace Application;
+
+                final class LegacyPaymentService {}
+
+                PHP,
+            'src/Application/functions.php'            => <<<'PHP'
+                <?php
+
+                namespace Application;
+
+                function processLegacyPayment(): void {}
+
+                PHP,
+            // A class and functions in one file: the file reaches the rule as both node kinds.
+            'src/Application/Mixed.php' => <<<'PHP'
+                <?php
+
+                namespace Application;
+
+                final class LegacyMixed {}
+
+                function mixedLegacyOne(): void {}
+
+                function mixedLegacyTwo(): void {}
+
+                PHP,
+        ]);
+
+        // One object registered under one key, evaluated against class nodes and function nodes.
+        $rule = new class implements RuleInterface, FunctionRuleInterface {
+            public function appliesTo(ClassNode|FunctionNode $node): bool
+            {
+                return $node->isInLayer('Application');
+            }
+
+            public function evaluate(ClassNode|FunctionNode $node): ?RuleViolation
+            {
+                if (! str_contains($node->shortName(), 'Legacy')) {
+                    return null;
+                }
+
+                $name = $node instanceof ClassNode ? $node->className : $node->functionName;
+                $type = $node instanceof ClassNode ? $node->getType() : 'Function';
+
+                return new RuleViolation(
+                    message:      sprintf('%s [%s] must not contain Legacy in its name', $type, $name),
+                    file:         $node->file,
+                    line:         $node->line,
+                    className:    $node instanceof ClassNode ? $name : '',
+                    layer:        $node->layer,
+                    functionName: $node instanceof FunctionNode ? $name : null,
+                );
+            }
+        };
+
+        $legacyMixed          = 'Class [Application\LegacyMixed] must not contain Legacy in its name';
+        $legacyPaymentService = 'Class [Application\LegacyPaymentService] must not contain Legacy in its name';
+        $mixedLegacyOne       = 'Function [Application\mixedLegacyOne] must not contain Legacy in its name';
+        $mixedLegacyTwo       = 'Function [Application\mixedLegacyTwo] must not contain Legacy in its name';
+        $processLegacyPayment = 'Function [Application\processLegacyPayment] must not contain Legacy in its name';
+
+        foreach (
+            [
+                [
+                    [],
+                    [$legacyMixed, $legacyPaymentService, $mixedLegacyOne, $mixedLegacyTwo, $processLegacyPayment],
+                ],
+                [
+                    ['src/Application/functions.php'],
+                    [$legacyMixed, $legacyPaymentService, $mixedLegacyOne, $mixedLegacyTwo],
+                ],
+                [
+                    ['src/Application/LegacyPaymentService.php'],
+                    [$legacyMixed, $mixedLegacyOne, $mixedLegacyTwo, $processLegacyPayment],
+                ],
+                [
+                    ['src/Application/Mixed.php'],
+                    [$legacyPaymentService, $processLegacyPayment],
+                ],
+                [
+                    ['src/Application/Mixed.php', 'src/Application/functions.php'],
+                    [$legacyPaymentService],
+                ],
+            ] as [$skipPaths, $expected]
+        ) {
+            $architecture = Architecture::define()
+                ->layer('Application', 'src/Application/')
+                ->rule('application.may_not_use_legacy_name', $rule)
+                ->skip(['application.may_not_use_legacy_name' => $skipPaths]);
+
+            foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+                $messages = array_map(
+                    static fn(RuleViolation $ruleViolation): string => $ruleViolation->message,
+                    (new Analyser($basePath))
+                        ->analyse($architecture, [], null, $analyserOptions)
+                        ->forRule('application.may_not_use_legacy_name')
+                );
+                sort($messages);
+
+                $this->assertSame($expected, $messages);
+            }
+        }
     }
 
     public function testAnalyserMergesGlobalAndRuleSpecificSkipPaths(): void
