@@ -36,6 +36,7 @@ use Boundwize\StructArmed\Util\Path;
 use function array_change_key_case;
 use function array_fill_keys;
 use function array_filter;
+use function array_intersect_key;
 use function array_key_exists;
 use function array_keys;
 use function array_unique;
@@ -462,16 +463,22 @@ final readonly class Analyser
                 continue;
             }
 
+            // A rule-specific skip path depends only on the file, so the rules
+            // left for a file are resolved once per node kind and reused by
+            // every further node of that file.
+            $skipMatchers = array_intersect_key($ruleSkipMatchers, $rules);
+            $rulesByFile  = [];
+
             foreach ($nodes as $node) {
                 if ($globalSkipPathMatcher->isSkipped($node->file)) {
                     continue;
                 }
 
-                foreach ($rules as $key => $rule) {
-                    if (isset($ruleSkipMatchers[$key]) && $ruleSkipMatchers[$key]->isSkipped($node->file)) {
-                        continue;
-                    }
+                $eligibleRules = $skipMatchers === []
+                    ? $rules
+                    : ($rulesByFile[$node->file] ??= $this->withoutSkippedRules($rules, $skipMatchers, $node->file));
 
+                foreach ($eligibleRules as $key => $rule) {
                     if (! $rule->appliesTo($node)) {
                         continue;
                     }
@@ -602,6 +609,26 @@ final readonly class Analyser
         $sourcePaths = $architecture->getLayers()['Source'] ?? null;
 
         return $sourcePaths === null || $sourcePaths === [];
+    }
+
+    /**
+     * Removes the rules whose own skip paths cover the file, keeping the
+     * remaining rules under their keys and in their original order.
+     *
+     * @template TRule of object
+     * @param array<string, TRule> $rules
+     * @param array<string, SkipPathMatcher> $skipMatchers
+     * @return array<string, TRule>
+     */
+    private function withoutSkippedRules(array $rules, array $skipMatchers, string $file): array
+    {
+        foreach ($skipMatchers as $key => $skipMatcher) {
+            if ($skipMatcher->isSkipped($file)) {
+                unset($rules[$key]);
+            }
+        }
+
+        return $rules;
     }
 
     /**
