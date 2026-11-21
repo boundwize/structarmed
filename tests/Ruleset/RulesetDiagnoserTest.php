@@ -196,18 +196,18 @@ final class RulesetDiagnoserTest extends TestCase
         ];
 
         yield 'ruleset key that is not a layer' => [
-            ['Domian' => ['Pattern']],
+            ['Undefined' => ['Pattern']],
             [
-                "ERROR Domian[]: Undefined layer"
-                . " => Define layer 'Domian', or remove 'Domian' from the ruleset",
+                "ERROR Undefined[]: Undefined layer"
+                . " => Define layer 'Undefined', or remove 'Undefined' from the ruleset",
             ],
         ];
 
         yield 'dependency that is not a layer' => [
-            ['Domain' => ['Patern', '+Unknown']],
+            ['Domain' => ['Missing', '+Unknown']],
             [
-                "ERROR Domain[Patern]: Undefined layer"
-                . " => Define layer 'Patern', or remove 'Patern' from the dependencies of layer 'Domain'",
+                "ERROR Domain[Missing]: Undefined layer"
+                . " => Define layer 'Missing', or remove 'Missing' from the dependencies of layer 'Domain'",
                 "ERROR Domain[+Unknown]: Undefined layer"
                 . " => Define layer 'Unknown', or remove '+Unknown' from the dependencies of layer 'Domain'",
             ],
