@@ -1596,15 +1596,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // instantiation. The NameResolver resolved its name on entering the
         // node carrying the attribute.
         if ($node instanceof Attribute) {
-            $name = $node->name;
+            $attributeName = $node->name->toString();
 
-            $this->currentFileInstantiations[$name->toString()] = true;
+            $this->currentFileInstantiations[$attributeName] = true;
 
             if (
                 $this->withFileAnalysis
-                && EmptyParentheses::tokenRangeAfter($this->currentTokens, $name->getEndTokenPos()) !== null
+                && EmptyParentheses::tokenRangeAfter($this->currentTokens, $node->name->getEndTokenPos()) !== null
             ) {
-                $this->attributesWithEmptyParentheses[] = [$node->getStartLine(), $name->toString()];
+                $this->attributesWithEmptyParentheses[] = [$node->getStartLine(), $attributeName];
             }
 
             return;
