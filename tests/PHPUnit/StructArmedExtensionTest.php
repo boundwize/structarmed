@@ -241,13 +241,14 @@ final class StructArmedExtensionTest extends TestCase
         $previousPath = getcwd();
         $this->assertIsString($previousPath);
 
-        $basePath   = $this->makeProjectWithCacheDirectory('structarmed-extension-keep-cache');
-        $configPath = $basePath . '/structarmed.php';
+        $basePath      = $this->makeProjectWithCacheDirectory('structarmed-extension-keep-cache');
+        $configPath    = $basePath . '/structarmed.php';
+        $cacheContents = [];
 
         chdir($basePath);
 
         try {
-            $this->expectOutputRegex('/No violations found.*No violations found/s');
+            $this->expectOutputRegex('/No violations found.*Class \[Bar\] must be declared final/s');
 
             (new StructArmedExtension())->bootstrap(
                 $this->configuration(),
@@ -256,11 +257,12 @@ final class StructArmedExtensionTest extends TestCase
             );
             $cacheContents = $this->directoryContents($basePath . '/custom-cache');
 
-            // A cached run would now write the node cache of the new file.
+            // A cached run would now write the node cache of the new file,
+            // the uncached run has to analyse it to report its violation.
             file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
                 <?php
 
-                final class Bar
+                class Bar
                 {
                 }
 
@@ -270,6 +272,13 @@ final class StructArmedExtensionTest extends TestCase
                 $this->configuration(),
                 new Facade(),
                 $this->parameters($configPath, noCache: true)
+            );
+
+            $this->fail('The uncached run did not report the violation of the new file.');
+        } catch (ViolationsFoundException $violationsFoundException) {
+            $this->assertStringContainsString(
+                'StructArmed found 1 architecture violation(s)',
+                $violationsFoundException->getMessage()
             );
         } finally {
             chdir($previousPath);
@@ -441,7 +450,8 @@ PHP);
     }
 
     /**
-     * A project with one class and a "custom-cache" cache directory, relative to the project.
+     * A project with one final class, a must be final rule, and
+     * a "custom-cache" cache directory, relative to the project.
      */
     private function makeProjectWithCacheDirectory(string $prefix): string
     {
@@ -459,9 +469,11 @@ PHP);
             <?php
 
             use Boundwize\StructArmed\Architecture;
+            use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
 
             return Architecture::define()
                 ->layer('App', 'src/')
+                ->rule('app.must_be_final', new MustBeFinalRule('App'))
                 ->cacheDirectory('custom-cache');
 
             PHP);
