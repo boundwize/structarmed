@@ -463,9 +463,9 @@ final readonly class Analyser
                 continue;
             }
 
-            // A rule-specific skip path depends only on the file, and the nodes
-            // of a file follow each other, so the rules left for a file are
-            // resolved when the file changes and reused by its further nodes.
+            // A rule-specific skip path depends only on the file, so the rules
+            // left for a file are reused while consecutive nodes belong to it
+            // and resolved again when the file changes.
             $skipMatchers  = array_intersect_key($ruleSkipMatchers, $rules);
             $eligibleRules = $rules;
             $eligibleFile  = null;
