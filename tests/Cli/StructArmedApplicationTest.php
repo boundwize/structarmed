@@ -2419,6 +2419,32 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandAnalysesDirectoryNamedAfterHelpOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        mkdir($basePath . '/-h');
+        mkdir($basePath . '/--help');
+
+        try {
+            foreach (['-h', '--help'] as $helpOption) {
+                [$exitCode, $output] = $this->runApplication(
+                    ['structarmed', 'analyse', $helpOption, '--no-progress'],
+                    $basePath
+                );
+
+                // The violation in src/ stays out, since only the named directory is scanned.
+                $this->assertSame(0, $exitCode, $output);
+                $this->assertStringContainsString('No violations found', $output);
+                $this->assertStringNotContainsString('Usage:', $output);
+            }
+        } finally {
+            rmdir($basePath . '/-h');
+            rmdir($basePath . '/--help');
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandRejectsNonPhpFileScanPath(): void
     {
         $basePath   = $this->createTempDirectory();

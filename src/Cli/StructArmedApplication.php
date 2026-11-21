@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Cli;
 
 use Boundwize\StructArmed\Analyser\Parallel\AnalysisNodeWorker;
+use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Version;
 
 use function array_slice;
@@ -12,6 +13,7 @@ use function array_values;
 use function file_get_contents;
 use function getcwd;
 use function in_array;
+use function is_dir;
 use function sprintf;
 use function unserialize;
 
@@ -59,10 +61,17 @@ final readonly class StructArmedApplication
             return 0;
         }
 
-        if (in_array($command, [null, '--help', '-h'], true)) {
-            echo Usage::render();
+        // A help option may follow the command: `structarmed analyse --help`. A directory
+        // named `-h` or `--help` is a path to analyse instead of a request for help.
+        foreach ($arguments as $argument) {
+            if (in_array($argument, ['--help', '-h'], true) && ! is_dir(Path::resolve($argument, $basePath))) {
+                $command = $argument;
+                break;
+            }
+        }
 
-            return 0;
+        if (in_array($command, [null, '--help', '-h'], true)) {
+            return (new HelpCommand())->run();
         }
 
         if ($command === 'init') {

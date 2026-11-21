@@ -408,7 +408,8 @@ final readonly class AnalyseCommand
                 continue;
             }
 
-            if (str_starts_with($argument, '--')) {
+            // `--help` only gets here as a directory of that name, which is a path to analyse.
+            if (str_starts_with($argument, '--') && $argument !== '--help') {
                 echo sprintf("Unknown option: %s\n\n", $argument);
                 echo Usage::render();
 
