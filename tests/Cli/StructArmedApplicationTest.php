@@ -2419,6 +2419,57 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandAnalysesDirectoryNamedAfterHelpOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        mkdir($basePath . '/-h');
+        mkdir($basePath . '/--help');
+
+        try {
+            foreach (['-h', '--help'] as $helpOption) {
+                [$exitCode, $output] = $this->runApplication(
+                    ['structarmed', 'analyse', $helpOption, '--no-progress'],
+                    $basePath
+                );
+
+                // The violation in src/ stays out, since only the named directory is scanned.
+                $this->assertSame(0, $exitCode, $output);
+                $this->assertStringContainsString('No violations found', $output);
+                $this->assertStringNotContainsString('Usage:', $output);
+            }
+        } finally {
+            rmdir($basePath . '/-h');
+            rmdir($basePath . '/--help');
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandTakesFileNamedAfterHelpOptionAsScanPath(): void
+    {
+        $basePath = $this->createTempDirectory();
+
+        file_put_contents($basePath . '/-h', '');
+        file_put_contents($basePath . '/--help', '');
+
+        try {
+            foreach (['-h', '--help'] as $helpOption) {
+                [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', $helpOption], $basePath);
+
+                // The file wins over the help, and is then rejected like any other non-PHP scan path.
+                $this->assertSame(1, $exitCode, $output);
+                $this->assertStringContainsString(
+                    'Error: path [' . $helpOption . '] is not analysable.',
+                    $output
+                );
+            }
+        } finally {
+            unlink($basePath . '/-h');
+            unlink($basePath . '/--help');
+            rmdir($basePath);
+        }
+    }
+
     public function testAnalyseCommandRejectsNonPhpFileScanPath(): void
     {
         $basePath   = $this->createTempDirectory();

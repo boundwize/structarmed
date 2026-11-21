@@ -7,7 +7,7 @@ nav_order: 8
 # CLI
 {: .no_toc }
 
-StructArmed provides commands for initialization, analysis, reports, baselines, and version output.
+StructArmed provides commands for initialization, analysis, reports, baselines, help, and version output.
 
 ## Contents
 {: .no_toc }
@@ -193,6 +193,22 @@ StructArmed runs in parallel by default. Disable parallel processing when debugg
 ```bash
 vendor/bin/structarmed analyse --disable-parallel
 ```
+
+## Help Commands
+
+```bash
+vendor/bin/structarmed --help
+vendor/bin/structarmed -h
+```
+
+`--help` and `-h` print the usage after a command as well:
+
+```bash
+vendor/bin/structarmed analyse --help
+vendor/bin/structarmed init -h
+```
+
+A file or directory named `-h` or `--help` in the current directory is a path to analyse, so `analyse -h` takes it as a scan path instead of printing the usage.
 
 ## Version Commands
 
