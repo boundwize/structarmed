@@ -2445,6 +2445,31 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandTakesFileNamedAfterHelpOptionAsScanPath(): void
+    {
+        $basePath = $this->createTempDirectory();
+
+        file_put_contents($basePath . '/-h', '');
+        file_put_contents($basePath . '/--help', '');
+
+        try {
+            foreach (['-h', '--help'] as $helpOption) {
+                [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', $helpOption], $basePath);
+
+                // The file wins over the help, and is then rejected like any other non-PHP scan path.
+                $this->assertSame(1, $exitCode, $output);
+                $this->assertStringContainsString(
+                    'Error: path [' . $helpOption . '] is not analysable.',
+                    $output
+                );
+            }
+        } finally {
+            unlink($basePath . '/-h');
+            unlink($basePath . '/--help');
+            rmdir($basePath);
+        }
+    }
+
     public function testAnalyseCommandRejectsNonPhpFileScanPath(): void
     {
         $basePath   = $this->createTempDirectory();

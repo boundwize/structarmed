@@ -10,10 +10,10 @@ use Boundwize\StructArmed\Version;
 
 use function array_slice;
 use function array_values;
+use function file_exists;
 use function file_get_contents;
 use function getcwd;
 use function in_array;
-use function is_dir;
 use function sprintf;
 use function unserialize;
 
@@ -61,10 +61,10 @@ final readonly class StructArmedApplication
             return 0;
         }
 
-        // A help option may follow the command: `structarmed analyse --help`. A directory
+        // A help option may follow the command: `structarmed analyse --help`. A file or directory
         // named `-h` or `--help` is a path to analyse instead of a request for help.
         foreach ($arguments as $argument) {
-            if (in_array($argument, ['--help', '-h'], true) && ! is_dir(Path::resolve($argument, $basePath))) {
+            if (in_array($argument, ['--help', '-h'], true) && ! file_exists(Path::resolve($argument, $basePath))) {
                 $command = $argument;
                 break;
             }

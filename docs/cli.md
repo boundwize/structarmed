@@ -208,7 +208,7 @@ vendor/bin/structarmed analyse --help
 vendor/bin/structarmed init -h
 ```
 
-A directory named `-h` or `--help` in the current directory is a path to analyse, so `analyse -h` scans it instead of printing the usage.
+A file or directory named `-h` or `--help` in the current directory is a path to analyse, so `analyse -h` takes it as a scan path instead of printing the usage.
 
 ## Version Commands
 
