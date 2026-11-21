@@ -463,20 +463,22 @@ final readonly class Analyser
                 continue;
             }
 
-            // A rule-specific skip path depends only on the file, so the rules
-            // left for a file are resolved once per node kind and reused by
-            // every further node of that file.
-            $skipMatchers = array_intersect_key($ruleSkipMatchers, $rules);
-            $rulesByFile  = [];
+            // A rule-specific skip path depends only on the file, and the nodes
+            // of a file follow each other, so the rules left for a file are
+            // resolved when the file changes and reused by its further nodes.
+            $skipMatchers  = array_intersect_key($ruleSkipMatchers, $rules);
+            $eligibleRules = $rules;
+            $eligibleFile  = null;
 
             foreach ($nodes as $node) {
                 if ($globalSkipPathMatcher->isSkipped($node->file)) {
                     continue;
                 }
 
-                $eligibleRules = $skipMatchers === []
-                    ? $rules
-                    : ($rulesByFile[$node->file] ??= $this->withoutSkippedRules($rules, $skipMatchers, $node->file));
+                if ($skipMatchers !== [] && $node->file !== $eligibleFile) {
+                    $eligibleFile  = $node->file;
+                    $eligibleRules = $this->withoutSkippedRules($rules, $skipMatchers, $eligibleFile);
+                }
 
                 foreach ($eligibleRules as $key => $rule) {
                     if (! $rule->appliesTo($node)) {
