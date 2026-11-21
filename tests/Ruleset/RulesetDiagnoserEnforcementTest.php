@@ -13,10 +13,14 @@ use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Random\Engine\Mt19937;
+use Random\Randomizer;
 
 use function array_diff;
 use function array_values;
+use function count;
 use function file_put_contents;
+use function json_encode;
 use function mkdir;
 use function sort;
 use function sprintf;
@@ -34,6 +38,8 @@ final class RulesetDiagnoserEnforcementTest extends TestCase
     use TemporaryDirectoryCleanupTrait;
 
     private const LAYERS = ['A', 'B', 'C', 'D'];
+
+    private const GENERATED_RULESETS = 300;
 
     public function testReportedEntriesAreTheOnesEnforcementDoesNotNeed(): void
     {
@@ -72,6 +78,74 @@ final class RulesetDiagnoserEnforcementTest extends TestCase
                 }
             }
         }
+    }
+
+    /**
+     * The hand-written rulesets above pin single cases; this one checks the same
+     * promise on generated rulesets, where the layers and their entries come in
+     * any order and + entries overlap and form cycles freely.
+     */
+    public function testReportedEntriesOfGeneratedRulesetsCanBeRemovedTogether(): void
+    {
+        $basePath   = $this->makeProject();
+        $randomizer = new Randomizer(new Mt19937(20_261_121));
+        $reported   = 0;
+
+        for ($index = 0; $index < self::GENERATED_RULESETS; $index++) {
+            $ruleset     = $this->generatedRuleset($randomizer);
+            $diagnostics = (new RulesetDiagnoser())->diagnose($this->architecture($ruleset));
+
+            if ($diagnostics === []) {
+                continue;
+            }
+
+            $reduced = $ruleset;
+
+            foreach ($diagnostics as $diagnostic) {
+                $reduced = $this->withoutEntry($reduced, $diagnostic->layer, $diagnostic->entry);
+            }
+
+            $reported   += count($diagnostics);
+            $description = (string) json_encode($ruleset);
+
+            $this->assertSame(
+                $this->violations($basePath, $ruleset),
+                $this->violations($basePath, $reduced),
+                $description
+            );
+            // With the reported entries gone, nothing else turns out to be removable.
+            $this->assertSame([], (new RulesetDiagnoser())->diagnose($this->architecture($reduced)), $description);
+        }
+
+        $this->assertGreaterThan(self::GENERATED_RULESETS / 2, $reported);
+    }
+
+    /**
+     * Every layer in a random position, listing about half of the other layers
+     * in a random order, about half of those inherited with +.
+     *
+     * @return array<string, list<string>>
+     */
+    private function generatedRuleset(Randomizer $randomizer): array
+    {
+        $ruleset = [];
+
+        foreach ($randomizer->shuffleArray(self::LAYERS) as $layer) {
+            $ruleset[$layer] = [];
+
+            foreach ($randomizer->shuffleArray(self::LAYERS) as $dependency) {
+                // Of four draws, two leave the layer out, one lists it and one inherits it with +.
+                $draw = $randomizer->getInt(0, 3);
+
+                if ($dependency === $layer || $draw < 2) {
+                    continue;
+                }
+
+                $ruleset[$layer][] = ($draw === 3 ? '+' : '') . $dependency;
+            }
+        }
+
+        return $ruleset;
     }
 
     /**
