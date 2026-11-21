@@ -17,6 +17,9 @@ final readonly class FileAnalysis
      * @param list<array{int, string, int|float}> $numericLiterals Numeric literals as
      *                                                               [line, spelling as written,
      *                                                               evaluated value].
+     * @param list<array{int, string}> $attributesWithEmptyParentheses Attributes spelling `()` although
+     *                                                               they pass no argument, as
+     *                                                               [line, resolved attribute name].
      */
     public function __construct(
         public string $file,
@@ -29,6 +32,7 @@ final readonly class FileAnalysis
         public int $sideEffectLine,
         public array $nonCanonicalKeywordConstants = [],
         public array $numericLiterals = [],
+        public array $attributesWithEmptyParentheses = [],
     ) {
     }
 }

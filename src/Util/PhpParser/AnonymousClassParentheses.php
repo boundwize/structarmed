@@ -8,13 +8,8 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Token;
 
 use function end;
-use function in_array;
-use function str_starts_with;
 
 use const T_CLASS;
-use const T_COMMENT;
-use const T_DOC_COMMENT;
-use const T_WHITESPACE;
 
 /**
  * Locates the `()` an anonymous class may spell after the `class` keyword
@@ -26,9 +21,8 @@ final class AnonymousClassParentheses
 {
     /**
      * The index range of the empty parentheses the anonymous class carries,
-     * including the whitespace separating them from what precedes; null when
-     * it carries none, passes an argument, or has a comment inside them,
-     * which removing the parentheses would delete.
+     * see {@see EmptyParentheses::tokenRangeAfter()}; null when it carries
+     * none, passes an argument, or has a comment inside them.
      *
      * @param array<Token> $tokens
      * @return array{int, int}|null
@@ -51,61 +45,6 @@ final class AnonymousClassParentheses
             return null;
         }
 
-        $keyword = $index;
-        $open    = self::skipWhitespaceAndComments($tokens, $keyword + 1);
-
-        if (! isset($tokens[$open]) || $tokens[$open]->text !== '(') {
-            return null;
-        }
-
-        $close = self::skipWhitespace($tokens, $open + 1);
-
-        if (! isset($tokens[$close]) || $tokens[$close]->text !== ')') {
-            return null;
-        }
-
-        // The whitespace before `(` goes too, back to the keyword or to a
-        // comment in between, which stays.
-        $first = $open;
-
-        while ($first - 1 > $keyword && $tokens[$first - 1]->id === T_WHITESPACE) {
-            $first--;
-        }
-
-        // A `#` or `//` comment ends at the newline that whitespace holds, so
-        // removing it would pull what follows the parentheses into the comment.
-        if (self::isLineComment($tokens[$first - 1])) {
-            $first = $open;
-        }
-
-        return [$first, $close];
-    }
-
-    private static function isLineComment(Token $token): bool
-    {
-        return $token->id === T_COMMENT && ! str_starts_with($token->text, '/*');
-    }
-
-    /** @param array<Token> $tokens */
-    private static function skipWhitespace(array $tokens, int $index): int
-    {
-        while (isset($tokens[$index]) && $tokens[$index]->id === T_WHITESPACE) {
-            $index++;
-        }
-
-        return $index;
-    }
-
-    /** @param array<Token> $tokens */
-    private static function skipWhitespaceAndComments(array $tokens, int $index): int
-    {
-        while (
-            isset($tokens[$index])
-            && (in_array($tokens[$index]->id, [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true))
-        ) {
-            $index++;
-        }
-
-        return $index;
+        return EmptyParentheses::tokenRangeAfter($tokens, $index);
     }
 }

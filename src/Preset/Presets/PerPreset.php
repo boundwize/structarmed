@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseMustBeOnOwnLineRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseNameMustBePascalCaseRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumConstantMayNotBeProtectedRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\EnumMethodMayNotBeProtectedRule;
+use Boundwize\StructArmed\Rule\Rules\File\AttributeMayNotHaveEmptyParenthesesRule;
 
 /**
  * PER Coding Style: extends PSR-12 (which in turn requires PSR-1).
@@ -31,6 +32,8 @@ final readonly class PerPreset implements PresetInterface
         'per.anonymous_classes.may_not_have_empty_parentheses';
 
     public const ENUM_CASES_MUST_BE_ON_OWN_LINE = 'per.enum_cases.must_be_on_own_line';
+
+    public const ATTRIBUTES_MAY_NOT_HAVE_EMPTY_PARENTHESES = 'per.attributes.may_not_have_empty_parentheses';
 
     /**
      * @param list<string>|null $sourcePaths
@@ -77,6 +80,11 @@ final readonly class PerPreset implements PresetInterface
         $architecture->rule(
             self::ENUM_CASES_MUST_BE_ON_OWN_LINE,
             new EnumCaseMustBeOnOwnLineRule($layerName)
+        );
+
+        $architecture->rule(
+            self::ATTRIBUTES_MAY_NOT_HAVE_EMPTY_PARENTHESES,
+            new AttributeMayNotHaveEmptyParenthesesRule($sourcePathsForPer)
         );
     }
 }

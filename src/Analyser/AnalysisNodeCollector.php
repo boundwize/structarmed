@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\Analyser;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
+use Boundwize\StructArmed\Util\PhpParser\EmptyParentheses;
 use Boundwize\StructArmed\Util\PhpParser\EnumCaseLine;
 use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
 use Boundwize\StructArmed\Util\PhpParser\UnconditionallyDeclaredFunctions;
@@ -376,6 +377,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $numericLiterals = [];
 
+    /**
+     * Attributes of the current file that spell `()` although they pass no
+     * argument, as [line, resolved attribute name]. Reset per file so the
+     * extractor can read them once traversal finishes.
+     *
+     * @var list<array{int, string}>
+     */
+    private array $attributesWithEmptyParentheses = [];
+
     private readonly ConstExprEvaluator $constExprEvaluator;
 
     /**
@@ -484,8 +494,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /**
      * @param bool $withFileAnalysis Whether to record the facts only file-analysis
      *                               rules read ({@see getNonCanonicalKeywordConstants()},
-     *                               {@see getNumericLiterals()}); an architecture-only
-     *                               run never reads them
+     *                               {@see getNumericLiterals()},
+     *                               {@see getAttributesWithEmptyParentheses()}); an
+     *                               architecture-only run never reads them
      * @param bool $withFileReferences Whether to keep the per-file references and
      *                                 instantiations ({@see getFileReferences()},
      *                                 {@see getFileInstantiations()}); only the rules
@@ -513,6 +524,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->currentFileInstantiations         = [];
         $this->nonCanonicalKeywordConstants      = [];
         $this->numericLiterals                   = [];
+        $this->attributesWithEmptyParentheses    = [];
         $this->currentNamespaceUses              = [];
         $this->currentNamespaceClassUses         = [];
         $this->fileClassLikes                    = [];
@@ -583,6 +595,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     public function getNumericLiterals(): array
     {
         return $this->numericLiterals;
+    }
+
+    /**
+     * Attributes of the file traversed last that spell `()` although they pass
+     * no argument, see AttributeMayNotHaveEmptyParenthesesRule.
+     *
+     * @return list<array{int, string}>
+     */
+    public function getAttributesWithEmptyParentheses(): array
+    {
+        return $this->attributesWithEmptyParentheses;
     }
 
     /**
@@ -1573,7 +1596,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // instantiation. The NameResolver resolved its name on entering the
         // node carrying the attribute.
         if ($node instanceof Attribute) {
-            $this->currentFileInstantiations[$node->name->toString()] = true;
+            $name = $node->name;
+
+            $this->currentFileInstantiations[$name->toString()] = true;
+
+            if (
+                $this->withFileAnalysis
+                && EmptyParentheses::tokenRangeAfter($this->currentTokens, $name->getEndTokenPos()) !== null
+            ) {
+                $this->attributesWithEmptyParentheses[] = [$node->getStartLine(), $name->toString()];
+            }
 
             return;
         }

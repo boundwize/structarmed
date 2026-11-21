@@ -95,6 +95,19 @@ PHP);
         );
     }
 
+    public function testExtractRecordsAttributesWithEmptyParenthesesInFileAnalysis(): void
+    {
+        $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');
+        $file = $dir . '/Foo.php';
+
+        file_put_contents($file, "<?php\n\n#[Foo(), Bar]\nfunction run(): void\n{\n}\n");
+
+        $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'App\\Domain'], $dir);
+        $extractionResult       = (new AnalysisNodeExtractor($namespaceLayerResolver))->extract([$file]);
+
+        $this->assertSame([[3, 'Foo']], $extractionResult->fileAnalyses[$file]->attributesWithEmptyParentheses);
+    }
+
     public function testExtractSkipsFilesWithParseErrors(): void
     {
         $dir  = $this->makeTemporaryDirectory('structarmed-extractor-test');

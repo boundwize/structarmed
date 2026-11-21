@@ -67,7 +67,7 @@ final class AnalysisResultCache
      * their shape, naming, or reference semantics change. It is recorded in
      * the metadata marker, so older caches are cleared on their next use.
      */
-    public const FORMAT_VERSION = 23;
+    public const FORMAT_VERSION = 24;
 
     private readonly string $cacheDirectory;
 
@@ -1406,8 +1406,8 @@ final class AnalysisResultCache
     /**
      * The file is not stored: the payload belongs to one file, known when
      * loading. Common scalars use a fixed positional list; append new fields
-     * to that list and bump FORMAT_VERSION. The two optional lists are empty
-     * for most files and left out.
+     * to that list and bump FORMAT_VERSION. The optional lists are empty for
+     * most files and left out.
      *
      * @return array<string, mixed>
      */
@@ -1433,6 +1433,10 @@ final class AnalysisResultCache
             $analysis['numericLiterals'] = $fileAnalysis->numericLiterals;
         }
 
+        if ($fileAnalysis->attributesWithEmptyParentheses !== []) {
+            $analysis['attributesWithEmptyParentheses'] = $fileAnalysis->attributesWithEmptyParentheses;
+        }
+
         return $analysis;
     }
 
@@ -1455,8 +1459,9 @@ final class AnalysisResultCache
             $sideEffectLine,
         ] = $scalars;
 
-        $nonCanonicalKeywordConstants = $analysis['nonCanonicalKeywordConstants'] ?? [];
-        $numericLiterals              = $analysis['numericLiterals'] ?? [];
+        $nonCanonicalKeywordConstants   = $analysis['nonCanonicalKeywordConstants'] ?? [];
+        $numericLiterals                = $analysis['numericLiterals'] ?? [];
+        $attributesWithEmptyParentheses = $analysis['attributesWithEmptyParentheses'] ?? [];
 
         if (
             ! is_bool($hasUtf8Bom)
@@ -1466,8 +1471,9 @@ final class AnalysisResultCache
             || ! is_bool($declaresSymbols)
             || ! is_bool($hasSideEffects)
             || ! is_int($sideEffectLine)
-            || ! $this->isKeywordConstantList($nonCanonicalKeywordConstants)
+            || ! $this->isLineAndStringList($nonCanonicalKeywordConstants)
             || ! $this->isNumericLiteralList($numericLiterals)
+            || ! $this->isLineAndStringList($attributesWithEmptyParentheses)
         ) {
             return null;
         }
@@ -1483,24 +1489,27 @@ final class AnalysisResultCache
             sideEffectLine: $sideEffectLine,
             nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
             numericLiterals: $numericLiterals,
+            attributesWithEmptyParentheses: $attributesWithEmptyParentheses,
         );
     }
 
     /**
+     * The shape the keyword constant and attribute facts share: [line, text].
+     *
      * @phpstan-assert-if-true list<array{int, string}> $value
      */
-    private function isKeywordConstantList(mixed $value): bool
+    private function isLineAndStringList(mixed $value): bool
     {
         if (! is_array($value) || ! array_is_list($value)) {
             return false;
         }
 
-        foreach ($value as $keywordConstant) {
+        foreach ($value as $lineAndString) {
             if (
-                ! is_array($keywordConstant)
-                || count($keywordConstant) !== 2
-                || ! is_int($keywordConstant[0] ?? null)
-                || ! is_string($keywordConstant[1] ?? null)
+                ! is_array($lineAndString)
+                || count($lineAndString) !== 2
+                || ! is_int($lineAndString[0] ?? null)
+                || ! is_string($lineAndString[1] ?? null)
             ) {
                 return false;
             }
