@@ -30,10 +30,10 @@ return Architecture::define()
     ->layer('Ruleset', 'src/Ruleset/')
     ->layer('Util', 'src/Util/')
     ->ruleset([
-        'Analyser'      => ['+Cache', 'Composer', 'File', 'LayerResolver', 'Progress'],
+        'Analyser'      => ['+Cache', 'File', 'LayerResolver', 'Progress'],
         'Baseline'      => ['Core', 'Rule', 'Util'],
         'Cache'         => ['Analyser', 'Composer', 'Core', 'Rule', 'Util'],
-        'Cli'           => ['Baseline', '+Cache', 'Config', 'Progress', 'Report', 'Ruleset', 'Util'],
+        'Cli'           => ['Baseline', '+Cache', 'Config', 'Progress', 'Report', 'Ruleset'],
         'Composer'      => ['Util'],
         'Config'        => ['Core'],
         'Core'          => ['Exception', 'Preset', 'Rule', 'Util'],
