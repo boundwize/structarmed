@@ -43,7 +43,7 @@ final readonly class DiagnoseRulesetCommand
 
     private const LAYER_HEADING = 'Layer';
 
-    private const ENTRY_HEADING = 'Entry';
+    private const DEPENDENCY_HEADING = 'Dependency';
 
     private const ISSUE_HEADING = 'Issue';
 
@@ -120,7 +120,7 @@ final readonly class DiagnoseRulesetCommand
         ];
         $levelWidth = strlen(self::LEVEL_HEADING);
         $layerWidth = strlen(self::LAYER_HEADING);
-        $entryWidth = strlen(self::ENTRY_HEADING);
+        $dependencyWidth = strlen(self::DEPENDENCY_HEADING);
         $issueWidth = strlen(self::ISSUE_HEADING);
         $fixWidth   = strlen(self::FIX_HEADING);
 
@@ -129,7 +129,7 @@ final readonly class DiagnoseRulesetCommand
 
             $levelWidth = max($levelWidth, strlen($diagnostic->severity));
             $layerWidth = max($layerWidth, strlen($diagnostic->layer));
-            $entryWidth = max($entryWidth, strlen($diagnostic->entry));
+            $dependencyWidth = max($dependencyWidth, strlen($diagnostic->entry));
             $issueWidth = max($issueWidth, strlen($diagnostic->issue));
             $fixWidth   = max($fixWidth, strlen($diagnostic->fix));
         }
@@ -139,7 +139,7 @@ final readonly class DiagnoseRulesetCommand
             self::BORDER_FORMAT,
             str_repeat('-', $levelWidth),
             str_repeat('-', $layerWidth),
-            str_repeat('-', $entryWidth),
+            str_repeat('-', $dependencyWidth),
             str_repeat('-', $issueWidth),
             str_repeat('-', $fixWidth)
         );
@@ -149,7 +149,7 @@ final readonly class DiagnoseRulesetCommand
             self::ROW_FORMAT,
             str_pad(self::LEVEL_HEADING, $levelWidth),
             str_pad(self::LAYER_HEADING, $layerWidth),
-            str_pad(self::ENTRY_HEADING, $entryWidth),
+            str_pad(self::DEPENDENCY_HEADING, $dependencyWidth),
             str_pad(self::ISSUE_HEADING, $issueWidth),
             str_pad(self::FIX_HEADING, $fixWidth)
         );
@@ -164,7 +164,7 @@ final readonly class DiagnoseRulesetCommand
                     $useColor
                 ),
                 str_pad($diagnostic->layer, $layerWidth),
-                str_pad($diagnostic->entry, $entryWidth),
+                str_pad($diagnostic->entry, $dependencyWidth),
                 str_pad($diagnostic->issue, $issueWidth),
                 str_pad($diagnostic->fix, $fixWidth)
             );

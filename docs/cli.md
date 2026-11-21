@@ -216,15 +216,15 @@ StructArmed Ruleset Diagnostics
 ===============================
 Configuration: /path/to/project/structarmed.php
 
-+---------+----------+----------+------------------------------------+-------------------------------------------------------------+
-| Level   | Layer    | Entry    | Issue                              | Fix                                                         |
-+---------+----------+----------+------------------------------------+-------------------------------------------------------------+
-| WARNING | Analyser | Composer | Already inherited through '+Cache' | Remove 'Composer' from the dependencies of layer 'Analyser' |
-+---------+----------+----------+------------------------------------+-------------------------------------------------------------+
++---------+----------+------------+------------------------------------+-------------------------------------------------------------+
+| Level   | Layer    | Dependency | Issue                              | Fix                                                         |
++---------+----------+------------+------------------------------------+-------------------------------------------------------------+
+| WARNING | Analyser | Composer   | Already inherited through '+Cache' | Remove 'Composer' from the dependencies of layer 'Analyser' |
++---------+----------+------------+------------------------------------+-------------------------------------------------------------+
 1 warning, 0 errors
 ```
 
-Each row points at one entry of the ruleset, by the `Layer` key and the `Entry` in its list, and says how to fix it.
+Each row points at one entry of the ruleset, by the `Layer` key and the `Dependency` in its list, and says how to fix it.
 
 | Level | Issue | Meaning |
 |---|---|---|
