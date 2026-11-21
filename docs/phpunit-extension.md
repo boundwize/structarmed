@@ -68,6 +68,20 @@ To hide only the StructArmed progress bar while keeping PHPUnit's own progress o
 </extensions>
 ```
 
+## Disable Cache
+
+The extension uses the same [cache](../cache/) as `structarmed analyse`. To run the analysis without caching, like the `--no-cache` option, set the `no-cache` parameter on the extension:
+
+```xml
+<extensions>
+    <bootstrap class="Boundwize\StructArmed\PHPUnit\StructArmedExtension">
+        <parameter name="no-cache" value="true"/>
+    </bootstrap>
+</extensions>
+```
+
+StructArmed then skips file hashing and neither reads nor writes cache entries, so every PHPUnit run repeats the full analysis. The existing cache is left untouched.
+
 ## When To Use It
 
 Use the extension when a project already treats PHPUnit as the main local or CI verification command. If your CI pipeline separates static analysis and tests, running `vendor/bin/structarmed analyse` as a dedicated step may be clearer.

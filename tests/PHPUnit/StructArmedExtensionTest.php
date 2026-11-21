@@ -20,9 +20,11 @@ use PHPUnit\TextUI\Configuration\Configuration;
 use ReflectionClass;
 
 use function chdir;
+use function file_get_contents;
 use function file_put_contents;
 use function getcwd;
 use function getenv;
+use function glob;
 use function json_encode;
 use function mkdir;
 use function preg_quote;
@@ -210,6 +212,73 @@ final class StructArmedExtensionTest extends TestCase
         }
     }
 
+    public function testBootstrapWithNoCacheParameterDoesNotWriteCache(): void
+    {
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
+
+        $basePath = $this->makeProjectWithCacheDirectory('structarmed-extension-no-cache');
+
+        chdir($basePath);
+
+        try {
+            $this->expectOutputRegex('/No violations found/');
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                $this->parameters($basePath . '/structarmed.php', noCache: true)
+            );
+        } finally {
+            chdir($previousPath);
+        }
+
+        $this->assertDirectoryDoesNotExist($basePath . '/custom-cache');
+    }
+
+    public function testBootstrapWithNoCacheParameterKeepsExistingCache(): void
+    {
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
+
+        $basePath   = $this->makeProjectWithCacheDirectory('structarmed-extension-keep-cache');
+        $configPath = $basePath . '/structarmed.php';
+
+        chdir($basePath);
+
+        try {
+            $this->expectOutputRegex('/No violations found.*No violations found/s');
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                $this->parameters($configPath)
+            );
+            $cacheContents = $this->directoryContents($basePath . '/custom-cache');
+
+            // A cached run would now write the node cache of the new file.
+            file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+                <?php
+
+                final class Bar
+                {
+                }
+
+                PHP);
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                $this->parameters($configPath, noCache: true)
+            );
+        } finally {
+            chdir($previousPath);
+        }
+
+        $this->assertNotSame([], $cacheContents);
+        $this->assertSame($cacheContents, $this->directoryContents($basePath . '/custom-cache'));
+    }
+
     public function testBootstrapThrowsWhenViolationsAreFound(): void
     {
         $configPath = $this->writeConfig(
@@ -310,6 +379,30 @@ PHP);
         $this->assertFalse($this->isProgressEnabled($this->configuration(noProgress: true), ['progress' => 'true']));
     }
 
+    public function testCacheIsEnabledWhenNoCacheParameterIsMissingOrNotTrue(): void
+    {
+        $this->assertFalse($this->isCacheDisabled([]));
+        $this->assertFalse($this->isCacheDisabled(['no-cache' => 'false']));
+        $this->assertFalse($this->isCacheDisabled(['no-cache' => 'not-a-boolean']));
+    }
+
+    public function testCacheIsDisabledByNoCacheParameter(): void
+    {
+        $this->assertTrue($this->isCacheDisabled(['no-cache' => 'true']));
+    }
+
+    /** @param array<string, string> $parameters */
+    private function isCacheDisabled(array $parameters): bool
+    {
+        $result = (new ReflectionClass(StructArmedExtension::class))->getMethod('isCacheDisabled')->invoke(
+            new StructArmedExtension(),
+            ParameterCollection::fromArray($parameters)
+        );
+        $this->assertIsBool($result);
+
+        return $result;
+    }
+
     /** @param array<string, string> $parameters */
     private function isProgressEnabled(Configuration $configuration, array $parameters): bool
     {
@@ -332,7 +425,7 @@ PHP);
         return $configuration;
     }
 
-    private function parameters(?string $configPath = null): ParameterCollection
+    private function parameters(?string $configPath = null, bool $noCache = false): ParameterCollection
     {
         $parameters = ['progress' => 'false'];
 
@@ -340,7 +433,54 @@ PHP);
             $parameters['config'] = $configPath;
         }
 
+        if ($noCache) {
+            $parameters['no-cache'] = 'true';
+        }
+
         return ParameterCollection::fromArray($parameters);
+    }
+
+    /**
+     * A project with one class and a "custom-cache" cache directory, relative to the project.
+     */
+    private function makeProjectWithCacheDirectory(string $prefix): string
+    {
+        $basePath = $this->makeTemporaryDirectory($prefix);
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+            <?php
+
+            final class Foo
+            {
+            }
+
+            PHP);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+            <?php
+
+            use Boundwize\StructArmed\Architecture;
+
+            return Architecture::define()
+                ->layer('App', 'src/')
+                ->cacheDirectory('custom-cache');
+
+            PHP);
+
+        return $basePath;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function directoryContents(string $directory): array
+    {
+        $contents = [];
+
+        foreach (glob($directory . '/*.json') ?: [] as $file) {
+            $contents[$file] = (string) file_get_contents($file);
+        }
+
+        return $contents;
     }
 
     private function cacheDirectoryCall(): string

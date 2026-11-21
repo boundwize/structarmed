@@ -50,34 +50,45 @@ final class StructArmedExtension implements Extension
         $start                        = microtime(true);
         $fileHashProvider             = new FileHashProvider();
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
-        $configHash                   = $analysisCacheMetadataFactory->configHash(
-            $configFile,
-            $architecture->getImportedFiles()
-        );
-        $composerGeneratedVersionHash = $analysisCacheMetadataFactory->composerGeneratedVersionHash();
-        $analysisResultCache          = new AnalysisResultCache(
-            $basePath,
-            $fileHashProvider,
-            $architecture->getCacheDirectory(),
-            $configHash,
-            $composerGeneratedVersionHash
-        );
+        $analysisResultCache          = null;
+        $analysisNodeCacheNamespace   = '';
 
-        if ($analysisResultCache->shouldInvalidate()) {
-            $analysisResultCache->clear();
+        // Without the cache, no file is hashed and no cache entry is read or
+        // written, the same as the --no-cache option of the analyse command.
+        if (! $this->isCacheDisabled($parameters)) {
+            $configHash                 = $analysisCacheMetadataFactory->configHash(
+                $configFile,
+                $architecture->getImportedFiles()
+            );
+            $analysisResultCache        = new AnalysisResultCache(
+                $basePath,
+                $fileHashProvider,
+                $architecture->getCacheDirectory(),
+                $configHash,
+                $analysisCacheMetadataFactory->composerGeneratedVersionHash()
+            );
+            $analysisNodeCacheNamespace = $analysisCacheMetadataFactory->analysisNodeCacheNamespace(
+                $basePath,
+                $configHash
+            );
+
+            if ($analysisResultCache->shouldInvalidate()) {
+                $analysisResultCache->clear();
+            }
         }
 
-        $analyser = new Analyser(
-            $basePath,
-            $analysisResultCache,
-            $analysisCacheMetadataFactory->analysisNodeCacheNamespace($basePath, $configHash)
-        );
-
+        $analyser = new Analyser($basePath, $analysisResultCache, $analysisNodeCacheNamespace);
         $files    = $analyser->filesForAnalysis($architecture);
-        $metadata = $analysisCacheMetadataFactory->metadata($basePath, $configFile, [], $files);
-        $cacheKey = $analysisCacheMetadataFactory->key($metadata);
+        $metadata = [];
+        $cacheKey = '';
 
-        $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
+        $ruleViolationCollection = null;
+
+        if ($analysisResultCache instanceof AnalysisResultCache) {
+            $metadata                = $analysisCacheMetadataFactory->metadata($basePath, $configFile, [], $files);
+            $cacheKey                = $analysisCacheMetadataFactory->key($metadata);
+            $ruleViolationCollection = $analysisResultCache->load($cacheKey, $metadata);
+        }
 
         if (! $ruleViolationCollection instanceof RuleViolationCollection) {
             $progressHandler = $this->isProgressEnabled($configuration, $parameters) ? new ConsoleProgressBar() : null;
@@ -87,7 +98,7 @@ final class StructArmedExtension implements Extension
                 progressHandler: $progressHandler,
                 files: $files
             );
-            $analysisResultCache->store($cacheKey, $metadata, $ruleViolationCollection);
+            $analysisResultCache?->store($cacheKey, $metadata, $ruleViolationCollection);
         }
 
         $elapsed = microtime(true) - $start;
@@ -109,6 +120,16 @@ final class StructArmedExtension implements Extension
                 $ruleViolationCollection->count()
             ));
         }
+    }
+
+    /**
+     * The extension's "no-cache" bootstrap parameter disables the cache;
+     * a missing or non boolean value keeps it enabled.
+     */
+    private function isCacheDisabled(ParameterCollection $parameterCollection): bool
+    {
+        return $parameterCollection->has('no-cache')
+            && filter_var($parameterCollection->get('no-cache'), FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
