@@ -391,6 +391,75 @@ final class AnalyserTest extends TestCase
         }
     }
 
+    public function testApiMayNotExposeInternalRuleReportsTypeAcceptedBySetHookAcrossRunnersAndCacheStates(): void
+    {
+        $basePath            = $this->makeTempProject([
+            'src/InternalValue.php' => <<<'PHP'
+                <?php
+                namespace App;
+                /** @internal */
+                final class InternalValue {
+                    public function __toString(): string {
+                        return 'value';
+                    }
+                }
+
+                PHP,
+            'src/Facade.php'        => <<<'PHP'
+                <?php
+                namespace App;
+                /** @api */
+                class Facade {
+                    public string $value {
+                        get => $this->value;
+                        set(string|InternalValue $value) => (string) $value;
+                    }
+                    public protected(set) string $guarded {
+                        set(string|InternalValue $guarded) => (string) $guarded;
+                    }
+                    public private(set) string $hidden {
+                        set(string|InternalValue $hidden) => (string) $hidden;
+                    }
+                    public function __construct(
+                        public string $promoted {
+                            set(string|InternalValue $promoted) => (string) $promoted;
+                        },
+                    ) {
+                    }
+                }
+
+                PHP,
+        ]);
+        $analysisResultCache = new AnalysisResultCache($basePath, new FileHashProvider(), 'cache');
+        $architecture        = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('expose', new ApiMayNotExposeInternalRule('Source'));
+        $message             = '@api Class [App\Facade] must not expose @internal Class [App\InternalValue] through ';
+        $expected            = [
+            [7, $message . 'param [value]'],
+            [10, $message . 'param [guarded]'],
+            [17, $message . 'param [promoted]'],
+        ];
+
+        foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
+            $cached = new Analyser($basePath, $analysisResultCache, 'config-' . $analyserOptions->workerCount);
+
+            // Without a cache, then filling one, then reading it back.
+            foreach ([new Analyser($basePath), $cached, $cached] as $analyser) {
+                $this->assertSame(
+                    $expected,
+                    array_map(
+                        static fn (RuleViolation $ruleViolation): array => [
+                            $ruleViolation->line,
+                            $ruleViolation->message,
+                        ],
+                        $analyser->analyse($architecture, [], null, $analyserOptions)->forRule('expose')
+                    )
+                );
+            }
+        }
+    }
+
     /** @return array<string, string> */
     private function signatureProjectFiles(): array
     {
