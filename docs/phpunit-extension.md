@@ -82,6 +82,26 @@ The extension uses the same [cache](../cache/) as `structarmed analyse`. To run 
 
 StructArmed then skips file hashing and neither reads nor writes cache entries, so every PHPUnit run repeats the full analysis. The existing cache is left untouched.
 
+## Baseline Info
+
+To see how the configured [baseline](../baselines/#baseline-info) matches the analysis, like the `--baseline-info` option, set the `baseline-info` parameter on the extension:
+
+```xml
+<extensions>
+    <bootstrap class="Boundwize\StructArmed\PHPUnit\StructArmedExtension">
+        <parameter name="baseline-info" value="true"/>
+    </bootstrap>
+</extensions>
+```
+
+A line is printed after the report, before the PHPUnit output:
+
+```text
+Baseline [structarmed-baseline.php]: 46 violation(s) filtered out, 0 no longer found.
+```
+
+The line turns into a warning when `no longer found` is above `0`, and it is `Baseline: not configured.` without a configured baseline. The parameter does not change whether the test run fails.
+
 ## When To Use It
 
 Use the extension when a project already treats PHPUnit as the main local or CI verification command. If your CI pipeline separates static analysis and tests, running `vendor/bin/structarmed analyse` as a dedicated step may be clearer.

@@ -527,6 +527,38 @@ PHP);
         }
     }
 
+    public function testInfoLeavesNoLongerFoundCountOutWithoutBaselineOrFullAnalysis(): void
+    {
+        $baseline = new Baseline();
+
+        $this->assertSame(
+            ['file' => null, 'filtered_out' => 0, 'no_longer_found' => null],
+            $baseline->info(null, '/project', 0)
+        );
+        $this->assertSame(
+            ['file' => 'baseline.php', 'filtered_out' => 2, 'no_longer_found' => null],
+            $baseline->info('baseline.php', '/project', 2, isFullAnalysis: false)
+        );
+    }
+
+    public function testInfoLineTellsFilteredOutAndNoLongerFoundCounts(): void
+    {
+        $baseline = new Baseline();
+
+        $this->assertSame(
+            'Baseline: not configured.',
+            $baseline->infoLine(['file' => null, 'filtered_out' => 0, 'no_longer_found' => null])
+        );
+        $this->assertSame(
+            'Baseline [baseline.php]: 2 violation(s) filtered out.',
+            $baseline->infoLine(['file' => 'baseline.php', 'filtered_out' => 2, 'no_longer_found' => null])
+        );
+        $this->assertSame(
+            'Baseline [baseline.php]: 2 violation(s) filtered out, 1 no longer found.',
+            $baseline->infoLine(['file' => 'baseline.php', 'filtered_out' => 2, 'no_longer_found' => 1])
+        );
+    }
+
     public function testFilterDistinguishesInvalidUtf8Signatures(): void
     {
         $basePath                = $this->createTempDirectory();
