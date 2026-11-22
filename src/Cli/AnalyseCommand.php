@@ -54,7 +54,7 @@ use const PHP_EOL;
  *     fix?: true,
  *     baseline-info?: true
  * }
- * @phpstan-type BaselineInfo array{file: ?string, filtered_out: int, no_longer_found: ?int}
+ * @phpstan-import-type BaselineInfo from Baseline
  */
 final readonly class AnalyseCommand
 {
@@ -354,11 +354,11 @@ final readonly class AnalyseCommand
         $withSummary = isset($options['summary']);
         // A missing baseline has nothing to tell beyond its own warning below.
         $baselineInfo = isset($options['baseline-info']) && $missingBaselineWarning === null
-            ? $this->baselineInfo(
+            ? $this->baseline->info(
                 $baseline,
                 $basePath,
                 $unfilteredRuleViolationCollection->count() - $ruleViolationCollection->count(),
-                $scanPaths
+                $scanPaths === []
             )
             : null;
 
@@ -497,43 +497,14 @@ final readonly class AnalyseCommand
     }
 
     /**
-     * @param list<string> $scanPaths
-     * @return BaselineInfo
-     */
-    private function baselineInfo(?string $baseline, string $basePath, int $filteredCount, array $scanPaths): array
-    {
-        return [
-            'file'         => $baseline,
-            'filtered_out' => $filteredCount,
-            // On a narrowed scan, a baselined violation of a file left out of the
-            // scan cannot be told from one that is gone, so only a full analysis counts them.
-            'no_longer_found' => $baseline === null || $scanPaths !== []
-                ? null
-                : $this->baseline->violationCount($baseline, $basePath) - $filteredCount,
-        ];
-    }
-
-    /**
      * @param BaselineInfo $baselineInfo
      */
     private function baselineInfoLine(array $baselineInfo): string
     {
-        ['file' => $file, 'filtered_out' => $filteredCount, 'no_longer_found' => $noLongerFoundCount] = $baselineInfo;
-
-        if ($file === null) {
-            return 'Baseline: not configured.';
-        }
-
-        $line = sprintf('Baseline [%s]: %d violation(s) filtered out', $file, $filteredCount);
-
-        if ($noLongerFoundCount === null) {
-            return $line . '.';
-        }
-
-        $line .= sprintf(', %d no longer found.', $noLongerFoundCount);
+        $line = $this->baseline->infoLine($baselineInfo);
 
         // Only a baseline that went stale is worth a warning.
-        return $noLongerFoundCount > 0 ? $this->warning($line) : $line;
+        return $baselineInfo['no_longer_found'] > 0 ? $this->warning($line) : $line;
     }
 
     private function warning(string $message): string

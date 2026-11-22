@@ -111,6 +111,8 @@ vendor/bin/structarmed analyse --report=json --baseline-info
 
 `no_longer_found` is `null` when paths are passed, and `file` is `null` without a configured baseline. The key is left out without `--baseline-info`.
 
+The [PHPUnit extension](../phpunit-extension/#baseline-info) prints the same line through its `baseline-info` parameter.
+
 ## When To Use A Baseline
 
 Use a baseline when a legacy project has known architecture violations that cannot be fixed in one pass.

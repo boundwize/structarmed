@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\PHPUnit;
 
 use Boundwize\StructArmed\Analyser\Analyser;
+use Boundwize\StructArmed\Baseline\Baseline;
 use Boundwize\StructArmed\Baseline\BaselineFilter;
 use Boundwize\StructArmed\Cache\AnalysisCacheMetadataFactory;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
@@ -103,15 +104,28 @@ final class StructArmedExtension implements Extension
 
         $elapsed = microtime(true) - $start;
 
+        $unfilteredCount         = $ruleViolationCollection->count();
         $ruleViolationCollection = (new BaselineFilter())->apply($ruleViolationCollection, $architecture, $basePath);
 
         $report = (new ConsoleReport(configFile: $configFile))->render($ruleViolationCollection, $elapsed);
         echo $report . "\n";
 
-        $missingBaselineWarning = (new BaselineFilter())->missingWarning($architecture->getBaseline(), $basePath);
+        $baselinePath           = $architecture->getBaseline();
+        $missingBaselineWarning = (new BaselineFilter())->missingWarning($baselinePath, $basePath);
 
         if ($missingBaselineWarning !== null) {
             echo 'Warning: ' . $missingBaselineWarning . "\n";
+        } elseif ($this->isBaselineInfoEnabled($parameters)) {
+            // Same line as the --baseline-info option of the analyse command.
+            $baseline     = new Baseline();
+            $baselineInfo = $baseline->info(
+                $baselinePath,
+                $basePath,
+                $unfilteredCount - $ruleViolationCollection->count()
+            );
+
+            // Only a baseline that went stale is worth a warning.
+            echo ($baselineInfo['no_longer_found'] > 0 ? 'Warning: ' : '') . $baseline->infoLine($baselineInfo) . "\n";
         }
 
         if ($ruleViolationCollection->hasViolations()) {
@@ -120,6 +134,16 @@ final class StructArmedExtension implements Extension
                 $ruleViolationCollection->count()
             ));
         }
+    }
+
+    /**
+     * The extension's "baseline-info" bootstrap parameter prints how the baseline
+     * matches the analysis; a missing or non boolean value leaves the line out.
+     */
+    private function isBaselineInfoEnabled(ParameterCollection $parameterCollection): bool
+    {
+        return $parameterCollection->has('baseline-info')
+            && filter_var($parameterCollection->get('baseline-info'), FILTER_VALIDATE_BOOLEAN);
     }
 
     /**

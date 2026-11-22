@@ -30,6 +30,9 @@ use function str_replace;
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_UNESCAPED_SLASHES;
 
+/**
+ * @phpstan-type BaselineInfo array{file: ?string, filtered_out: int, no_longer_found: ?int}
+ */
 final readonly class Baseline
 {
     public function filter(
@@ -82,6 +85,48 @@ final readonly class Baseline
             $normalisedBasePath,
             $this->messagePathPrefixes($basePath, $normalisedBasePath),
         ));
+    }
+
+    /**
+     * How the baseline matched an analysis it kept $filteredCount violations out of.
+     *
+     * @return BaselineInfo
+     */
+    public function info(
+        ?string $baselinePath,
+        string $basePath,
+        int $filteredCount,
+        bool $isFullAnalysis = true
+    ): array {
+        return [
+            'file'         => $baselinePath,
+            'filtered_out' => $filteredCount,
+            // On a narrowed scan, a baselined violation of a file left out of the
+            // scan cannot be told from one that is gone, so only a full analysis counts them.
+            'no_longer_found' => $baselinePath === null || ! $isFullAnalysis
+                ? null
+                : $this->violationCount($baselinePath, $basePath) - $filteredCount,
+        ];
+    }
+
+    /**
+     * @param BaselineInfo $info
+     */
+    public function infoLine(array $info): string
+    {
+        ['file' => $file, 'filtered_out' => $filteredCount, 'no_longer_found' => $noLongerFoundCount] = $info;
+
+        if ($file === null) {
+            return 'Baseline: not configured.';
+        }
+
+        $line = sprintf('Baseline [%s]: %d violation(s) filtered out', $file, $filteredCount);
+
+        if ($noLongerFoundCount === null) {
+            return $line . '.';
+        }
+
+        return $line . sprintf(', %d no longer found.', $noLongerFoundCount);
     }
 
     public function generate(

@@ -27,8 +27,11 @@ use function getenv;
 use function glob;
 use function json_encode;
 use function mkdir;
+use function ob_get_clean;
+use function ob_start;
 use function preg_quote;
 use function putenv;
+use function unlink;
 use function var_export;
 
 #[CoversClass(StructArmedExtension::class)]
@@ -377,6 +380,147 @@ PHP);
         );
     }
 
+    public function testBootstrapPrintsBaselineInfoOnlyWithBaselineInfoParameter(): void
+    {
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
+
+        $basePath   = $this->makeTemporaryDirectory('structarmed-extension-baseline-info');
+        $configPath = $basePath . '/structarmed.php';
+        mkdir($basePath . '/src');
+        file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+            <?php
+
+            namespace App;
+
+            class Foo
+            {
+            }
+
+            PHP);
+        file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+            <?php
+
+            namespace App;
+
+            class Bar
+            {
+            }
+
+            PHP);
+        file_put_contents($basePath . '/structarmed-baseline.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            return [
+                [
+                    'rule'    => 'source.must_be_final',
+                    'message' => 'Class [App\Foo] must be declared final',
+                    'file'    => 'src/Foo.php',
+                    'class'   => 'App\Foo',
+                    'layer'   => 'Source',
+                ],
+                [
+                    'rule'    => 'source.must_be_final',
+                    'message' => 'Class [App\Bar] must be declared final',
+                    'file'    => 'src/Bar.php',
+                    'class'   => 'App\Bar',
+                    'layer'   => 'Source',
+                ],
+            ];
+
+            PHP);
+        file_put_contents($configPath, <<<'PHP'
+            <?php
+
+            use Boundwize\StructArmed\Architecture;
+            use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+            return Architecture::define()
+                ->layer('Source', 'src/')
+                ->rule('source.must_be_final', new MustBeFinalRule('Source'))
+                ->baseline('structarmed-baseline.php');
+
+            PHP);
+
+        $withBaselineInfo    = $this->parameters($configPath, noCache: true, baselineInfo: true);
+        $withoutBaselineInfo = $this->parameters($configPath, noCache: true);
+
+        chdir($basePath);
+
+        try {
+            $output                 = $this->bootstrapOutput($withBaselineInfo);
+            $outputWithoutParameter = $this->bootstrapOutput($withoutBaselineInfo);
+
+            file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Bar
+                {
+                }
+
+                PHP);
+            $staleOutput = $this->bootstrapOutput($withBaselineInfo);
+
+            file_put_contents($basePath . '/src/Foo.php', <<<'PHP'
+                <?php
+
+                namespace App;
+
+                final class Foo
+                {
+                }
+
+                PHP);
+            unlink($basePath . '/structarmed-baseline.php');
+            $missingOutput = $this->bootstrapOutput($withBaselineInfo);
+
+            file_put_contents($configPath, <<<'PHP'
+                <?php
+
+                use Boundwize\StructArmed\Architecture;
+
+                return Architecture::define()
+                    ->layer('Source', 'src/');
+
+                PHP);
+            $notConfiguredOutput = $this->bootstrapOutput($withBaselineInfo);
+        } finally {
+            chdir($previousPath);
+        }
+
+        $this->assertStringContainsString(
+            "\nBaseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.\n",
+            $output
+        );
+        $this->assertStringNotContainsString('Warning:', $output);
+        $this->assertStringContainsString('No violations found', $outputWithoutParameter);
+        $this->assertStringNotContainsString('Baseline [', $outputWithoutParameter);
+        $this->assertStringContainsString(
+            "\nWarning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.\n",
+            $staleOutput
+        );
+        // A missing baseline has nothing to tell beyond its own warning.
+        $this->assertStringContainsString(
+            'Warning: Baseline file [structarmed-baseline.php] does not exist',
+            $missingOutput
+        );
+        $this->assertStringNotContainsString('filtered out', $missingOutput);
+        $this->assertStringContainsString("\nBaseline: not configured.\n", $notConfiguredOutput);
+    }
+
+    public function testBaselineInfoIsEnabledOnlyByTrueBaselineInfoParameter(): void
+    {
+        $this->assertTrue($this->isBaselineInfoEnabled(['baseline-info' => 'true']));
+        $this->assertTrue($this->isBaselineInfoEnabled(['baseline-info' => '1']));
+        $this->assertFalse($this->isBaselineInfoEnabled([]));
+        $this->assertFalse($this->isBaselineInfoEnabled(['baseline-info' => 'false']));
+        $this->assertFalse($this->isBaselineInfoEnabled(['baseline-info' => 'not-a-boolean']));
+    }
+
     public function testProgressIsEnabledWhenParameterIsMissing(): void
     {
         $this->assertTrue($this->isProgressEnabled($this->configuration(), []));
@@ -398,6 +542,18 @@ PHP);
     public function testCacheIsDisabledByNoCacheParameter(): void
     {
         $this->assertTrue($this->isCacheDisabled(['no-cache' => 'true']));
+    }
+
+    /** @param array<string, string> $parameters */
+    private function isBaselineInfoEnabled(array $parameters): bool
+    {
+        $result = (new ReflectionClass(StructArmedExtension::class))->getMethod('isBaselineInfoEnabled')->invoke(
+            new StructArmedExtension(),
+            ParameterCollection::fromArray($parameters)
+        );
+        $this->assertIsBool($result);
+
+        return $result;
     }
 
     /** @param array<string, string> $parameters */
@@ -434,8 +590,11 @@ PHP);
         return $configuration;
     }
 
-    private function parameters(?string $configPath = null, bool $noCache = false): ParameterCollection
-    {
+    private function parameters(
+        ?string $configPath = null,
+        bool $noCache = false,
+        bool $baselineInfo = false
+    ): ParameterCollection {
         $parameters = ['progress' => 'false'];
 
         if ($configPath !== null) {
@@ -446,7 +605,27 @@ PHP);
             $parameters['no-cache'] = 'true';
         }
 
+        if ($baselineInfo) {
+            $parameters['baseline-info'] = 'true';
+        }
+
         return ParameterCollection::fromArray($parameters);
+    }
+
+    /**
+     * The output of one bootstrap run, to compare several runs within a test.
+     */
+    private function bootstrapOutput(ParameterCollection $parameterCollection): string
+    {
+        ob_start();
+
+        try {
+            (new StructArmedExtension())->bootstrap($this->configuration(), new Facade(), $parameterCollection);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        return $output;
     }
 
     /**
