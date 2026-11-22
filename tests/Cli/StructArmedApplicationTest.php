@@ -2131,7 +2131,14 @@ PHP);
                 $narrowedOutput
             );
             $this->assertStringNotContainsString('Baseline [', $jsonOutput);
-            $this->assertIsArray(json_decode($jsonOutput, true));
+
+            $jsonData = json_decode($jsonOutput, true);
+
+            $this->assertIsArray($jsonData);
+            $this->assertSame(
+                ['file' => 'structarmed-baseline.php', 'filtered_out' => 1, 'no_longer_found' => 1],
+                $jsonData['baseline']
+            );
         } finally {
             $this->removeTempDirectory($basePath);
         }

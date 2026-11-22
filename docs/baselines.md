@@ -89,7 +89,27 @@ The `no longer found` count needs a full analysis. When paths are passed, as in 
 
 Without a configured baseline the line is `Baseline: not configured.`. The option does not change the exit code.
 
-The line is printed for the `console`, `summary`, and `github` reports only. The `json` report cannot carry an extra line without breaking its output, so `--baseline-info` has no effect with `--report=json`.
+The line is printed for the `console`, `summary`, and `github` reports. The `json` report cannot carry an extra line without breaking its output, so it carries the same numbers under a `baseline` key:
+
+```bash
+vendor/bin/structarmed analyse --report=json --baseline-info
+```
+
+```json
+{
+    "violations": [],
+    "baseline": {
+        "file": "structarmed-baseline.php",
+        "filtered_out": 46,
+        "no_longer_found": 2
+    },
+    "total": 0,
+    "passed": true,
+    "elapsed": 0.34
+}
+```
+
+`no_longer_found` is `null` when paths are passed, and `file` is `null` without a configured baseline. The key is left out without `--baseline-info`.
 
 ## When To Use A Baseline
 
