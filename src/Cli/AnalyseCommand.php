@@ -20,6 +20,7 @@ use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\GithubReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
 use Boundwize\StructArmed\Report\Reports\SummaryReport;
+use Boundwize\StructArmed\Report\WarningLine;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
@@ -375,7 +376,7 @@ final readonly class AnalyseCommand
         // Shown after the report, so it stays visible below a long violation
         // list. The json report never gets here with a missing baseline.
         if ($missingBaselineWarning !== null) {
-            echo PHP_EOL . $this->warning($missingBaselineWarning) . PHP_EOL;
+            echo PHP_EOL . WarningLine::render($missingBaselineWarning) . PHP_EOL;
         } elseif ($baselineInfo !== null && $reportType !== 'json') {
             // An extra line would break the json output: the json report carries it under a `baseline` key.
             echo PHP_EOL . $this->baselineInfoLine($baselineInfo) . PHP_EOL;
@@ -504,12 +505,7 @@ final readonly class AnalyseCommand
         $line = $this->baseline->infoLine($baselineInfo);
 
         // Only a baseline that went stale is worth a warning.
-        return $baselineInfo['no_longer_found'] > 0 ? $this->warning($line) : $line;
-    }
-
-    private function warning(string $message): string
-    {
-        return sprintf('%s %s', ColorSupport::wrap('Warning:', '33', ColorSupport::detect()), $message);
+        return $baselineInfo['no_longer_found'] > 0 ? WarningLine::render($line) : $line;
     }
 
     private function fixedViolationMessage(int $fixedCount): string

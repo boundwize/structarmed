@@ -30,6 +30,7 @@ use function mkdir;
 use function ob_get_clean;
 use function ob_start;
 use function preg_quote;
+use function preg_replace;
 use function putenv;
 use function unlink;
 use function var_export;
@@ -370,7 +371,8 @@ PHP);
         );
 
         $this->expectOutputRegex(
-            '/No violations found.*Warning: Baseline file \\[missing-baseline\\.php\\] does not exist/s'
+            // The warning label is yellow when colors are supported.
+            '/No violations found.*Warning:(\e\\[0m)? Baseline file \\[missing-baseline\\.php\\] does not exist/s'
         );
 
         (new StructArmedExtension())->bootstrap(
@@ -492,24 +494,26 @@ PHP);
             chdir($previousPath);
         }
 
-        $this->assertStringContainsString(
-            "\nBaseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.\n",
+        // Each line ends with a blank line, to stay apart from the PHPUnit output that follows.
+        $this->assertStringEndsWith(
+            "\nBaseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.\n\n",
             $output
         );
         $this->assertStringNotContainsString('Warning:', $output);
         $this->assertStringContainsString('No violations found', $outputWithoutParameter);
         $this->assertStringNotContainsString('Baseline [', $outputWithoutParameter);
-        $this->assertStringContainsString(
-            "\nWarning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.\n",
-            $staleOutput
+        $this->assertStringEndsWith(
+            "\nWarning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.\n\n",
+            $this->withoutAnsi($staleOutput)
         );
         // A missing baseline has nothing to tell beyond its own warning.
         $this->assertStringContainsString(
-            'Warning: Baseline file [structarmed-baseline.php] does not exist',
-            $missingOutput
+            "\nWarning: Baseline file [structarmed-baseline.php] does not exist",
+            $this->withoutAnsi($missingOutput)
         );
+        $this->assertStringEndsWith("without baseline filtering.\n\n", $missingOutput);
         $this->assertStringNotContainsString('filtered out', $missingOutput);
-        $this->assertStringContainsString("\nBaseline: not configured.\n", $notConfiguredOutput);
+        $this->assertStringEndsWith("\nBaseline: not configured.\n\n", $notConfiguredOutput);
     }
 
     public function testBaselineInfoIsEnabledOnlyByTrueBaselineInfoParameter(): void
@@ -610,6 +614,11 @@ PHP);
         }
 
         return ParameterCollection::fromArray($parameters);
+    }
+
+    private function withoutAnsi(string $value): string
+    {
+        return (string) preg_replace('/\e\[[0-9;]*m/', '', $value);
     }
 
     /**

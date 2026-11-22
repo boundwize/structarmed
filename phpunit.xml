@@ -12,7 +12,9 @@
   </source>
   <!-- ensure properly tested as e2e -->
   <extensions>
-    <bootstrap class="Boundwize\StructArmed\PHPUnit\StructArmedExtension"/>
+    <bootstrap class="Boundwize\StructArmed\PHPUnit\StructArmedExtension">
+      <parameter name="baseline-info" value="true"/>
+    </bootstrap>
     <bootstrap class="Boundwize\Pyrameter\Extension"/>
   </extensions>
 </phpunit>

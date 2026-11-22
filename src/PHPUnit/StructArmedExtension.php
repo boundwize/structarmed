@@ -14,6 +14,7 @@ use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Exception\ViolationsFoundException;
 use Boundwize\StructArmed\Progress\ConsoleProgressBar;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
+use Boundwize\StructArmed\Report\WarningLine;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use PHPUnit\Runner\Extension\Extension;
 use PHPUnit\Runner\Extension\Facade;
@@ -113,8 +114,9 @@ final class StructArmedExtension implements Extension
         $baselinePath           = $architecture->getBaseline();
         $missingBaselineWarning = (new BaselineFilter())->missingWarning($baselinePath, $basePath);
 
+        // The blank line after either line keeps it apart from the PHPUnit output that follows.
         if ($missingBaselineWarning !== null) {
-            echo 'Warning: ' . $missingBaselineWarning . "\n";
+            echo WarningLine::render($missingBaselineWarning) . "\n\n";
         } elseif ($this->isBaselineInfoEnabled($parameters)) {
             // Same line as the --baseline-info option of the analyse command.
             $baseline     = new Baseline();
@@ -123,9 +125,10 @@ final class StructArmedExtension implements Extension
                 $basePath,
                 $unfilteredCount - $ruleViolationCollection->count()
             );
+            $line         = $baseline->infoLine($baselineInfo);
 
             // Only a baseline that went stale is worth a warning.
-            echo ($baselineInfo['no_longer_found'] > 0 ? 'Warning: ' : '') . $baseline->infoLine($baselineInfo) . "\n";
+            echo ($baselineInfo['no_longer_found'] > 0 ? WarningLine::render($line) : $line) . "\n\n";
         }
 
         if ($ruleViolationCollection->hasViolations()) {
