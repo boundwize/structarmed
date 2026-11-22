@@ -1068,8 +1068,8 @@ PHP);
             [],
         ];
 
-        // A partial application only creates a closure: nothing is probed, so
-        // the name it binds stays a reference.
+        // The closure a partial application creates still only probes for
+        // the name it binds, so that name is no reference.
         yield 'function_exists() bound name' => [
             <<<'PHP'
                 <?php
@@ -1077,7 +1077,18 @@ PHP);
 
                 function_exists('App\helper', ...);
                 PHP,
-            ['?App\function_exists', 'App\helper', '!App\helper'],
+            ['?App\function_exists'],
+            [],
+        ];
+
+        yield 'function_exists() bound named argument' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists(function: __NAMESPACE__ . '\helper', ...);
+                PHP,
+            ['?App\function_exists'],
             [],
         ];
 
