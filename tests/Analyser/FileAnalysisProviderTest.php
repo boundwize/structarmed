@@ -727,6 +727,20 @@ final class FileAnalysisProviderTest extends TestCase
             true,
             true,
         ];
+
+        yield 'define() with named arguments' => ["define(constant_name: 'X', value: 1);", true, false];
+        // A partial application only creates a closure: no constant is declared.
+        yield 'define() with placeholder' => ["define('X', ?);", false, true];
+        yield 'define() with named placeholder' => ["define('X', value: ?);", false, true];
+        yield 'define() with variadic placeholder' => ["define('X', ...);", false, true];
+        yield 'first-class callable define()' => ['define(...);', false, true];
+        yield 'guarded define() with placeholder' => ["defined('X') || define('X', ?);", false, true];
+        yield 'defined() with placeholder guarding define()' => ["defined(?) || define('X', 1);", false, true];
+        yield 'define() with placeholder and include argument' => [
+            "define('X', include 'config.php', ?);",
+            false,
+            true,
+        ];
     }
 
     #[DataProvider('defineStatementProvider')]

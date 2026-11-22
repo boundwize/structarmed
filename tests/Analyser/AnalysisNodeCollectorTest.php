@@ -928,6 +928,232 @@ PHP);
         );
     }
 
+    /**
+     * @return iterable<string, array{string, list<string>, list<string>}>
+     */
+    public static function partialFunctionApplicationProvider(): iterable
+    {
+        yield 'ordinary function call' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                foo('App\Value');
+                PHP,
+            ['?App\foo', 'App\Value', '!App\Value'],
+            [],
+        ];
+
+        // A placeholder is no argument: the callable stays referenced, and
+        // there is no value to inspect.
+        yield 'first-class callable' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                foo(...);
+                PHP,
+            ['?App\foo'],
+            [],
+        ];
+
+        yield 'placeholder' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                foo(?);
+                PHP,
+            ['?App\foo'],
+            [],
+        ];
+
+        yield 'named placeholder' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                foo(first: ?);
+                PHP,
+            ['?App\foo'],
+            [],
+        ];
+
+        // The arguments bound next to a placeholder are still collected.
+        yield 'mixed arguments' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                foo('App\Value', ?, 123);
+                PHP,
+            ['?App\foo', 'App\Value', '!App\Value'],
+            [],
+        ];
+
+        yield 'named argument next to named placeholder' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                foo(first: ?, second: 'App\Value');
+                PHP,
+            ['?App\foo', 'App\Value', '!App\Value'],
+            [],
+        ];
+
+        yield 'bound argument before variadic placeholder' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                foo('App\Value', ...);
+                PHP,
+            ['?App\foo', 'App\Value', '!App\Value'],
+            [],
+        ];
+
+        yield 'bound object' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                foo(new Service(), ?);
+                PHP,
+            ['?App\foo', 'App\Service'],
+            ['App\Service'],
+        ];
+
+        yield 'static method' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                Service::create(?);
+                PHP,
+            ['App\Service'],
+            [],
+        ];
+
+        yield 'instance method' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                $service->run(?, 'App\Value');
+                PHP,
+            ['App\Value', '!App\Value'],
+            [],
+        ];
+
+        yield 'function_exists() placeholder' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists(?);
+                PHP,
+            ['?App\function_exists'],
+            [],
+        ];
+
+        yield 'function_exists() named placeholder' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists(function: ?);
+                PHP,
+            ['?App\function_exists'],
+            [],
+        ];
+
+        // The closure a partial application creates still only probes for
+        // the name it binds, so that name is no reference.
+        yield 'function_exists() bound name' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists('App\helper', ...);
+                PHP,
+            ['?App\function_exists'],
+            [],
+        ];
+
+        yield 'function_exists() bound named argument' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                function_exists(function: __NAMESPACE__ . '\helper', ...);
+                PHP,
+            ['?App\function_exists'],
+            [],
+        ];
+
+        yield 'define() placeholder' => [
+            <<<'PHP'
+                <?php
+                namespace App;
+
+                define('KEY', ?);
+                PHP,
+            ['?App\define', 'KEY', '!KEY'],
+            [],
+        ];
+    }
+
+    /**
+     * @param list<string> $expectedFileReferences
+     * @param list<string> $expectedFileInstantiations
+     */
+    #[DataProvider('partialFunctionApplicationProvider')]
+    public function testCollectsBoundArgumentsOfPartialFunctionApplication(
+        string $code,
+        array $expectedFileReferences,
+        array $expectedFileInstantiations,
+    ): void {
+        $analysisNodeCollector = $this->makeCollector($code);
+
+        $this->assertSame(
+            $expectedFileReferences,
+            $analysisNodeCollector->getFileReferences()['/fake/path/Foo.php'] ?? []
+        );
+        $this->assertSame(
+            $expectedFileInstantiations,
+            $analysisNodeCollector->getFileInstantiations()['/fake/path/Foo.php'] ?? []
+        );
+    }
+
+    public function testRecordsPartialFunctionApplicationAsFunctionCallOfItsScope(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            final class Caller
+            {
+                public function run(): void
+                {
+                    helper(?);
+                    \Other\qualified('value', ?, 123);
+                    \strlen(string: ?);
+                }
+            }
+            PHP);
+
+        // A partially applied function is referenced like a called one, so a
+        // rule on function calls still sees it; the bound arguments stay
+        // analysable.
+        $this->assertSame(
+            ['?App\helper', 'Other\qualified', 'strlen'],
+            $analysisNodeCollector->getClassNodes()[0]->functionCalls
+        );
+        $this->assertSame([[10, '123', 123]], $analysisNodeCollector->getNumericLiterals());
+    }
+
     public function testCollectsTopLevelUnqualifiedFunctionCallAsFallbackMarker(): void
     {
         $analysisNodeCollector = $this->makeCollector(<<<'PHP'

@@ -605,7 +605,8 @@ final class FileAnalysisProvider
      * imported `use function Vendor\define` resolved to a fully qualified name that no
      * longer reads as `define`. An unqualified call inside a namespace keeps its name
      * and falls back to the global built-in as PHP does at runtime, unless the file
-     * declares that function in the namespace itself.
+     * declares that function in the namespace itself. A partial application, such as
+     * `define('X', ?)` or `define(...)`, only creates a closure: it calls nothing.
      */
     private function isGlobalFunctionCall(Expr $expr, string $function): bool
     {
@@ -613,6 +614,7 @@ final class FileAnalysisProvider
             ! $expr instanceof FuncCall
             || ! $expr->name instanceof Name
             || $expr->name->toLowerString() !== $function
+            || $expr->isPartialFunctionApplication()
         ) {
             return false;
         }

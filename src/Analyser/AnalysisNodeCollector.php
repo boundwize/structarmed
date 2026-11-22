@@ -1540,14 +1540,15 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         // Entered before its arguments, so the name string is marked before
         // the String_ branch sees it — also outside any scope, where a
-        // top-level `if (! function_exists(...))` guard usually sits.
+        // top-level `if (! function_exists(...))` guard usually sits. A name
+        // bound by a partial application is still only probed, once the
+        // closure runs; a placeholder is no argument, so nothing is marked.
         if (
             $node instanceof FuncCall
             && $node->name instanceof Name
             && $node->name->toLowerString() === 'function_exists'
-            && ! $node->isFirstClassCallable()
         ) {
-            ($node->getArgs()[0] ?? null)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+            $node->getArg('function', 0)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
         }
 
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {

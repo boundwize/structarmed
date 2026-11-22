@@ -18,7 +18,10 @@ use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\If_;
 use PhpParser\Node\Stmt\Namespace_ as NamespaceStmt;
 use PhpParser\NodeTraverser;
+use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RemoveFunctionVisitor::class)]
@@ -137,6 +140,79 @@ final class RemoveFunctionVisitorTest extends TestCase
             ->traverse([$if]);
 
         $this->assertSame([$if], $statements);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function partialFunctionExistsApplicationProvider(): iterable
+    {
+        yield 'placeholder' => [
+            <<<'PHP'
+                <?php
+
+                namespace App;
+
+                if (! function_exists(?)) {
+                    function unused(): void {}
+                }
+                PHP,
+        ];
+
+        yield 'named placeholder' => [
+            <<<'PHP'
+                <?php
+
+                namespace App;
+
+                if (! function_exists(function: ?)) {
+                    function unused(): void {}
+                }
+                PHP,
+        ];
+
+        yield 'bound name before variadic placeholder' => [
+            <<<'PHP'
+                <?php
+
+                namespace App;
+
+                if (! function_exists('App\unused', ...)) {
+                    function unused(): void {}
+                }
+                PHP,
+        ];
+
+        yield 'first-class callable' => [
+            <<<'PHP'
+                <?php
+
+                namespace App;
+
+                if (! function_exists(...)) {
+                    function unused(): void {}
+                }
+                PHP,
+        ];
+    }
+
+    #[DataProvider('partialFunctionExistsApplicationProvider')]
+    public function testKeepsPartiallyAppliedFunctionExistsIfEmptiedByRemoval(string $code): void
+    {
+        $ast = (new ParserFactory())->createForNewestSupportedVersion()->parse($code);
+
+        $statements = (new NodeTraverser(new NameResolver(), new RemoveFunctionVisitor('App\\unused')))
+            ->traverse($ast ?? []);
+
+        $namespace = $statements[0] ?? null;
+
+        $this->assertInstanceOf(NamespaceStmt::class, $namespace);
+
+        // A partial application yields a closure instead of running the
+        // check, so the emptied block is no guard of the removed function.
+        $this->assertCount(1, $namespace->stmts);
+        $this->assertInstanceOf(If_::class, $namespace->stmts[0]);
+        $this->assertSame([], $namespace->stmts[0]->stmts);
     }
 
     public function testRemovesNamespaceConcatFunctionExistsGuardNamingRemovedFunction(): void

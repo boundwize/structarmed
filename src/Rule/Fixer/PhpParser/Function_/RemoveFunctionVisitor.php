@@ -87,7 +87,7 @@ final class RemoveFunctionVisitor extends NodeVisitorAbstract
             ! $funcCall instanceof FuncCall
             || ! $funcCall->name instanceof Name
             || $funcCall->name->toLowerString() !== 'function_exists'
-            || $funcCall->isFirstClassCallable()
+            || $funcCall->isPartialFunctionApplication()
         ) {
             return false;
         }
