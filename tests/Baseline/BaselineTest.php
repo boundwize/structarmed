@@ -482,6 +482,51 @@ PHP);
         }
     }
 
+    public function testViolationCountSumsEntriesByTheirCount(): void
+    {
+        $basePath = $this->createTempDirectory();
+
+        try {
+            file_put_contents($basePath . '/baseline.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+return [
+    [
+        'rule' => 'source.must_be_final',
+        'message' => 'Class [App\Foo] must be declared final',
+        'file' => 'src/Foo.php',
+        'class' => 'App\Foo',
+        'layer' => 'Source',
+    ],
+    [
+        'rule' => 'psr12.files.must_use_lowercase_keyword_constants',
+        'message' => 'Keyword constant [TRUE] must use lowercase [true]',
+        'file' => 'src/Foo.php',
+        'class' => '',
+        'layer' => null,
+        'count' => 3,
+    ],
+    [
+        'rule' => 'source.must_be_final',
+        'message' => 'Class [App\Bar] must be declared final',
+        'file' => 'src/Bar.php',
+        'class' => 'App\Bar',
+        'layer' => 'Source',
+        'count' => 'invalid',
+    ],
+    'not an entry',
+];
+
+PHP);
+
+            $this->assertSame(5, (new Baseline())->violationCount('baseline.php', $basePath));
+        } finally {
+            $this->removeTempDirectory($basePath, ['baseline.php']);
+        }
+    }
+
     public function testFilterDistinguishesInvalidUtf8Signatures(): void
     {
         $basePath                = $this->createTempDirectory();

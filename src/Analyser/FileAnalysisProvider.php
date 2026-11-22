@@ -152,12 +152,16 @@ final class FileAnalysisProvider
      *                                                 the file declares unconditionally, as the same
      *                                                 traversal collected them; null makes the
      *                                                 provider gather them from the AST itself.
+     * @param list<array{int, string}> $attributesWithEmptyParentheses Attributes spelling `()` without
+     *                                                                 an argument, recorded by the same
+     *                                                                 analysis-node traversal.
      */
     public function analyse(
         string $file,
         array $nonCanonicalKeywordConstants = [],
         array $numericLiterals = [],
         ?array $localFunctions = null,
+        array $attributesWithEmptyParentheses = [],
     ): FileAnalysis {
         $file = Path::normalise($file, canonicalise: true);
 
@@ -192,6 +196,7 @@ final class FileAnalysisProvider
             sideEffectLine: $fileState['sideEffectLine'],
             nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
             numericLiterals: $numericLiterals,
+            attributesWithEmptyParentheses: $attributesWithEmptyParentheses,
         );
 
         $this->analyses[$file] = $fileAnalysis;

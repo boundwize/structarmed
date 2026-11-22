@@ -47,6 +47,8 @@ use function sys_get_temp_dir;
 use function tempnam;
 use function unlink;
 
+use const PHP_EOL;
+
 #[CoversClass(AnalyseCommand::class)]
 #[CoversClass(ClearCacheCommand::class)]
 #[CoversClass(InitCommand::class)]
@@ -289,7 +291,35 @@ PHP);
             [$exitCode, $output] = $this->runApplication(['structarmed', 'init'], $basePath);
 
             $this->assertSame(0, $exitCode);
-            $this->assertStringContainsString('structarmed.php already exists.', $output);
+            $this->assertStringContainsString(
+                "structarmed.php already exists, use `append` instead\n\n"
+                . 'vendor/bin/structarmed append --preset=psr4',
+                $output
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandRendersDiscoveredConfigurationFileAsAbsolutePath(): void
+    {
+        $basePath = $this->createProjectDirectory();
+        $expected = 'Configuration: ' . $this->normalisePath((string) realpath($basePath)) . '/structarmed.php';
+
+        try {
+            foreach (['console', 'summary', 'github'] as $reportType) {
+                [$exitCode, $output] = $this->runApplication(
+                    ['structarmed', 'analyse', '--report=' . $reportType, '--no-progress'],
+                    $basePath
+                );
+
+                $this->assertSame(0, $exitCode, $output);
+                $this->assertStringContainsString($expected, $output);
+            }
+
+            [, $output] = $this->runApplication(['structarmed', 'analyse', '--report=json'], $basePath);
+
+            $this->assertStringNotContainsString('Configuration:', $output);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -959,6 +989,52 @@ PHP);
             $this->assertIsArray($data);
             $this->assertSame(0, $data['total']);
             $this->assertTrue($data['passed']);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandRendersSummaryReport(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--report=summary',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertMatchesRegularExpression('/^source\.must_declare_method_visibility +1\R/m', $output);
+            $this->assertStringContainsString('1 violation(s) found in 1 rule(s)', $output);
+            $this->assertStringNotContainsString('src/Foo.php', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandAppendsSummaryToConsoleReportWithSummaryOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
+
+        try {
+            $arguments = ['structarmed', 'analyse', '--config=' . $basePath . '/structarmed.php', '--no-progress'];
+
+            [, $output] = $this->runApplication($arguments, $basePath);
+
+            $this->assertDoesNotMatchRegularExpression('/^source\.must_declare_method_visibility +1\R/m', $output);
+
+            [$exitCode, $output] = $this->runApplication([...$arguments, '--summary'], $basePath);
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('src/Foo.php', $output);
+            $this->assertMatchesRegularExpression('/^source\.must_declare_method_visibility +1\R/m', $output);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -1974,6 +2050,106 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandPrintsBaselineInfoOnlyWithBaselineInfoOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+        $analyse  = [
+            'structarmed',
+            'analyse',
+            '--config=' . $basePath . '/structarmed.php',
+            '--no-cache',
+            '--no-progress',
+        ];
+
+        try {
+            file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+<?php
+
+namespace App;
+
+class Bar
+{
+}
+
+PHP);
+
+            [, $notConfiguredOutput] = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+
+            $this->runApplication([...$analyse, '--generate-baseline=structarmed-baseline.php'], $basePath);
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->baseline('structarmed-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+PHP);
+
+            [$exitCode, $output]     = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+            [, $outputWithoutOption] = $this->runApplication($analyse, $basePath);
+
+            file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+<?php
+
+namespace App;
+
+final class Bar
+{
+}
+
+PHP);
+
+            [$staleExitCode, $staleOutput] = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+            [, $narrowedOutput]            = $this->runApplication(
+                [...$analyse, 'src/Foo.php', '--baseline-info'],
+                $basePath
+            );
+            [, $jsonOutput]                = $this->runApplication(
+                [...$analyse, '--report=json', '--baseline-info'],
+                $basePath
+            );
+
+            $this->assertStringContainsString(PHP_EOL . 'Baseline: not configured.' . PHP_EOL, $notConfiguredOutput);
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                PHP_EOL
+                    . 'Baseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.'
+                    . PHP_EOL,
+                $output
+            );
+            $this->assertStringNotContainsString('Warning:', $output);
+            $this->assertStringNotContainsString('Baseline [', $outputWithoutOption);
+            $this->assertSame(0, $staleExitCode, $staleOutput);
+            $this->assertStringContainsString(
+                PHP_EOL
+                    . 'Warning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.'
+                    . PHP_EOL,
+                $this->withoutAnsi($staleOutput)
+            );
+            $this->assertStringContainsString(
+                PHP_EOL . 'Baseline [structarmed-baseline.php]: 1 violation(s) filtered out.' . PHP_EOL,
+                $narrowedOutput
+            );
+            $this->assertStringNotContainsString('Baseline [', $jsonOutput);
+
+            $jsonData = json_decode($jsonOutput, true);
+
+            $this->assertIsArray($jsonData);
+            $this->assertSame(
+                ['file' => 'structarmed-baseline.php', 'filtered_out' => 1, 'no_longer_found' => 1],
+                $jsonData['baseline']
+            );
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandFiltersPathDependentBaselineFromDifferentBasePath(): void
     {
         $sourceBasePath = $this->createProjectDirectory();
@@ -2048,7 +2224,7 @@ PHP;
         }
     }
 
-    public function testAnalyseCommandReportsConfiguredBaselineFailure(): void
+    public function testAnalyseCommandWarnsWithoutBlockingWhenConfiguredBaselineIsMissing(): void
     {
         $basePath = $this->createProjectDirectory();
 
@@ -2075,11 +2251,64 @@ PHP);
                 $basePath
             );
 
-            $this->assertSame(1, $exitCode);
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('No violations found', $output);
             $this->assertStringContainsString(
-                'Error: Baseline file [missing-baseline.php] does not exist.',
+                'Baseline file [missing-baseline.php] does not exist, '
+                    . 'violations are reported without baseline filtering.',
                 $output
             );
+            $this->assertStringNotContainsString('Error:', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandReportsViolationsWhenConfiguredBaselineIsMissingExceptForJsonReport(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        try {
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->baseline('missing-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+PHP);
+
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--clear-cache',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            [$jsonExitCode, $jsonOutput] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyse',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--report=json',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(1, $exitCode, $output);
+            $this->assertStringContainsString('source.must_be_final', $output);
+            $this->assertStringContainsString('Baseline file [missing-baseline.php] does not exist', $output);
+            $this->assertSame(1, $jsonExitCode, $jsonOutput);
+            $this->assertSame("Error: Baseline file [missing-baseline.php] does not exist.\n", $jsonOutput);
         } finally {
             $this->removeTempDirectory($basePath);
         }
@@ -2090,6 +2319,7 @@ PHP);
         $basePath = $this->createProjectDirectoryWithImplicitMethodVisibilityViolation();
 
         try {
+            file_put_contents($basePath . '/structarmed-baseline.php', "<?php return 'invalid';");
             file_put_contents($basePath . '/structarmed.php', <<<'PHP'
 <?php
 
@@ -2099,7 +2329,7 @@ use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustDeclareMethodVisibilityRule;
 
 return Architecture::define()
-    ->baseline('missing-baseline.php')
+    ->baseline('structarmed-baseline.php')
     ->layer('Source', 'src/')
     ->rule('source.must_declare_method_visibility', new MustDeclareMethodVisibilityRule('Source'));
 PHP);
@@ -2117,7 +2347,7 @@ PHP);
 
             $this->assertSame(1, $exitCode);
             $this->assertStringContainsString(
-                'Error: Baseline file [missing-baseline.php] does not exist.',
+                'Error: Baseline file [structarmed-baseline.php] must return an array.',
                 $output
             );
             $this->assertStringContainsString(
@@ -2175,7 +2405,7 @@ return Architecture::define()
 
         public function fix(RuleViolation $ruleViolation): bool
         {
-            unlink($this->baselineFile);
+            file_put_contents($this->baselineFile, "<?php return 'invalid';");
 
             return true;
         }
@@ -2197,7 +2427,7 @@ PHP);
 
             $this->assertSame(1, $exitCode);
             $this->assertStringContainsString(
-                'Error: Baseline file [structarmed-baseline.php] does not exist.',
+                'Error: Baseline file [structarmed-baseline.php] must return an array.',
                 $output
             );
         } finally {
@@ -2288,6 +2518,57 @@ PHP);
             $this->assertStringContainsString('violation', $output);
         } finally {
             $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandAnalysesDirectoryNamedAfterHelpOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+
+        mkdir($basePath . '/-h');
+        mkdir($basePath . '/--help');
+
+        try {
+            foreach (['-h', '--help'] as $helpOption) {
+                [$exitCode, $output] = $this->runApplication(
+                    ['structarmed', 'analyse', $helpOption, '--no-progress'],
+                    $basePath
+                );
+
+                // The violation in src/ stays out, since only the named directory is scanned.
+                $this->assertSame(0, $exitCode, $output);
+                $this->assertStringContainsString('No violations found', $output);
+                $this->assertStringNotContainsString('Usage:', $output);
+            }
+        } finally {
+            rmdir($basePath . '/-h');
+            rmdir($basePath . '/--help');
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandTakesFileNamedAfterHelpOptionAsScanPath(): void
+    {
+        $basePath = $this->createTempDirectory();
+
+        file_put_contents($basePath . '/-h', '');
+        file_put_contents($basePath . '/--help', '');
+
+        try {
+            foreach (['-h', '--help'] as $helpOption) {
+                [$exitCode, $output] = $this->runApplication(['structarmed', 'analyse', $helpOption], $basePath);
+
+                // The file wins over the help, and is then rejected like any other non-PHP scan path.
+                $this->assertSame(1, $exitCode, $output);
+                $this->assertStringContainsString(
+                    'Error: path [' . $helpOption . '] is not analysable.',
+                    $output
+                );
+            }
+        } finally {
+            unlink($basePath . '/-h');
+            unlink($basePath . '/--help');
+            rmdir($basePath);
         }
     }
 

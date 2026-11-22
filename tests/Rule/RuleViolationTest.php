@@ -166,6 +166,20 @@ final class RuleViolationTest extends TestCase
         $this->assertSame([$ruleViolation, $app], iterator_to_array($collection));
     }
 
+    public function testCollectionCountsViolationsPerRuleMostViolatedFirst(): void
+    {
+        $collection = new RuleViolationCollection();
+
+        $this->assertSame([], $collection->countByRule());
+
+        $collection->add($this->violation('domain.rule', 'Domain'));
+        $collection->add($this->violation('zeta.rule', 'Domain'));
+        $collection->add($this->violation('app.rule', 'Application'));
+        $collection->add($this->violation('zeta.rule', 'Domain'));
+
+        $this->assertSame(['zeta.rule' => 2, 'app.rule' => 1, 'domain.rule' => 1], $collection->countByRule());
+    }
+
     public function testCollectionSortsByFileAndLineKeepingSameLineOrder(): void
     {
         $otherFile  = new RuleViolation('Other file', '/src/B.php', 1, '', null, 'a.rule');

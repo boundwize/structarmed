@@ -28,6 +28,18 @@ Run architecture checks as part of your test suite.
 
 Violations cause the test run to fail before any tests execute. This makes architecture checks part of the same feedback loop as your normal PHPUnit suite.
 
+The report printed before the PHPUnit output names the configuration file in effect as an absolute path, whether it was discovered or set with the `config` parameter:
+
+```text
+StructArmed {version} — Architecture Enforcement
+================================================
+Configuration: /path/to/project/structarmed.php
+
+✅  No violations found. (0.39s)
+
+PHPUnit 11.5.0 by Sebastian Bergmann and contributors.
+```
+
 ## Disable For One Run
 
 Set `STRUCTARMED_DISABLED` to `1` to run PHPUnit without the architecture checks:
@@ -55,6 +67,20 @@ To hide only the StructArmed progress bar while keeping PHPUnit's own progress o
     </bootstrap>
 </extensions>
 ```
+
+## Disable Cache
+
+The extension uses the same [cache](../cache/) as `structarmed analyse`. To run the analysis without caching, like the `--no-cache` option, set the `no-cache` parameter on the extension:
+
+```xml
+<extensions>
+    <bootstrap class="Boundwize\StructArmed\PHPUnit\StructArmedExtension">
+        <parameter name="no-cache" value="true"/>
+    </bootstrap>
+</extensions>
+```
+
+StructArmed then skips file hashing and neither reads nor writes cache entries, so every PHPUnit run repeats the full analysis. The existing cache is left untouched.
 
 ## When To Use It
 

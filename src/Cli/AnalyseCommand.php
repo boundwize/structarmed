@@ -19,6 +19,7 @@ use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use Boundwize\StructArmed\Report\Reports\ConsoleReport;
 use Boundwize\StructArmed\Report\Reports\GithubReport;
 use Boundwize\StructArmed\Report\Reports\JsonReport;
+use Boundwize\StructArmed\Report\Reports\SummaryReport;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
@@ -46,11 +47,14 @@ use const PHP_EOL;
  *     basepath?: string,
  *     generate-baseline?: string,
  *     no-progress?: true,
+ *     summary?: true,
  *     clear-cache?: true,
  *     no-cache?: true,
  *     disable-parallel?: true,
- *     fix?: true
+ *     fix?: true,
+ *     baseline-info?: true
  * }
+ * @phpstan-type BaselineInfo array{file: ?string, filtered_out: int, no_longer_found: ?int}
  */
 final readonly class AnalyseCommand
 {
@@ -64,10 +68,12 @@ final readonly class AnalyseCommand
 
     private const FLAG_OPTIONS = [
         '--no-progress'      => 'no-progress',
+        '--summary'          => 'summary',
         '--clear-cache'      => 'clear-cache',
         '--no-cache'         => 'no-cache',
         '--disable-parallel' => 'disable-parallel',
         '--fix'              => 'fix',
+        '--baseline-info'    => 'baseline-info',
     ];
 
     /**
@@ -79,8 +85,11 @@ final readonly class AnalyseCommand
      */
     private const MAX_FIX_PASSES = 10;
 
-    public function __construct(private ?ProgressHandlerInterface $progressHandler = null)
-    {
+    public function __construct(
+        private ?ProgressHandlerInterface $progressHandler = null,
+        private Baseline $baseline = new Baseline(),
+        private BaselineFilter $baselineFilter = new BaselineFilter()
+    ) {
     }
 
     /**
@@ -97,7 +106,7 @@ final readonly class AnalyseCommand
         [$options, $scanPaths] = $parsedArguments;
         $reportType            = $options['report'] ?? 'console';
 
-        if (! in_array($reportType, ['console', 'json', 'github'], true)) {
+        if (! in_array($reportType, ['console', 'json', 'github', 'summary'], true)) {
             echo sprintf("Invalid report type: %s\n\n", $reportType);
             echo Usage::render();
 
@@ -153,6 +162,17 @@ final readonly class AnalyseCommand
             return $this->reportError($runtimeException);
         }
 
+        $baseline               = $architecture->getBaseline();
+        $missingBaselineWarning = $this->baselineFilter->missingWarning($baseline, $basePath);
+
+        // A warning would break the json output, and left out it would hide
+        // that the baseline is not applied, so the json report keeps the error.
+        if ($reportType === 'json' && $missingBaselineWarning !== null && ! isset($options['generate-baseline'])) {
+            echo sprintf("Error: Baseline file [%s] does not exist.\n", $baseline);
+
+            return 1;
+        }
+
         $start                        = microtime(true);
         $fileHashProvider             = new FileHashProvider();
         $analysisCacheMetadataFactory = new AnalysisCacheMetadataFactory($fileHashProvider);
@@ -185,7 +205,7 @@ final readonly class AnalyseCommand
 
         $analyser        = new Analyser($basePath, $analysisResultCache, $analysisNodeCacheNamespace);
         $files           = $analyser->filesForAnalysis($architecture, $scanPaths);
-        $progress        = $reportType === 'console' && ! isset($options['no-progress'])
+        $progress        = in_array($reportType, ['console', 'summary'], true) && ! isset($options['no-progress'])
             ? $this->progressHandler ?? new ConsoleProgressBar()
             : null;
         $analyserOptions = isset($options['disable-parallel']) ? AnalyserOptions::sequential() : null;
@@ -313,7 +333,7 @@ final readonly class AnalyseCommand
 
         if ($shouldGenerateBaseline) {
             try {
-                (new Baseline())->generate(
+                $this->baseline->generate(
                     $unfilteredRuleViolationCollection,
                     $options['generate-baseline'],
                     $basePath
@@ -331,14 +351,35 @@ final readonly class AnalyseCommand
             return 0;
         }
 
+        $withSummary = isset($options['summary']);
+        // A missing baseline has nothing to tell beyond its own warning below.
+        $baselineInfo = isset($options['baseline-info']) && $missingBaselineWarning === null
+            ? $this->baselineInfo(
+                $baseline,
+                $basePath,
+                $unfilteredRuleViolationCollection->count() - $ruleViolationCollection->count(),
+                $scanPaths
+            )
+            : null;
+
         echo match ($reportType) {
-            'json' => (new JsonReport())->render($ruleViolationCollection, $elapsed),
+            'json' => (new JsonReport($withSummary, $baselineInfo))->render($ruleViolationCollection, $elapsed),
             // GitHub resolves annotation paths against the repository root, which
             // differs from the base path when a sub directory is analysed.
-            'github' => (new GithubReport(getenv('GITHUB_WORKSPACE') ?: $basePath))
+            'github' => (new GithubReport(getenv('GITHUB_WORKSPACE') ?: $basePath, $withSummary, $configFile))
                 ->render($ruleViolationCollection, $elapsed),
-            default => (new ConsoleReport())->render($ruleViolationCollection, $elapsed),
+            'summary' => (new SummaryReport($configFile))->render($ruleViolationCollection, $elapsed),
+            default => (new ConsoleReport($withSummary, $configFile))->render($ruleViolationCollection, $elapsed),
         };
+
+        // Shown after the report, so it stays visible below a long violation
+        // list. The json report never gets here with a missing baseline.
+        if ($missingBaselineWarning !== null) {
+            echo PHP_EOL . $this->warning($missingBaselineWarning) . PHP_EOL;
+        } elseif ($baselineInfo !== null && $reportType !== 'json') {
+            // An extra line would break the json output: the json report carries it under a `baseline` key.
+            echo PHP_EOL . $this->baselineInfoLine($baselineInfo) . PHP_EOL;
+        }
 
         // The github report surfaces violations as pull request annotations,
         // so the job itself is not failed on top of them.
@@ -378,7 +419,8 @@ final readonly class AnalyseCommand
                 continue;
             }
 
-            if (str_starts_with($argument, '--')) {
+            // `--help` only gets here as a file or directory of that name, which is a path to analyse.
+            if (str_starts_with($argument, '--') && $argument !== '--help') {
                 echo sprintf("Unknown option: %s\n\n", $argument);
                 echo Usage::render();
 
@@ -401,7 +443,7 @@ final readonly class AnalyseCommand
             return $unfilteredRuleViolationCollection;
         }
 
-        return (new BaselineFilter())->apply($unfilteredRuleViolationCollection, $architecture, $basePath);
+        return $this->baselineFilter->apply($unfilteredRuleViolationCollection, $architecture, $basePath);
     }
 
     private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int
@@ -452,6 +494,51 @@ final readonly class AnalyseCommand
         echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
         return 1;
+    }
+
+    /**
+     * @param list<string> $scanPaths
+     * @return BaselineInfo
+     */
+    private function baselineInfo(?string $baseline, string $basePath, int $filteredCount, array $scanPaths): array
+    {
+        return [
+            'file'         => $baseline,
+            'filtered_out' => $filteredCount,
+            // On a narrowed scan, a baselined violation of a file left out of the
+            // scan cannot be told from one that is gone, so only a full analysis counts them.
+            'no_longer_found' => $baseline === null || $scanPaths !== []
+                ? null
+                : $this->baseline->violationCount($baseline, $basePath) - $filteredCount,
+        ];
+    }
+
+    /**
+     * @param BaselineInfo $baselineInfo
+     */
+    private function baselineInfoLine(array $baselineInfo): string
+    {
+        ['file' => $file, 'filtered_out' => $filteredCount, 'no_longer_found' => $noLongerFoundCount] = $baselineInfo;
+
+        if ($file === null) {
+            return 'Baseline: not configured.';
+        }
+
+        $line = sprintf('Baseline [%s]: %d violation(s) filtered out', $file, $filteredCount);
+
+        if ($noLongerFoundCount === null) {
+            return $line . '.';
+        }
+
+        $line .= sprintf(', %d no longer found.', $noLongerFoundCount);
+
+        // Only a baseline that went stale is worth a warning.
+        return $noLongerFoundCount > 0 ? $this->warning($line) : $line;
+    }
+
+    private function warning(string $message): string
+    {
+        return sprintf('%s %s', ColorSupport::wrap('Warning:', '33', ColorSupport::detect()), $message);
     }
 
     private function fixedViolationMessage(int $fixedCount): string

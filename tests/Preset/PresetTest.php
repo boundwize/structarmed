@@ -31,6 +31,7 @@ use Boundwize\StructArmed\Rule\Rules\Class_\MayNotExtendClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedAbstractClassRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedInterfaceRule;
 use Boundwize\StructArmed\Rule\Rules\Class_\MustBeUsedTraitRule;
+use Boundwize\StructArmed\Rule\Rules\File\AttributeMayNotHaveEmptyParenthesesRule;
 use Boundwize\StructArmed\Rule\Rules\File\LargeNumericLiteralMustUseSeparatorRule;
 use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
 use Boundwize\StructArmed\Rule\Rules\Function_\MustBeUsedFunctionRule;
@@ -328,6 +329,10 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(PerPreset::ANONYMOUS_CLASSES_MAY_NOT_HAVE_EMPTY_PARENTHESES, $rules);
         $this->assertArrayHasKey(PerPreset::ENUM_CASES_MUST_BE_ON_OWN_LINE, $rules);
         $this->assertInstanceOf(EnumCaseMustBeOnOwnLineRule::class, $rules[PerPreset::ENUM_CASES_MUST_BE_ON_OWN_LINE]);
+        $this->assertInstanceOf(
+            AttributeMayNotHaveEmptyParenthesesRule::class,
+            $rules[PerPreset::ATTRIBUTES_MAY_NOT_HAVE_EMPTY_PARENTHESES]
+        );
     }
 
     public function testPerPresetUsesComposerSourcePathsByDefault(): void

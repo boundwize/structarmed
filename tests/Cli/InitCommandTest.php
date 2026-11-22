@@ -161,7 +161,11 @@ final class InitCommandTest extends TestCase
             [$exitCode, $output] = $this->runInit($basePath, []);
 
             $this->assertSame(0, $exitCode, $output);
-            $this->assertStringContainsString('structarmed.dist.php already exists.', $output);
+            $this->assertStringContainsString(
+                "structarmed.dist.php already exists, use `append` instead\n\n"
+                . 'vendor/bin/structarmed append --preset=psr4',
+                $output
+            );
             $this->assertFileDoesNotExist($basePath . '/structarmed.php');
         } finally {
             unlink($distFile);

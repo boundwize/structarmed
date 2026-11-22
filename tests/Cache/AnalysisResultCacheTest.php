@@ -1624,6 +1624,7 @@ final class AnalysisResultCacheTest extends TestCase
             sideEffectLine: 1,
             nonCanonicalKeywordConstants: [[3, 'TRUE'], [5, '\\NULL']],
             numericLiterals: [[7, '10000', 10000], [8, '1e10', 10000000000.0]],
+            attributesWithEmptyParentheses: [[9, 'App\\Attr'], [9, 'Override']],
         );
 
         file_put_contents($sourceFile, '<?php class Foo {}');
@@ -1827,24 +1828,31 @@ final class AnalysisResultCacheTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{list<array{int, string}>, list<array{int, string, int|float}>}>
+     * @return iterable<string, array{
+     *     list<array{int, string}>,
+     *     list<array{int, string, int|float}>,
+     *     list<array{int, string}>,
+     * }>
      */
     public static function optionalFileAnalysisListsProvider(): iterable
     {
-        yield 'both omitted' => [[], []];
-        yield 'only keyword constants' => [[[3, 'TRUE'], [5, '\\NULL']], []];
-        yield 'only numeric literals' => [[], [[7, '10000', 10000], [8, '1.25', 1.25]]];
-        yield 'both present' => [[[3, 'TRUE']], [[7, '10000', 10000]]];
+        yield 'all omitted' => [[], [], []];
+        yield 'only keyword constants' => [[[3, 'TRUE'], [5, '\\NULL']], [], []];
+        yield 'only numeric literals' => [[], [[7, '10000', 10000], [8, '1.25', 1.25]], []];
+        yield 'only attributes' => [[], [], [[9, 'App\\Attr'], [9, 'Override']]];
+        yield 'all present' => [[[3, 'TRUE']], [[7, '10000', 10000]], [[9, 'Override']]];
     }
 
     /**
      * @param list<array{int, string}> $nonCanonicalKeywordConstants
      * @param list<array{int, string, int|float}> $numericLiterals
+     * @param list<array{int, string}> $attributesWithEmptyParentheses
      */
     #[DataProvider('optionalFileAnalysisListsProvider')]
     public function testFileAnalysisUsesCompactScalarsAndSparseLists(
         array $nonCanonicalKeywordConstants,
         array $numericLiterals,
+        array $attributesWithEmptyParentheses,
     ): void {
         $cacheDirectory      = $this->createTempDirectory();
         $sourceFile          = $cacheDirectory . '/Foo.php';
@@ -1860,6 +1868,7 @@ final class AnalysisResultCacheTest extends TestCase
             sideEffectLine: 5,
             nonCanonicalKeywordConstants: $nonCanonicalKeywordConstants,
             numericLiterals: $numericLiterals,
+            attributesWithEmptyParentheses: $attributesWithEmptyParentheses,
         );
 
         file_put_contents($sourceFile, '<?php class Foo {}');
@@ -1880,6 +1889,10 @@ final class AnalysisResultCacheTest extends TestCase
                 $expected['numericLiterals'] = $numericLiterals;
             }
 
+            if ($attributesWithEmptyParentheses !== []) {
+                $expected['attributesWithEmptyParentheses'] = $attributesWithEmptyParentheses;
+            }
+
             $this->assertSame($expected, $payload['fileAnalysis']);
 
             $nextRunCache = new AnalysisResultCache(__DIR__, new FileHashProvider(), $cacheDirectory);
@@ -1889,9 +1902,17 @@ final class AnalysisResultCacheTest extends TestCase
             $this->assertSame($sourceFile, $loaded['fileAnalysis']->file);
             $this->assertSame($nonCanonicalKeywordConstants, $loaded['fileAnalysis']->nonCanonicalKeywordConstants);
             $this->assertSame($numericLiterals, $loaded['fileAnalysis']->numericLiterals);
+            $this->assertSame(
+                $attributesWithEmptyParentheses,
+                $loaded['fileAnalysis']->attributesWithEmptyParentheses
+            );
 
             // Explicit empty lists hydrate just like omitted lists.
-            $payload['fileAnalysis'] = $expected + ['nonCanonicalKeywordConstants' => [], 'numericLiterals' => []];
+            $payload['fileAnalysis'] = $expected + [
+                'nonCanonicalKeywordConstants'   => [],
+                'numericLiterals'                => [],
+                'attributesWithEmptyParentheses' => [],
+            ];
             $this->writeCachePayload($cacheDirectory, $payload, $cacheFile);
             $this->assertEquals($loaded, $nextRunCache->loadAnalysisNodes($sourceFile, 'config', true));
         } finally {
@@ -1971,6 +1992,15 @@ final class AnalysisResultCacheTest extends TestCase
         yield 'numeric literal with invalid line' => [[...$valid, 'numericLiterals' => [['1', '10000', 10000]]]];
         yield 'numeric literal with invalid spelling' => [[...$valid, 'numericLiterals' => [[1, 10000, 10000]]]];
         yield 'numeric literal with invalid value' => [[...$valid, 'numericLiterals' => [[1, '10000', '10000']]]];
+        yield 'invalid attributes type' => [[...$valid, 'attributesWithEmptyParentheses' => 'bad']];
+        yield 'attributes not a list' => [[...$valid, 'attributesWithEmptyParentheses' => ['a' => [1, 'Attr']]]];
+        yield 'attribute not an array' => [[...$valid, 'attributesWithEmptyParentheses' => ['bad']]];
+        yield 'attribute not a pair' => [[...$valid, 'attributesWithEmptyParentheses' => [[1]]]];
+        yield 'attribute with extra entry' => [
+            [...$valid, 'attributesWithEmptyParentheses' => [[1, 'Attr', 'extra']]],
+        ];
+        yield 'attribute with invalid line' => [[...$valid, 'attributesWithEmptyParentheses' => [['1', 'Attr']]]];
+        yield 'attribute with invalid name' => [[...$valid, 'attributesWithEmptyParentheses' => [[1, 1]]]];
     }
 
     public function testClassNodesWithFileAnalysisMissesMalformedFacts(): void

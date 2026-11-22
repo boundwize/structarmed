@@ -126,6 +126,32 @@ PHP);
         $this->assertSame([], $analysisNodeCollector->getNumericLiterals());
     }
 
+    public function testCollectsAttributesSpellingEmptyParentheses(): void
+    {
+        $analysisNodeCollector = $this->makeCollector(<<<'PHP'
+<?php
+
+namespace App;
+
+#[Entity(), \Deprecated ( ), Plain, WithArgument(1), Commented(/* none */)]
+final class Foo
+{
+    public function bar(#[\SensitiveParameter()] string $secret): void
+    {
+    }
+}
+PHP);
+
+        $this->assertSame(
+            [[5, 'App\\Entity'], [5, 'Deprecated'], [8, 'SensitiveParameter']],
+            $analysisNodeCollector->getAttributesWithEmptyParentheses()
+        );
+
+        $analysisNodeCollector->setCurrentFile('/fake/path/Bar.php');
+
+        $this->assertSame([], $analysisNodeCollector->getAttributesWithEmptyParentheses());
+    }
+
     public function testSkipsFileAnalysisFactsWhenDisabledButStillCollectsClassDependencies(): void
     {
         $analysisNodeCollector = $this->makeCollector(<<<'PHP'
@@ -135,6 +161,7 @@ namespace App;
 
 final class Foo
 {
+    #[\Deprecated()]
     public function bar(): int
     {
         return TRUE ? 10000 : \M_PI + 1.5;
@@ -144,6 +171,7 @@ PHP, withFileAnalysis: false);
 
         $this->assertSame([], $analysisNodeCollector->getNonCanonicalKeywordConstants());
         $this->assertSame([], $analysisNodeCollector->getNumericLiterals());
+        $this->assertSame([], $analysisNodeCollector->getAttributesWithEmptyParentheses());
 
         $classNodes = $analysisNodeCollector->getClassNodes();
 

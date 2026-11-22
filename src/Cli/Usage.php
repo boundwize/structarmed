@@ -11,10 +11,13 @@ final class Usage
         return <<<'TXT'
 Usage:
   structarmed --version
+  structarmed [command] -h|--help
   structarmed init [--preset=ddd|mvc|psr4|psr1|psr12|per|psr15|yagni|codequality|stability|enum|all]
+  structarmed append --preset=ddd|mvc|psr4|psr1|psr12|per|psr15|yagni|codequality|stability|enum|all
   structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php]
-    [-d|--basepath=path/to/project] [--report=console|json|github] [--no-progress]
-    [--clear-cache] [--no-cache] [--disable-parallel] [--fix] [--generate-baseline=structarmed-baseline.php]
+    [-d|--basepath=path/to/project] [--report=console|json|github|summary] [--summary]
+    [--no-progress] [--clear-cache] [--no-cache] [--disable-parallel] [--fix]
+    [--generate-baseline=structarmed-baseline.php] [--baseline-info]
   structarmed --clear-cache [--config=path/to/structarmed.php] [-d|--basepath=path/to/project]
 
 TXT;

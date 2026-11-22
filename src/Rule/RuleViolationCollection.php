@@ -15,7 +15,9 @@ use function array_keys;
 use function array_map;
 use function array_multisort;
 use function array_values;
+use function arsort;
 use function count;
+use function ksort;
 
 use const SORT_NUMERIC;
 use const SORT_STRING;
@@ -73,6 +75,27 @@ final class RuleViolationCollection implements Countable, IteratorAggregate
 
         // The position column breaks ties, so the violations are never compared.
         array_multisort($files, SORT_STRING, $lines, SORT_NUMERIC, $position, $this->violations);
+    }
+
+    /**
+     * Number of violations per rule key, most violated rule first; rules with
+     * the same count are ordered by key.
+     *
+     * @return array<string, int>
+     */
+    public function countByRule(): array
+    {
+        $countByRule = [];
+
+        foreach ($this->violations as $violation) {
+            $countByRule[$violation->ruleKey] = ($countByRule[$violation->ruleKey] ?? 0) + 1;
+        }
+
+        // arsort() is stable, so the key order survives among equal counts.
+        ksort($countByRule, SORT_STRING);
+        arsort($countByRule, SORT_NUMERIC);
+
+        return $countByRule;
     }
 
     /** @return RuleViolation[] */

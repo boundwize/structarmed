@@ -12,15 +12,31 @@ use function json_encode;
 use const JSON_INVALID_UTF8_SUBSTITUTE;
 use const JSON_PRETTY_PRINT;
 
-final class JsonReport implements ReportInterface
+final readonly class JsonReport implements ReportInterface
 {
+    /**
+     * @param array{file: ?string, filtered_out: int, no_longer_found: ?int}|null $baselineInfo
+     */
+    public function __construct(private bool $withSummary = false, private ?array $baselineInfo = null)
+    {
+    }
+
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
-        return json_encode([
-            'violations' => $ruleViolationCollection->toArray(),
-            'total'      => $ruleViolationCollection->count(),
-            'passed'     => $ruleViolationCollection->isEmpty(),
-            'elapsed'    => $elapsedSeconds,
-        ], JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE) . "\n";
+        $data = ['violations' => $ruleViolationCollection->toArray()];
+
+        if ($this->withSummary) {
+            $data['summary'] = (object) $ruleViolationCollection->countByRule();
+        }
+
+        if ($this->baselineInfo !== null) {
+            $data['baseline'] = $this->baselineInfo;
+        }
+
+        $data['total']   = $ruleViolationCollection->count();
+        $data['passed']  = $ruleViolationCollection->isEmpty();
+        $data['elapsed'] = $elapsedSeconds;
+
+        return json_encode($data, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE) . "\n";
     }
 }

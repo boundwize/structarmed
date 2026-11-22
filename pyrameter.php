@@ -6,7 +6,7 @@ use Boundwize\Pyrameter\Config\PyrameterConfig;
 
 return PyrameterConfig::defaults()
     ->targetShape(
-        unit: ['min' => 51],
-        integration: ['max' => 49],
+        unit: ['min' => 52],
+        integration: ['max' => 48],
     )
     ->failOnViolation();

@@ -7,7 +7,7 @@ nav_order: 8
 # CLI
 {: .no_toc }
 
-StructArmed provides commands for initialization, analysis, reports, baselines, and version output.
+StructArmed provides commands for initialization, analysis, reports, baselines, help, and version output.
 
 ## Contents
 {: .no_toc }
@@ -31,6 +31,19 @@ vendor/bin/structarmed init --preset=stability
 vendor/bin/structarmed init --preset=enum
 vendor/bin/structarmed init --preset=all
 ```
+
+`init` only creates a new config file. When `structarmed.php` or `structarmed.dist.php` already exists, it leaves the file untouched and points to `append`.
+
+## Append Commands
+
+Add a preset to the existing config file:
+
+```bash
+vendor/bin/structarmed append --preset=codequality
+vendor/bin/structarmed append --preset=all
+```
+
+`append` adds a `->withPreset(...)` call at the end of the returned `Architecture` chain and leaves the rest of the file as is. Presets that the config already enables are skipped, so `--preset=all` adds only the missing ones.
 
 ## Analyse Commands
 
@@ -100,6 +113,14 @@ When a violation is fixable, the console report adds a hint telling you to rerun
 
 ## Reports
 
+The `console`, `summary`, and `github` reports print the configuration file in effect as an absolute path below the heading, so a discovered config or a relative `--config` value is easy to verify:
+
+```text
+StructArmed {version} — Architecture Enforcement
+================================================
+Configuration: /path/to/project/structarmed.php
+```
+
 ```bash
 # Console output is the default.
 vendor/bin/structarmed analyse
@@ -110,15 +131,66 @@ vendor/bin/structarmed analyze --report=json
 
 # GitHub Actions annotations.
 vendor/bin/structarmed analyse --report=github
+
+# Number of violations per rule.
+vendor/bin/structarmed analyse --report=summary
 ```
 
 The `github` report prints one `::error file=...,line=...,title=...::message` workflow command per violation, so GitHub Actions shows each violation inline on the pull request. File paths are relative to `GITHUB_WORKSPACE` (the repository root) when it is set, so annotations still attach when `--basepath` points at a sub directory; otherwise they are relative to the project root. The console report follows the workflow commands, so an annotation's "View details" link lands on a readable job log.
 
 The `github` report always exits with `0`: violations surface as annotations instead of failing the job. Use the `console` or `json` report when the job must fail on violations.
 
+The `summary` report prints the number of violations per rule instead of every violation, most violated rule first:
+
+```text
+Rule                                   Count
+────────────────────────────────────────────
+source.must_declare_method_visibility     12
+layer.may_not_depend_on                    3
+────────────────────────────────────────────
+15 violation(s) found in 2 rule(s)  •  0.34s
+```
+
+It exits with `1` when violations are found, like the `console` report. Without violations the table holds a single `(none)` row with a count of `0`.
+
+Pass `--summary` to keep the full report and add the counts to it:
+
+```bash
+vendor/bin/structarmed analyse --summary
+vendor/bin/structarmed analyse --report=github --summary
+vendor/bin/structarmed analyse --report=json --summary
+```
+
+The `console` and `github` reports then end with the same table, after the list of violations. The `json` report carries the counts under a `summary` key:
+
+```json
+{
+    "violations": [],
+    "summary": {
+        "source.must_declare_method_visibility": 12,
+        "layer.may_not_depend_on": 3
+    },
+    "total": 15,
+    "passed": false,
+    "elapsed": 0.34
+}
+```
+
+## Baseline Commands
+
+```bash
+# Record the current violations in a baseline file.
+vendor/bin/structarmed analyse --generate-baseline=structarmed-baseline.php
+
+# Show how the configured baseline matches the current analysis.
+vendor/bin/structarmed analyse --baseline-info
+```
+
+See [Baselines](../baselines/) for details.
+
 ## Progress Output
 
-The console report shows a progress bar on stderr while files are parsed. Disable it for CI logs or when piping output:
+The `console` and `summary` reports show a progress bar on stderr while files are parsed. Disable it for CI logs or when piping output:
 
 ```bash
 vendor/bin/structarmed analyse --no-progress
@@ -133,6 +205,22 @@ StructArmed runs in parallel by default. Disable parallel processing when debugg
 ```bash
 vendor/bin/structarmed analyse --disable-parallel
 ```
+
+## Help Commands
+
+```bash
+vendor/bin/structarmed --help
+vendor/bin/structarmed -h
+```
+
+`--help` and `-h` print the usage after a command as well:
+
+```bash
+vendor/bin/structarmed analyse --help
+vendor/bin/structarmed init -h
+```
+
+A file or directory named `-h` or `--help` in the current directory is a path to analyse, so `analyse -h` takes it as a scan path instead of printing the usage.
 
 ## Version Commands
 

@@ -6,7 +6,9 @@ namespace Boundwize\StructArmed\Report\Reports;
 
 use Boundwize\StructArmed\Cli\ColorSupport;
 use Boundwize\StructArmed\Report\ReportInterface;
+use Boundwize\StructArmed\Report\SummaryTable;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
+use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Version;
 
 use function implode;
@@ -16,8 +18,12 @@ use function strlen;
 
 use const PHP_EOL;
 
-final class ConsoleReport implements ReportInterface
+final readonly class ConsoleReport implements ReportInterface
 {
+    public function __construct(private bool $withSummary = false, private ?string $configFile = null)
+    {
+    }
+
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
         $useColor  = ColorSupport::detect();
@@ -29,8 +35,18 @@ final class ConsoleReport implements ReportInterface
         $lines[] = $heading;
         $lines[] = str_repeat('=', $lineWidth);
 
+        if ($this->configFile !== null) {
+            // A relative config path is printed as the absolute path in effect.
+            $lines[] = 'Configuration: ' . Path::normalise($this->configFile, canonicalise: true);
+        }
+
         if ($ruleViolationCollection->isEmpty()) {
             $lines[] = '';
+
+            if ($this->withSummary) {
+                $lines = [...$lines, ...SummaryTable::lines($ruleViolationCollection), ''];
+            }
+
             $lines[] = sprintf('✅  No violations found. (%.2fs)', $elapsedSeconds);
             $lines[] = '';
 
@@ -58,6 +74,12 @@ final class ConsoleReport implements ReportInterface
 
         $lines[] = '';
         $lines[] = str_repeat('─', $lineWidth);
+
+        if ($this->withSummary) {
+            $lines[] = '';
+            $lines   = [...$lines, ...SummaryTable::lines($ruleViolationCollection)];
+        }
+
         $lines[] = sprintf(
             '%d violation(s) found  •  %.2fs',
             $ruleViolationCollection->count(),
