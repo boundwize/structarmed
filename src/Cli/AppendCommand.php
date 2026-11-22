@@ -286,23 +286,29 @@ final class AppendCommand
             return [$return, ''];
         }
 
-        $closure = $return->expr;
-        $last    = end($closure->stmts);
-
-        if (
-            ($last instanceof Expression && $last->expr instanceof MethodCall)
-            || ($last instanceof Return_ && $last->expr instanceof Expr)
-        ) {
-            return [$last, ''];
-        }
-
+        $closure  = $return->expr;
         $variable = ($closure->params[0] ?? null)?->var;
 
-        // nothing added after a bare `return;` would run
-        if ($last instanceof Return_ || ! $variable instanceof Variable || ! is_string($variable->name)) {
+        if (! $variable instanceof Variable || ! is_string($variable->name)) {
             return null;
         }
 
-        return [$closure, '$' . $variable->name];
+        $last = end($closure->stmts);
+
+        if ($last instanceof Expression || $last instanceof Return_) {
+            $receiver = $last->expr;
+
+            while ($receiver instanceof MethodCall) {
+                $receiver = $receiver->var;
+            }
+
+            // only a chain on the parameter configures the Architecture
+            if ($receiver instanceof Variable && $receiver->name === $variable->name) {
+                return [$last, ''];
+            }
+        }
+
+        // nothing added after a `return` would run
+        return $last instanceof Return_ ? null : [$closure, '$' . $variable->name];
     }
 }

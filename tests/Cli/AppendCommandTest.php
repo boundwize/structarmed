@@ -297,6 +297,22 @@ final class AppendCommandTest extends TestCase
                 PHP,
             "Error: could not find a statement to append to in structarmed.php.\n",
         ];
+
+        yield 'a closure that ends with a return of something else' => [
+            <<<'PHP'
+                <?php
+
+                use Boundwize\StructArmed\Architecture;
+
+                return static function (Architecture $architecture): void {
+                    $architecture->layer('Domain', 'src/Domain/');
+
+                    return;
+                };
+
+                PHP,
+            "Error: could not find a statement to append to in structarmed.php.\n",
+        ];
     }
 
     /**
@@ -806,6 +822,69 @@ final class AppendCommandTest extends TestCase
                     }
 
                     $architecture->withPreset(\Boundwize\StructArmed\Preset\Preset::ENUM());
+                };
+
+                PHP,
+        ];
+
+        yield 'adds a statement to a closure that ends with a call on another object' => [
+            'structarmed.php',
+            'enum',
+            <<<'PHP'
+                <?php
+
+                use Boundwize\StructArmed\Architecture;
+                use Boundwize\StructArmed\Preset\Preset;
+
+                return static function (Architecture $architecture) use ($logger): void {
+                    $architecture->layer('Domain', 'src/Domain/');
+
+                    $logger->info('Configuration loaded');
+                };
+
+                PHP,
+            "Appended Preset::ENUM() to structarmed.php\n",
+            <<<'PHP'
+                <?php
+
+                use Boundwize\StructArmed\Architecture;
+                use Boundwize\StructArmed\Preset\Preset;
+
+                return static function (Architecture $architecture) use ($logger): void {
+                    $architecture->layer('Domain', 'src/Domain/');
+
+                    $logger->info('Configuration loaded');
+
+                    $architecture->withPreset(Preset::ENUM());
+                };
+
+                PHP,
+        ];
+
+        yield 'continues the chain a closure returns' => [
+            'structarmed.php',
+            'enum',
+            <<<'PHP'
+                <?php
+
+                use Boundwize\StructArmed\Architecture;
+                use Boundwize\StructArmed\Preset\Preset;
+
+                return static function (Architecture $architecture): Architecture {
+                    return $architecture;
+                };
+
+                PHP,
+            "Appended Preset::ENUM() to structarmed.php\n",
+            <<<'PHP'
+                <?php
+
+                use Boundwize\StructArmed\Architecture;
+                use Boundwize\StructArmed\Preset\Preset;
+
+                return static function (Architecture $architecture): Architecture {
+                    return $architecture
+                        ->withPreset(Preset::ENUM());
                 };
 
                 PHP,
