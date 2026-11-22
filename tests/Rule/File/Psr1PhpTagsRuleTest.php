@@ -66,7 +66,7 @@ final class Psr1PhpTagsRuleTest extends TestCase
             mkdir($basePath . '/src');
             file_put_contents($basePath . '/src/Foo.php', "<?echo 'test';?>");
             $command = escapeshellarg(PHP_BINARY)
-                . ' -d short_open_tag=1 '
+                . ' -n -d short_open_tag=1 '
                 . escapeshellarg($basePath . '/src/Foo.php');
 
             exec($command, $output, $exitCode);
@@ -109,7 +109,7 @@ final class Psr1PhpTagsRuleTest extends TestCase
             $this->assertSame('<?php echo "hi";', $fixedContent);
 
             $command = escapeshellarg(PHP_BINARY)
-                . ' -d short_open_tag=1 '
+                . ' -n -d short_open_tag=1 '
                 . escapeshellarg($basePath . '/src/Foo.php');
             exec($command, $output, $exitCode);
 
@@ -135,7 +135,7 @@ final class Psr1PhpTagsRuleTest extends TestCase
             $this->assertSame('<?php $value = 1; echo $value;', $fixedContent);
 
             $command = escapeshellarg(PHP_BINARY)
-                . ' -d short_open_tag=1 -l '
+                . ' -n -d short_open_tag=1 -l '
                 . escapeshellarg($basePath . '/src/Foo.php');
             exec($command, $output, $exitCode);
 

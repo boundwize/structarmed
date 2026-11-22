@@ -535,6 +535,7 @@ PHP);
         // "0\n", index 3 as "3" then "\n".
         $GLOBALS['mock_proc_open_command']         = [
             PHP_BINARY,
+            '-n',
             '-r',
             'fwrite(STDOUT, "2\n1"); usleep(50000); fwrite(STDOUT, "0\n3"); usleep(50000); fwrite(STDOUT, "\n");',
         ];
@@ -753,6 +754,7 @@ PHP);
         // non-zero exit code, empty output file, diagnostic on stderr. Both workers die; each failure is reported.
         $GLOBALS['mock_proc_open_command'] = [
             PHP_BINARY,
+            '-n',
             '-r',
             'fwrite(STDERR, "simulated worker fatal"); exit(255);',
         ];
@@ -993,7 +995,7 @@ PHP);
     #[RequiresFunction('posix_kill')]
     public function testExtractReportsErrorPayloadOfForkedWorkerExitingNonZero(): void
     {
-        $GLOBALS['mock_pcntl_fork']                = [PHP_BINARY, '-r', 'exit(1);'];
+        $GLOBALS['mock_pcntl_fork']                = [PHP_BINARY, '-n', '-r', 'exit(1);'];
         $GLOBALS['mock_file_get_contents_payload'] = ['nodes' => [], 'error' => 'simulated payload error'];
 
         $dir  = $this->makeTemporaryDirectory('structarmed-parallel-test');
