@@ -51,7 +51,8 @@ use const PHP_EOL;
  *     clear-cache?: true,
  *     no-cache?: true,
  *     disable-parallel?: true,
- *     fix?: true
+ *     fix?: true,
+ *     baseline-info?: true
  * }
  */
 final readonly class AnalyseCommand
@@ -71,6 +72,7 @@ final readonly class AnalyseCommand
         '--no-cache'         => 'no-cache',
         '--disable-parallel' => 'disable-parallel',
         '--fix'              => 'fix',
+        '--baseline-info'    => 'baseline-info',
     ];
 
     /**
@@ -368,6 +370,14 @@ final readonly class AnalyseCommand
                 ColorSupport::wrap('Warning:', '33', ColorSupport::detect()),
                 $missingBaselineWarning
             ) . PHP_EOL;
+        } elseif (isset($options['baseline-info']) && $reportType !== 'json') {
+            // An extra line would break the json output, so the json report leaves it out.
+            echo PHP_EOL . $this->baselineInfo(
+                $baseline,
+                $basePath,
+                $unfilteredRuleViolationCollection->count() - $ruleViolationCollection->count(),
+                $scanPaths
+            ) . PHP_EOL;
         }
 
         // The github report surfaces violations as pull request annotations,
@@ -483,6 +493,29 @@ final readonly class AnalyseCommand
         echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
         return 1;
+    }
+
+    /**
+     * @param list<string> $scanPaths
+     */
+    private function baselineInfo(?string $baseline, string $basePath, int $filteredCount, array $scanPaths): string
+    {
+        if ($baseline === null) {
+            return 'Baseline: not configured.';
+        }
+
+        $info = sprintf('Baseline [%s]: %d violation(s) filtered out', $baseline, $filteredCount);
+
+        // On a narrowed scan, a baselined violation of a file left out of the
+        // scan cannot be told from one that is gone, so only a full analysis counts them.
+        if ($scanPaths !== []) {
+            return $info . '.';
+        }
+
+        return $info . sprintf(
+            ', %d no longer found.',
+            $this->baseline->violationCount($baseline, $basePath) - $filteredCount
+        );
     }
 
     private function fixedViolationMessage(int $fixedCount): string

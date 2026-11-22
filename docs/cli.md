@@ -176,6 +176,18 @@ The `console` and `github` reports then end with the same table, after the list 
 }
 ```
 
+## Baseline Commands
+
+```bash
+# Record the current violations in a baseline file.
+vendor/bin/structarmed analyse --generate-baseline=structarmed-baseline.php
+
+# Show how the configured baseline matches the current analysis.
+vendor/bin/structarmed analyse --baseline-info
+```
+
+See [Baselines](../baselines/) for details.
+
 ## Progress Output
 
 The `console` and `summary` reports show a progress bar on stderr while files are parsed. Disable it for CI logs or when piping output:

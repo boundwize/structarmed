@@ -2048,6 +2048,94 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandPrintsBaselineInfoOnlyWithBaselineInfoOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+        $analyse  = [
+            'structarmed',
+            'analyse',
+            '--config=' . $basePath . '/structarmed.php',
+            '--no-cache',
+            '--no-progress',
+        ];
+
+        try {
+            file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+<?php
+
+namespace App;
+
+class Bar
+{
+}
+
+PHP);
+
+            [, $notConfiguredOutput] = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+
+            $this->runApplication([...$analyse, '--generate-baseline=structarmed-baseline.php'], $basePath);
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->baseline('structarmed-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+PHP);
+
+            [$exitCode, $output]     = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+            [, $outputWithoutOption] = $this->runApplication($analyse, $basePath);
+
+            file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+<?php
+
+namespace App;
+
+final class Bar
+{
+}
+
+PHP);
+
+            [$staleExitCode, $staleOutput] = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+            [, $narrowedOutput]            = $this->runApplication(
+                [...$analyse, 'src/Foo.php', '--baseline-info'],
+                $basePath
+            );
+            [, $jsonOutput]                = $this->runApplication(
+                [...$analyse, '--report=json', '--baseline-info'],
+                $basePath
+            );
+
+            $this->assertStringContainsString("\nBaseline: not configured.\n", $notConfiguredOutput);
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                "\nBaseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.\n",
+                $output
+            );
+            $this->assertStringNotContainsString('Baseline [', $outputWithoutOption);
+            $this->assertSame(0, $staleExitCode, $staleOutput);
+            $this->assertStringContainsString(
+                "\nBaseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.\n",
+                $staleOutput
+            );
+            $this->assertStringContainsString(
+                "\nBaseline [structarmed-baseline.php]: 1 violation(s) filtered out.\n",
+                $narrowedOutput
+            );
+            $this->assertStringNotContainsString('Baseline [', $jsonOutput);
+            $this->assertIsArray(json_decode($jsonOutput, true));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandFiltersPathDependentBaselineFromDifferentBasePath(): void
     {
         $sourceBasePath = $this->createProjectDirectory();

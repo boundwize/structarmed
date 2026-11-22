@@ -17,7 +17,7 @@ Usage:
   structarmed analyse|analyze [path ...] [--config=path/to/structarmed.php]
     [-d|--basepath=path/to/project] [--report=console|json|github|summary] [--summary]
     [--no-progress] [--clear-cache] [--no-cache] [--disable-parallel] [--fix]
-    [--generate-baseline=structarmed-baseline.php]
+    [--generate-baseline=structarmed-baseline.php] [--baseline-info]
   structarmed --clear-cache [--config=path/to/structarmed.php] [-d|--basepath=path/to/project]
 
 TXT;
