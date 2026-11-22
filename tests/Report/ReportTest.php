@@ -15,6 +15,7 @@ use Boundwize\StructArmed\Version;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_keys;
 use function implode;
 use function json_decode;
 use function str_repeat;
@@ -206,6 +207,28 @@ final class ReportTest extends TestCase
         $json = (new JsonReport(withSummary: true))->render(new RuleViolationCollection(), 0.0);
 
         $this->assertStringContainsString('"summary": {}', $json);
+    }
+
+    public function testJsonReportRendersBaselineInfoOnlyWhenGiven(): void
+    {
+        $baselineInfo = ['file' => 'structarmed-baseline.php', 'filtered_out' => 46, 'no_longer_found' => 2];
+
+        $data              = json_decode(
+            (new JsonReport(baselineInfo: $baselineInfo))->render(new RuleViolationCollection(), 0.0),
+            true
+        );
+        $dataWithoutInfo   = json_decode((new JsonReport())->render(new RuleViolationCollection(), 0.0), true);
+        $notConfiguredJson = (new JsonReport(
+            baselineInfo: ['file' => null, 'filtered_out' => 0, 'no_longer_found' => null]
+        ))->render(new RuleViolationCollection(), 0.0);
+
+        $this->assertIsArray($data);
+        $this->assertSame($baselineInfo, $data['baseline']);
+        $this->assertSame(['violations', 'baseline', 'total', 'passed', 'elapsed'], array_keys($data));
+        $this->assertIsArray($dataWithoutInfo);
+        $this->assertArrayNotHasKey('baseline', $dataWithoutInfo);
+        $this->assertStringContainsString('"file": null', $notConfiguredJson);
+        $this->assertStringContainsString('"no_longer_found": null', $notConfiguredJson);
     }
 
     public function testSummaryReportRendersZeroRowTableForPassingResult(): void

@@ -51,8 +51,10 @@ use const PHP_EOL;
  *     clear-cache?: true,
  *     no-cache?: true,
  *     disable-parallel?: true,
- *     fix?: true
+ *     fix?: true,
+ *     baseline-info?: true
  * }
+ * @phpstan-type BaselineInfo array{file: ?string, filtered_out: int, no_longer_found: ?int}
  */
 final readonly class AnalyseCommand
 {
@@ -71,6 +73,7 @@ final readonly class AnalyseCommand
         '--no-cache'         => 'no-cache',
         '--disable-parallel' => 'disable-parallel',
         '--fix'              => 'fix',
+        '--baseline-info'    => 'baseline-info',
     ];
 
     /**
@@ -349,9 +352,18 @@ final readonly class AnalyseCommand
         }
 
         $withSummary = isset($options['summary']);
+        // A missing baseline has nothing to tell beyond its own warning below.
+        $baselineInfo = isset($options['baseline-info']) && $missingBaselineWarning === null
+            ? $this->baselineInfo(
+                $baseline,
+                $basePath,
+                $unfilteredRuleViolationCollection->count() - $ruleViolationCollection->count(),
+                $scanPaths
+            )
+            : null;
 
         echo match ($reportType) {
-            'json' => (new JsonReport($withSummary))->render($ruleViolationCollection, $elapsed),
+            'json' => (new JsonReport($withSummary, $baselineInfo))->render($ruleViolationCollection, $elapsed),
             // GitHub resolves annotation paths against the repository root, which
             // differs from the base path when a sub directory is analysed.
             'github' => (new GithubReport(getenv('GITHUB_WORKSPACE') ?: $basePath, $withSummary, $configFile))
@@ -363,11 +375,10 @@ final readonly class AnalyseCommand
         // Shown after the report, so it stays visible below a long violation
         // list. The json report never gets here with a missing baseline.
         if ($missingBaselineWarning !== null) {
-            echo PHP_EOL . sprintf(
-                '%s %s',
-                ColorSupport::wrap('Warning:', '33', ColorSupport::detect()),
-                $missingBaselineWarning
-            ) . PHP_EOL;
+            echo PHP_EOL . $this->warning($missingBaselineWarning) . PHP_EOL;
+        } elseif ($baselineInfo !== null && $reportType !== 'json') {
+            // An extra line would break the json output: the json report carries it under a `baseline` key.
+            echo PHP_EOL . $this->baselineInfoLine($baselineInfo) . PHP_EOL;
         }
 
         // The github report surfaces violations as pull request annotations,
@@ -483,6 +494,51 @@ final readonly class AnalyseCommand
         echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
 
         return 1;
+    }
+
+    /**
+     * @param list<string> $scanPaths
+     * @return BaselineInfo
+     */
+    private function baselineInfo(?string $baseline, string $basePath, int $filteredCount, array $scanPaths): array
+    {
+        return [
+            'file'         => $baseline,
+            'filtered_out' => $filteredCount,
+            // On a narrowed scan, a baselined violation of a file left out of the
+            // scan cannot be told from one that is gone, so only a full analysis counts them.
+            'no_longer_found' => $baseline === null || $scanPaths !== []
+                ? null
+                : $this->baseline->violationCount($baseline, $basePath) - $filteredCount,
+        ];
+    }
+
+    /**
+     * @param BaselineInfo $baselineInfo
+     */
+    private function baselineInfoLine(array $baselineInfo): string
+    {
+        ['file' => $file, 'filtered_out' => $filteredCount, 'no_longer_found' => $noLongerFoundCount] = $baselineInfo;
+
+        if ($file === null) {
+            return 'Baseline: not configured.';
+        }
+
+        $line = sprintf('Baseline [%s]: %d violation(s) filtered out', $file, $filteredCount);
+
+        if ($noLongerFoundCount === null) {
+            return $line . '.';
+        }
+
+        $line .= sprintf(', %d no longer found.', $noLongerFoundCount);
+
+        // Only a baseline that went stale is worth a warning.
+        return $noLongerFoundCount > 0 ? $this->warning($line) : $line;
+    }
+
+    private function warning(string $message): string
+    {
+        return sprintf('%s %s', ColorSupport::wrap('Warning:', '33', ColorSupport::detect()), $message);
     }
 
     private function fixedViolationMessage(int $fixedCount): string

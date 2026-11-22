@@ -13,6 +13,7 @@ use PhpParser\PrettyPrinter\Standard;
 use RuntimeException;
 
 use function array_keys;
+use function array_sum;
 use function array_values;
 use function dirname;
 use function file_exists;
@@ -65,6 +66,22 @@ final readonly class Baseline
         }
 
         return $filtered;
+    }
+
+    /**
+     * The number of violations the baseline file can suppress: an entry
+     * carrying a `count` stands for that many violations.
+     */
+    public function violationCount(string $baselinePath, string $basePath): int
+    {
+        $normalisedBasePath = Path::normalise($basePath, canonicalise: true);
+
+        return array_sum($this->loadSignatures(
+            $baselinePath,
+            $basePath,
+            $normalisedBasePath,
+            $this->messagePathPrefixes($basePath, $normalisedBasePath),
+        ));
     }
 
     public function generate(

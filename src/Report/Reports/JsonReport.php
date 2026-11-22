@@ -14,7 +14,10 @@ use const JSON_PRETTY_PRINT;
 
 final readonly class JsonReport implements ReportInterface
 {
-    public function __construct(private bool $withSummary = false)
+    /**
+     * @param array{file: ?string, filtered_out: int, no_longer_found: ?int}|null $baselineInfo
+     */
+    public function __construct(private bool $withSummary = false, private ?array $baselineInfo = null)
     {
     }
 
@@ -24,6 +27,10 @@ final readonly class JsonReport implements ReportInterface
 
         if ($this->withSummary) {
             $data['summary'] = (object) $ruleViolationCollection->countByRule();
+        }
+
+        if ($this->baselineInfo !== null) {
+            $data['baseline'] = $this->baselineInfo;
         }
 
         $data['total']   = $ruleViolationCollection->count();

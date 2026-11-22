@@ -62,6 +62,55 @@ The `json` report cannot carry a warning without breaking its output, so with `-
 Error: Baseline file [structarmed-baseline.php] does not exist.
 ```
 
+## Baseline Info
+
+A baseline goes stale once baselined violations are fixed: their entries stay in the file. StructArmed does not warn about that by default, because a baseline can be kept as is on purpose, for example when it is shared between branches. Pass `--baseline-info` to see how the configured baseline matches the current analysis:
+
+```bash
+vendor/bin/structarmed analyse --baseline-info
+```
+
+A line is printed after the report:
+
+```text
+Baseline [structarmed-baseline.php]: 46 violation(s) filtered out, 0 no longer found.
+```
+
+- `filtered out` is the number of violations the baseline kept out of the report.
+- `no longer found` is the number of baselined violations the analysis did not produce anymore.
+
+When `no longer found` is above `0`, the line turns into a warning, and regenerating the baseline with `--generate-baseline` drops those entries:
+
+```text
+Warning: Baseline [structarmed-baseline.php]: 46 violation(s) filtered out, 2 no longer found.
+```
+
+The `no longer found` count needs a full analysis. When paths are passed, as in `analyse src --baseline-info`, baselined violations of the files left out cannot be told from fixed ones, so only the `filtered out` count is printed.
+
+Without a configured baseline the line is `Baseline: not configured.`. The option does not change the exit code.
+
+The line is printed for the `console`, `summary`, and `github` reports. The `json` report cannot carry an extra line without breaking its output, so it carries the same numbers under a `baseline` key:
+
+```bash
+vendor/bin/structarmed analyse --report=json --baseline-info
+```
+
+```json
+{
+    "violations": [],
+    "baseline": {
+        "file": "structarmed-baseline.php",
+        "filtered_out": 46,
+        "no_longer_found": 2
+    },
+    "total": 0,
+    "passed": true,
+    "elapsed": 0.34
+}
+```
+
+`no_longer_found` is `null` when paths are passed, and `file` is `null` without a configured baseline. The key is left out without `--baseline-info`.
+
 ## When To Use A Baseline
 
 Use a baseline when a legacy project has known architecture violations that cannot be fixed in one pass.

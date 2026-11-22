@@ -47,6 +47,8 @@ use function sys_get_temp_dir;
 use function tempnam;
 use function unlink;
 
+use const PHP_EOL;
+
 #[CoversClass(AnalyseCommand::class)]
 #[CoversClass(ClearCacheCommand::class)]
 #[CoversClass(InitCommand::class)]
@@ -2043,6 +2045,106 @@ PHP);
             $this->assertSame(0, $generateExitCode, $generateOutput);
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString('No violations found', $output);
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandPrintsBaselineInfoOnlyWithBaselineInfoOption(): void
+    {
+        $basePath = $this->createProjectDirectoryWithViolation();
+        $analyse  = [
+            'structarmed',
+            'analyse',
+            '--config=' . $basePath . '/structarmed.php',
+            '--no-cache',
+            '--no-progress',
+        ];
+
+        try {
+            file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+<?php
+
+namespace App;
+
+class Bar
+{
+}
+
+PHP);
+
+            [, $notConfiguredOutput] = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+
+            $this->runApplication([...$analyse, '--generate-baseline=structarmed-baseline.php'], $basePath);
+            file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->baseline('structarmed-baseline.php')
+    ->layer('Source', 'src/')
+    ->rule('source.must_be_final', new MustBeFinalRule('Source'));
+
+PHP);
+
+            [$exitCode, $output]     = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+            [, $outputWithoutOption] = $this->runApplication($analyse, $basePath);
+
+            file_put_contents($basePath . '/src/Bar.php', <<<'PHP'
+<?php
+
+namespace App;
+
+final class Bar
+{
+}
+
+PHP);
+
+            [$staleExitCode, $staleOutput] = $this->runApplication([...$analyse, '--baseline-info'], $basePath);
+            [, $narrowedOutput]            = $this->runApplication(
+                [...$analyse, 'src/Foo.php', '--baseline-info'],
+                $basePath
+            );
+            [, $jsonOutput]                = $this->runApplication(
+                [...$analyse, '--report=json', '--baseline-info'],
+                $basePath
+            );
+
+            $this->assertStringContainsString(PHP_EOL . 'Baseline: not configured.' . PHP_EOL, $notConfiguredOutput);
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString(
+                PHP_EOL
+                    . 'Baseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.'
+                    . PHP_EOL,
+                $output
+            );
+            $this->assertStringNotContainsString('Warning:', $output);
+            $this->assertStringNotContainsString('Baseline [', $outputWithoutOption);
+            $this->assertSame(0, $staleExitCode, $staleOutput);
+            $this->assertStringContainsString(
+                PHP_EOL
+                    . 'Warning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.'
+                    . PHP_EOL,
+                $this->withoutAnsi($staleOutput)
+            );
+            $this->assertStringContainsString(
+                PHP_EOL . 'Baseline [structarmed-baseline.php]: 1 violation(s) filtered out.' . PHP_EOL,
+                $narrowedOutput
+            );
+            $this->assertStringNotContainsString('Baseline [', $jsonOutput);
+
+            $jsonData = json_decode($jsonOutput, true);
+
+            $this->assertIsArray($jsonData);
+            $this->assertSame(
+                ['file' => 'structarmed-baseline.php', 'filtered_out' => 1, 'no_longer_found' => 1],
+                $jsonData['baseline']
+            );
         } finally {
             $this->removeTempDirectory($basePath);
         }
