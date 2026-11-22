@@ -1899,6 +1899,49 @@ PHP;
         );
     }
 
+    public function testCollectsSetHookParameterOfPromotedPropertyUnderItsSetVisibility(): void
+    {
+        $this->assertSame(
+            [
+                ['Vendor\Imported', 'value', ClassSignature::PARAM, 'public', 11, false],
+                ['App\Guarded', 'value', ClassSignature::PARAM, 'protected', 14, false],
+                ['App\Hidden', 'value', ClassSignature::PARAM, 'private', 17, false],
+                ['App\Declared', 'declared', ClassSignature::PROPERTY, 'private', 19, true],
+                ['App\Declared', 'value', ClassSignature::PARAM, 'private', 20, false],
+                ['App\Wider', 'value', ClassSignature::PARAM, 'private', 20, false],
+                ['App\Declared', 'declared', ClassSignature::PARAM, 'public', 19, true],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                namespace App;
+
+                use Vendor\Imported;
+
+                class Foo
+                {
+                    public function __construct(
+                        public string $open {
+                            set(string|Imported $value) => (string) $value;
+                        },
+                        public protected(set) string $guarded {
+                            set(string|Guarded $value) => (string) $value;
+                        },
+                        public private(set) string $hidden {
+                            set(string|Hidden $value) => (string) $value;
+                        },
+                        private Declared $declared {
+                            set(Declared|Wider $value) {
+                                $this->declared = new Declared();
+                            }
+                        },
+                    ) {
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
     public function testKeepsSignaturesWithTheirDeclaringClassLike(): void
     {
         $analysisNodeCollector = $this->makeCollector(

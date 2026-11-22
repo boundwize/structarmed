@@ -420,6 +420,12 @@ final class AnalyserTest extends TestCase
                     public private(set) string $hidden {
                         set(string|InternalValue $hidden) => (string) $hidden;
                     }
+                    public function __construct(
+                        public string $promoted {
+                            set(string|InternalValue $promoted) => (string) $promoted;
+                        },
+                    ) {
+                    }
                 }
 
                 PHP,
@@ -432,6 +438,7 @@ final class AnalyserTest extends TestCase
         $expected            = [
             [7, $message . 'param [value]'],
             [10, $message . 'param [guarded]'],
+            [17, $message . 'param [promoted]'],
         ];
 
         foreach ([AnalyserOptions::sequential(), AnalyserOptions::parallel(2)] as $analyserOptions) {
