@@ -53,8 +53,7 @@ Explore community projects built around StructArmed.
             <a href="https://skie.github.io/structarmed-vizualize/">StructArmed Explorer</a>
         </td>
         <td nowrap>
-            Visualize your <code>structarmed.php</code> configuration as an interactive layer-dependency graph<br>
-            directly in the browser, with no installation required.
+            Visualize your <code>structarmed.php</code> configuration as an interactive layer-dependency graph directly in the browser, with no installation required.
         </td>
     </tr>
     <tr>
@@ -62,8 +61,7 @@ Explore community projects built around StructArmed.
             <a href="https://github.com/Crustum/structarmed-cakephp">StructArmed CakePHP Preset</a>
         </td>
         <td nowrap>
-            Preset for CakePHP 5 conventions (Controller/Component, Table/Entity/Behavior,<br>
-            View/Cell/Helper, Command), with plugin namespace support.
+            Preset for CakePHP 5 conventions (Controller/Component, Table/Entity/Behavior, View/Cell/Helper, Command), with plugin namespace support.
         </td>
     </tr>
 </table>
