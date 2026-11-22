@@ -821,11 +821,11 @@ final class AnalyserTest extends TestCase
     public function testAnalyserReturnsNoViolationsForValidCode(): void
     {
         $architecture = Architecture::define()
-            ->layer('Domain', 'tests/Fixtures/sample/src/Domain/')
-            ->layer('Application', 'tests/Fixtures/sample/src/Application/')
-            ->layer('Infrastructure', 'tests/Fixtures/sample/src/Infrastructure/');
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Application', 'src/Application/')
+            ->layer('Infrastructure', 'src/Infrastructure/');
 
-        $analyser                = new Analyser(dirname(__DIR__, 2));
+        $analyser                = new Analyser(__DIR__ . '/../Fixtures/sample');
         $ruleViolationCollection = $analyser->analyse($architecture);
 
         // Order.php is a valid entity — should produce no layer violations
@@ -835,12 +835,12 @@ final class AnalyserTest extends TestCase
     public function testAnalyserDetectsViolationsInBadCode(): void
     {
         $architecture = Architecture::define()
-            ->layer('Domain', 'tests/Fixtures/sample/src/Domain/')
-            ->layer('Application', 'tests/Fixtures/sample/src/Application/')
-            ->layer('Infrastructure', 'tests/Fixtures/sample/src/Infrastructure/')
+            ->layer('Domain', 'src/Domain/')
+            ->layer('Application', 'src/Application/')
+            ->layer('Infrastructure', 'src/Infrastructure/')
             ->withPreset(Preset::DDD());
 
-        $analyser                = new Analyser(dirname(__DIR__, 2));
+        $analyser                = new Analyser(__DIR__ . '/../Fixtures/sample');
         $ruleViolationCollection = $analyser->analyse($architecture);
 
         // BadOrderEntity.php uses DateTime and is not final — should have violations
@@ -3706,9 +3706,9 @@ PHP;
     public function testAnalyserReturnsEmptyCollectionForEmptyLayers(): void
     {
         $architecture = Architecture::define()
-            ->layer('Domain', 'tests/Fixtures/sample/src/Domain/Events/');
+            ->layer('Domain', 'src/Domain/Events/');
 
-        $analyser                = new Analyser(dirname(__DIR__, 2));
+        $analyser                = new Analyser(__DIR__ . '/../Fixtures/sample');
         $ruleViolationCollection = $analyser->analyse($architecture);
 
         // Events directory is empty — no violations
@@ -3718,9 +3718,9 @@ PHP;
     public function testAnalyserSkipsNonExistentPaths(): void
     {
         $architecture = Architecture::define()
-            ->layer('Domain', 'tests/Fixtures/sample/src/DoesNotExist/');
+            ->layer('Domain', 'src/DoesNotExist/');
 
-        $analyser = new Analyser(dirname(__DIR__, 2));
+        $analyser = new Analyser(__DIR__ . '/../Fixtures/sample');
 
         // Should not throw — simply skip missing directories
         $ruleViolationCollection = $analyser->analyse($architecture);

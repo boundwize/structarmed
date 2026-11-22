@@ -43,18 +43,28 @@ final class StructArmedExtensionTest extends TestCase
 
     public function testBootstrapPrintsPassingReport(): void
     {
-        $configPath = $this->writeConfig(
+        $configPath   = $this->writeConfig(
             'return ' . Architecture::class . "::define()\n"
             . $this->cacheDirectoryCall() . ';'
         );
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
 
-        $this->expectOutputRegex('/No violations found/');
+        // an empty project: from the repository root, its composer.json would
+        // put every source and test file of this package under analysis
+        chdir($this->makeTemporaryDirectory('structarmed-extension'));
 
-        (new StructArmedExtension())->bootstrap(
-            $this->configuration(),
-            new Facade(),
-            $this->parameters($configPath)
-        );
+        try {
+            $this->expectOutputRegex('/No violations found/');
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                $this->parameters($configPath)
+            );
+        } finally {
+            chdir($previousPath);
+        }
     }
 
     private string|false $originalDisabledValue = false;
@@ -294,22 +304,31 @@ final class StructArmedExtensionTest extends TestCase
 
     public function testBootstrapThrowsWhenViolationsAreFound(): void
     {
-        $configPath = $this->writeConfig(
+        $configPath   = $this->writeConfig(
             'return ' . Architecture::class . "::define()\n"
-            . "    ->layer('Domain', 'tests/Fixtures/sample/src/Domain/')\n"
+            . "    ->layer('Domain', 'src/Domain/')\n"
             . "    ->rule('must_be_final', new " . MustBeFinalRule::class . "('Domain'))\n"
             . $this->cacheDirectoryCall() . ';'
         );
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
 
-        $this->expectException(ViolationsFoundException::class);
-        $this->expectExceptionMessage('StructArmed found');
-        $this->expectOutputRegex('/Found \d+ violation/');
+        // the sample project has no composer.json, so only its Domain layer is analysed
+        chdir(__DIR__ . '/../Fixtures/sample');
 
-        (new StructArmedExtension())->bootstrap(
-            $this->configuration(),
-            new Facade(),
-            $this->parameters($configPath)
-        );
+        try {
+            $this->expectException(ViolationsFoundException::class);
+            $this->expectExceptionMessage('StructArmed found');
+            $this->expectOutputRegex('/Found \d+ violation/');
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                $this->parameters($configPath)
+            );
+        } finally {
+            chdir($previousPath);
+        }
     }
 
     public function testBootstrapDoesNotThrowWhenViolationsAreBaselined(): void
@@ -364,22 +383,30 @@ PHP);
 
     public function testBootstrapWarnsWithoutBlockingWhenBaselineFileMissing(): void
     {
-        $configPath = $this->writeConfig(
+        $configPath   = $this->writeConfig(
             'return ' . Architecture::class . "::define()\n"
             . "    ->baseline('missing-baseline.php')\n"
             . $this->cacheDirectoryCall() . ';'
         );
+        $previousPath = getcwd();
+        $this->assertIsString($previousPath);
 
-        $this->expectOutputRegex(
-            // The warning label is yellow when colors are supported.
-            '/No violations found.*Warning:(\e\\[0m)? Baseline file \\[missing-baseline\\.php\\] does not exist/s'
-        );
+        chdir($this->makeTemporaryDirectory('structarmed-extension'));
 
-        (new StructArmedExtension())->bootstrap(
-            $this->configuration(),
-            new Facade(),
-            $this->parameters($configPath)
-        );
+        try {
+            $this->expectOutputRegex(
+                // The warning label is yellow when colors are supported.
+                '/No violations found.*Warning:(\e\\[0m)? Baseline file \\[missing-baseline\\.php\\] does not exist/s'
+            );
+
+            (new StructArmedExtension())->bootstrap(
+                $this->configuration(),
+                new Facade(),
+                $this->parameters($configPath)
+            );
+        } finally {
+            chdir($previousPath);
+        }
     }
 
     public function testBootstrapPrintsBaselineInfoOnlyWithBaselineInfoParameter(): void
