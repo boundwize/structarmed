@@ -79,10 +79,11 @@ final readonly class AnalysisNodeExtractor
 
         foreach ($filesToParse as $fileToParse) {
             try {
-                $ast                          = $this->fileAnalysisProvider->ast($fileToParse, $withFileAnalysis);
-                $nonCanonicalKeywordConstants = [];
-                $numericLiterals              = [];
-                $fileFunctions                = [];
+                $ast                            = $this->fileAnalysisProvider->ast($fileToParse, $withFileAnalysis);
+                $nonCanonicalKeywordConstants   = [];
+                $numericLiterals                = [];
+                $fileFunctions                  = [];
+                $attributesWithEmptyParentheses = [];
 
                 if ($ast !== null && $ast !== []) {
                     $analysisNodeCollector->setCurrentFile($fileToParse, $this->fileAnalysisProvider->tokens());
@@ -91,9 +92,10 @@ final readonly class AnalysisNodeExtractor
                     // The same traversal ran NameResolver, so the file analysis
                     // reuses its AST instead of resolving names in a second walk.
                     if ($withFileAnalysis) {
-                        $nonCanonicalKeywordConstants = $analysisNodeCollector->getNonCanonicalKeywordConstants();
-                        $numericLiterals              = $analysisNodeCollector->getNumericLiterals();
-                        $fileFunctions                = $analysisNodeCollector->getFileFunctions();
+                        $nonCanonicalKeywordConstants   = $analysisNodeCollector->getNonCanonicalKeywordConstants();
+                        $numericLiterals                = $analysisNodeCollector->getNumericLiterals();
+                        $fileFunctions                  = $analysisNodeCollector->getFileFunctions();
+                        $attributesWithEmptyParentheses = $analysisNodeCollector->getAttributesWithEmptyParentheses();
 
                         $this->fileAnalysisProvider->replaceResolvedAst($fileToParse, $resolvedAst);
                     }
@@ -107,6 +109,7 @@ final readonly class AnalysisNodeExtractor
                         $nonCanonicalKeywordConstants,
                         $numericLiterals,
                         $fileFunctions,
+                        $attributesWithEmptyParentheses,
                     );
                 }
             } finally {

@@ -60,6 +60,7 @@ final class PropertyUnserializeTraitTest extends TestCase
                 sideEffectLine: 9,
                 nonCanonicalKeywordConstants: [[9, 'TRUE']],
                 numericLiterals: [[11, '1000000', 1000000]],
+                attributesWithEmptyParentheses: [[13, 'App\Attr']],
             ),
         ];
         yield 'class' => [
