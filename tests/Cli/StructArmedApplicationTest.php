@@ -47,6 +47,8 @@ use function sys_get_temp_dir;
 use function tempnam;
 use function unlink;
 
+use const PHP_EOL;
+
 #[CoversClass(AnalyseCommand::class)]
 #[CoversClass(ClearCacheCommand::class)]
 #[CoversClass(InitCommand::class)]
@@ -2113,21 +2115,25 @@ PHP);
                 $basePath
             );
 
-            $this->assertStringContainsString("\nBaseline: not configured.\n", $notConfiguredOutput);
+            $this->assertStringContainsString(PHP_EOL . 'Baseline: not configured.' . PHP_EOL, $notConfiguredOutput);
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString(
-                "\nBaseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.\n",
+                PHP_EOL
+                    . 'Baseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.'
+                    . PHP_EOL,
                 $output
             );
             $this->assertStringNotContainsString('Warning:', $output);
             $this->assertStringNotContainsString('Baseline [', $outputWithoutOption);
             $this->assertSame(0, $staleExitCode, $staleOutput);
             $this->assertStringContainsString(
-                "\nWarning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.\n",
+                PHP_EOL
+                    . 'Warning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.'
+                    . PHP_EOL,
                 $this->withoutAnsi($staleOutput)
             );
             $this->assertStringContainsString(
-                "\nBaseline [structarmed-baseline.php]: 1 violation(s) filtered out.\n",
+                PHP_EOL . 'Baseline [structarmed-baseline.php]: 1 violation(s) filtered out.' . PHP_EOL,
                 $narrowedOutput
             );
             $this->assertStringNotContainsString('Baseline [', $jsonOutput);
