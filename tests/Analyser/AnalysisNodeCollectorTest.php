@@ -1532,6 +1532,10 @@ PHP;
             {
                 public Bar $bar;
 
+                public string $hooked {
+                    set(string|Corge $value) => (string) $value;
+                }
+
                 public function __construct(public Baz $baz)
                 {
                 }
@@ -1765,6 +1769,174 @@ PHP;
                 class Foo
                 {
                     public Shared $first, $second;
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testKeepsOnlyThePropertySignatureForGetHookAndUntypedSetHook(): void
+    {
+        $this->assertSame(
+            [
+                ['Shared', 'getOnly', ClassSignature::PROPERTY, 'public', 5, false],
+                ['Shared', 'implicitSet', ClassSignature::PROPERTY, 'public', 9, false],
+                ['Shared', 'blockSet', ClassSignature::PROPERTY, 'public', 14, false],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    public Shared $getOnly {
+                        get => $this->getOnly;
+                    }
+
+                    public Shared $implicitSet {
+                        get => $this->implicitSet;
+                        set => $value;
+                    }
+
+                    public Shared $blockSet {
+                        set {
+                            $this->blockSet = $value;
+                        }
+                    }
+
+                    public $untyped {
+                        set($value) => $value;
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testCollectsExplicitSetHookParameterTypesAsParameters(): void
+    {
+        $this->assertSame(
+            [
+                ['Vendor\Imported', 'value', ClassSignature::PARAM, 'public', 11, false],
+                ['Fully\Qualified', 'value', ClassSignature::PARAM, 'public', 11, false],
+                ['App\Local', 'composite', ClassSignature::PROPERTY, 'public', 14, false],
+                ['App\Local', 'composite', ClassSignature::PARAM, 'public', 15, false],
+                ['App\First', 'composite', ClassSignature::PARAM, 'public', 15, false],
+                ['App\Second', 'composite', ClassSignature::PARAM, 'public', 15, false],
+                ['App\Local', 'nullable', ClassSignature::PROPERTY, 'public', 20, false],
+                ['App\Local', 'renamed', ClassSignature::PARAM, 'public', 21, false],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                namespace App;
+
+                use Vendor\Imported;
+
+                class Foo
+                {
+                    public string $union {
+                        get => $this->union;
+                        set(string|Imported|\Fully\Qualified $value) => (string) $value;
+                    }
+
+                    public Local $composite {
+                        set(Local|(First&Second) $composite) {
+                            $this->composite = new Local();
+                        }
+                    }
+
+                    public ?Local $nullable {
+                        set(?Local $renamed) => $renamed;
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testCollectsSetHookParameterUnderTheVisibilityThePropertyIsSetWith(): void
+    {
+        $this->assertSame(
+            [
+                ['PublicProperty', 'value', ClassSignature::PARAM, 'public', 6, false],
+                ['ProtectedProperty', 'value', ClassSignature::PARAM, 'protected', 10, false],
+                ['PrivateProperty', 'value', ClassSignature::PARAM, 'private', 14, false],
+                ['ProtectedSet', 'value', ClassSignature::PARAM, 'protected', 18, false],
+                ['PrivateSet', 'value', ClassSignature::PARAM, 'private', 22, false],
+                ['Declared', 'implicitlyPublic', ClassSignature::PROPERTY, 'public', 25, false],
+                ['Declared', 'value', ClassSignature::PARAM, 'private', 26, false],
+                ['Wider', 'value', ClassSignature::PARAM, 'private', 26, false],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                class Foo
+                {
+                    public string $publicProperty {
+                        set(string|PublicProperty $value) => (string) $value;
+                    }
+
+                    protected string $protectedProperty {
+                        set(string|ProtectedProperty $value) => (string) $value;
+                    }
+
+                    private string $privateProperty {
+                        set(string|PrivateProperty $value) => (string) $value;
+                    }
+
+                    public protected(set) string $protectedSet {
+                        set(string|ProtectedSet $value) => (string) $value;
+                    }
+
+                    protected private(set) string $privateSet {
+                        set(string|PrivateSet $value) => (string) $value;
+                    }
+
+                    private(set) Declared $implicitlyPublic {
+                        set(Declared|Wider $value) {
+                            $this->implicitlyPublic = new Declared();
+                        }
+                    }
+                }
+                CODE_SAMPLE)
+        );
+    }
+
+    public function testCollectsSetHookParameterOfPromotedPropertyUnderItsSetVisibility(): void
+    {
+        $this->assertSame(
+            [
+                ['Vendor\Imported', 'value', ClassSignature::PARAM, 'public', 11, false],
+                ['App\Guarded', 'value', ClassSignature::PARAM, 'protected', 14, false],
+                ['App\Hidden', 'value', ClassSignature::PARAM, 'private', 17, false],
+                ['App\Declared', 'declared', ClassSignature::PROPERTY, 'private', 19, true],
+                ['App\Declared', 'value', ClassSignature::PARAM, 'private', 20, false],
+                ['App\Wider', 'value', ClassSignature::PARAM, 'private', 20, false],
+                ['App\Declared', 'declared', ClassSignature::PARAM, 'public', 19, true],
+            ],
+            $this->collectSignatures(<<<'CODE_SAMPLE'
+                <?php
+
+                namespace App;
+
+                use Vendor\Imported;
+
+                class Foo
+                {
+                    public function __construct(
+                        public string $open {
+                            set(string|Imported $value) => (string) $value;
+                        },
+                        public protected(set) string $guarded {
+                            set(string|Guarded $value) => (string) $value;
+                        },
+                        public private(set) string $hidden {
+                            set(string|Hidden $value) => (string) $value;
+                        },
+                        private Declared $declared {
+                            set(Declared|Wider $value) {
+                                $this->declared = new Declared();
+                            }
+                        },
+                    ) {
+                    }
                 }
                 CODE_SAMPLE)
         );
@@ -3633,12 +3805,14 @@ PHP;
     public function testIgnoresMemberNodesOutsideTrackedClassLike(): void
     {
         $namespaceLayerResolver = new NamespaceLayerResolver(['Domain' => 'src/Domain/'], self::BASE_PATH);
-        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver);
+        $analysisNodeCollector  = new AnalysisNodeCollector($namespaceLayerResolver, withSignatures: true);
+        $property               = new Property(Modifiers::PUBLIC, [new PropertyItem('orphan')]);
         $enumCase               = new EnumCase('Orphan');
 
         $analysisNodeCollector->setCurrentFile('/fake/path/Foo.php');
 
-        $analysisNodeCollector->enterNode(new Property(Modifiers::PUBLIC, [new PropertyItem('orphan')]));
+        $analysisNodeCollector->enterNode($property);
+        $analysisNodeCollector->leaveNode($property);
         $analysisNodeCollector->enterNode(new ClassConst([new Const_('ORPHAN', new Int_(1))]));
         $analysisNodeCollector->enterNode(new TraitUse([new Name('OrphanTrait')]));
         $analysisNodeCollector->enterNode($enumCase);

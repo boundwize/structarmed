@@ -286,6 +286,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
         ClassMethod::class        => true,
+        Property::class           => true,
         Function_::class          => true,
         Class_::class             => true,
         Interface_::class         => true,
@@ -847,6 +848,18 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
+        // Left after its hooks, once the NameResolver has resolved their
+        // parameter types; the rest of the property is collected on enter.
+        if ($node instanceof Property) {
+            $analysis = $this->declaringClassLikeAnalysis();
+
+            if ($this->withSignatures && $analysis instanceof ClassLikeAnalysis) {
+                $this->collectSetHookSignatures($analysis, $node);
+            }
+
+            return null;
+        }
+
         if ($node instanceof Function_) {
             $this->finishFunctionLikeAnalysis();
             array_pop($this->activeFunctionNames);
@@ -1048,6 +1061,35 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
+     * A set hook may accept a wider type than its property declares, so an
+     * explicitly typed hook parameter is recorded as a parameter of its own,
+     * under the visibility the property is set with. A get hook, and a set
+     * hook without a typed parameter, take the property's type, which is
+     * recorded with the property, or the promoted parameter, itself.
+     */
+    private function collectSetHookSignatures(ClassLikeAnalysis $classLikeAnalysis, Property|Param $node): void
+    {
+        $visibility = match (true) {
+            $node->isPrivateSet()   => 'private',
+            $node->isProtectedSet() => 'protected',
+            default                 => $this->resolveVisibilityName($node),
+        };
+
+        // only a set hook takes a parameter
+        foreach ($node->hooks as $hook) {
+            foreach ($hook->params as $param) {
+                $this->collectSignatures(
+                    $classLikeAnalysis,
+                    $param->type,
+                    $param->var instanceof Variable && is_string($param->var->name) ? $param->var->name : '',
+                    ClassSignature::PARAM,
+                    $visibility
+                );
+            }
+        }
+    }
+
+    /**
      * Collected on leaving the enum, while its scope is still active: by then
      * the NameResolver has resolved every name in the case values, and a case
      * value may reference an enum constant declared after the case.
@@ -1240,8 +1282,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         foreach ($classMethod->params as $param) {
             $name = $param->var instanceof Variable && is_string($param->var->name) ? $param->var->name : '';
 
-            // a promoted parameter is recorded as the property it declares, and also
-            // as a parameter when private, since callers must still pass its type
+            // a promoted parameter is recorded as the property it declares, set hook
+            // included, and also as a parameter when private, since callers must
+            // still pass its type
             if ($param->isPromoted()) {
                 $this->collectSignatures(
                     $classLikeAnalysis,
@@ -1251,6 +1294,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     $this->resolveVisibilityName($param),
                     true
                 );
+                $this->collectSetHookSignatures($classLikeAnalysis, $param);
 
                 if (! $param->isPrivate()) {
                     continue;
