@@ -286,6 +286,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         MethodCall::class         => true,
         NullsafeMethodCall::class => true,
         ClassMethod::class        => true,
+        Property::class           => true,
         Function_::class          => true,
         Class_::class             => true,
         Interface_::class         => true,
@@ -847,6 +848,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return null;
         }
 
+        // Left after its hooks, once the NameResolver has resolved their
+        // parameter types; the rest of the property is collected on enter.
+        if ($node instanceof Property) {
+            $this->collectSetHookSignatures($node);
+
+            return null;
+        }
+
         if ($node instanceof Function_) {
             $this->finishFunctionLikeAnalysis();
             array_pop($this->activeFunctionNames);
@@ -1043,6 +1052,41 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         if ($stmt instanceof TraitUse && ! $analysis->isInterface) {
             foreach ($stmt->traits as $trait) {
                 $analysis->traits[] = $trait->toString();
+            }
+        }
+    }
+
+    /**
+     * A set hook may accept a wider type than its property declares, so an
+     * explicitly typed hook parameter is recorded as a parameter of its own,
+     * under the visibility the property is set with. A get hook, and a set
+     * hook without a typed parameter, take the property's type, which
+     * collectMember() has already recorded.
+     */
+    private function collectSetHookSignatures(Property $property): void
+    {
+        $analysis = $this->declaringClassLikeAnalysis();
+
+        if (! $this->withSignatures || ! $analysis instanceof ClassLikeAnalysis) {
+            return;
+        }
+
+        $visibility = match (true) {
+            $property->isPrivateSet()   => 'private',
+            $property->isProtectedSet() => 'protected',
+            default                     => $this->resolveVisibilityName($property),
+        };
+
+        // only a set hook takes a parameter
+        foreach ($property->hooks as $hook) {
+            foreach ($hook->params as $param) {
+                $this->collectSignatures(
+                    $analysis,
+                    $param->type,
+                    $param->var instanceof Variable && is_string($param->var->name) ? $param->var->name : '',
+                    ClassSignature::PARAM,
+                    $visibility
+                );
             }
         }
     }
