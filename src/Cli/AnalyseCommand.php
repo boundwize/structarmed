@@ -365,11 +365,7 @@ final readonly class AnalyseCommand
         // Shown after the report, so it stays visible below a long violation
         // list. The json report never gets here with a missing baseline.
         if ($missingBaselineWarning !== null) {
-            echo PHP_EOL . sprintf(
-                '%s %s',
-                ColorSupport::wrap('Warning:', '33', ColorSupport::detect()),
-                $missingBaselineWarning
-            ) . PHP_EOL;
+            echo PHP_EOL . $this->warning($missingBaselineWarning) . PHP_EOL;
         } elseif (isset($options['baseline-info']) && $reportType !== 'json') {
             // An extra line would break the json output, so the json report leaves it out.
             echo PHP_EOL . $this->baselineInfo(
@@ -512,10 +508,16 @@ final readonly class AnalyseCommand
             return $info . '.';
         }
 
-        return $info . sprintf(
-            ', %d no longer found.',
-            $this->baseline->violationCount($baseline, $basePath) - $filteredCount
-        );
+        $noLongerFoundCount = $this->baseline->violationCount($baseline, $basePath) - $filteredCount;
+        $info              .= sprintf(', %d no longer found.', $noLongerFoundCount);
+
+        // Only a baseline that went stale is worth a warning.
+        return $noLongerFoundCount > 0 ? $this->warning($info) : $info;
+    }
+
+    private function warning(string $message): string
+    {
+        return sprintf('%s %s', ColorSupport::wrap('Warning:', '33', ColorSupport::detect()), $message);
     }
 
     private function fixedViolationMessage(int $fixedCount): string

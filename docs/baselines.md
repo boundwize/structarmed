@@ -73,15 +73,23 @@ vendor/bin/structarmed analyse --baseline-info
 A line is printed after the report:
 
 ```text
-Baseline [structarmed-baseline.php]: 46 violation(s) filtered out, 2 no longer found.
+Baseline [structarmed-baseline.php]: 46 violation(s) filtered out, 0 no longer found.
 ```
 
 - `filtered out` is the number of violations the baseline kept out of the report.
-- `no longer found` is the number of baselined violations the analysis did not produce anymore. When it is above `0`, regenerating the baseline with `--generate-baseline` drops them.
+- `no longer found` is the number of baselined violations the analysis did not produce anymore.
+
+When `no longer found` is above `0`, the line turns into a warning, and regenerating the baseline with `--generate-baseline` drops those entries:
+
+```text
+Warning: Baseline [structarmed-baseline.php]: 46 violation(s) filtered out, 2 no longer found.
+```
 
 The `no longer found` count needs a full analysis. When paths are passed, as in `analyse src --baseline-info`, baselined violations of the files left out cannot be told from fixed ones, so only the `filtered out` count is printed.
 
-Without a configured baseline the line is `Baseline: not configured.`. The option changes neither the exit code nor the `json` report, which keeps its shape.
+Without a configured baseline the line is `Baseline: not configured.`. The option does not change the exit code.
+
+The line is printed for the `console`, `summary`, and `github` reports only. The `json` report cannot carry an extra line without breaking its output, so `--baseline-info` has no effect with `--report=json`.
 
 ## When To Use A Baseline
 

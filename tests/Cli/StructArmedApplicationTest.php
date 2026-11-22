@@ -2119,11 +2119,12 @@ PHP);
                 "\nBaseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.\n",
                 $output
             );
+            $this->assertStringNotContainsString('Warning:', $output);
             $this->assertStringNotContainsString('Baseline [', $outputWithoutOption);
             $this->assertSame(0, $staleExitCode, $staleOutput);
             $this->assertStringContainsString(
-                "\nBaseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.\n",
-                $staleOutput
+                "\nWarning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.\n",
+                $this->withoutAnsi($staleOutput)
             );
             $this->assertStringContainsString(
                 "\nBaseline [structarmed-baseline.php]: 1 violation(s) filtered out.\n",
