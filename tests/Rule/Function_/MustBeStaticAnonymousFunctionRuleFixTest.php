@@ -11,6 +11,7 @@ use Boundwize\StructArmed\Rule\Fixer\PhpParser\FunctionLike\AddStaticAnonymousFu
 use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
 use Boundwize\StructArmed\Rule\RuleViolation;
 use Boundwize\StructArmed\Tests\Support\TemporaryDirectoryCleanupTrait;
+use Closure;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -294,6 +295,94 @@ PHP,
         );
 
         // A second analysis of the fixed file is clean.
+        $this->assertCount(
+            0,
+            (new Analyser($basePath))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+                ->forRule('source.static_closures')
+        );
+    }
+
+    public function testAnalyseThenFixSkipsLocallyDeclaredInstanceMethodCalls(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-local-method-closure');
+        mkdir($basePath . '/src');
+        $file = $basePath . '/src/Handler.php';
+        $code = <<<'PHP'
+<?php
+return (new class {
+    public function callbacks(): array
+    {
+        return [
+            fn () => self::VALUE(), fn () => 1,
+            function () { return self::value(); },
+            fn () => static::value(),
+            fn () => (fn () => self::value())(),
+            fn () => self::staticValue(),
+            fn () => self::unknown(),
+            fn () => static::unknown(),
+            fn ($method) => self::$method(),
+            fn () => (new class {
+                public function callback(): \Closure { return fn () => self::value(); }
+                private static function value(): int { return 7; }
+            })->callback()(),
+            fn () => self::value(),
+        ];
+    }
+    private function value(): int { return 42; }
+    private static function staticValue(): int { return 7; }
+})->callbacks();
+PHP;
+        file_put_contents($file, $code);
+
+        $rule         = new MustBeStaticAnonymousFunctionRule(layer: 'Source');
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.static_closures', $rule);
+        $violations   = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.static_closures');
+
+        $this->assertCount(7, $violations);
+        $this->assertTrue($rule->fix(...$violations));
+        $this->assertSame(
+            <<<'PHP'
+<?php
+return (new class {
+    public function callbacks(): array
+    {
+        return [
+            fn () => self::VALUE(), static fn () => 1,
+            function () { return self::value(); },
+            fn () => static::value(),
+            fn () => (fn () => self::value())(),
+            static fn () => self::staticValue(),
+            static fn () => self::unknown(),
+            static fn () => static::unknown(),
+            static fn ($method) => self::$method(),
+            static fn () => (new class {
+                public function callback(): \Closure { return static fn () => self::value(); }
+                private static function value(): int { return 7; }
+            })->callback()(),
+            fn () => self::value(),
+        ];
+    }
+    private function value(): int { return 42; }
+    private static function staticValue(): int { return 7; }
+})->callbacks();
+PHP,
+            file_get_contents($file)
+        );
+
+        $callbacks = require $file;
+        $this->assertIsArray($callbacks);
+
+        foreach ([0 => 42, 1 => 1, 2 => 42, 3 => 42, 4 => 42, 5 => 7, 9 => 7, 10 => 42] as $index => $expected) {
+            $callback = $callbacks[$index];
+            $this->assertInstanceOf(Closure::class, $callback);
+            $this->assertSame($expected, $callback());
+        }
+
         $this->assertCount(
             0,
             (new Analyser($basePath))
