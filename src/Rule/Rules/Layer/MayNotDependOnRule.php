@@ -14,6 +14,7 @@ use function in_array;
 use function sprintf;
 use function str_contains;
 use function str_starts_with;
+use function strtolower;
 
 final class MayNotDependOnRule extends AbstractLayerAwareRule implements MultipleRuleViolationInterface
 {
@@ -24,7 +25,7 @@ final class MayNotDependOnRule extends AbstractLayerAwareRule implements Multipl
         private readonly string $to,
         ?string $toPath = null,
     ) {
-        $this->normalisedToPath = Path::normalise($toPath ?? $to);
+        $this->normalisedToPath = strtolower(Path::normalise($toPath ?? $to));
     }
 
     public function appliesTo(ClassNode $classNode): bool
@@ -79,8 +80,8 @@ final class MayNotDependOnRule extends AbstractLayerAwareRule implements Multipl
             return in_array($this->to, $dependencyNode->layers, true);
         }
 
-        // Priority 2: Fallback to path matching
-        $depPath = Path::normalise($dependency);
+        // Priority 2: Fallback to path matching, case-insensitive like PHP class names
+        $depPath = strtolower(Path::normalise($dependency));
 
         return str_contains($depPath . '/', '/' . $this->normalisedToPath . '/')
             || str_starts_with($depPath . '/', $this->normalisedToPath . '/');
