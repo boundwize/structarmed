@@ -9,12 +9,8 @@ use Boundwize\StructArmed\Tests\Support\InMemoryStreamTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function array_filter;
-use function count;
-use function explode;
 use function getenv;
 use function putenv;
-use function trim;
 
 #[CoversClass(ConsoleProgressBar::class)]
 final class ConsoleProgressBarTest extends TestCase
@@ -116,7 +112,7 @@ final class ConsoleProgressBarTest extends TestCase
         );
     }
 
-    public function testProgressBarPrintsAtMostEvery10PercentWhenNotTty(): void
+    public function testProgressBarPrintsEvery10PercentWhenNotTty(): void
     {
         $stream = $this->openMemoryStream();
 
@@ -131,12 +127,23 @@ final class ConsoleProgressBarTest extends TestCase
 
         $output = $this->streamContents($stream);
 
-        $this->assertStringContainsString('Analyzing [----------]   0% 0/93', $output);
-        $this->assertStringContainsString('Analyzing [==========] 100% 93/93', $output);
-        $this->assertStringNotContainsString("\r", $output);
+        $this->assertSame(
+            <<<'OUTPUT'
+            Analyzing [----------]   0% 0/93
+            Analyzing [=---------]  10% 10/93
+            Analyzing [==--------]  20% 19/93
+            Analyzing [===-------]  30% 28/93
+            Analyzing [====------]  40% 38/93
+            Analyzing [=====-----]  50% 47/93
+            Analyzing [======----]  60% 56/93
+            Analyzing [=======---]  70% 66/93
+            Analyzing [========--]  80% 75/93
+            Analyzing [=========-]  90% 84/93
+            Analyzing [==========] 100% 93/93
 
-        $lines = array_filter(explode("\n", trim($output)));
-        $this->assertLessThanOrEqual(12, count($lines)); // 0% + at most 10 steps + 100%
+            OUTPUT,
+            $output
+        );
     }
 
     public function testProgressBarHandlesZeroTotalWithoutRenderingFileName(): void
