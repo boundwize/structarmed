@@ -12,6 +12,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+use function array_change_key_case;
+
 #[CoversClass(MayNotDependOnRule::class)]
 final class MayNotDependOnRuleTest extends TestCase
 {
@@ -207,7 +209,8 @@ final class MayNotDependOnRuleTest extends TestCase
         // No path segment names the layer; only the node's layer catches it.
         $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
         $dependencyNode     = $this->makeNode(layer: 'Infrastructure', className: 'App\Persistence\OrderRepository');
-        $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
+        $classNodeMap       = [$dependencyNode->className => $dependencyNode];
+        $mayNotDependOnRule->injectClassNodeMap($classNodeMap, array_change_key_case($classNodeMap));
         $classNode = $this->makeNode('Domain', ['app\persistence\orderrepository']);
 
         $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));

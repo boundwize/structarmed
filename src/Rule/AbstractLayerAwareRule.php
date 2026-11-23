@@ -6,7 +6,6 @@ namespace Boundwize\StructArmed\Rule;
 
 use Boundwize\StructArmed\Analyser\ClassNode;
 
-use function array_change_key_case;
 use function strtolower;
 
 /**
@@ -22,11 +21,17 @@ abstract class AbstractLayerAwareRule
     /** @var array<string, ClassNode> lowercased class name → class node */
     private array $lowercaseClassNodeMap = [];
 
-    /** @param array<string, ClassNode> $classNodeMap */
-    public function injectClassNodeMap(array $classNodeMap): void
+    /**
+     * @internal called by the analyser, which injects both maps before any class is evaluated
+     *
+     * @param array<string, ClassNode> $classNodeMap          class name → class node
+     * @param array<string, ClassNode> $lowercaseClassNodeMap lowercased class name → class node; the analyser
+     *                                                        builds it once and shares it across the rules
+     */
+    public function injectClassNodeMap(array $classNodeMap, array $lowercaseClassNodeMap = []): void
     {
         $this->classNodeMap          = $classNodeMap;
-        $this->lowercaseClassNodeMap = array_change_key_case($classNodeMap);
+        $this->lowercaseClassNodeMap = $lowercaseClassNodeMap;
     }
 
     /**

@@ -10,6 +10,8 @@ use Boundwize\StructArmed\Rule\RuleViolation;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_change_key_case;
+
 #[CoversClass(ApiMayNotExtendInternalRule::class)]
 final class ApiMayNotExtendInternalRuleTest extends TestCase
 {
@@ -55,9 +57,10 @@ final class ApiMayNotExtendInternalRuleTest extends TestCase
     public function testFindsInternalAncestorWrittenInAnotherCase(): void
     {
         $apiMayNotExtendInternalRule = new ApiMayNotExtendInternalRule(layer: 'Core');
-        $apiMayNotExtendInternalRule->injectClassNodeMap([
+        $classNodeMap                = [
             'App\InternalFacade' => $this->makeNode('App\InternalFacade', isInternal: true),
-        ]);
+        ];
+        $apiMayNotExtendInternalRule->injectClassNodeMap($classNodeMap, array_change_key_case($classNodeMap));
 
         // Class names are case-insensitive: `extends internalfacade` is valid PHP
         $violation = $apiMayNotExtendInternalRule->evaluate(
