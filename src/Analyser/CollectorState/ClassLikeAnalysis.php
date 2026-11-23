@@ -2,13 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\CollectorState;
 
+use Boundwize\StructArmed\Analyser\ClassSignature;
+use Boundwize\StructArmed\Analyser\ConstantNode;
+use Boundwize\StructArmed\Analyser\EnumCaseNode;
+use Boundwize\StructArmed\Analyser\MethodNode;
+use Boundwize\StructArmed\Analyser\PropertyNode;
 use PhpParser\Node\Name;
 
 /**
  * Facts collected while traversing a class-like: body-level references
- * plus its members, each recorded as the traverser passes the declaring node.
+ * plus its members and the scope state needed while it is active.
  *
  * @internal
  */
@@ -60,8 +65,20 @@ final class ClassLikeAnalysis
     /** @var EnumCaseNode[] */
     public array $enumCases = [];
 
+    /**
+     * @param array{self: string|null, static: string|null, parent: string|null} $instantiationScope
+     *        Class names or deferred markers for self/static/parent; anonymous
+     *        classes only resolve parent.
+     * @param array<string, bool> $methodStaticFlags Lowercased method names and their static flags
+     * @param int $functionLikeDepthAtEntry Only function-likes entered after this
+     *        depth can capture this class-like's `$this`.
+     */
     public function __construct(
         public readonly bool $isInterface,
+        public readonly ?string $name,
+        public readonly array $instantiationScope,
+        public readonly array $methodStaticFlags,
+        public readonly int $functionLikeDepthAtEntry,
         /** The direct parent class a `parent` signature type resolves to. */
         public readonly ?string $parent = null,
     ) {
