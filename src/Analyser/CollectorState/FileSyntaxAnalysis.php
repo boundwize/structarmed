@@ -30,8 +30,8 @@ final class FileSyntaxAnalysis
 
     /** @param array<Token> $tokens The source tokens for facts not carried by the AST */
     public function __construct(
-        public readonly string $file = '',
-        public readonly array $tokens = [],
+        public readonly string $file,
+        public readonly array $tokens,
     ) {
     }
 }
