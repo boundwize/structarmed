@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Analyser;
+namespace Boundwize\StructArmed\Tests\Analyser\Capture;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\CollectorState\ClassLikeAnalysis;

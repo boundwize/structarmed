@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Rules\File;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;

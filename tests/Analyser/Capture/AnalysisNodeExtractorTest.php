@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Analyser;
+namespace Boundwize\StructArmed\Tests\Analyser\Capture;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;

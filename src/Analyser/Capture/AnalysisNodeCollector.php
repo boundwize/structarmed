@@ -2,14 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\Capture;
 
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
 use Boundwize\StructArmed\Analyser\CollectorState\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\CollectorState\FileReferenceAnalysis;
 use Boundwize\StructArmed\Analyser\CollectorState\FileSyntaxAnalysis;
 use Boundwize\StructArmed\Analyser\CollectorState\FunctionLikeAnalysis;
 use Boundwize\StructArmed\Analyser\CollectorState\MethodAnalysis;
 use Boundwize\StructArmed\Analyser\CollectorState\NamespaceAnalysis;
+use Boundwize\StructArmed\Analyser\ConstantNode;
+use Boundwize\StructArmed\Analyser\EnumCaseNode;
+use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Analyser\MethodNode;
+use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use Boundwize\StructArmed\Util\PhpParser\EmptyParentheses;
@@ -251,8 +260,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      * parser only ever instantiates these exact classes, so a single ::class
      * hash lookup lets the large majority of nodes (identifiers, arguments,
      * most scalars, assignments, ...) return before any instanceof check.
+     * The AnalysisNodeTraverser reads it to skip the call altogether.
      */
-    private const ENTER_NODES = self::COMPLEXITY_BRANCH_NODES
+    public const ENTER_NODES = self::COMPLEXITY_BRANCH_NODES
         + self::LANGUAGE_CONSTRUCT_NODES
         + self::MEMBER_NODES
         + [
@@ -284,7 +294,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /**
      * Every node class leaveNode() acts on, see ENTER_NODES.
      */
-    private const LEAVE_NODES = [
+    public const LEAVE_NODES = [
         Closure::class            => true,
         ArrowFunction::class      => true,
         New_::class               => true,
