@@ -6,6 +6,7 @@ namespace Boundwize\StructArmed\LayerResolver\Resolvers;
 
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 
+use function is_string;
 use function preg_match;
 
 /**
