@@ -190,6 +190,40 @@ final class AttributeMayNotHaveEmptyParenthesesRuleTest extends TestCase
             PHP, file_get_contents($basePath . '/src/Foo.php'));
     }
 
+    public function testViolatesAndFixesAttributeOnGlobalConstant(): void
+    {
+        $basePath = $this->makeProject(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            #[\Deprecated()]
+            const LEGACY = 1;
+
+            PHP);
+
+        $attributeMayNotHaveEmptyParenthesesRule = new AttributeMayNotHaveEmptyParenthesesRule(['src/']);
+        $violations                              = $attributeMayNotHaveEmptyParenthesesRule->evaluateProjectAll(
+            $basePath,
+            Architecture::define()
+        );
+
+        $this->assertCount(1, $violations);
+        $this->assertSame(5, $violations[0]->line);
+        $this->assertSame('Attribute [Deprecated] may not have empty parentheses', $violations[0]->message);
+
+        $this->assertTrue($attributeMayNotHaveEmptyParenthesesRule->fix($violations[0]));
+        $this->assertSame(<<<'PHP'
+            <?php
+
+            namespace App;
+
+            #[\Deprecated]
+            const LEGACY = 1;
+
+            PHP, file_get_contents($basePath . '/src/Foo.php'));
+    }
+
     public function testAnalyserReportsAndFixesThroughTheCollectedFileAnalysis(): void
     {
         $basePath = $this->makeProject(<<<'PHP'

@@ -1465,7 +1465,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
+        // An attribute on a global constant (`#[Deprecated] const A = 1;`) is
+        // the one attribute outside every scope, and is still collected.
+        if (
+            $this->activeClassLikeAnalyses === []
+            && $this->activeFunctionLikeAnalyses === []
+            && ! $node instanceof Attribute
+        ) {
             return;
         }
 
