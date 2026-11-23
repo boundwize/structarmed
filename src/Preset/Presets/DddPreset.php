@@ -296,12 +296,12 @@ final readonly class DddPreset implements PresetInterface
                 );
             }
 
-            foreach (['die', 'exit'] as $construct) {
-                $architecture->rule(
-                    sprintf('ddd.safety.%s_no_%s', strtolower($layer), $construct),
-                    new MayNotUseLanguageConstructRule(layer: $layer, construct: $construct)
-                );
-            }
+            // `die` is an alias of `exit` and the rule matches both spellings,
+            // so a second rule for `die` would report every usage twice.
+            $architecture->rule(
+                sprintf('ddd.safety.%s_no_exit', strtolower($layer)),
+                new MayNotUseLanguageConstructRule(layer: $layer, construct: 'exit')
+            );
         }
 
         return $this;
