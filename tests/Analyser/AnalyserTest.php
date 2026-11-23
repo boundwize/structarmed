@@ -1040,6 +1040,68 @@ final class AnalyserTest extends TestCase
         );
     }
 
+    public function testMvcPresetReportsEachExitAndDieSpellingOnceUnderTheExitRule(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Model/Example.php' => <<<'PHP'
+                <?php
+
+                namespace App\Model;
+
+                final class Example
+                {
+                    public function run(bool $condition): void
+                    {
+                        if ($condition) {
+                            exit(1);
+                        }
+
+                        die('Stopped');
+                    }
+                }
+                PHP,
+            'src/Model/OnlyDie.php' => <<<'PHP'
+                <?php
+
+                namespace App\Model;
+
+                final class OnlyDie
+                {
+                    public function run(): void
+                    {
+                        die('Stopped');
+                    }
+                }
+                PHP,
+        ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            Architecture::define()->withPreset(Preset::MVC()),
+            [],
+            null,
+            AnalyserOptions::sequential()
+        );
+
+        $messages = [];
+
+        foreach ($ruleViolationCollection->forRule('mvc.safety.model_no_exit') as $violation) {
+            $messages[] = $violation->message;
+        }
+
+        sort($messages);
+
+        // `die` is an alias of `exit`: one rule reports each spelling as written
+        $this->assertSame(
+            [
+                'Class [App\Model\Example] must not use language construct [die]',
+                'Class [App\Model\Example] must not use language construct [exit]',
+                'Class [App\Model\OnlyDie] must not use language construct [die]',
+            ],
+            $messages
+        );
+        $this->assertCount(3, $ruleViolationCollection);
+    }
+
     public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClass(): void
     {
         $factory = '<?php namespace App;' . "\n"
