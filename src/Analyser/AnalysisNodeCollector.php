@@ -442,6 +442,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var list<ClassLikeAnalysis> */
     private array $activeClassLikeAnalyses = [];
 
+    /** @var list<ClassLike> */
+    private array $activeClassLikes = [];
+
     /**
      * Cyclomatic complexity of each tracked method currently being entered,
      * innermost last. A branch node increments every entry: a method nested
@@ -531,6 +534,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->fileClassLikes                    = [];
         $this->fileFunctions                     = [];
         $this->activeClassLikeAnalyses           = [];
+        $this->activeClassLikes                  = [];
         $this->activeMethodComplexities          = [];
         $this->activeMethodStaticFlags           = [];
         $this->activeClassLikeNames              = [];
@@ -767,6 +771,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof ClassLike) {
+                $this->activeClassLikes[] = $node;
+
                 $classLikeName = $node->name instanceof Identifier
                     ? $this->resolveClassName($node)
                     : null;
@@ -844,7 +850,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $this->collectObjectBindingRequirement($node);
 
             if ($node instanceof StaticCall) {
-                $this->collectParentMethodCall($node);
+                $this->collectImplicitThisMethodCall($node);
 
                 return null;
             }
@@ -898,6 +904,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         array_pop($this->activeClassLikeScopes);
+        array_pop($this->activeClassLikes);
         array_pop($this->activeClassLikeNames);
         array_pop($this->functionLikeDepthAtClassLikeEntry);
 
@@ -2079,14 +2086,35 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
+     * `self::method()` and `static::method()` need `$this` when the current
+     * class-like declares a non-static method. Only local declarations are
+     * inspected; unresolved methods retain the assumption that they are static.
+     *
      * `parent::method()` forwards `$this` to a non-static parent method. The
      * parent class may live in another file, so only a call to the method
      * the enclosing method overrides is decided here: an override is static
      * exactly when the method it overrides is, so inside a non-static method
      * such a call counts as `$this` usage.
      */
-    private function collectParentMethodCall(StaticCall $staticCall): void
+    private function collectImplicitThisMethodCall(StaticCall $staticCall): void
     {
+        if (
+            $staticCall->class instanceof Name
+            && in_array($staticCall->class->toLowerString(), ['self', 'static'], true)
+            && $staticCall->name instanceof Identifier
+        ) {
+            $classLike = end($this->activeClassLikes);
+
+            if (
+                $classLike instanceof ClassLike
+                && $classLike->getMethod($staticCall->name->toString())?->isStatic() === false
+            ) {
+                $this->markThisUsage();
+            }
+
+            return;
+        }
+
         if (
             ! $staticCall->class instanceof Name
             || $staticCall->class->toLowerString() !== 'parent'

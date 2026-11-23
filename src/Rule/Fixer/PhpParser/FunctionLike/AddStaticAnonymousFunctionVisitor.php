@@ -27,7 +27,8 @@ use function in_array;
 /**
  * Adds the `static` modifier to the anonymous functions starting on the given
  * line that neither read `$this`, call the parent of the enclosing non-static
- * method, nor require object binding.
+ * method, call a locally declared non-static method through self/static,
+ * nor require object binding.
  *
  * An anonymous function has no name, so its start line is the only identity
  * a violation can carry, and several may start on one line. Re-applying the
@@ -43,6 +44,9 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     /** @var list<array{string, bool}> lowercased name and static flag of each method being entered, innermost last */
     private array $activeMethodStaticFlags = [];
 
+    /** @var list<ClassLike> */
+    private array $activeClassLikes = [];
+
     public function __construct(
         private readonly int $line,
     ) {
@@ -53,12 +57,19 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     {
         $this->objectBoundAnonymousFunctions = [];
         $this->activeMethodStaticFlags       = [];
+        $this->activeClassLikes              = [];
 
         return null;
     }
 
     public function enterNode(Node $node): ?Node
     {
+        if ($node instanceof ClassLike) {
+            $this->activeClassLikes[] = $node;
+
+            return null;
+        }
+
         if ($node instanceof ClassMethod) {
             $this->activeMethodStaticFlags[] = [$node->name->toLowerString(), $node->isStatic()];
 
@@ -100,6 +111,10 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
 
     public function leaveNode(Node $node): null
     {
+        if ($node instanceof ClassLike) {
+            array_pop($this->activeClassLikes);
+        }
+
         if ($node instanceof ClassMethod) {
             array_pop($this->activeMethodStaticFlags);
         }
@@ -122,15 +137,21 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
      * method. It counts when it calls the method the enclosing non-static
      * method overrides: an override is static exactly when the method it
      * overrides is.
+     * Calls through self/static count when the current class-like declares
+     * the target method as non-static. Unresolved methods remain fixable.
      */
     private function usesThis(Closure|ArrowFunction $anonymousFunction): bool
     {
         [$methodName, $isStatic] = end($this->activeMethodStaticFlags) ?: [null, true];
-        $thisFinder              = new class ($isStatic ? null : $methodName) extends NodeVisitorAbstract {
+        $thisFinder              = new class (
+            $isStatic ? null : $methodName,
+            end($this->activeClassLikes) ?: null,
+        ) extends NodeVisitorAbstract {
             public bool $found = false;
 
             public function __construct(
                 private readonly ?string $nonStaticMethodName,
+                private readonly ?ClassLike $classLike,
             ) {
             }
 
@@ -147,6 +168,11 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
                         && $node->class->toLowerString() === 'parent'
                         && $node->name instanceof Identifier
                         && $node->name->toLowerString() === $this->nonStaticMethodName)
+                    || ($node instanceof StaticCall
+                        && $node->class instanceof Name
+                        && in_array($node->class->toLowerString(), ['self', 'static'], true)
+                        && $node->name instanceof Identifier
+                        && $this->classLike?->getMethod($node->name->toString())?->isStatic() === false)
                 ) {
                     $this->found = true;
 

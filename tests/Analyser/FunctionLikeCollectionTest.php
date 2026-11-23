@@ -417,7 +417,7 @@ final class FunctionLikeCollectionTest extends TestCase
         $this->assertTrue($anonymousFunctionNodes[0]->usesThis, 'method names are case-insensitive');
         $this->assertTrue($anonymousFunctionNodes[1]->usesThis, 'outer closure captures $this for the inner one');
         $this->assertTrue($anonymousFunctionNodes[2]->usesThis, 'inner arrow function');
-        $this->assertFalse($anonymousFunctionNodes[3]->usesThis, 'self:: is not a parent call');
+        $this->assertTrue($anonymousFunctionNodes[3]->usesThis, 'self:: calls a locally declared non-static method');
         $this->assertFalse($anonymousFunctionNodes[4]->usesThis, 'another parent method');
         $this->assertFalse($anonymousFunctionNodes[5]->usesThis, 'dynamic method name');
         $this->assertFalse($anonymousFunctionNodes[6]->usesThis, 'the call belongs to the anonymous class');
