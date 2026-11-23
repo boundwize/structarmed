@@ -460,7 +460,7 @@ final class PresetTest extends TestCase
         );
         $this->assertArrayHasKey('ddd.safety.domain_no_dd', $rules);
         $this->assertArrayHasKey('ddd.safety.application_no_exit', $rules);
-        $this->assertArrayNotHasKey('ddd.safety.application_no_die', $rules);
+        $this->assertArrayHasKey('ddd.safety.application_no_die', $rules);
         $this->assertArrayHasKey('ddd.safety.domain_no_stderr', $rules);
     }
 
@@ -671,7 +671,7 @@ final class PresetTest extends TestCase
         $this->assertArrayHasKey(MvcPreset::HELPER_MUST_HAVE_RETURN_TYPES, $rules);
         $this->assertArrayHasKey('mvc.safety.controller_no_dd', $rules);
         $this->assertArrayHasKey('mvc.safety.service_no_exit', $rules);
-        $this->assertArrayNotHasKey('mvc.safety.service_no_die', $rules);
+        $this->assertArrayHasKey('mvc.safety.service_no_die', $rules);
     }
 
     public function testMvcPresetDoesNotReplaceConfiguredLayersOrPatterns(): void

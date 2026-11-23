@@ -296,12 +296,14 @@ final readonly class DddPreset implements PresetInterface
                 );
             }
 
-            // `die` is an alias of `exit` and the rule matches both spellings,
-            // so a second rule for `die` would report every usage twice.
-            $architecture->rule(
-                sprintf('ddd.safety.%s_no_exit', strtolower($layer)),
-                new MayNotUseLanguageConstructRule(layer: $layer, construct: 'exit')
-            );
+            // `die` is an alias of `exit`: each rule matches its own spelling
+            // only, so a usage is reported once instead of by both rules.
+            foreach (['die', 'exit'] as $construct) {
+                $architecture->rule(
+                    sprintf('ddd.safety.%s_no_%s', strtolower($layer), $construct),
+                    new MayNotUseLanguageConstructRule(layer: $layer, construct: $construct, matchAlias: false)
+                );
+            }
         }
 
         return $this;

@@ -110,7 +110,7 @@ final class MayNotUseLanguageConstructRuleTest extends TestCase
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
         $this->assertSame(
-            'Class [App\\Domain\\OrderService] must not use language construct [' . $recordedConstructs[0] . ']',
+            'Class [App\\Domain\\OrderService] must not use language construct [' . $configured . ']',
             $violation->message
         );
     }
@@ -124,24 +124,38 @@ final class MayNotUseLanguageConstructRuleTest extends TestCase
         yield 'ban die, code used exit'  => ['die', ['exit']];
     }
 
-    public function testReportsEachSpellingWhenBothExitAndDieAreUsed(): void
-    {
-        $mayNotUseLanguageConstructRule = new MayNotUseLanguageConstructRule(layer: 'Domain', construct: 'exit');
-        $classNode                      = $this->makeNode(['die', 'exit']);
-
-        $messages = [];
-
-        foreach ($mayNotUseLanguageConstructRule->evaluateAll($classNode) as $violation) {
-            $messages[] = $violation->message;
-        }
-
-        $this->assertSame(
-            [
-                'Class [App\\Domain\\OrderService] must not use language construct [exit]',
-                'Class [App\\Domain\\OrderService] must not use language construct [die]',
-            ],
-            $messages
+    /**
+     * Two rules banning one spelling each, as the DDD and MVC presets register
+     * them, turn the alias off so a usage is reported by one of them only.
+     *
+     * @param array<string> $recordedConstructs
+     */
+    #[DataProvider('exactSpellingProvider')]
+    public function testWithoutAliasOnlyTheConfiguredSpellingMatches(
+        string $configured,
+        array $recordedConstructs,
+        bool $expectsViolation,
+    ): void {
+        $mayNotUseLanguageConstructRule = new MayNotUseLanguageConstructRule(
+            layer: 'Domain',
+            construct: $configured,
+            matchAlias: false,
         );
+
+        $violation = $mayNotUseLanguageConstructRule->evaluate($this->makeNode($recordedConstructs));
+
+        $this->assertSame($expectsViolation, $violation instanceof RuleViolation);
+    }
+
+    /** @return iterable<string, array{string, array<string>, bool}> */
+    public static function exactSpellingProvider(): iterable
+    {
+        yield 'ban exit, code used exit' => ['exit', ['exit'], true];
+        yield 'ban exit, code used die'  => ['exit', ['die'], false];
+        yield 'ban die, code used die'   => ['die', ['die'], true];
+        yield 'ban die, code used exit'  => ['die', ['exit'], false];
+        yield 'ban EXIT, code used exit' => ['EXIT', ['exit'], true];
+        yield 'ban exit, code used both' => ['exit', ['die', 'exit'], true];
     }
 
     /**

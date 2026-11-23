@@ -1040,7 +1040,7 @@ final class AnalyserTest extends TestCase
         );
     }
 
-    public function testMvcPresetReportsEachExitAndDieSpellingOnceUnderTheExitRule(): void
+    public function testMvcPresetReportsEachExitAndDieSpellingOnceUnderItsOwnRule(): void
     {
         $basePath = $this->makeTempProject([
             'src/Model/Example.php' => <<<'PHP'
@@ -1084,22 +1084,22 @@ final class AnalyserTest extends TestCase
 
         $messages = [];
 
-        foreach ($ruleViolationCollection->forRule('mvc.safety.model_no_exit') as $violation) {
-            $messages[] = $violation->message;
+        foreach ($ruleViolationCollection as $violation) {
+            $messages[] = $violation->ruleKey . ': ' . $violation->message;
         }
 
         sort($messages);
 
-        // `die` is an alias of `exit`: one rule reports each spelling as written
+        // `die` is an alias of `exit`: each spelling is reported once, by the
+        // rule named after it
         $this->assertSame(
             [
-                'Class [App\Model\Example] must not use language construct [die]',
-                'Class [App\Model\Example] must not use language construct [exit]',
-                'Class [App\Model\OnlyDie] must not use language construct [die]',
+                'mvc.safety.model_no_die: Class [App\Model\Example] must not use language construct [die]',
+                'mvc.safety.model_no_die: Class [App\Model\OnlyDie] must not use language construct [die]',
+                'mvc.safety.model_no_exit: Class [App\Model\Example] must not use language construct [exit]',
             ],
             $messages
         );
-        $this->assertCount(3, $ruleViolationCollection);
     }
 
     public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClass(): void
