@@ -6,7 +6,7 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
-use Boundwize\StructArmed\Analyser\FunctionLikeAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\FunctionLikeAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;
@@ -17,6 +17,8 @@ use PhpParser\ParserFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+
+use function array_column;
 
 /**
  * Collection of named functions, closures, and arrow functions by the
@@ -304,6 +306,49 @@ final class FunctionLikeCollectionTest extends TestCase
         // The enclosing function sees the closure body too.
         $this->assertSame(['$_POST'], $functionNode->superglobals);
         $this->assertSame(2, $functionNode->cyclomaticComplexity);
+    }
+
+    public function testRestoresNearestNamedFunctionThroughNestedAnonymousScopes(): void
+    {
+        $collector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App\Domain;
+            function outer(): void
+            {
+                $closure = function () {
+                    fn () => 1;
+                    function inner(): void
+                    {
+                        $nested = function () {
+                            return fn () => new class {};
+                        };
+                    }
+                    fn () => new class {};
+                };
+            }
+            fn () => fn () => new class {};
+            PHP);
+
+        $this->assertSame(
+            [
+                'App\Domain\outer',
+                'App\Domain\outer',
+                'App\Domain\inner',
+                'App\Domain\inner',
+                'App\Domain\outer',
+                null,
+                null,
+            ],
+            array_column($collector->getAnonymousFunctionNodes(), 'enclosingFunctionName'),
+        );
+        $this->assertSame(
+            ['App\Domain\inner', 'App\Domain\outer', null],
+            array_column($collector->getAnonymousClassNodes(), 'enclosingFunctionName'),
+        );
+        $this->assertSame(
+            ['App\Domain\outer', 'App\Domain\inner'],
+            array_column($collector->getFunctionNodes(), 'functionName'),
+        );
     }
 
     public function testNestedClosuresEachGetTheirOwnNodeAndComplexity(): void

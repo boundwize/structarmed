@@ -6,9 +6,13 @@ namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
-use Boundwize\StructArmed\Analyser\ClassLikeAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ClassSignature;
+use Boundwize\StructArmed\Analyser\CollectorState\ClassLikeAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\FileReferenceAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\FileSyntaxAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\MethodAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\NamespaceAnalysis;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use PhpParser\Modifiers;
@@ -37,6 +41,10 @@ use function array_map;
 #[CoversClass(AnalysisNodeCollector::class)]
 #[CoversClass(ClassLikeAnalysis::class)]
 #[CoversClass(EnumCaseNode::class)]
+#[CoversClass(FileReferenceAnalysis::class)]
+#[CoversClass(FileSyntaxAnalysis::class)]
+#[CoversClass(MethodAnalysis::class)]
+#[CoversClass(NamespaceAnalysis::class)]
 final class AnalysisNodeCollectorTest extends TestCase
 {
     private const BASE_PATH = '/structarmed-test-project';
@@ -2468,6 +2476,140 @@ PHP;
         // The inner body is counted on both, like a closure's on its enclosing scopes.
         $this->assertSame(['App\Clock'], $inner->dependencies);
         $this->assertSame(['App\Clock'], $outer->dependencies);
+    }
+
+    public function testRestoresClassAndMethodStateAfterNestedAnonymousClass(): void
+    {
+        $collector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+            class OuterClass extends OuterBase {
+                public function run(): void
+                {
+                    fn () => self::run();
+                    $factory = function () {
+                        return new class extends InnerBase {
+                            public static function run(): void
+                            {
+                                if (true) {
+                                    new self();
+                                    new parent();
+                                }
+                                fn () => self::run();
+                                fn () => parent::run();
+                            }
+                            public function instance(): void
+                            {
+                                fn () => $this;
+                            }
+                        };
+                    };
+                    fn () => self::run();
+                    fn () => parent::run();
+                    if (true) {
+                        new self();
+                        new parent();
+                        new static();
+                    }
+                }
+                public function next(): void {}
+            }
+            PHP);
+
+        $this->assertSame(
+            [true, false, false, false, true, true, true],
+            array_column($collector->getAnonymousFunctionNodes(), 'usesThis'),
+        );
+        $this->assertSame(
+            [3, 1],
+            array_column($collector->getClassNodes()[0]->methods, 'cyclomaticComplexity'),
+        );
+        $anonymousClass = $collector->getAnonymousClassNodes()[0];
+        $this->assertSame('App\OuterClass', $anonymousClass->enclosingClassName);
+        $this->assertSame([2, 1], array_column($anonymousClass->methods, 'cyclomaticComplexity'));
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\InnerBase', 'App\OuterClass', 'App\OuterBase', 'static@App\OuterClass']],
+            $collector->getFileInstantiations(),
+        );
+    }
+
+    public function testFileFactsResetWhileCollectedReferencesRemainAvailable(): void
+    {
+        $collector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+            use Vendor\Imported;
+            #[Marker()]
+            function helper(): void { TRUE; 42; }
+            new Created();
+            PHP);
+
+        $this->assertSame([[5, 'TRUE']], $collector->getNonCanonicalKeywordConstants());
+        $this->assertSame([[5, '42', 42]], $collector->getNumericLiterals());
+        $this->assertSame([[4, 'App\Marker']], $collector->getAttributesWithEmptyParentheses());
+        $this->assertSame(['app\helper' => true], $collector->getFileFunctions());
+        $references     = $collector->getFileReferences();
+        $instantiations = $collector->getFileInstantiations();
+        $this->assertNotEmpty($references);
+        $this->assertNotEmpty($instantiations);
+
+        $collector->setCurrentFile('/fake/path/Empty.php');
+        $traverser = new NodeTraverser(new NameResolver(), $collector);
+        $traverser->traverse([]);
+
+        $this->assertSame([], $collector->getNonCanonicalKeywordConstants());
+        $this->assertSame([], $collector->getNumericLiterals());
+        $this->assertSame([], $collector->getAttributesWithEmptyParentheses());
+        $this->assertSame([], $collector->getFileFunctions());
+        $this->assertSame($references, $collector->getFileReferences());
+        $this->assertSame($instantiations, $collector->getFileInstantiations());
+    }
+
+    public function testScopeStateDoesNotLeakBetweenFiles(): void
+    {
+        $collector = $this->makeCollector(<<<'PHP'
+            <?php
+            namespace App;
+            class First extends FirstBase {
+                public function run(): void
+                {
+                    fn () => self::run();
+                    if (true) {
+                        new parent();
+                    }
+                }
+            }
+            PHP);
+
+        $parser = (new ParserFactory())->createForNewestSupportedVersion();
+        $ast    = $parser->parse(<<<'PHP'
+            <?php
+            fn () => self::run();
+            new self();
+            new static();
+            new parent();
+            class Second extends SecondBase {
+                public static function run(): void
+                {
+                    fn () => parent::run();
+                    new parent();
+                }
+            }
+            PHP);
+        $collector->setCurrentFile('/fake/path/Second.php', $parser->getTokens());
+        $traverser = new NodeTraverser(new NameResolver(), $collector);
+        $traverser->traverse($ast ?? []);
+
+        $this->assertSame([true, false, false], array_column($collector->getAnonymousFunctionNodes(), 'usesThis'));
+        $this->assertSame(
+            ['App\First', null, 'Second'],
+            array_column($collector->getAnonymousFunctionNodes(), 'enclosingClassName'),
+        );
+        $this->assertSame(1, $collector->getClassNodes()[1]->methods[0]->cyclomaticComplexity);
+        $this->assertSame(
+            ['/fake/path/Foo.php' => ['App\FirstBase'], '/fake/path/Second.php' => ['SecondBase']],
+            $collector->getFileInstantiations(),
+        );
     }
 
     public function testCollectsAnonymousClassNodeWithoutExtends(): void

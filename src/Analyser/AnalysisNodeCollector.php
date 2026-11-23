@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\CollectorState\ClassLikeAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\FileReferenceAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\FileSyntaxAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\FunctionLikeAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\MethodAnalysis;
+use Boundwize\StructArmed\Analyser\CollectorState\NamespaceAnalysis;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use Boundwize\StructArmed\Util\PhpParser\EmptyParentheses;
@@ -310,9 +316,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var array<string, list<string>> */
     private array $fileReferences = [];
 
-    /** @var array<string, true> */
-    private array $currentFileReferences = [];
-
     /**
      * Separator of a deferred instantiation marker, `<keyword>@<class-like>`,
      * recorded when `new self()`, `new static()`, or `new parent()` cannot be
@@ -341,80 +344,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** Resolved function references cannot collide with class-like names. */
     private const FUNCTION_REFERENCE_PREFIX = '!';
 
-    /** @var array<string, true> Lower-cased short names of the current file's fallback markers */
-    private array $currentFileFallbackNames = [];
-
-    /** @var array<string, string> Global functions the current file calls by resolved name, keyed lower-cased */
-    private array $currentFileGlobalFunctionCalls = [];
-
-    /** @var array<string, string> Resolved unqualified calls, keyed by their namespaced spelling */
-    private array $resolvedFunctionNames = [];
-
-    /** The namespace being traversed, as `__NAMESPACE__` evaluates to: empty in the global namespace */
-    private string $currentNamespace = '';
-
     /** @var array<string, list<string>> */
     private array $fileInstantiations = [];
 
-    /** @var array<string, true> */
-    private array $currentFileInstantiations = [];
-
-    /**
-     * `true`, `false`, and `null` fetches of the current file whose spelling is
-     * not the canonical lowercase, as [line, spelling as written]; a leading
-     * `\` marks a fully qualified form. Reset per file instead of in
-     * afterTraverse() so the extractor can read them once traversal finishes.
-     *
-     * @var list<array{int, string}>
-     */
-    private array $nonCanonicalKeywordConstants = [];
-
-    /**
-     * Numeric literals of the current file, as [line, spelling as written,
-     * evaluated value]. Reset per file so the extractor can read them once
-     * traversal finishes.
-     *
-     * @var list<array{int, string, int|float}>
-     */
-    private array $numericLiterals = [];
-
-    /**
-     * Attributes of the current file that spell `()` although they pass no
-     * argument, as [line, resolved attribute name]. Reset per file so the
-     * extractor can read them once traversal finishes.
-     *
-     * @var list<array{int, string}>
-     */
-    private array $attributesWithEmptyParentheses = [];
-
     private readonly ConstExprEvaluator $constExprEvaluator;
 
-    /**
-     * Stack of class-likes currently being entered, so `new self`,
-     * `new static`, and `new parent` instantiations can be resolved to the
-     * class names (or deferred markers) they target. Anonymous classes have
-     * no name to resolve self/static to, but their `extends` still resolves
-     * `parent`.
-     *
-     * @var list<array{self: string|null, static: string|null, parent: string|null}>
-     */
-    private array $activeClassLikeScopes = [];
+    private NamespaceAnalysis $namespaceAnalysis;
 
-    private string $currentFile = '';
+    private FileReferenceAnalysis $fileReferenceAnalysis;
 
-    /** @var array<Token> */
-    private array $currentTokens = [];
-
-    /** @var array<string, true> */
-    private array $currentNamespaceUses = [];
-
-    /**
-     * The class imports among $currentNamespaceUses: not `use function` or
-     * `use const`.
-     *
-     * @var array<string, true>
-     */
-    private array $currentNamespaceClassUses = [];
+    private FileSyntaxAnalysis $fileSyntaxAnalysis;
 
     /**
      * Each class-like left in the current file with the facts collected
@@ -426,65 +365,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private array $fileClassLikes = [];
 
-    /**
-     * Lower-cased names of the functions the current file declares
-     * unconditionally at namespace level. PHP function names are
-     * case-insensitive, so calls are matched case-insensitively.
-     *
-     * A function declared inside another function or a conditional only
-     * exists once that code has run, so an unqualified call cannot be
-     * resolved to it: until then PHP falls back to the global function.
-     *
-     * @var array<string, true>
-     */
-    private array $fileFunctions = [];
-
     /** @var list<ClassLikeAnalysis> */
     private array $activeClassLikeAnalyses = [];
 
-    /** @var list<array<string, bool>> Lowercased method names and static flags per class-like, innermost last */
-    private array $activeClassMethodStaticFlags = [];
-
-    /**
-     * Cyclomatic complexity of each tracked method currently being entered,
-     * innermost last. A branch node increments every entry: a method nested
-     * through an anonymous class still adds to its enclosing method.
-     *
-     * @var list<int>
-     */
-    private array $activeMethodComplexities = [];
-
-    /**
-     * Lowercased name of each method currently being entered and whether it
-     * is static, innermost last.
-     *
-     * @var list<array{string, bool}>
-     */
-    private array $activeMethodStaticFlags = [];
-
-    /**
-     * Names of the class-likes currently being entered, innermost last; an
-     * anonymous class contributes null.
-     *
-     * @var list<string|null>
-     */
-    private array $activeClassLikeNames = [];
-
-    /** @var list<string> */
-    private array $activeFunctionNames = [];
+    /** @var list<MethodAnalysis> Innermost method last */
+    private array $activeMethodAnalyses = [];
 
     /** @var list<FunctionLikeAnalysis> */
     private array $activeFunctionLikeAnalyses = [];
-
-    /**
-     * For each class-like currently being entered, how many function-likes
-     * were active at that point. `$this` inside a class-like body binds to
-     * that class-like, so only anonymous functions entered after it (deeper
-     * in the stack) are the ones reading it.
-     *
-     * @var list<int>
-     */
-    private array $functionLikeDepthAtClassLikeEntry = [];
 
     /**
      * Every function-like entered in the current file, in source order. Their
@@ -512,36 +400,23 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         private readonly bool $withSignatures = false,
         private readonly bool $withFileReferences = true,
     ) {
-        $this->constExprEvaluator = new ConstExprEvaluator($this->evaluateClassNameFetch(...));
+        $this->constExprEvaluator    = new ConstExprEvaluator($this->evaluateClassNameFetch(...));
+        $this->namespaceAnalysis     = new NamespaceAnalysis();
+        $this->fileReferenceAnalysis = new FileReferenceAnalysis();
+        $this->fileSyntaxAnalysis    = new FileSyntaxAnalysis('', []);
     }
 
     /** @param array<Token> $tokens The file's token stream, for the facts its AST does not carry */
     public function setCurrentFile(string $file, array $tokens = []): void
     {
-        $this->currentFile                       = $file;
-        $this->currentTokens                     = $tokens;
-        $this->currentFileReferences             = [];
-        $this->currentFileFallbackNames          = [];
-        $this->currentFileGlobalFunctionCalls    = [];
-        $this->resolvedFunctionNames             = [];
-        $this->currentNamespace                  = '';
-        $this->currentFileInstantiations         = [];
-        $this->nonCanonicalKeywordConstants      = [];
-        $this->numericLiterals                   = [];
-        $this->attributesWithEmptyParentheses    = [];
-        $this->currentNamespaceUses              = [];
-        $this->currentNamespaceClassUses         = [];
-        $this->fileClassLikes                    = [];
-        $this->fileFunctions                     = [];
-        $this->activeClassLikeAnalyses           = [];
-        $this->activeClassMethodStaticFlags      = [];
-        $this->activeMethodComplexities          = [];
-        $this->activeMethodStaticFlags           = [];
-        $this->activeClassLikeNames              = [];
-        $this->activeFunctionNames               = [];
-        $this->activeFunctionLikeAnalyses        = [];
-        $this->fileFunctionLikeAnalyses          = [];
-        $this->functionLikeDepthAtClassLikeEntry = [];
+        $this->namespaceAnalysis          = new NamespaceAnalysis();
+        $this->fileReferenceAnalysis      = new FileReferenceAnalysis();
+        $this->fileSyntaxAnalysis         = new FileSyntaxAnalysis($file, $tokens);
+        $this->fileClassLikes             = [];
+        $this->activeClassLikeAnalyses    = [];
+        $this->activeMethodAnalyses       = [];
+        $this->activeFunctionLikeAnalyses = [];
+        $this->fileFunctionLikeAnalyses   = [];
     }
 
     /** @return list<ClassNode> */
@@ -588,7 +463,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     public function getNonCanonicalKeywordConstants(): array
     {
-        return $this->nonCanonicalKeywordConstants;
+        return $this->fileSyntaxAnalysis->nonCanonicalKeywordConstants;
     }
 
     /**
@@ -599,7 +474,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     public function getNumericLiterals(): array
     {
-        return $this->numericLiterals;
+        return $this->fileSyntaxAnalysis->numericLiterals;
     }
 
     /**
@@ -610,7 +485,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     public function getAttributesWithEmptyParentheses(): array
     {
-        return $this->attributesWithEmptyParentheses;
+        return $this->fileSyntaxAnalysis->attributesWithEmptyParentheses;
     }
 
     /**
@@ -621,7 +496,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     public function getFileFunctions(): array
     {
-        return $this->fileFunctions;
+        return $this->fileReferenceAnalysis->declaredFunctions;
     }
 
     /**
@@ -722,9 +597,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // single instanceof.
         if ($node instanceof Stmt) {
             if ($node instanceof Namespace_) {
-                $this->currentNamespace          = (string) $node->name;
-                $this->currentNamespaceUses      = [];
-                $this->currentNamespaceClassUses = [];
+                $this->namespaceAnalysis = new NamespaceAnalysis((string) $node->name);
 
                 return null;
             }
@@ -733,10 +606,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 foreach ($node->uses as $use) {
                     $name = $use->name->toString();
 
-                    $this->currentNamespaceUses[$name] = true;
+                    $this->namespaceAnalysis->uses[$name] = true;
 
                     if ($node->type === Use_::TYPE_NORMAL) {
-                        $this->currentNamespaceClassUses[$name] = true;
+                        $this->namespaceAnalysis->classUses[$name] = true;
                     }
                 }
 
@@ -749,14 +622,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 foreach ($node->uses as $use) {
                     $name = $prefix . '\\' . $use->name->toString();
 
-                    $this->currentNamespaceUses[$name] = true;
+                    $this->namespaceAnalysis->uses[$name] = true;
 
                     // A typed group (`use function A\{b, c}`) types the group,
                     // a mixed one (`use A\{B, function c}`) each item.
                     $type = $node->type === Use_::TYPE_UNKNOWN ? $use->type : $node->type;
 
                     if ($type === Use_::TYPE_NORMAL) {
-                        $this->currentNamespaceClassUses[$name] = true;
+                        $this->namespaceAnalysis->classUses[$name] = true;
                     }
                 }
 
@@ -764,36 +637,19 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof Function_) {
-                $this->activeFunctionNames[] = $this->resolveFunctionDeclarationName($node);
                 $this->startFunctionLikeAnalysis($node);
 
                 return null;
             }
 
             if ($node instanceof ClassLike) {
-                $methodStaticFlags = [];
-
-                foreach ($node->getMethods() as $method) {
-                    $methodStaticFlags[$method->name->toLowerString()] = $method->isStatic();
-                }
-
-                $this->activeClassMethodStaticFlags[] = $methodStaticFlags;
-
-                $classLikeName = $node->name instanceof Identifier
-                    ? $this->resolveClassName($node)
-                    : null;
-
-                $this->activeClassLikeScopes[]             = $this->createClassLikeScope($node, $classLikeName);
-                $this->activeClassLikeNames[]              = $classLikeName;
-                $this->functionLikeDepthAtClassLikeEntry[] = count($this->activeFunctionLikeAnalyses);
                 $this->startClassLikeAnalysis($node);
 
                 return null;
             }
 
             if ($node instanceof ClassMethod) {
-                $this->activeMethodStaticFlags[] = [$node->name->toLowerString(), $node->isStatic()];
-                $this->startMethodAnalysis();
+                $this->activeMethodAnalyses[] = new MethodAnalysis($node->name->toLowerString(), $node->isStatic());
 
                 return null;
             }
@@ -877,7 +733,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($node instanceof ClassMethod) {
-            array_pop($this->activeMethodStaticFlags);
             $this->finishMethodAnalysis($node);
 
             return null;
@@ -897,7 +752,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($node instanceof Function_) {
             $this->finishFunctionLikeAnalysis();
-            array_pop($this->activeFunctionNames);
 
             return null;
         }
@@ -908,11 +762,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         if ($node instanceof Enum_) {
             $this->collectEnumCases($node);
         }
-
-        array_pop($this->activeClassLikeScopes);
-        array_pop($this->activeClassMethodStaticFlags);
-        array_pop($this->activeClassLikeNames);
-        array_pop($this->functionLikeDepthAtClassLikeEntry);
 
         /** @var ClassLikeAnalysis $analysis */
         $analysis = array_pop($this->activeClassLikeAnalyses);
@@ -929,7 +778,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $node,
                 $analysis,
                 $this->innermostActiveClassLikeName(),
-                $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
+                $this->innermostActiveFunctionName(),
             ];
         } else {
             $this->fileClassLikes[] = [$node, $analysis, null, null];
@@ -941,7 +790,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @param Node[] $nodes */
     public function afterTraverse(array $nodes): null
     {
-        $this->fileFunctions = UnconditionallyDeclaredFunctions::names($nodes);
+        $this->fileReferenceAnalysis->declaredFunctions = UnconditionallyDeclaredFunctions::names($nodes);
 
         foreach ($this->fileClassLikes as [$classLike, $analysis, $enclosingClassName, $enclosingFunctionName]) {
             if ($classLike instanceof Class_ && $classLike->isAnonymous()) {
@@ -959,39 +808,37 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         // a global function also called by resolved name here is referenced
         // by name.
         $globalFunctionCalls = array_intersect_key(
-            $this->currentFileGlobalFunctionCalls,
-            $this->currentFileFallbackNames
+            $this->fileReferenceAnalysis->globalFunctionCalls,
+            $this->fileReferenceAnalysis->fallbackNames
         );
 
         foreach ($globalFunctionCalls as $globalFunctionCall) {
-            $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $globalFunctionCall] = true;
+            $this->fileReferenceAnalysis->references[self::FUNCTION_REFERENCE_PREFIX . $globalFunctionCall] = true;
         }
 
-        $this->currentFileFallbackNames       = [];
-        $this->currentFileGlobalFunctionCalls = [];
+        $this->fileReferenceAnalysis->fallbackNames       = [];
+        $this->fileReferenceAnalysis->globalFunctionCalls = [];
 
-        if ($this->withFileReferences && $this->currentFileReferences !== []) {
-            $this->fileReferences[$this->currentFile] = array_keys($this->currentFileReferences);
+        if ($this->withFileReferences && $this->fileReferenceAnalysis->references !== []) {
+            $this->fileReferences[$this->fileSyntaxAnalysis->file] = array_keys(
+                $this->fileReferenceAnalysis->references,
+            );
         }
 
-        if ($this->withFileReferences && $this->currentFileInstantiations !== []) {
-            $this->fileInstantiations[$this->currentFile] = array_keys($this->currentFileInstantiations);
+        if ($this->withFileReferences && $this->fileReferenceAnalysis->instantiations !== []) {
+            $this->fileInstantiations[$this->fileSyntaxAnalysis->file] = array_keys(
+                $this->fileReferenceAnalysis->instantiations,
+            );
         }
 
-        $this->currentFileReferences     = [];
-        $this->currentFileInstantiations = [];
+        $this->fileReferenceAnalysis->references     = [];
+        $this->fileReferenceAnalysis->instantiations = [];
 
-        $this->fileClassLikes                    = [];
-        $this->activeClassLikeAnalyses           = [];
-        $this->activeClassLikeScopes             = [];
-        $this->activeClassMethodStaticFlags      = [];
-        $this->activeMethodComplexities          = [];
-        $this->activeMethodStaticFlags           = [];
-        $this->activeClassLikeNames              = [];
-        $this->activeFunctionNames               = [];
-        $this->activeFunctionLikeAnalyses        = [];
-        $this->fileFunctionLikeAnalyses          = [];
-        $this->functionLikeDepthAtClassLikeEntry = [];
+        $this->fileClassLikes             = [];
+        $this->activeClassLikeAnalyses    = [];
+        $this->activeMethodAnalyses       = [];
+        $this->activeFunctionLikeAnalyses = [];
+        $this->fileFunctionLikeAnalyses   = [];
 
         return null;
     }
@@ -1003,16 +850,30 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private function startClassLikeAnalysis(ClassLike $classLike): void
     {
+        $methodStaticFlags = [];
+
+        foreach ($classLike->getMethods() as $method) {
+            $methodStaticFlags[$method->name->toLowerString()] = $method->isStatic();
+        }
+
+        $classLikeName = $classLike->name instanceof Identifier
+            ? $this->resolveClassName($classLike)
+            : null;
+
         $classLikeAnalysis = new ClassLikeAnalysis(
             $classLike instanceof Interface_,
+            $classLikeName,
+            $this->createClassLikeScope($classLike, $classLikeName),
+            $methodStaticFlags,
+            count($this->activeFunctionLikeAnalyses),
             $classLike instanceof Class_ && $classLike->extends instanceof Name
                 ? $classLike->extends->toString()
                 : null,
         );
 
         if ($classLike->name instanceof Identifier) {
-            $classLikeAnalysis->dependencies      = $this->currentNamespaceUses;
-            $classLikeAnalysis->classDependencies = $this->currentNamespaceClassUses;
+            $classLikeAnalysis->dependencies      = $this->namespaceAnalysis->uses;
+            $classLikeAnalysis->classDependencies = $this->namespaceAnalysis->classUses;
         }
 
         $this->activeClassLikeAnalyses[] = $classLikeAnalysis;
@@ -1027,13 +888,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $analysis = end($this->activeClassLikeAnalyses);
 
         return $analysis instanceof ClassLikeAnalysis ? $analysis : null;
-    }
-
-    private function startMethodAnalysis(): void
-    {
-        if ($this->declaringClassLikeAnalysis() instanceof ClassLikeAnalysis) {
-            $this->activeMethodComplexities[] = 1;
-        }
     }
 
     /**
@@ -1157,7 +1011,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 name:       (string) $enumCase->name,
                 line:       $enumCase->getStartLine(),
                 value:      $this->resolveEnumCaseValue($enumCase->expr, $evaluator),
-                sharesLine: EnumCaseLine::sharesLine($this->currentTokens, $enumCase),
+                sharesLine: EnumCaseLine::sharesLine($this->fileSyntaxAnalysis->tokens, $enumCase),
             );
         }
     }
@@ -1173,7 +1027,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private function createEnumConstantEvaluator(array $constants): ConstExprEvaluator
     {
-        $enumName = end($this->activeClassLikeNames);
+        $enumName = $this->declaringClassLikeAnalysis()?->name;
         $values   = [];
 
         $evaluator = new ConstExprEvaluator(function (Expr $expr) use (
@@ -1219,7 +1073,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $functionLikeAnalysis = new FunctionLikeAnalysis(
             $functionLike,
             $this->innermostActiveClassLikeName(),
-            $this->activeFunctionNames === [] ? null : end($this->activeFunctionNames),
+            $functionLike instanceof Function_
+                ? $this->resolveFunctionDeclarationName($functionLike)
+                : $this->innermostActiveFunctionName(),
         );
 
         $this->activeFunctionLikeAnalyses[] = $functionLikeAnalysis;
@@ -1249,9 +1105,22 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     private function innermostActiveClassLikeName(): ?string
     {
-        for ($index = count($this->activeClassLikeNames) - 1; $index >= 0; $index--) {
-            if ($this->activeClassLikeNames[$index] !== null) {
-                return $this->activeClassLikeNames[$index];
+        for ($index = count($this->activeClassLikeAnalyses) - 1; $index >= 0; $index--) {
+            if ($this->activeClassLikeAnalyses[$index]->name !== null) {
+                return $this->activeClassLikeAnalyses[$index]->name;
+            }
+        }
+
+        return null;
+    }
+
+    private function innermostActiveFunctionName(): ?string
+    {
+        for ($index = count($this->activeFunctionLikeAnalyses) - 1; $index >= 0; $index--) {
+            $functionLike = $this->activeFunctionLikeAnalyses[$index]->functionLike;
+
+            if ($functionLike instanceof Function_) {
+                return $this->resolveFunctionDeclarationName($functionLike);
             }
         }
 
@@ -1265,13 +1134,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private function finishMethodAnalysis(ClassMethod $classMethod): void
     {
-        $analysis = $this->declaringClassLikeAnalysis();
+        $methodAnalysis = array_pop($this->activeMethodAnalyses);
+        $analysis       = $this->declaringClassLikeAnalysis();
 
         if (! $analysis instanceof ClassLikeAnalysis) {
             return;
         }
-
-        $cyclomaticComplexity = array_pop($this->activeMethodComplexities);
 
         $analysis->methods[] = new MethodNode(
             name:                 (string) $classMethod->name,
@@ -1279,7 +1147,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             hasReturnType:        $classMethod->returnType instanceof Node,
             isStatic:             $classMethod->isStatic(),
             paramCount:           count($classMethod->params),
-            cyclomaticComplexity: $cyclomaticComplexity ?? 1,
+            cyclomaticComplexity: $methodAnalysis->cyclomaticComplexity ?? 1,
             lineCount:            $this->calculateLineCount($classMethod),
             hasExplicitVisibility: VisibilityFlagChecker::hasExplicitVisibilityFlag($classMethod->flags),
             line:                 $classMethod->getStartLine(),
@@ -1448,7 +1316,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 is_string($rawValue)
                 && ($node instanceof Int_ || is_finite($node->value))
             ) {
-                $this->numericLiterals[] = [$node->getStartLine(), $rawValue, $node->value];
+                $this->fileSyntaxAnalysis->numericLiterals[] = [$node->getStartLine(), $rawValue, $node->value];
             }
 
             return;
@@ -1499,7 +1367,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 // Outside any class-like scope — procedural functions and
                 // top-level statements — a class-like reference still keeps
                 // the referenced class-like alive.
-                $this->currentFileReferences[$name] = true;
+                $this->fileReferenceAnalysis->references[$name] = true;
             }
 
             $this->addDependency($name, ! $node->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE));
@@ -1548,7 +1416,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 && $this->activeClassLikeAnalyses === []
                 && $this->activeFunctionLikeAnalyses === []
             ) {
-                $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $node->name->toString()] = true;
+                $this->fileReferenceAnalysis->references[
+                    self::FUNCTION_REFERENCE_PREFIX . $node->name->toString()
+                ] = true;
             }
         }
 
@@ -1590,11 +1460,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $nodeClass = $node::class;
 
         if (isset(self::COMPLEXITY_BRANCH_NODES[$nodeClass])) {
-            foreach ($this->activeMethodComplexities as &$activeMethodComplexity) {
-                $activeMethodComplexity++;
+            foreach ($this->activeMethodAnalyses as $activeMethodAnalysis) {
+                $activeMethodAnalysis->cyclomaticComplexity++;
             }
-
-            unset($activeMethodComplexity);
 
             $activeFunctionLikeCount = count($this->activeFunctionLikeAnalyses);
 
@@ -1657,13 +1525,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         if ($node instanceof Attribute) {
             $attributeName = $node->name->toString();
 
-            $this->currentFileInstantiations[$attributeName] = true;
+            $this->fileReferenceAnalysis->instantiations[$attributeName] = true;
 
             if (
                 $this->withFileAnalysis
-                && EmptyParentheses::tokenRangeAfter($this->currentTokens, $node->name->getEndTokenPos()) !== null
+                && EmptyParentheses::tokenRangeAfter(
+                    $this->fileSyntaxAnalysis->tokens,
+                    $node->name->getEndTokenPos(),
+                ) !== null
             ) {
-                $this->attributesWithEmptyParentheses[] = [$node->getStartLine(), $attributeName];
+                $this->fileSyntaxAnalysis->attributesWithEmptyParentheses[] = [$node->getStartLine(), $attributeName];
             }
 
             return;
@@ -1712,7 +1583,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        $this->nonCanonicalKeywordConstants[] = [$name->getStartLine(), $spelling];
+        $this->fileSyntaxAnalysis->nonCanonicalKeywordConstants[] = [$name->getStartLine(), $spelling];
     }
 
     private function collectInstantiation(New_ $new): void
@@ -1723,7 +1594,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $className = $this->resolveClassLikeName($class);
 
             if ($className !== null) {
-                $this->currentFileInstantiations[$className] = true;
+                $this->fileReferenceAnalysis->instantiations[$className] = true;
             }
 
             return;
@@ -1742,7 +1613,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $className = $this->resolveClassNameExpr($class);
 
         if ($className !== null) {
-            $this->currentFileInstantiations[$className] = true;
+            $this->fileReferenceAnalysis->instantiations[$className] = true;
         }
     }
 
@@ -1760,13 +1631,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         // After name resolution only self, static, and parent survive as
         // plain names.
-        $scope = end($this->activeClassLikeScopes);
-
-        if ($scope === false) {
-            return null;
-        }
-
-        return $scope[$name->toLowerString()] ?? null;
+        return $this->declaringClassLikeAnalysis()?->instantiationScope[$name->toLowerString()] ?? null;
     }
 
     /**
@@ -1837,7 +1702,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $reflectionTarget = $this->resolveReflectionTarget($new);
 
         if ($reflectionTarget !== null) {
-            $this->currentFileInstantiations[$reflectionTarget] = true;
+            $this->fileReferenceAnalysis->instantiations[$reflectionTarget] = true;
         }
     }
 
@@ -1968,7 +1833,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($expr instanceof NamespaceMagicConst) {
-            return $this->currentNamespace;
+            return $this->namespaceAnalysis->name;
         }
 
         // A nested concatenation is left before the outer one, which finds
@@ -2008,7 +1873,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 preg_match(self::METHOD_NAME_PATTERN, substr($value, $separatorPosition + 2)) === 1
                 && preg_match(self::CLASS_LIKE_STRING_PATTERN, $staticCallableClass) === 1
             ) {
-                $this->currentFileReferences[$staticCallableClass] = true;
+                $this->fileReferenceAnalysis->references[$staticCallableClass] = true;
             }
 
             return;
@@ -2018,8 +1883,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             preg_match(self::CLASS_LIKE_STRING_PATTERN, $value) === 1
             && ! isset(self::KEYWORD_CONSTANTS[strtolower($value)])
         ) {
-            $this->currentFileReferences[$value]                                   = true;
-            $this->currentFileReferences[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
+            $this->fileReferenceAnalysis->references[$value]                                   = true;
+            $this->fileReferenceAnalysis->references[self::FUNCTION_REFERENCE_PREFIX . $value] = true;
         }
     }
 
@@ -2083,9 +1948,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private function markThisUsage(): void
     {
-        $depth = $this->functionLikeDepthAtClassLikeEntry === []
-            ? 0
-            : end($this->functionLikeDepthAtClassLikeEntry);
+        $depth = $this->declaringClassLikeAnalysis()->functionLikeDepthAtEntry ?? 0;
 
         for ($index = count($this->activeFunctionLikeAnalyses) - 1; $index >= $depth; $index--) {
             $this->activeFunctionLikeAnalyses[$index]->usesThis = true;
@@ -2110,7 +1973,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             && in_array($staticCall->class->toLowerString(), ['self', 'static'], true)
             && $staticCall->name instanceof Identifier
         ) {
-            $methodStaticFlags = end($this->activeClassMethodStaticFlags) ?: [];
+            $methodStaticFlags = $this->declaringClassLikeAnalysis()->methodStaticFlags ?? [];
 
             if (($methodStaticFlags[$staticCall->name->toLowerString()] ?? null) === false) {
                 $this->markThisUsage();
@@ -2123,14 +1986,14 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             ! $staticCall->class instanceof Name
             || $staticCall->class->toLowerString() !== 'parent'
             || ! $staticCall->name instanceof Identifier
-            || $this->activeMethodStaticFlags === []
+            || $this->activeMethodAnalyses === []
         ) {
             return;
         }
 
-        [$methodName, $isStatic] = end($this->activeMethodStaticFlags);
+        $methodAnalysis = end($this->activeMethodAnalyses);
 
-        if (! $isStatic && $staticCall->name->toLowerString() === $methodName) {
+        if (! $methodAnalysis->isStatic && $staticCall->name->toLowerString() === $methodAnalysis->name) {
             $this->markThisUsage();
         }
     }
@@ -2160,7 +2023,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $this->classNodes[] = new ClassNode(
             className:          $className,
-            file:               $this->currentFile,
+            file:               $this->fileSyntaxAnalysis->file,
             line:               $classLike->getStartLine(),
             layer:              $layer,
             extends:            $classLike instanceof Class_ && $classLike->extends instanceof Name
@@ -2205,7 +2068,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         [$layer, $layers] = $this->resolveLayerData($enclosingClassName ?? $enclosingFunctionName ?? '');
 
         $this->anonymousClassNodes[] = new AnonymousClassNode(
-            file:                  $this->currentFile,
+            file:                  $this->fileSyntaxAnalysis->file,
             line:                  $class->getStartLine(),
             extends:               $class->extends instanceof Name ? $class->extends->toString() : null,
             implements:            $this->collectImplements($class),
@@ -2213,7 +2076,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             layer:                 $layer,
             enclosingClassName:    $enclosingClassName,
             enclosingFunctionName: $enclosingFunctionName,
-            hasEmptyParentheses:   AnonymousClassParentheses::emptyTokenRange($this->currentTokens, $class) !== null,
+            hasEmptyParentheses:   AnonymousClassParentheses::emptyTokenRange(
+                $this->fileSyntaxAnalysis->tokens,
+                $class,
+            ) !== null,
             layers:                $layers,
             isReadonly:            $class->isReadonly(),
             dependencies:          $analysis['dependencies'],
@@ -2250,7 +2116,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             $this->functionNodes[] = new FunctionNode(
                 functionName:         $functionName,
-                file:                 $this->currentFile,
+                file:                 $this->fileSyntaxAnalysis->file,
                 line:                 $functionLike->getStartLine(),
                 layer:                $layer,
                 hasReturnType:        $hasReturnType,
@@ -2262,7 +2128,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 superglobals:         $superglobals,
                 languageConstructs:   $languageConstructs,
                 layers:               $layers,
-                isConditional:        ! isset($this->fileFunctions[strtolower($functionName)]),
+                isConditional: ! isset($this->fileReferenceAnalysis->declaredFunctions[strtolower($functionName)]),
             );
 
             return;
@@ -2276,7 +2142,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         [$layer, $layers] = $this->resolveLayerData($scopeName);
 
         $this->anonymousFunctionNodes[] = new AnonymousFunctionNode(
-            file:                  $this->currentFile,
+            file:                  $this->fileSyntaxAnalysis->file,
             line:                  $functionLike->getStartLine(),
             layer:                 $layer,
             isArrowFunction:       $functionLike instanceof ArrowFunction,
@@ -2308,11 +2174,11 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private function resolveLayerData(string $scopeName): array
     {
-        $layers = $this->layerResolver->resolveAll($scopeName, $this->currentFile);
+        $layers = $this->layerResolver->resolveAll($scopeName, $this->fileSyntaxAnalysis->file);
         $layer  = match (count($layers)) {
             0       => null,
             1       => $layers[0],
-            default => $this->layerResolver->resolve($scopeName, $this->currentFile),
+            default => $this->layerResolver->resolve($scopeName, $this->fileSyntaxAnalysis->file),
         };
 
         return [$layer, $layers];
@@ -2410,7 +2276,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         if ($name instanceof FullyQualified) {
             if (! str_contains($functionName, '\\')) {
-                $this->currentFileGlobalFunctionCalls[$name->toLowerString()] = $functionName;
+                $this->fileReferenceAnalysis->globalFunctionCalls[$name->toLowerString()] = $functionName;
             }
 
             return $functionName;
@@ -2423,19 +2289,20 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             // A call may be collected by its closure and enclosing scopes,
             // and repeated throughout the file. Resolve each spelling once.
-            if (isset($this->resolvedFunctionNames[$namespacedNameString])) {
-                return $this->resolvedFunctionNames[$namespacedNameString];
+            if (isset($this->fileReferenceAnalysis->resolvedFunctionNames[$namespacedNameString])) {
+                return $this->fileReferenceAnalysis->resolvedFunctionNames[$namespacedNameString];
             }
 
-            if (isset($this->fileFunctions[strtolower($namespacedNameString)])) {
-                return $this->resolvedFunctionNames[$namespacedNameString] = $namespacedNameString;
+            if (isset($this->fileReferenceAnalysis->declaredFunctions[strtolower($namespacedNameString)])) {
+                return $this->fileReferenceAnalysis->resolvedFunctionNames[$namespacedNameString]
+                    = $namespacedNameString;
             }
 
             // Declared in another file or not at all: which function PHP
             // calls is resolved once every function is known.
             $this->addFunctionFallback($name, $namespacedName);
 
-            $functionName = $this->resolvedFunctionNames[$namespacedNameString]
+            $functionName = $this->fileReferenceAnalysis->resolvedFunctionNames[$namespacedNameString]
                 = self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedNameString;
         }
 
@@ -2444,8 +2311,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
     private function addFunctionFallback(Name $name, Name $namespacedName): void
     {
-        $this->currentFileReferences[self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedName->toString()] = true;
-        $this->currentFileFallbackNames[$name->toLowerString()]                                           = true;
+        $reference = self::FUNCTION_FALLBACK_MARKER_PREFIX . $namespacedName->toString();
+
+        $this->fileReferenceAnalysis->references[$reference]                = true;
+        $this->fileReferenceAnalysis->fallbackNames[$name->toLowerString()] = true;
     }
 
     /**
