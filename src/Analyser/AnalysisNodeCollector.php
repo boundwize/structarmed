@@ -400,23 +400,28 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         private readonly bool $withSignatures = false,
         private readonly bool $withFileReferences = true,
     ) {
-        $this->constExprEvaluator    = new ConstExprEvaluator($this->evaluateClassNameFetch(...));
-        $this->namespaceAnalysis     = new NamespaceAnalysis();
-        $this->fileReferenceAnalysis = new FileReferenceAnalysis();
-        $this->fileSyntaxAnalysis    = new FileSyntaxAnalysis('', []);
+        $this->constExprEvaluator = new ConstExprEvaluator($this->evaluateClassNameFetch(...));
+        $this->initGroupedAnalysis();
     }
 
     /** @param array<Token> $tokens The file's token stream, for the facts its AST does not carry */
     public function setCurrentFile(string $file, array $tokens = []): void
     {
-        $this->namespaceAnalysis          = new NamespaceAnalysis();
-        $this->fileReferenceAnalysis      = new FileReferenceAnalysis();
-        $this->fileSyntaxAnalysis         = new FileSyntaxAnalysis($file, $tokens);
+        $this->initGroupedAnalysis($file, $tokens);
+
         $this->fileClassLikes             = [];
         $this->activeClassLikeAnalyses    = [];
         $this->activeMethodAnalyses       = [];
         $this->activeFunctionLikeAnalyses = [];
         $this->fileFunctionLikeAnalyses   = [];
+    }
+
+    /** @param array<Token> $tokens */
+    private function initGroupedAnalysis(string $file = '', array $tokens = []): void
+    {
+        $this->namespaceAnalysis     = new NamespaceAnalysis();
+        $this->fileReferenceAnalysis = new FileReferenceAnalysis();
+        $this->fileSyntaxAnalysis    = new FileSyntaxAnalysis($file, $tokens);
     }
 
     /** @return list<ClassNode> */
