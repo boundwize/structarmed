@@ -29,6 +29,8 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
 
     private float $lastRenderTime = 0.0;
 
+    private int $nextNonTtyRenderAt = 0;
+
     private readonly int $width;
 
     private readonly bool $useColor;
@@ -70,6 +72,9 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
             }
 
             $this->lastRenderTime = $now;
+        } elseif ($this->current < $this->nextNonTtyRenderAt) {
+            // Still below the next 10% step, so render() would print nothing.
+            return;
         }
 
         $this->render();
@@ -109,6 +114,7 @@ final class ConsoleProgressBar implements ProgressHandlerInterface
         }
 
         $this->lastRenderedPercent = $percent;
+        $this->nextNonTtyRenderAt  = (int) (($percent + 10) * $this->total / 100);
 
         $filled = $this->total > 0
             ? (int) (($this->current / $this->total) * $this->width)
