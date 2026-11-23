@@ -84,7 +84,7 @@ final readonly class ClassNameRegexLayerResolver implements LayerResolverInterfa
         if (is_string($patterns)) {
             return (bool) preg_match($patterns, $className);
         }
-        
+
         foreach ($patterns as $pattern) {
             if ($pattern === null) {
                 continue;
