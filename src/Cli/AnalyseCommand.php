@@ -343,10 +343,13 @@ final readonly class AnalyseCommand
                 return $this->reportError($runtimeException);
             }
 
+            $violationCount = $unfilteredRuleViolationCollection->count();
+
             echo sprintf(
-                "Generated baseline [%s] with %d violation(s).\n",
+                "Generated baseline [%s] with %d violation%s.\n",
                 $options['generate-baseline'],
-                $unfilteredRuleViolationCollection->count()
+                $violationCount,
+                $violationCount === 1 ? '' : 's'
             );
 
             return 0;

@@ -30,7 +30,9 @@ final readonly class SummaryReport implements ReportInterface
 
     public function render(RuleViolationCollection $ruleViolationCollection, float $elapsedSeconds): string
     {
-        $heading = sprintf('StructArmed %s — Architecture Enforcement', Version::current());
+        $heading        = sprintf('StructArmed %s — Architecture Enforcement', Version::current());
+        $violationCount = $ruleViolationCollection->count();
+        $ruleCount      = count($ruleViolationCollection->countByRule());
 
         $lines = [
             '',
@@ -45,9 +47,11 @@ final readonly class SummaryReport implements ReportInterface
             $ruleViolationCollection->isEmpty()
                 ? PHP_EOL . sprintf('✅  No violations found. (%.2fs)', $elapsedSeconds)
                 : sprintf(
-                    '%d violation(s) found in %d rule(s)  •  %.2fs',
-                    $ruleViolationCollection->count(),
-                    count($ruleViolationCollection->countByRule()),
+                    '%d violation%s found in %d rule%s  •  %.2fs',
+                    $violationCount,
+                    $violationCount === 1 ? '' : 's',
+                    $ruleCount,
+                    $ruleCount === 1 ? '' : 's',
                     $elapsedSeconds
                 ),
             '',

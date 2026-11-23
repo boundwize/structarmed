@@ -874,7 +874,7 @@ PHP);
             );
 
             $this->assertSame(1, $exitCode, $output);
-            $this->assertStringContainsString('1 violation(s) found', $output);
+            $this->assertStringContainsString('1 violation found', $output);
             $this->assertDirectoryDoesNotExist($cacheDirectory);
         } finally {
             $this->removeTempDirectory($basePath);
@@ -1012,7 +1012,7 @@ PHP);
 
             $this->assertSame(1, $exitCode, $output);
             $this->assertMatchesRegularExpression('/^source\.must_declare_method_visibility +1\R/m', $output);
-            $this->assertStringContainsString('1 violation(s) found in 1 rule(s)', $output);
+            $this->assertStringContainsString('1 violation found in 1 rule', $output);
             $this->assertStringNotContainsString('src/Foo.php', $output);
         } finally {
             $this->removeTempDirectory($basePath);
@@ -1058,7 +1058,7 @@ PHP);
                 '::error file=src/Foo.php,line=7,title=source.must_declare_method_visibility::',
                 $output
             );
-            $this->assertStringContainsString('1 violation(s) found', $output);
+            $this->assertStringContainsString('1 violation found', $output);
         } finally {
             putenv($githubWorkspace === false ? 'GITHUB_WORKSPACE' : 'GITHUB_WORKSPACE=' . $githubWorkspace);
             $this->removeTempDirectory($basePath);
@@ -1677,7 +1677,7 @@ PHP);
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString(
-                'Generated baseline [structarmed-baseline.php] with 1 violation(s).',
+                'Generated baseline [structarmed-baseline.php] with 1 violation.',
                 $output
             );
             $this->assertFileExists($basePath . '/structarmed-baseline.php');
@@ -1794,7 +1794,7 @@ PHP);
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString(
-                'Generated baseline [structarmed-baseline.php] with 1 violation(s).',
+                'Generated baseline [structarmed-baseline.php] with 1 violation.',
                 $output
             );
             $this->assertFileExists($basePath . '/structarmed-baseline.php');
@@ -1822,7 +1822,7 @@ PHP);
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString(
-                'Generated baseline [structarmed-baseline.php] with 0 violation(s).',
+                'Generated baseline [structarmed-baseline.php] with 0 violations.',
                 $output
             );
             $this->assertStringContainsString(
@@ -1868,7 +1868,7 @@ PHP,
                 $this->withoutAnsi($output)
             );
             $this->assertStringContainsString(
-                'Generated baseline [structarmed-baseline.php] with 0 violation(s).',
+                'Generated baseline [structarmed-baseline.php] with 0 violations.',
                 $output
             );
         } finally {
@@ -1909,7 +1909,7 @@ PHP);
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString(
-                'Generated baseline [structarmed-baseline.php] with 0 violation(s).',
+                'Generated baseline [structarmed-baseline.php] with 0 violations.',
                 $output
             );
             $this->assertStringContainsString(
@@ -1956,7 +1956,7 @@ PHP);
 
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString(
-                'Generated baseline [structarmed-baseline.php] with 1 violation(s).',
+                'Generated baseline [structarmed-baseline.php] with 1 violation.',
                 $output
             );
             $this->assertStringContainsString(
@@ -2119,7 +2119,7 @@ PHP);
             $this->assertSame(0, $exitCode, $output);
             $this->assertStringContainsString(
                 PHP_EOL
-                    . 'Baseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.'
+                    . 'Baseline [structarmed-baseline.php]: 2 violations filtered out, 0 no longer found.'
                     . PHP_EOL,
                 $output
             );
@@ -2128,12 +2128,12 @@ PHP);
             $this->assertSame(0, $staleExitCode, $staleOutput);
             $this->assertStringContainsString(
                 PHP_EOL
-                    . 'Warning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.'
+                    . 'Warning: Baseline [structarmed-baseline.php]: 1 violation filtered out, 1 no longer found.'
                     . PHP_EOL,
                 $this->withoutAnsi($staleOutput)
             );
             $this->assertStringContainsString(
-                PHP_EOL . 'Baseline [structarmed-baseline.php]: 1 violation(s) filtered out.' . PHP_EOL,
+                PHP_EOL . 'Baseline [structarmed-baseline.php]: 1 violation filtered out.' . PHP_EOL,
                 $narrowedOutput
             );
             $this->assertStringNotContainsString('Baseline [', $jsonOutput);

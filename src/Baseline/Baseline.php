@@ -120,7 +120,12 @@ final readonly class Baseline
             return 'Baseline: not configured.';
         }
 
-        $line = sprintf('Baseline [%s]: %d violation(s) filtered out', $file, $filteredCount);
+        $line = sprintf(
+            'Baseline [%s]: %d violation%s filtered out',
+            $file,
+            $filteredCount,
+            $filteredCount === 1 ? '' : 's'
+        );
 
         if ($noLongerFoundCount === null) {
             return $line . '.';

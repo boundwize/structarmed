@@ -148,7 +148,7 @@ Rule                                   Count
 source.must_declare_method_visibility     12
 layer.may_not_depend_on                    3
 ────────────────────────────────────────────
-15 violation(s) found in 2 rule(s)  •  0.34s
+15 violations found in 2 rules  •  0.34s
 ```
 
 It exits with `1` when violations are found, like the `console` report. Without violations the table holds a single `(none)` row with a count of `0`.

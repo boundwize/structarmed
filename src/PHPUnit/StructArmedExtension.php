@@ -132,9 +132,12 @@ final class StructArmedExtension implements Extension
         }
 
         if ($ruleViolationCollection->hasViolations()) {
+            $violationCount = $ruleViolationCollection->count();
+
             throw new ViolationsFoundException(sprintf(
-                'StructArmed found %d architecture violation(s). Fix them before running tests.',
-                $ruleViolationCollection->count()
+                'StructArmed found %d architecture violation%s. Fix them before running tests.',
+                $violationCount,
+                $violationCount === 1 ? '' : 's'
             ));
         }
     }
