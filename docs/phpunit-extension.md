@@ -97,7 +97,7 @@ To see how the configured [baseline](../baselines/#baseline-info) matches the an
 A line is printed after the report, before the PHPUnit output:
 
 ```text
-Baseline [structarmed-baseline.php]: 46 violation(s) filtered out, 0 no longer found.
+Baseline [structarmed-baseline.php]: 46 violations filtered out, 0 no longer found.
 ```
 
 The line turns into a warning when `no longer found` is above `0`, and it is `Baseline: not configured.` without a configured baseline. The parameter does not change whether the test run fails.

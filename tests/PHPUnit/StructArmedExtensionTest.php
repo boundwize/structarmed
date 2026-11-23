@@ -291,7 +291,7 @@ final class StructArmedExtensionTest extends TestCase
             $this->fail('The uncached run did not report the violation of the new file.');
         } catch (ViolationsFoundException $violationsFoundException) {
             $this->assertStringContainsString(
-                'StructArmed found 1 architecture violation(s)',
+                'StructArmed found 1 architecture violation.',
                 $violationsFoundException->getMessage()
             );
         } finally {
@@ -523,14 +523,14 @@ PHP);
 
         // Each line ends with a blank line, to stay apart from the PHPUnit output that follows.
         $this->assertStringEndsWith(
-            "\nBaseline [structarmed-baseline.php]: 2 violation(s) filtered out, 0 no longer found.\n\n",
+            "\nBaseline [structarmed-baseline.php]: 2 violations filtered out, 0 no longer found.\n\n",
             $output
         );
         $this->assertStringNotContainsString('Warning:', $output);
         $this->assertStringContainsString('No violations found', $outputWithoutParameter);
         $this->assertStringNotContainsString('Baseline [', $outputWithoutParameter);
         $this->assertStringEndsWith(
-            "\nWarning: Baseline [structarmed-baseline.php]: 1 violation(s) filtered out, 1 no longer found.\n\n",
+            "\nWarning: Baseline [structarmed-baseline.php]: 1 violation filtered out, 1 no longer found.\n\n",
             $this->withoutAnsi($staleOutput)
         );
         // A missing baseline has nothing to tell beyond its own warning.

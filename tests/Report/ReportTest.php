@@ -68,7 +68,7 @@ final class ReportTest extends TestCase
         $ruleViolationCollection->add($this->violation());
 
         $this->assertStringContainsString(
-            implode(PHP_EOL, ['Configuration: /project/structarmed.php', '', 'Found 1 violation(s):']),
+            implode(PHP_EOL, ['Configuration: /project/structarmed.php', '', 'Found 1 violation:']),
             (new ConsoleReport(configFile: '/project/structarmed.php'))->render($ruleViolationCollection, 0.34)
         );
     }
@@ -80,10 +80,10 @@ final class ReportTest extends TestCase
 
         $report = (new ConsoleReport())->render($ruleViolationCollection, 0.34);
 
-        $this->assertStringContainsString('Found 1 violation(s):', $report);
+        $this->assertStringContainsString('Found 1 violation:', $report);
         $this->assertStringContainsString('[rule.key]', $report);
         $this->assertStringContainsString('Layer: Domain', $report);
-        $this->assertStringContainsString('1 violation(s) found', $report);
+        $this->assertStringContainsString('1 violation found', $report);
     }
 
     public function testConsoleReportDoesNotRenderViolationCountPerRuleByDefault(): void
@@ -101,6 +101,9 @@ final class ReportTest extends TestCase
         $ruleViolationCollection->add($this->violation('layer.may_not_depend_on'));
         $ruleViolationCollection->add($this->violation('layer.may_not_depend_on'));
 
+        $report = (new ConsoleReport(withSummary: true))->render($ruleViolationCollection, 0.34);
+
+        $this->assertStringContainsString('Found 3 violations:', $report);
         $this->assertStringEndsWith(
             implode(PHP_EOL, [
                 '',
@@ -109,10 +112,10 @@ final class ReportTest extends TestCase
                 'layer.may_not_depend_on      2',
                 'psr4                         1',
                 str_repeat('─', 30),
-                '3 violation(s) found  •  0.34s',
+                '3 violations found  •  0.34s',
                 '',
             ]),
-            (new ConsoleReport(withSummary: true))->render($ruleViolationCollection, 0.34)
+            $report
         );
     }
 
@@ -302,10 +305,18 @@ final class ReportTest extends TestCase
                 'layer.may_not_depend_on      2',
                 'psr4                         1',
                 str_repeat('─', 30),
-                '3 violation(s) found in 2 rule(s)  •  0.34s',
+                '3 violations found in 2 rules  •  0.34s',
                 '',
             ]),
             (new SummaryReport())->render($ruleViolationCollection, 0.34)
+        );
+
+        $singleRuleViolationCollection = new RuleViolationCollection();
+        $singleRuleViolationCollection->add($this->violation('psr4'));
+
+        $this->assertStringEndsWith(
+            '1 violation found in 1 rule  •  0.34s' . PHP_EOL,
+            (new SummaryReport())->render($singleRuleViolationCollection, 0.34)
         );
     }
 

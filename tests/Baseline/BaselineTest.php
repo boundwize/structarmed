@@ -550,11 +550,15 @@ PHP);
             $baseline->infoLine(['file' => null, 'filtered_out' => 0, 'no_longer_found' => null])
         );
         $this->assertSame(
-            'Baseline [baseline.php]: 2 violation(s) filtered out.',
+            'Baseline [baseline.php]: 1 violation filtered out.',
+            $baseline->infoLine(['file' => 'baseline.php', 'filtered_out' => 1, 'no_longer_found' => null])
+        );
+        $this->assertSame(
+            'Baseline [baseline.php]: 2 violations filtered out.',
             $baseline->infoLine(['file' => 'baseline.php', 'filtered_out' => 2, 'no_longer_found' => null])
         );
         $this->assertSame(
-            'Baseline [baseline.php]: 2 violation(s) filtered out, 1 no longer found.',
+            'Baseline [baseline.php]: 2 violations filtered out, 1 no longer found.',
             $baseline->infoLine(['file' => 'baseline.php', 'filtered_out' => 2, 'no_longer_found' => 1])
         );
     }

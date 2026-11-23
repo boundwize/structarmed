@@ -24,7 +24,7 @@
         <text x="0" y="63" class="text">Configuration: /var/www/prj-ddd/structarmed.php</text>
 
         <!-- Line 6: Found violations -->
-        <text x="0" y="94" class="text">Found 1 violation(s):</text>
+        <text x="0" y="94" class="text">Found 1 violation:</text>
 
         <!-- Line 7: Separator -->
         <text x="0" y="108" class="text">───────────────────────────────────────────────</text>
@@ -45,6 +45,6 @@
         <text x="0" y="207" class="text">───────────────────────────────────────────────</text>
 
         <!-- Line 15: Summary -->
-        <text x="0" y="221" class="text">1 violation(s) found  •  0.00s</text>
+        <text x="0" y="221" class="text">1 violation found  •  0.00s</text>
     </g>
 </svg>

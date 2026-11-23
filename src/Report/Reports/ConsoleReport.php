@@ -53,8 +53,11 @@ final readonly class ConsoleReport implements ReportInterface
             return implode(PHP_EOL, $lines);
         }
 
+        $violationCount = $ruleViolationCollection->count();
+        $pluralSuffix   = $violationCount === 1 ? '' : 's';
+
         $lines[] = '';
-        $lines[] = sprintf('Found %d violation(s):', $ruleViolationCollection->count());
+        $lines[] = sprintf('Found %d violation%s:', $violationCount, $pluralSuffix);
         $lines[] = str_repeat('─', $lineWidth);
 
         foreach ($ruleViolationCollection as $violation) {
@@ -81,8 +84,9 @@ final readonly class ConsoleReport implements ReportInterface
         }
 
         $lines[] = sprintf(
-            '%d violation(s) found  •  %.2fs',
-            $ruleViolationCollection->count(),
+            '%d violation%s found  •  %.2fs',
+            $violationCount,
+            $pluralSuffix,
             $elapsedSeconds
         );
         $lines[] = '';
