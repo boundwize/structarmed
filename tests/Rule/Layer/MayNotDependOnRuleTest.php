@@ -204,7 +204,7 @@ final class MayNotDependOnRuleTest extends TestCase
 
     public function testFindsDependencyNodeWrittenInAnotherCase(): void
     {
-        // Path matching would miss the lowercased name; the node's layer catches it.
+        // No path segment names the layer; only the node's layer catches it.
         $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
         $dependencyNode     = $this->makeNode(layer: 'Infrastructure', className: 'App\Persistence\OrderRepository');
         $mayNotDependOnRule->injectClassNodeMap([$dependencyNode->className => $dependencyNode]);
@@ -236,6 +236,22 @@ final class MayNotDependOnRuleTest extends TestCase
         ]);
 
         $this->assertInstanceOf(RuleViolation::class, $mayNotDependOnRule->evaluate($classNode));
+    }
+
+    public function testPathFallbackMatchesDependencyWrittenInAnotherCase(): void
+    {
+        $mayNotDependOnRule = new MayNotDependOnRule(from: 'Domain', to: 'Infrastructure');
+        $classNode          = $this->makeNode('Domain', [
+            'App\infrastructure\Repository',
+            'INFRASTRUCTURE\Repository',
+            'App\Infrastructures\Repository',
+        ]);
+
+        $violations = $mayNotDependOnRule->evaluateAll($classNode);
+
+        $this->assertCount(2, $violations);
+        $this->assertStringContainsString('[App\infrastructure\Repository]', $violations[0]->message);
+        $this->assertStringContainsString('[INFRASTRUCTURE\Repository]', $violations[1]->message);
     }
 
     public function testFallsBackToPathWhenScannedDependencyHasNoLayer(): void
