@@ -22,11 +22,18 @@ abstract class AbstractLayerAwareRule
     /** @var array<string, ClassNode> lowercased class name → class node */
     private array $lowercaseClassNodeMap = [];
 
-    /** @param array<string, ClassNode> $classNodeMap */
-    public function injectClassNodeMap(array $classNodeMap): void
+    /**
+     * @internal called by the analyser, which injects both maps before any class is evaluated
+     *
+     * @param array<string, ClassNode>      $classNodeMap          class name → class node
+     * @param array<string, ClassNode>|null $lowercaseClassNodeMap lowercased class name → class node; the analyser
+     *                                                             builds it once and shares it across the rules,
+     *                                                             built here when omitted
+     */
+    public function injectClassNodeMap(array $classNodeMap, ?array $lowercaseClassNodeMap = null): void
     {
         $this->classNodeMap          = $classNodeMap;
-        $this->lowercaseClassNodeMap = array_change_key_case($classNodeMap);
+        $this->lowercaseClassNodeMap = $lowercaseClassNodeMap ?? array_change_key_case($classNodeMap);
     }
 
     /**

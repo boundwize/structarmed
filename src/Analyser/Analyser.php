@@ -308,8 +308,14 @@ final readonly class Analyser
         // (layer, dependency) pair is checked once.
         $allowedDependencies = [];
 
-        foreach ($layerAwareRules as $layerAwareRule) {
-            $layerAwareRule->injectClassNodeMap($classDependencyMaps['classNodeMap']);
+        if ($hasLayerAwareRules) {
+            // Built once here so the rules share one lowercase copy.
+            $classNodeMap          = $classDependencyMaps['classNodeMap'];
+            $lowercaseClassNodeMap = array_change_key_case($classNodeMap);
+
+            foreach ($layerAwareRules as $layerAwareRule) {
+                $layerAwareRule->injectClassNodeMap($classNodeMap, $lowercaseClassNodeMap);
+            }
         }
 
         // Function-likes and anonymous classes are not part of the class
