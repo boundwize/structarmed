@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\NodeConcern\NameQueryTrait;
+use Boundwize\StructArmed\Analyser\NodeConcern\NodeQueryTrait;
+use Boundwize\StructArmed\Analyser\NodeConcern\PropertyUnserializeTrait;
+
 use function array_filter;
 use function preg_match;
 use function strrpos;

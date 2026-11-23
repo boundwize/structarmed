@@ -2,18 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\NodeConcern;
+
+use Boundwize\StructArmed\Analyser;
 
 use function ltrim;
 use function strcasecmp;
 
 /**
- * Parent-chain queries shared by {@see ClassNode} and {@see AnonymousClassNode}.
+ * Parent-chain queries shared by ClassNode and AnonymousClassNode.
  * Both carry the class they extend and the interfaces they implement directly,
  * and receive their transitive parents from the analyser once every scanned
  * class-like is known.
  *
  * @internal
+ *
+ * @see Analyser\ClassNode
+ * @see Analyser\AnonymousClassNode
  *
  * @property-read string|null $extends          Parent class name, null when none
  * @property-read string[]    $implements       Interface names implemented directly

@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\NodeConcern\MemberQueryTrait;
+use Boundwize\StructArmed\Analyser\NodeConcern\NodeQueryTrait;
+use Boundwize\StructArmed\Analyser\NodeConcern\PropertyUnserializeTrait;
+use Boundwize\StructArmed\Analyser\NodeConcern\RecursiveParentsTrait;
+use Boundwize\StructArmed\Analyser\NodeConcern\ScopeTrait;
+
 use function array_filter;
 
 /**

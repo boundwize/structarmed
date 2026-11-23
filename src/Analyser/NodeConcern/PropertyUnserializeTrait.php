@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\NodeConcern;
 
 /**
  * Without __unserialize(), unserialize() builds a property hash table on every

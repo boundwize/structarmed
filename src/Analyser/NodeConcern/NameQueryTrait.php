@@ -2,15 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\NodeConcern;
+
+use Boundwize\StructArmed\Analyser;
 
 use function str_ends_with;
 use function str_starts_with;
 
 /**
- * Short-name query helpers shared by {@see ClassNode} and {@see FunctionNode}.
+ * Short-name query helpers shared by ClassNode and FunctionNode.
  *
  * @internal
+ *
+ * @see Analyser\ClassNode
+ * @see Analyser\FunctionNode
  */
 trait NameQueryTrait
 {

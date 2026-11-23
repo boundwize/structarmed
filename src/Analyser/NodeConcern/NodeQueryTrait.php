@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\NodeConcern;
+
+use Boundwize\StructArmed\Analyser;
 
 use function in_array;
 use function ltrim;
@@ -13,13 +15,18 @@ use function strtolower;
 use function trim;
 
 /**
- * Query helpers shared by {@see ClassNode}, {@see AnonymousClassNode},
- * {@see FunctionNode}, and {@see AnonymousFunctionNode}. All four nodes carry
- * the same body-level facts — layers, dependencies, function calls,
- * superglobals, language constructs — so rules can ask the same questions of
- * a function body that they ask of a class-like.
+ * Query helpers shared by ClassNode, AnonymousClassNode, FunctionNode, and
+ * AnonymousFunctionNode. All four nodes carry the same body-level facts —
+ * layers, dependencies, function calls, superglobals, language constructs — so
+ * rules can ask the same questions of a function body that they ask of a
+ * class-like.
  *
  * @internal
+ *
+ * @see Analyser\ClassNode
+ * @see Analyser\AnonymousClassNode
+ * @see Analyser\FunctionNode
+ * @see Analyser\AnonymousFunctionNode
  *
  * @property list<string> $layers All layer names this node belongs to; assigned once in each node's constructor
  * @property-read list<string> $dependencies       Fully-qualified class, function, or constant dependencies
