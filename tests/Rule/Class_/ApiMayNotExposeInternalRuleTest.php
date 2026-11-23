@@ -12,7 +12,6 @@ use Boundwize\StructArmed\Rule\SignatureTypesAwareRuleInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-use function array_change_key_case;
 use function array_map;
 
 #[CoversClass(ApiMayNotExposeInternalRule::class)]
@@ -139,10 +138,9 @@ final class ApiMayNotExposeInternalRuleTest extends TestCase
     public function testFindsInternalTypeWrittenInAnotherCase(): void
     {
         $apiMayNotExposeInternalRule = new ApiMayNotExposeInternalRule(layer: 'Core');
-        $classNodeMap                = [
+        $apiMayNotExposeInternalRule->injectClassNodeMap([
             'App\Pool' => $this->makeNode('App\Pool', isInternal: true),
-        ];
-        $apiMayNotExposeInternalRule->injectClassNodeMap($classNodeMap, array_change_key_case($classNodeMap));
+        ]);
 
         // Class names are case-insensitive: `function pool(): pool` is valid PHP
         $violation = $apiMayNotExposeInternalRule->evaluate($this->makeNode(
