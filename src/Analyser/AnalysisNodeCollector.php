@@ -1410,52 +1410,62 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             return;
         }
 
-        if ($node instanceof FuncCall && $node->name instanceof Name) {
-            $node->name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
+        if ($node instanceof FuncCall) {
+            $name = $node->name;
 
-            // Inside a function-like the call is one of that scope's function
-            // calls instead: recorded here as well, a function calling only
-            // itself by resolved name would keep itself alive.
-            if (
-                $node->name instanceof FullyQualified
-                && $this->activeClassLikeAnalyses === []
-                && $this->activeFunctionLikeAnalyses === []
-            ) {
-                $this->fileReferenceAnalysis->references[
-                    self::FUNCTION_REFERENCE_PREFIX . $node->name->toString()
-                ] = true;
+            if (! $name instanceof Name) {
+                return;
             }
-        }
 
-        // Entered before its arguments, so the name string is marked before
-        // the String_ branch sees it — also outside any scope, where a
-        // top-level `if (! function_exists(...))` guard usually sits. A name
-        // bound by a partial application is still only probed, once the
-        // closure runs; a placeholder is no argument, so nothing is marked.
-        if (
-            $node instanceof FuncCall
-            && $node->name instanceof Name
-            && $node->name->toLowerString() === 'function_exists'
-        ) {
-            $node->getArg('function', 0)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+            $name->setAttribute(self::NON_CLASS_NAME_ATTRIBUTE, true);
+
+            $functionName = $name->toLowerString();
+
+            // Entered before its arguments, so the name string is marked before
+            // the String_ branch sees it — also outside any scope, where a
+            // top-level `if (! function_exists(...))` guard usually sits. A name
+            // bound by a partial application is still only probed, once the
+            // closure runs; a placeholder is no argument, so nothing is marked.
+            if ($functionName === 'function_exists') {
+                $node->getArg('function', 0)?->value->setAttribute(self::FUNCTION_EXISTS_CHECK_ATTRIBUTE, true);
+            }
+
+            if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
+                // Inside a function-like the call is one of that scope's
+                // function calls instead: recorded here as well, a function
+                // calling only itself by resolved name would keep itself alive.
+                if ($name instanceof FullyQualified) {
+                    $this->fileReferenceAnalysis->references[
+                        self::FUNCTION_REFERENCE_PREFIX . $name->toString()
+                    ] = true;
+
+                    return;
+                }
+
+                // A top-level unqualified call in a namespace is not a
+                // FullyQualified node, so it is recorded here as a fallback
+                // marker, keeping the function PHP calls alive.
+                $namespacedName = $name->getAttribute('namespacedName');
+
+                if ($namespacedName instanceof Name) {
+                    $this->addFunctionFallback($name, $namespacedName);
+                }
+
+                return;
+            }
+
+            // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
+            // FuncCall instead of Exit_, but remain language constructs
+            if ($functionName === 'exit' || $functionName === 'die') {
+                $this->addLanguageConstruct($functionName);
+            } else {
+                $this->addFunctionCallName($name);
+            }
+
+            return;
         }
 
         if ($this->activeClassLikeAnalyses === [] && $this->activeFunctionLikeAnalyses === []) {
-            // A top-level unqualified call in a namespace is not a FullyQualified
-            // node, so it is recorded here as a fallback marker, keeping the
-            // function PHP calls alive.
-            if (
-                $node instanceof FuncCall
-                && $node->name instanceof Name
-                && ! $node->name instanceof FullyQualified
-            ) {
-                $namespacedName = $node->name->getAttribute('namespacedName');
-
-                if ($namespacedName instanceof Name) {
-                    $this->addFunctionFallback($node->name, $namespacedName);
-                }
-            }
-
             return;
         }
 
@@ -1473,22 +1483,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
             if ($activeFunctionLikeCount > 0) {
                 $this->activeFunctionLikeAnalyses[$activeFunctionLikeCount - 1]->cyclomaticComplexity++;
-            }
-
-            return;
-        }
-
-        if ($node instanceof FuncCall) {
-            if ($node->name instanceof Name) {
-                $functionName = $node->name->toLowerString();
-
-                // PHP 8.4 generalized exit/die (e.g. named arguments) parse as
-                // FuncCall instead of Exit_, but remain language constructs
-                if ($functionName === 'exit' || $functionName === 'die') {
-                    $this->addLanguageConstruct($functionName);
-                } else {
-                    $this->addFunctionCallName($node->name);
-                }
             }
 
             return;
