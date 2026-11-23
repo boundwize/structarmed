@@ -43,7 +43,7 @@ Documentation is available online, with source files kept in this repository:
 
 Explore community projects built around StructArmed.
 
-<table width="100%">
+<table>
   <tr>
     <th>Project</th>
     <th>Description</th>
