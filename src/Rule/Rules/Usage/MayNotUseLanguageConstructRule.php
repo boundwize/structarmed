@@ -48,7 +48,8 @@ final readonly class MayNotUseLanguageConstructRule implements MultipleRuleViola
                     '%s [%s] must not use language construct [%s]',
                     $classNode->getType(),
                     $classNode->className,
-                    $usedConstruct
+                    // the configured construct keeps its configured spelling
+                    $usedConstruct === $construct ? $this->construct : $usedConstruct
                 ),
                 file:      $classNode->file,
                 line:      $classNode->line,
