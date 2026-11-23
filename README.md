@@ -49,11 +49,11 @@ Explore community projects built around StructArmed.
     <th>Description</th>
   </tr>
   <tr>
-    <td nowrap><a href="https://skie.github.io/structarmed-vizualize/">StructArmed Explorer</a></td>
+    <td nowrap><sub><a href="https://skie.github.io/structarmed-vizualize/">StructArmed Explorer</a></sub></td>
     <td nowrap><sub>Explore structarmed.php as an interactive layer-dependency graph in your browser.</sub></td>
   </tr>
   <tr>
-    <td nowrap><a href="https://github.com/Crustum/structarmed-cakephp">StructArmed CakePHP</a></td>
+    <td nowrap><sub><a href="https://github.com/Crustum/structarmed-cakephp">StructArmed CakePHP</a></sub></td>
     <td nowrap><sub>CakePHP 5 presets for MVC and commands, with plugin namespace support.</sub></td>
   </tr>
 </table>
