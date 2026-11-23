@@ -1040,6 +1040,68 @@ final class AnalyserTest extends TestCase
         );
     }
 
+    public function testMvcPresetReportsEachExitAndDieSpellingOnceUnderItsOwnRule(): void
+    {
+        $basePath = $this->makeTempProject([
+            'src/Model/Example.php' => <<<'PHP'
+                <?php
+
+                namespace App\Model;
+
+                final class Example
+                {
+                    public function run(bool $condition): void
+                    {
+                        if ($condition) {
+                            exit(1);
+                        }
+
+                        die('Stopped');
+                    }
+                }
+                PHP,
+            'src/Model/OnlyDie.php' => <<<'PHP'
+                <?php
+
+                namespace App\Model;
+
+                final class OnlyDie
+                {
+                    public function run(): void
+                    {
+                        die('Stopped');
+                    }
+                }
+                PHP,
+        ]);
+
+        $ruleViolationCollection = (new Analyser($basePath))->analyse(
+            Architecture::define()->withPreset(Preset::MVC()),
+            [],
+            null,
+            AnalyserOptions::sequential()
+        );
+
+        $messages = [];
+
+        foreach ($ruleViolationCollection as $violation) {
+            $messages[] = $violation->ruleKey . ': ' . $violation->message;
+        }
+
+        sort($messages);
+
+        // `die` is an alias of `exit`: each spelling is reported once, by the
+        // rule named after it
+        $this->assertSame(
+            [
+                'mvc.safety.model_no_die: Class [App\Model\Example] must not use language construct [die]',
+                'mvc.safety.model_no_die: Class [App\Model\OnlyDie] must not use language construct [die]',
+                'mvc.safety.model_no_exit: Class [App\Model\Example] must not use language construct [exit]',
+            ],
+            $messages
+        );
+    }
+
     public function testMustBeFinalRuleDoesNotFlagClassExtendedByAnonymousClass(): void
     {
         $factory = '<?php namespace App;' . "\n"

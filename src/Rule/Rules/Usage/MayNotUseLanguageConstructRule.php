@@ -8,13 +8,21 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Rule\RuleInterface;
 use Boundwize\StructArmed\Rule\RuleViolation;
 
+use function in_array;
 use function sprintf;
+use function strtolower;
 
 final readonly class MayNotUseLanguageConstructRule implements RuleInterface
 {
+    /**
+     * @param bool $matchAlias Whether banning `exit` also catches its alias `die`, and the other
+     *                         way around. Two rules banning one spelling each turn it off, so a
+     *                         usage is reported once, by the rule named after the spelling written.
+     */
     public function __construct(
         private string $layer,
         private string $construct,
+        private bool $matchAlias = true,
     ) {
     }
 
@@ -25,7 +33,11 @@ final readonly class MayNotUseLanguageConstructRule implements RuleInterface
 
     public function evaluate(ClassNode $classNode): ?RuleViolation
     {
-        if (! $classNode->usesLanguageConstruct($this->construct)) {
+        $isUsed = $this->matchAlias
+            ? $classNode->usesLanguageConstruct($this->construct)
+            : in_array(strtolower($this->construct), $classNode->languageConstructs, true);
+
+        if (! $isUsed) {
             return null;
         }
 

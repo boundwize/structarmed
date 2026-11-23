@@ -109,7 +109,10 @@ final class MayNotUseLanguageConstructRuleTest extends TestCase
         $violation = $mayNotUseLanguageConstructRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString($configured, $violation->message);
+        $this->assertSame(
+            'Class [App\\Domain\\OrderService] must not use language construct [' . $configured . ']',
+            $violation->message
+        );
     }
 
     /** @return iterable<string, array{string, array<string>}> */
@@ -119,6 +122,40 @@ final class MayNotUseLanguageConstructRuleTest extends TestCase
         yield 'ban exit, code used die'  => ['exit', ['die']];
         yield 'ban die, code used die'   => ['die', ['die']];
         yield 'ban die, code used exit'  => ['die', ['exit']];
+    }
+
+    /**
+     * Two rules banning one spelling each, as the DDD and MVC presets register
+     * them, turn the alias off so a usage is reported by one of them only.
+     *
+     * @param array<string> $recordedConstructs
+     */
+    #[DataProvider('exactSpellingProvider')]
+    public function testWithoutAliasOnlyTheConfiguredSpellingMatches(
+        string $configured,
+        array $recordedConstructs,
+        bool $expectsViolation,
+    ): void {
+        $mayNotUseLanguageConstructRule = new MayNotUseLanguageConstructRule(
+            layer: 'Domain',
+            construct: $configured,
+            matchAlias: false,
+        );
+
+        $violation = $mayNotUseLanguageConstructRule->evaluate($this->makeNode($recordedConstructs));
+
+        $this->assertSame($expectsViolation, $violation instanceof RuleViolation);
+    }
+
+    /** @return iterable<string, array{string, array<string>, bool}> */
+    public static function exactSpellingProvider(): iterable
+    {
+        yield 'ban exit, code used exit' => ['exit', ['exit'], true];
+        yield 'ban exit, code used die'  => ['exit', ['die'], false];
+        yield 'ban die, code used die'   => ['die', ['die'], true];
+        yield 'ban die, code used exit'  => ['die', ['exit'], false];
+        yield 'ban EXIT, code used exit' => ['EXIT', ['exit'], true];
+        yield 'ban exit, code used both' => ['exit', ['die', 'exit'], true];
     }
 
     /**
