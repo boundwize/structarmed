@@ -442,8 +442,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     /** @var list<ClassLikeAnalysis> */
     private array $activeClassLikeAnalyses = [];
 
-    /** @var list<ClassLike> */
-    private array $activeClassLikes = [];
+    /** @var list<array<string, bool>> Lowercased method names and static flags per class-like, innermost last */
+    private array $activeClassMethodStaticFlags = [];
 
     /**
      * Cyclomatic complexity of each tracked method currently being entered,
@@ -534,7 +534,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->fileClassLikes                    = [];
         $this->fileFunctions                     = [];
         $this->activeClassLikeAnalyses           = [];
-        $this->activeClassLikes                  = [];
+        $this->activeClassMethodStaticFlags      = [];
         $this->activeMethodComplexities          = [];
         $this->activeMethodStaticFlags           = [];
         $this->activeClassLikeNames              = [];
@@ -771,7 +771,13 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             }
 
             if ($node instanceof ClassLike) {
-                $this->activeClassLikes[] = $node;
+                $methodStaticFlags = [];
+
+                foreach ($node->getMethods() as $method) {
+                    $methodStaticFlags[$method->name->toLowerString()] = $method->isStatic();
+                }
+
+                $this->activeClassMethodStaticFlags[] = $methodStaticFlags;
 
                 $classLikeName = $node->name instanceof Identifier
                     ? $this->resolveClassName($node)
@@ -904,7 +910,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         array_pop($this->activeClassLikeScopes);
-        array_pop($this->activeClassLikes);
+        array_pop($this->activeClassMethodStaticFlags);
         array_pop($this->activeClassLikeNames);
         array_pop($this->functionLikeDepthAtClassLikeEntry);
 
@@ -978,6 +984,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->fileClassLikes                    = [];
         $this->activeClassLikeAnalyses           = [];
         $this->activeClassLikeScopes             = [];
+        $this->activeClassMethodStaticFlags      = [];
         $this->activeMethodComplexities          = [];
         $this->activeMethodStaticFlags           = [];
         $this->activeClassLikeNames              = [];
@@ -2103,12 +2110,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             && in_array($staticCall->class->toLowerString(), ['self', 'static'], true)
             && $staticCall->name instanceof Identifier
         ) {
-            $classLike = end($this->activeClassLikes);
+            $methodStaticFlags = end($this->activeClassMethodStaticFlags) ?: [];
 
-            if (
-                $classLike instanceof ClassLike
-                && $classLike->getMethod($staticCall->name->toString())?->isStatic() === false
-            ) {
+            if (($methodStaticFlags[$staticCall->name->toLowerString()] ?? null) === false) {
                 $this->markThisUsage();
             }
 

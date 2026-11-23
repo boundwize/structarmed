@@ -44,8 +44,8 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     /** @var list<array{string, bool}> lowercased name and static flag of each method being entered, innermost last */
     private array $activeMethodStaticFlags = [];
 
-    /** @var list<ClassLike> */
-    private array $activeClassLikes = [];
+    /** @var list<array<string, bool>> Lowercased method names and static flags per class-like, innermost last */
+    private array $activeClassMethodStaticFlags = [];
 
     public function __construct(
         private readonly int $line,
@@ -57,7 +57,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     {
         $this->objectBoundAnonymousFunctions = [];
         $this->activeMethodStaticFlags       = [];
-        $this->activeClassLikes              = [];
+        $this->activeClassMethodStaticFlags  = [];
 
         return null;
     }
@@ -65,7 +65,13 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     public function enterNode(Node $node): ?Node
     {
         if ($node instanceof ClassLike) {
-            $this->activeClassLikes[] = $node;
+            $methodStaticFlags = [];
+
+            foreach ($node->getMethods() as $method) {
+                $methodStaticFlags[$method->name->toLowerString()] = $method->isStatic();
+            }
+
+            $this->activeClassMethodStaticFlags[] = $methodStaticFlags;
 
             return null;
         }
@@ -112,7 +118,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     public function leaveNode(Node $node): null
     {
         if ($node instanceof ClassLike) {
-            array_pop($this->activeClassLikes);
+            array_pop($this->activeClassMethodStaticFlags);
         }
 
         if ($node instanceof ClassMethod) {
@@ -145,13 +151,14 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
         [$methodName, $isStatic] = end($this->activeMethodStaticFlags) ?: [null, true];
         $thisFinder              = new class (
             $isStatic ? null : $methodName,
-            end($this->activeClassLikes) ?: null,
+            end($this->activeClassMethodStaticFlags) ?: [],
         ) extends NodeVisitorAbstract {
             public bool $found = false;
 
+            /** @param array<string, bool> $methodStaticFlags */
             public function __construct(
                 private readonly ?string $nonStaticMethodName,
-                private readonly ?ClassLike $classLike,
+                private readonly array $methodStaticFlags,
             ) {
             }
 
@@ -172,7 +179,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
                         && $node->class instanceof Name
                         && in_array($node->class->toLowerString(), ['self', 'static'], true)
                         && $node->name instanceof Identifier
-                        && $this->classLike?->getMethod($node->name->toString())?->isStatic() === false)
+                        && ($this->methodStaticFlags[$node->name->toLowerString()] ?? null) === false)
                 ) {
                     $this->found = true;
 
