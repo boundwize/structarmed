@@ -80,7 +80,11 @@ final readonly class ClassNameRegexLayerResolver implements LayerResolverInterfa
      */
     private function matchesPattern(string|array $patterns, string $className): bool
     {
-        foreach ((array) $patterns as $pattern) {
+        if (is_string($patterns)) {
+            return (bool) preg_match($patterns, $className);
+        }
+        
+        foreach ($patterns as $pattern) {
             if ($pattern === null) {
                 continue;
             }
