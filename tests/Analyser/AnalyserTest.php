@@ -1035,7 +1035,7 @@ final class AnalyserTest extends TestCase
         // configuration must still catch the recorded lowercase `exit`.
         $this->assertCount(1, $violations);
         $this->assertSame(
-            'Class [App\Domain\Service] must not use language construct [EXIT]',
+            'Class [App\Domain\Service] must not use language construct [exit]',
             $violations[0]->message,
         );
     }

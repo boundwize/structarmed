@@ -109,7 +109,10 @@ final class MayNotUseLanguageConstructRuleTest extends TestCase
         $violation = $mayNotUseLanguageConstructRule->evaluate($classNode);
 
         $this->assertInstanceOf(RuleViolation::class, $violation);
-        $this->assertStringContainsString($configured, $violation->message);
+        $this->assertSame(
+            'Class [App\\Domain\\OrderService] must not use language construct [' . $recordedConstructs[0] . ']',
+            $violation->message
+        );
     }
 
     /** @return iterable<string, array{string, array<string>}> */
@@ -119,6 +122,26 @@ final class MayNotUseLanguageConstructRuleTest extends TestCase
         yield 'ban exit, code used die'  => ['exit', ['die']];
         yield 'ban die, code used die'   => ['die', ['die']];
         yield 'ban die, code used exit'  => ['die', ['exit']];
+    }
+
+    public function testReportsEachSpellingWhenBothExitAndDieAreUsed(): void
+    {
+        $mayNotUseLanguageConstructRule = new MayNotUseLanguageConstructRule(layer: 'Domain', construct: 'exit');
+        $classNode                      = $this->makeNode(['die', 'exit']);
+
+        $messages = [];
+
+        foreach ($mayNotUseLanguageConstructRule->evaluateAll($classNode) as $violation) {
+            $messages[] = $violation->message;
+        }
+
+        $this->assertSame(
+            [
+                'Class [App\\Domain\\OrderService] must not use language construct [exit]',
+                'Class [App\\Domain\\OrderService] must not use language construct [die]',
+            ],
+            $messages
+        );
     }
 
     /**
