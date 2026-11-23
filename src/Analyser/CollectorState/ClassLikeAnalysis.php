@@ -4,11 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\CollectorState;
 
-use Boundwize\StructArmed\Analyser\ClassSignature;
-use Boundwize\StructArmed\Analyser\ConstantNode;
-use Boundwize\StructArmed\Analyser\EnumCaseNode;
-use Boundwize\StructArmed\Analyser\MethodNode;
-use Boundwize\StructArmed\Analyser\PropertyNode;
+use Boundwize\StructArmed\Analyser;
 use PhpParser\Node\Name;
 
 /**
@@ -38,7 +34,7 @@ final class ClassLikeAnalysis
      */
     public array $constantFetches = [];
 
-    /** @var list<ClassSignature> */
+    /** @var list<Analyser\ClassSignature> */
     public array $signatures = [];
 
     /** @var list<Name> */
@@ -53,16 +49,16 @@ final class ClassLikeAnalysis
     /** @var string[] */
     public array $traits = [];
 
-    /** @var ConstantNode[] */
+    /** @var Analyser\ConstantNode[] */
     public array $constants = [];
 
-    /** @var PropertyNode[] */
+    /** @var Analyser\PropertyNode[] */
     public array $properties = [];
 
-    /** @var MethodNode[] */
+    /** @var Analyser\MethodNode[] */
     public array $methods = [];
 
-    /** @var EnumCaseNode[] */
+    /** @var Analyser\EnumCaseNode[] */
     public array $enumCases = [];
 
     /**

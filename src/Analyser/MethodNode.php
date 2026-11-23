@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\NodeConcern\PropertyUnserializeTrait;
+
 use function strcasecmp;
 
 final readonly class MethodNode

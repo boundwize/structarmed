@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\NodeConcern\PropertyUnserializeTrait;
+
 /**
  * One class-like type named by a member's signature. Its name and kind tell
  * which member: the type of a property or parameter, or a method's return type.

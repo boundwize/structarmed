@@ -2,13 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\NodeConcern;
+
+use Boundwize\StructArmed\Analyser;
 
 /**
- * Enclosing-scope label shared by {@see AnonymousClassNode} and
- * {@see AnonymousFunctionNode}.
+ * Enclosing-scope label shared by AnonymousClassNode and
+ * AnonymousFunctionNode.
  *
  * @internal
+ *
+ * @see Analyser\AnonymousClassNode
+ * @see Analyser\AnonymousFunctionNode
  *
  * @property-read string|null $enclosingClassName    Innermost named class-like the node is declared in
  * @property-read string|null $enclosingFunctionName Innermost named function the node is declared in
