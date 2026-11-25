@@ -821,9 +821,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             $this->fileReferenceAnalysis->references[self::FUNCTION_REFERENCE_PREFIX . $globalFunctionCall] = true;
         }
 
-        $this->fileReferenceAnalysis->fallbackNames       = [];
-        $this->fileReferenceAnalysis->globalFunctionCalls = [];
-
         if ($this->withFileReferences && $this->fileReferenceAnalysis->references !== []) {
             $this->fileReferences[$this->fileSyntaxAnalysis->file] = array_keys(
                 $this->fileReferenceAnalysis->references,
@@ -836,14 +833,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             );
         }
 
-        $this->fileReferenceAnalysis->references     = [];
-        $this->fileReferenceAnalysis->instantiations = [];
-
-        $this->fileClassLikes             = [];
-        $this->activeClassLikeAnalyses    = [];
-        $this->activeMethodAnalyses       = [];
-        $this->activeFunctionLikeAnalyses = [];
-        $this->fileFunctionLikeAnalyses   = [];
+        $this->fileClassLikes           = [];
+        $this->fileFunctionLikeAnalyses = [];
 
         return null;
     }
@@ -865,15 +856,17 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             ? $this->resolveClassName($classLike)
             : null;
 
+        $parent = $classLike instanceof Class_ && $classLike->extends instanceof Name
+            ? $classLike->extends->toString()
+            : null;
+
         $classLikeAnalysis = new ClassLikeAnalysis(
             $classLike instanceof Interface_,
             $classLikeName,
-            $this->createClassLikeScope($classLike, $classLikeName),
+            $this->createClassLikeScope($classLike, $classLikeName, $parent),
             $methodStaticFlags,
             count($this->activeFunctionLikeAnalyses),
-            $classLike instanceof Class_ && $classLike->extends instanceof Name
-                ? $classLike->extends->toString()
-                : null,
+            $parent,
         );
 
         if ($classLike->name instanceof Identifier) {
@@ -1648,12 +1641,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      *
      * @return array{self: string|null, static: string|null, parent: string|null}
      */
-    private function createClassLikeScope(ClassLike $classLike, ?string $classLikeName): array
+    private function createClassLikeScope(ClassLike $classLike, ?string $classLikeName, ?string $parent): array
     {
-        $parent = $classLike instanceof Class_ && $classLike->extends instanceof Name
-            ? $classLike->extends->toString()
-            : null;
-
         if ($classLikeName === null) {
             return ['self' => null, 'static' => null, 'parent' => $parent];
         }
