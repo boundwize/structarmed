@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Tests\Analyser;
 
 use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeVisitor;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
@@ -21,6 +22,7 @@ use function count;
 use function file_put_contents;
 
 #[CoversClass(AnalysisNodeExtractor::class)]
+#[CoversClass(AnalysisNodeVisitor::class)]
 #[CoversClass(ExtractionResult::class)]
 final class AnalysisNodeExtractorTest extends TestCase
 {

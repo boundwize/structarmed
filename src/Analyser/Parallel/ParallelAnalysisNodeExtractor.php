@@ -300,6 +300,8 @@ final readonly class ParallelAnalysisNodeExtractor
                     // phpcs:enable
                     $result = $output !== '' ? unserialize($output) : null;
 
+                    unset($output);
+
                     // A worker that died before writing a payload (OOM, fatal error, killed process) leaves an
                     // empty output file and a non-zero exit code; report the exit failure and stderr first instead
                     // of masking it behind a generic "invalid payload" protocol error.

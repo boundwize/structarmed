@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser\CollectorState;
+namespace Boundwize\StructArmed\Analyser\Capture\CollectorState;
 
 /**
  * State of an active method. Branches in nested methods also increment the

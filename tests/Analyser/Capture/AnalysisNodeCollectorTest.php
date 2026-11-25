@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Analyser;
+namespace Boundwize\StructArmed\Tests\Analyser\Capture;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeCollector;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\ClassLikeAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\FileReferenceAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\FileSyntaxAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\MethodAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\NamespaceAnalysis;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\ClassSignature;
-use Boundwize\StructArmed\Analyser\CollectorState\ClassLikeAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\FileReferenceAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\FileSyntaxAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\MethodAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\NamespaceAnalysis;
 use Boundwize\StructArmed\Analyser\EnumCaseNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use PhpParser\Modifiers;

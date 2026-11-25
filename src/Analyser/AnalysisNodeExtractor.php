@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeCollector;
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeVisitor;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Progress\ProgressHandlerInterface;
 use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitor\NameResolver;
 
 use function array_push;
 use function array_slice;
@@ -73,7 +74,7 @@ final readonly class AnalysisNodeExtractor
             $withSignatures,
             $withFileReferences,
         );
-        $nodeTraverser         = new NodeTraverser(new NameResolver(), $analysisNodeCollector);
+        $nodeTraverser         = new NodeTraverser(new AnalysisNodeVisitor($analysisNodeCollector));
         $fileAnalyses          = [];
         $storedCounts          = [0, 0, 0, 0];
 
@@ -117,6 +118,8 @@ final readonly class AnalysisNodeExtractor
                     $this->fileAnalysisProvider->releaseAst($fileToParse);
                 }
 
+                unset($ast, $resolvedAst);
+
                 $progressHandler?->advance($fileToParse);
             }
 
@@ -144,6 +147,10 @@ final readonly class AnalysisNodeExtractor
             $analysisNodeCollector->getFunctionNodes(),
             $analysisNodeCollector->getAnonymousFunctionNodes(),
         );
+
+        if (count($filesToParse) === count($files)) {
+            return $extractionResult;
+        }
 
         return $cachedResult->merge($extractionResult);
     }
@@ -205,6 +212,10 @@ final readonly class AnalysisNodeExtractor
         bool $withSignatures,
         bool $withFileReferences,
     ): array {
+        if (! $this->analysisResultCache instanceof AnalysisResultCache) {
+            return [new ExtractionResult([], []), $files];
+        }
+
         $classNodes             = [];
         $fileAnalyses           = [];
         $anonymousClassNodes    = [];
@@ -215,7 +226,7 @@ final readonly class AnalysisNodeExtractor
         $filesToParse           = [];
 
         foreach ($files as $file) {
-            $cachedResult = $this->analysisResultCache?->loadAnalysisNodes(
+            $cachedResult = $this->analysisResultCache->loadAnalysisNodes(
                 $file,
                 $this->analysisNodeCacheNamespace,
                 $withFileAnalysis,

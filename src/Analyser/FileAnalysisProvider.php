@@ -67,7 +67,7 @@ use const T_OPEN_TAG;
 
 final class FileAnalysisProvider
 {
-    private readonly Parser $parser;
+    private ?Parser $parser = null;
 
     /** @var array<string, array<Node>|null> Typed as {@see NodeTraverser::traverse()} returns them. */
     private array $asts = [];
@@ -117,7 +117,6 @@ final class FileAnalysisProvider
     {
         $this->analyses   = self::normaliseAnalyses($this->analyses);
         $this->scopeFiles = array_keys($this->analyses);
-        $this->parser     = (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     /** @return list<string> The files represented by the analyses supplied at construction. */
@@ -210,7 +209,7 @@ final class FileAnalysisProvider
     {
         if (! $retainForAnalysis) {
             try {
-                return $this->parser->parse((string) file_get_contents($file));
+                return $this->parser()->parse((string) file_get_contents($file));
             } catch (Error) {
                 return null;
             }
@@ -238,7 +237,12 @@ final class FileAnalysisProvider
      */
     public function tokens(): array
     {
-        return $this->parser->getTokens();
+        return $this->parser()->getTokens();
+    }
+
+    private function parser(): Parser
+    {
+        return $this->parser ??= (new ParserFactory())->createForNewestSupportedVersion();
     }
 
     /**
@@ -254,7 +258,7 @@ final class FileAnalysisProvider
         $isValid = true;
 
         try {
-            $ast = $this->parser->parse($code);
+            $ast = $this->parser()->parse($code);
         } catch (Error) {
             $isValid = false;
         }
@@ -360,7 +364,7 @@ final class FileAnalysisProvider
             return null;
         }
 
-        foreach ($this->parser->getTokens() as $token) {
+        foreach ($this->parser()->getTokens() as $token) {
             $id = $token->id;
 
             // What follows `__halt_compiler();` is raw data PHP never parses.
