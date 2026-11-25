@@ -67,31 +67,31 @@ final class StructArmedApplicationTest extends TestCase
         yield 'missing file' => [
             "->import(__DIR__ . '/config/domain.php')",
             '<?php return [];',
-            '#^Error: Imported configuration file \[.+/config/domain\.php\] does not exist\.\n$#',
+            '#^Error: Imported configuration file \[.+config/domain\.php\] does not exist\.\R$#',
         ];
 
         yield 'directory' => [
             "->import(__DIR__ . '/src')",
             '<?php return [];',
-            '#^Error: Imported configuration file \[.+/src\] does not exist\.\n$#',
+            '#^Error: Imported configuration file \[.+src\] does not exist\.\R$#',
         ];
 
         yield 'not a callable' => [
             "->import(__DIR__ . '/imported.php')",
             '<?php return [];',
-            '#^Error: Imported configuration \[.+/imported\.php\] must return a callable\.\n$#',
+            '#^Error: Imported configuration \[.+imported\.php\] must return a callable\.\R$#',
         ];
 
         yield 'circular import' => [
             "->import(__DIR__ . '/imported.php')",
             '<?php return static fn ($architecture) => $architecture->import(__FILE__);',
-            '#^Error: Circular import of configuration \[.+/imported\.php\]\.\n$#',
+            '#^Error: Circular import of configuration \[.+imported\.php\]\.\R$#',
         ];
 
         yield 'missing nested file' => [
             "->import(__DIR__ . '/imported.php')",
             "<?php return static fn (\$architecture) => \$architecture->import(__DIR__ . '/nested.php');",
-            '#^Error: Imported configuration file \[.+/nested\.php\] does not exist\.\n$#',
+            '#^Error: Imported configuration file \[.+nested\.php\] does not exist\.\R$#',
         ];
     }
 
