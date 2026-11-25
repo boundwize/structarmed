@@ -15,12 +15,22 @@ use RuntimeException;
 use function file_get_contents;
 use function file_put_contents;
 use function is_file;
+use function substr_count;
 
-final readonly class JsonRecastFixerProcessor
+final class JsonRecastFixerProcessor
 {
+    /**
+     * Whether the last successful process() call changed the number of lines
+     * of its file. Only meaningful right after a call that
+     * returned true: every call resets it first.
+     */
+    public static bool $lastFixChangedLineCount = false;
+
     /** @param NodeJsonVisitor|non-empty-list<NodeJsonVisitor> $nodeJsonVisitors */
     public function process(string $file, NodeJsonVisitor|array $nodeJsonVisitors): bool
     {
+        self::$lastFixChangedLineCount = false;
+
         if (! is_file($file)) {
             return false;
         }
@@ -53,6 +63,13 @@ final readonly class JsonRecastFixerProcessor
 
         $fixedJson = JsonRecast::print($jsonRecastResult);
 
-        return $fixedJson !== $json && file_put_contents($file, $fixedJson) !== false;
+        if ($fixedJson === $json || file_put_contents($file, $fixedJson) === false) {
+            return false;
+        }
+
+        // Both versions are already in memory, so no extra read is needed.
+        self::$lastFixChangedLineCount = substr_count($json, "\n") !== substr_count($fixedJson, "\n");
+
+        return true;
     }
 }
