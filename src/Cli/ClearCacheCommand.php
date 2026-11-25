@@ -8,6 +8,7 @@ use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;
 use Boundwize\StructArmed\Config\ConfigLoader;
 use Boundwize\StructArmed\Util\Path;
+use InvalidArgumentException;
 use RuntimeException;
 
 use function count;
@@ -72,6 +73,11 @@ final readonly class ClearCacheCommand
 
                 return 1;
             }
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            // the config file was found but is invalid, so its cache directory is unknown
+            echo 'Error: ' . $invalidArgumentException->getMessage() . PHP_EOL;
+
+            return 1;
         }
 
         (new AnalysisResultCache($basePath, new FileHashProvider(), $cacheDirectory))->clear();

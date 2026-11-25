@@ -42,6 +42,7 @@ use function realpath;
 use function rename;
 use function rmdir;
 use function serialize;
+use function sprintf;
 use function str_replace;
 use function sys_get_temp_dir;
 use function tempnam;
@@ -58,6 +59,82 @@ use const PHP_EOL;
 #[CoversClass(Baseline::class)]
 final class StructArmedApplicationTest extends TestCase
 {
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function provideInvalidImportConfig(): iterable
+    {
+        yield 'missing file' => [
+            "->import(__DIR__ . '/config/domain.php')",
+            '<?php return [];',
+            '#^Error: Imported configuration file \[.+config/domain\.php\] does not exist\.\R$#',
+        ];
+
+        yield 'directory' => [
+            "->import(__DIR__ . '/src')",
+            '<?php return [];',
+            '#^Error: Imported configuration file \[.+src\] does not exist\.\R$#',
+        ];
+
+        yield 'not a callable' => [
+            "->import(__DIR__ . '/imported.php')",
+            '<?php return [];',
+            '#^Error: Imported configuration \[.+imported\.php\] must return a callable\.\R$#',
+        ];
+
+        yield 'circular import' => [
+            "->import(__DIR__ . '/imported.php')",
+            '<?php return static fn ($architecture) => $architecture->import(__FILE__);',
+            '#^Error: Circular import of configuration \[.+imported\.php\]\.\R$#',
+        ];
+
+        yield 'missing nested file' => [
+            "->import(__DIR__ . '/imported.php')",
+            "<?php return static fn (\$architecture) => \$architecture->import(__DIR__ . '/nested.php');",
+            '#^Error: Imported configuration file \[.+nested\.php\] does not exist\.\R$#',
+        ];
+    }
+
+    #[DataProvider('provideInvalidImportConfig')]
+    public function testCommandsReportInvalidImportedConfig(
+        string $import,
+        string $importedContent,
+        string $expectedOutputPattern
+    ): void {
+        $basePath = $this->createTempDirectory();
+
+        try {
+            mkdir($basePath . '/src');
+            file_put_contents($basePath . '/imported.php', $importedContent);
+            file_put_contents($basePath . '/structarmed.php', sprintf(<<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+
+return Architecture::define()
+    %s;
+PHP, $import));
+
+            $commands = [
+                ['analyse'],
+                ['--clear-cache'],
+                ['--clear-cache', '--config=' . $basePath . '/structarmed.php'],
+            ];
+
+            foreach ($commands as $arguments) {
+                [$exitCode, $output] = $this->runApplication(['structarmed', ...$arguments], $basePath);
+
+                $this->assertSame(1, $exitCode, $output);
+                $this->assertMatchesRegularExpression($expectedOutputPattern, $output);
+            }
+        } finally {
+            unlink($basePath . '/imported.php');
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testApplicationClearsCacheWithoutAnalyseCommand(): void
     {
         $basePath = $this->createTempDirectory();
