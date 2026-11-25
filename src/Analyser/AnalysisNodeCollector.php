@@ -1961,9 +1961,12 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
     }
 
     /**
-     * `self::method()` and `static::method()` need `$this` when the current
-     * class-like declares a non-static method. Only local declarations are
-     * inspected; unresolved methods retain the assumption that they are static.
+     * `self::method()`, `static::method()`, and a call through the enclosing
+     * class's own name need `$this` when the current class-like declares a
+     * non-static method. Only local declarations are inspected; unresolved
+     * methods retain the assumption that they are static. The method lookup
+     * runs first, so the class name is only compared for a call that names
+     * a locally declared non-static method.
      *
      * `parent::method()` forwards `$this` to a non-static parent method. The
      * parent class may live in another file, so only a call to the method
@@ -1973,32 +1976,38 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
      */
     private function collectImplicitThisMethodCall(StaticCall $staticCall): void
     {
-        if (
-            $staticCall->class instanceof Name
-            && in_array($staticCall->class->toLowerString(), ['self', 'static'], true)
-            && $staticCall->name instanceof Identifier
-        ) {
-            $methodStaticFlags = $this->declaringClassLikeAnalysis()->methodStaticFlags ?? [];
+        if (! $staticCall->class instanceof Name || ! $staticCall->name instanceof Identifier) {
+            return;
+        }
 
-            if (($methodStaticFlags[$staticCall->name->toLowerString()] ?? null) === false) {
+        $className  = $staticCall->class->toLowerString();
+        $methodName = $staticCall->name->toLowerString();
+
+        if ($className === 'parent') {
+            if ($this->activeMethodAnalyses === []) {
+                return;
+            }
+
+            $methodAnalysis = end($this->activeMethodAnalyses);
+
+            if (! $methodAnalysis->isStatic && $methodName === $methodAnalysis->name) {
                 $this->markThisUsage();
             }
 
             return;
         }
 
-        if (
-            ! $staticCall->class instanceof Name
-            || $staticCall->class->toLowerString() !== 'parent'
-            || ! $staticCall->name instanceof Identifier
-            || $this->activeMethodAnalyses === []
-        ) {
+        $classLikeAnalysis = $this->declaringClassLikeAnalysis();
+
+        if (($classLikeAnalysis?->methodStaticFlags[$methodName] ?? null) !== false) {
             return;
         }
 
-        $methodAnalysis = end($this->activeMethodAnalyses);
-
-        if (! $methodAnalysis->isStatic && $staticCall->name->toLowerString() === $methodAnalysis->name) {
+        if (
+            $className === 'self'
+            || $className === 'static'
+            || ($classLikeAnalysis->name !== null && $className === strtolower($classLikeAnalysis->name))
+        ) {
             $this->markThisUsage();
         }
     }

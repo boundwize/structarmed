@@ -391,6 +391,112 @@ PHP,
         );
     }
 
+    public function testAnalyseThenFixSkipsEnclosingClassNameInstanceMethodCalls(): void
+    {
+        $basePath = $this->makeTemporaryDirectory('structarmed-class-name-method-closure');
+        mkdir($basePath . '/src');
+        $file = $basePath . '/src/Handler.php';
+        $code = <<<'PHP'
+<?php
+
+namespace ExplicitClassCallFixture;
+
+use ExplicitClassCallFixture\Handler as Me;
+
+final class Handler
+{
+    public function callbacks(): array
+    {
+        return [
+            fn () => Handler::value(), fn () => 1,
+            fn () => \ExplicitClassCallFixture\Handler::value(),
+            fn () => Me::value(),
+            fn () => HANDLER::VALUE(),
+            function () { return Handler::value(); },
+            fn () => (fn () => Handler::value())(),
+            fn () => Handler::staticValue(),
+            fn () => Other::value(),
+            fn () => Handler::unknown(),
+        ];
+    }
+    private function value(): int { return 42; }
+    private static function staticValue(): int { return 7; }
+}
+
+final class Other
+{
+    public static function value(): int { return 9; }
+}
+
+return (new Handler())->callbacks();
+PHP;
+        file_put_contents($file, $code);
+
+        $rule         = new MustBeStaticAnonymousFunctionRule(layer: 'Source');
+        $architecture = Architecture::define()
+            ->layer('Source', 'src/')
+            ->rule('source.static_closures', $rule);
+        $violations   = (new Analyser($basePath))
+            ->analyse($architecture, [], null, AnalyserOptions::sequential())
+            ->forRule('source.static_closures');
+
+        $this->assertCount(4, $violations);
+        $this->assertTrue($rule->fix(...$violations));
+        $this->assertSame(
+            <<<'PHP'
+<?php
+
+namespace ExplicitClassCallFixture;
+
+use ExplicitClassCallFixture\Handler as Me;
+
+final class Handler
+{
+    public function callbacks(): array
+    {
+        return [
+            fn () => Handler::value(), static fn () => 1,
+            fn () => \ExplicitClassCallFixture\Handler::value(),
+            fn () => Me::value(),
+            fn () => HANDLER::VALUE(),
+            function () { return Handler::value(); },
+            fn () => (fn () => Handler::value())(),
+            static fn () => Handler::staticValue(),
+            static fn () => Other::value(),
+            static fn () => Handler::unknown(),
+        ];
+    }
+    private function value(): int { return 42; }
+    private static function staticValue(): int { return 7; }
+}
+
+final class Other
+{
+    public static function value(): int { return 9; }
+}
+
+return (new Handler())->callbacks();
+PHP,
+            file_get_contents($file)
+        );
+
+        $callbacks = require $file;
+        $this->assertIsArray($callbacks);
+
+        foreach ([42, 1, 42, 42, 42, 42, 42, 7, 9] as $index => $expected) {
+            $callback = $callbacks[$index];
+            $this->assertInstanceOf(Closure::class, $callback);
+            $this->assertSame($expected, $callback());
+        }
+
+        $this->assertCount(
+            0,
+            (new Analyser($basePath))
+                ->analyse($architecture, [], null, AnalyserOptions::sequential())
+                ->forRule('source.static_closures')
+        );
+    }
+
     public function testAnalyseThenFixSkipsParentMethodCallsOutsideStaticMethods(): void
     {
         $basePath = $this->makeTemporaryDirectory('structarmed-parent-method-closure');
