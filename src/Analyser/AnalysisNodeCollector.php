@@ -1362,20 +1362,23 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         }
 
         if ($node instanceof FullyQualified) {
-            $name = $node->toString();
+            $name        = $node->toString();
+            $isClassName = ! $node->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE);
 
-            if (isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
+            // `true`, `false`, and `null` only arrive as the marked name of a
+            // constant fetch, so a class name skips the lowering.
+            if (! $isClassName && isset(self::KEYWORD_CONSTANTS[strtolower($name)])) {
                 return;
             }
 
-            if ($this->activeClassLikeAnalyses === [] && ! $node->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE)) {
+            if ($isClassName && $this->activeClassLikeAnalyses === []) {
                 // Outside any class-like scope — procedural functions and
                 // top-level statements — a class-like reference still keeps
                 // the referenced class-like alive.
                 $this->fileReferenceAnalysis->references[$name] = true;
             }
 
-            $this->addDependency($name, ! $node->hasAttribute(self::NON_CLASS_NAME_ATTRIBUTE));
+            $this->addDependency($name, $isClassName);
 
             return;
         }
