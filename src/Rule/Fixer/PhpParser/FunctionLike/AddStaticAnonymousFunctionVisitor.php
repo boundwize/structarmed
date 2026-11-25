@@ -27,7 +27,8 @@ use function in_array;
 /**
  * Adds the `static` modifier to the anonymous functions starting on the given
  * line that neither read `$this`, call the parent of the enclosing non-static
- * method, call a locally declared non-static method through self/static,
+ * method, call a locally declared non-static method through self/static or
+ * the enclosing class's own name,
  * nor require object binding.
  *
  * An anonymous function has no name, so its start line is the only identity
@@ -47,6 +48,9 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     /** @var list<array<string, bool>> Lowercased method names and static flags per class-like, innermost last */
     private array $activeClassMethodStaticFlags = [];
 
+    /** @var list<string|null> Lowercased resolved name per class-like, null when anonymous, innermost last */
+    private array $activeClassNames = [];
+
     public function __construct(
         private readonly int $line,
     ) {
@@ -58,6 +62,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
         $this->objectBoundAnonymousFunctions = [];
         $this->activeMethodStaticFlags       = [];
         $this->activeClassMethodStaticFlags  = [];
+        $this->activeClassNames              = [];
 
         return null;
     }
@@ -72,6 +77,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
             }
 
             $this->activeClassMethodStaticFlags[] = $methodStaticFlags;
+            $this->activeClassNames[]             = ($node->namespacedName ?? $node->name)?->toLowerString();
 
             return null;
         }
@@ -119,6 +125,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
     {
         if ($node instanceof ClassLike) {
             array_pop($this->activeClassMethodStaticFlags);
+            array_pop($this->activeClassNames);
         }
 
         if ($node instanceof ClassMethod) {
@@ -143,8 +150,10 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
      * method. It counts when it calls the method the enclosing non-static
      * method overrides: an override is static exactly when the method it
      * overrides is.
-     * Calls through self/static count when the current class-like declares
-     * the target method as non-static. Unresolved methods remain fixable.
+     * Calls through self/static or the current class-like's own name count
+     * when the current class-like declares the target method as non-static.
+     * The name is the one the NameResolver resolved, when it ran. Unresolved
+     * methods remain fixable.
      */
     private function usesThis(Closure|ArrowFunction $anonymousFunction): bool
     {
@@ -152,6 +161,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
         $thisFinder              = new class (
             $isStatic ? null : $methodName,
             end($this->activeClassMethodStaticFlags) ?: [],
+            end($this->activeClassNames) ?: null,
         ) extends NodeVisitorAbstract {
             public bool $found = false;
 
@@ -159,6 +169,7 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
             public function __construct(
                 private readonly ?string $nonStaticMethodName,
                 private readonly array $methodStaticFlags,
+                private readonly ?string $className,
             ) {
             }
 
@@ -177,9 +188,13 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
                         && $node->name->toLowerString() === $this->nonStaticMethodName)
                     || ($node instanceof StaticCall
                         && $node->class instanceof Name
-                        && in_array($node->class->toLowerString(), ['self', 'static'], true)
                         && $node->name instanceof Identifier
-                        && ($this->methodStaticFlags[$node->name->toLowerString()] ?? null) === false)
+                        && ($this->methodStaticFlags[$node->name->toLowerString()] ?? null) === false
+                        && in_array(
+                            $this->resolvedClassName($node->class),
+                            ['self', 'static', $this->className],
+                            true
+                        ))
                 ) {
                     $this->found = true;
 
@@ -187,6 +202,14 @@ final class AddStaticAnonymousFunctionVisitor extends NodeVisitorAbstract
                 }
 
                 return null;
+            }
+
+            /** The NameResolver, when it ran, left the resolved name as an attribute. */
+            private function resolvedClassName(Name $name): string
+            {
+                $resolvedName = $name->getAttribute('resolvedName');
+
+                return ($resolvedName instanceof Name ? $resolvedName : $name)->toLowerString();
             }
         };
 

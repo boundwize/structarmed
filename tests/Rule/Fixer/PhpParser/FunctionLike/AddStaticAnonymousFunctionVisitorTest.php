@@ -130,6 +130,53 @@ final class AddStaticAnonymousFunctionVisitorTest extends TestCase
         $this->assertTrue($afterMethods->static, 'no enclosing method');
     }
 
+    public function testDoesNotChangeAnonymousFunctionCallingNonStaticMethodThroughEnclosingClassName(): void
+    {
+        $callingOwnName   = new ArrowFunction(
+            ['expr' => new StaticCall(new Name('EXAMPLE'), 'VALUE')],
+            ['startLine' => 12]
+        );
+        $callingStatic    = new ArrowFunction(
+            ['expr' => new StaticCall(new Name('Example'), 'create')],
+            ['startLine' => 12]
+        );
+        $callingOther     = new ArrowFunction(
+            ['expr' => new StaticCall(new Name('Other'), 'value')],
+            ['startLine' => 12]
+        );
+        $inAnonymousClass = new ArrowFunction(
+            ['expr' => new StaticCall(new Name('Example'), 'value')],
+            ['startLine' => 12]
+        );
+
+        (new NodeTraverser(new AddStaticAnonymousFunctionVisitor(12)))->traverse([
+            new Class_('Example', [
+                'stmts' => [
+                    new ClassMethod('value'),
+                    new ClassMethod('create', ['flags' => Modifiers::STATIC]),
+                    new ClassMethod('run', [
+                        'stmts' => [
+                            new Return_($callingOwnName),
+                            new Return_($callingStatic),
+                            new Return_($callingOther),
+                        ],
+                    ]),
+                ],
+            ]),
+            new Class_(null, [
+                'stmts' => [
+                    new ClassMethod('value'),
+                    new ClassMethod('run', ['stmts' => [new Return_($inAnonymousClass)]]),
+                ],
+            ]),
+        ]);
+
+        $this->assertFalse($callingOwnName->static, 'names compare case-insensitively without a resolved name');
+        $this->assertTrue($callingStatic->static);
+        $this->assertTrue($callingOther->static);
+        $this->assertTrue($inAnonymousClass->static, 'an anonymous class has no name to call through');
+    }
+
     public function testDoesNotChangeClosureWhoseNestedClosureReadsThis(): void
     {
         $inner = new Closure(['stmts' => [new Return_(new Variable('this'))]], ['startLine' => 12]);
