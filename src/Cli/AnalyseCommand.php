@@ -23,7 +23,9 @@ use Boundwize\StructArmed\Report\Reports\SummaryReport;
 use Boundwize\StructArmed\Report\WarningLine;
 use Boundwize\StructArmed\Rule\FixableInterface;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\AbstractJsonRecastFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\JsonRecast\JsonRecastFixerProcessor;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
+use Boundwize\StructArmed\Rule\Fixer\PhpParser\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
 use RuntimeException;
@@ -453,6 +455,11 @@ final readonly class AnalyseCommand
     private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int
     {
         $fixedCount = 0;
+        // The violations were collected before any fix ran, so once a fix adds
+        // or removes lines in a file, the lines of that file's remaining
+        // violations are stale and could point a line-based fixer at other
+        // code. Those are left to the next pass, which re-analyses the file.
+        $lineShiftedFiles = [];
 
         foreach ($architecture->getRules() as $ruleKey => $rule) {
             if (! $rule instanceof FixableInterface) {
@@ -469,8 +476,15 @@ final readonly class AnalyseCommand
                 && ! $rule instanceof AbstractJsonRecastFixableRule
             ) {
                 foreach ($ruleViolations as $ruleViolation) {
+                    if (isset($lineShiftedFiles[$ruleViolation->file])) {
+                        continue;
+                    }
+
                     if ($rule->fix($ruleViolation)) {
                         $fixedCount++;
+                        // A custom fixer does not tell whether it moved lines,
+                        // so a successful one is assumed to have.
+                        $lineShiftedFiles[$ruleViolation->file] = true;
                     }
                 }
 
@@ -483,9 +497,23 @@ final readonly class AnalyseCommand
                 $violationsByFile[$ruleViolation->file][] = $ruleViolation;
             }
 
-            foreach ($violationsByFile as $violations) {
+            foreach ($violationsByFile as $file => $violations) {
+                if (isset($lineShiftedFiles[$file])) {
+                    continue;
+                }
+
                 if ($rule->fix(...$violations)) {
                     $fixedCount += count($violations);
+
+                    // A successful fix went through the rule's processor,
+                    // which holds the answer of that very call.
+                    $lineCountChanged = $rule instanceof AbstractPhpParserFixableRule
+                        ? PhpParserFixerProcessor::$lastFixChangedLineCount
+                        : JsonRecastFixerProcessor::$lastFixChangedLineCount;
+
+                    if ($lineCountChanged) {
+                        $lineShiftedFiles[$file] = true;
+                    }
                 }
             }
         }

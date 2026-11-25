@@ -23,13 +23,23 @@ use function file_get_contents;
 use function file_put_contents;
 use function is_file;
 use function is_string;
+use function substr_count;
 use function unlink;
 
-final readonly class PhpParserFixerProcessor
+final class PhpParserFixerProcessor
 {
+    /**
+     * Whether the last successful process() call changed the number of lines
+     * of its file, deleting it included. Only meaningful right after a call that
+     * returned true: every call resets it first.
+     */
+    public static bool $lastFixChangedLineCount = false;
+
     /** @param NodeVisitor|non-empty-list<NodeVisitor> $nodeVisitors */
     public function process(string $file, NodeVisitor|array $nodeVisitors, bool $removeFileWhenEmpty = false): bool
     {
+        self::$lastFixChangedLineCount = false;
+
         if (! is_file($file)) {
             return false;
         }
@@ -70,7 +80,7 @@ final readonly class PhpParserFixerProcessor
         // A fix that removes the last declaration leaves only boilerplate
         // (declare/namespace/use); the whole file is dead weight at that point.
         if ($removeFileWhenEmpty && $this->hasOnlyDeclarations($statements)) {
-            return unlink($file);
+            return self::$lastFixChangedLineCount = unlink($file);
         }
 
         $prettyPrinter = new class extends Standard {
@@ -102,7 +112,14 @@ final readonly class PhpParserFixerProcessor
         };
         $fixedCode     = $prettyPrinter->printFormatPreserving($statements, $originalStatements, $tokens);
 
-        return $fixedCode !== $code && file_put_contents($file, $fixedCode) !== false;
+        if ($fixedCode === $code || file_put_contents($file, $fixedCode) === false) {
+            return false;
+        }
+
+        // Both versions are already in memory, so no extra read is needed.
+        self::$lastFixChangedLineCount = substr_count($code, "\n") !== substr_count($fixedCode, "\n");
+
+        return true;
     }
 
     /**

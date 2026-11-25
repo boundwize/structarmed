@@ -8,10 +8,13 @@ use Boundwize\JsonRecast\Node\NodeJson;
 use Boundwize\JsonRecast\Node\StringNode;
 use Boundwize\JsonRecast\NodeVisitor\NodeJsonVisitorAbstract;
 use Boundwize\StructArmed\Rule\Fixer\JsonRecast\JsonRecastFixerProcessor;
+use Boundwize\StructArmed\Rule\Fixer\JsonRecast\ObjectItemNode\RemoveMissingPsr4PathVisitor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
+use function dirname;
+use function file_get_contents;
 use function file_put_contents;
 use function sys_get_temp_dir;
 use function tempnam;
@@ -55,6 +58,52 @@ final class JsonRecastFixerProcessorTest extends TestCase
             $this->assertFalse($this->process($file));
         } finally {
             unlink($file);
+        }
+    }
+
+    public function testProcessReportsLineCountChangeOnlyForTheCallThatChangedIt(): void
+    {
+        $multiLineFile  = $this->temporaryJsonFile(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "Existing\\": "./",
+            "Missing\\": "missing/"
+        }
+    }
+}
+JSON);
+        $singleLineFile = $this->temporaryJsonFile(
+            '{"autoload": {"psr-4": {"Existing\\\\": "./", "Missing\\\\": "missing/"}}}'
+        );
+
+        $jsonRecastFixerProcessor                          = new JsonRecastFixerProcessor();
+        $removeMissingPsr4PathVisitor                      = new RemoveMissingPsr4PathVisitor(dirname($multiLineFile));
+        JsonRecastFixerProcessor::$lastFixChangedLineCount = false;
+
+        try {
+            $this->assertTrue(
+                $jsonRecastFixerProcessor->process($multiLineFile, $removeMissingPsr4PathVisitor)
+            );
+            $this->assertTrue(JsonRecastFixerProcessor::$lastFixChangedLineCount);
+            $this->assertStringNotContainsString('Missing', (string) file_get_contents($multiLineFile));
+
+            // The flag is shared by the next calls: a fix that keeps
+            // the lines of another file, then one that changes nothing.
+            $this->assertTrue(
+                $jsonRecastFixerProcessor->process($singleLineFile, $removeMissingPsr4PathVisitor)
+            );
+            $this->assertFalse(JsonRecastFixerProcessor::$lastFixChangedLineCount);
+            $this->assertStringNotContainsString('Missing', (string) file_get_contents($singleLineFile));
+            JsonRecastFixerProcessor::$lastFixChangedLineCount = true;
+
+            $this->assertFalse(
+                $jsonRecastFixerProcessor->process($multiLineFile, $removeMissingPsr4PathVisitor)
+            );
+            $this->assertFalse(JsonRecastFixerProcessor::$lastFixChangedLineCount);
+        } finally {
+            unlink($multiLineFile);
+            unlink($singleLineFile);
         }
     }
 
