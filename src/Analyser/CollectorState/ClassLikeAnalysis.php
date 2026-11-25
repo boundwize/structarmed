@@ -76,7 +76,7 @@ final class ClassLikeAnalysis
         public readonly array $methodStaticFlags,
         public readonly int $functionLikeDepthAtEntry,
         /** The direct parent class a `parent` signature type resolves to. */
-        public readonly ?string $parent = null,
+        public readonly ?string $parent,
     ) {
     }
 }
