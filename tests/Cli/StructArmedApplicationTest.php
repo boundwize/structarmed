@@ -1339,6 +1339,197 @@ PHP);
         }
     }
 
+    public function testAnalyseCommandFixDoesNotApplyStaleLinesAfterAnEarlierFixShiftedThem(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        // The enum fix adds three lines, moving the baselined arrow function
+        // of a() onto line 12, the line the violation of b() was reported on.
+        file_put_contents($basePath . '/src/Example.php', <<<'PHP'
+<?php
+
+namespace App;
+
+enum Status { case Active; case Inactive; }
+
+final class Example
+{
+    public function a(): \Closure { return fn () => 42; }
+
+    // second
+    public function b(): \Closure { return fn () => 43; }
+}
+PHP);
+        file_put_contents($basePath . '/structarmed-baseline.php', <<<'PHP'
+<?php
+
+return [
+    [
+        'rule'    => 'source.static_closures',
+        'message' => 'Arrow function in [App\Example] must be declared static',
+        'file'    => 'src/Example.php',
+        'class'   => 'App\Example',
+        'layer'   => 'Source',
+        'count'   => 1,
+    ],
+];
+PHP);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\Rules\Class_\EnumCaseMustBeOnOwnLineRule;
+use Boundwize\StructArmed\Rule\Rules\Function_\MustBeStaticAnonymousFunctionRule;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->baseline('structarmed-baseline.php')
+    ->rule('source.enum_case_own_line', new EnumCaseMustBeOnOwnLineRule(layer: 'Source'))
+    ->rule('source.static_closures', new MustBeStaticAnonymousFunctionRule(layer: 'Source'));
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('3 violations have been fixed.', $this->withoutAnsi($output));
+            $this->assertSame(<<<'PHP'
+<?php
+
+namespace App;
+
+enum Status {
+    case Active;
+    case Inactive;
+}
+
+final class Example
+{
+    public function a(): \Closure { return fn () => 42; }
+
+    // second
+    public function b(): \Closure { return static fn () => 43; }
+}
+PHP, (string) file_get_contents($basePath . '/src/Example.php'));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
+    public function testAnalyseCommandFixDoesNotApplyStaleLinesOfCustomFixerAfterItsOwnFixShiftedThem(): void
+    {
+        $basePath = $this->createProjectDirectory();
+
+        // The custom fixer handles one violation per call: marking First adds
+        // a line, so the line reported for Second no longer points at it.
+        file_put_contents($basePath . '/src/Example.php', <<<'PHP'
+<?php
+
+namespace App;
+
+final class First
+{
+}
+
+final class Second
+{
+}
+PHP);
+        file_put_contents($basePath . '/structarmed.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Rule\FixableInterface;
+use Boundwize\StructArmed\Rule\RuleInterface;
+use Boundwize\StructArmed\Rule\RuleViolation;
+
+return Architecture::define()
+    ->layer('Source', 'src/')
+    ->rule(
+        'source.checked_marker',
+        new class implements RuleInterface, FixableInterface {
+        public function appliesTo(ClassNode $classNode): bool
+        {
+            return true;
+        }
+
+        public function evaluate(ClassNode $classNode): ?RuleViolation
+        {
+            $lines = (array) file($classNode->file);
+
+            if (($lines[$classNode->line - 2] ?? '') === "// checked\n") {
+                return null;
+            }
+
+            return new RuleViolation(
+                message:   'Missing checked marker',
+                file:      $classNode->file,
+                line:      $classNode->line,
+                className: $classNode->className,
+                layer:     $classNode->layer,
+                ruleKey:   'source.checked_marker',
+            );
+        }
+
+        public function fix(RuleViolation $ruleViolation): bool
+        {
+            $lines = (array) file($ruleViolation->file);
+            array_splice($lines, $ruleViolation->line - 1, 0, "// checked\n");
+
+            return file_put_contents($ruleViolation->file, implode('', $lines)) !== false;
+        }
+    }
+    );
+PHP);
+
+        try {
+            [$exitCode, $output] = $this->runApplication(
+                [
+                    'structarmed',
+                    'analyze',
+                    '--config=' . $basePath . '/structarmed.php',
+                    '--fix',
+                    '--no-progress',
+                ],
+                $basePath
+            );
+
+            $this->assertSame(0, $exitCode, $output);
+            $this->assertStringContainsString('2 violations have been fixed.', $this->withoutAnsi($output));
+            $this->assertSame(<<<'PHP'
+<?php
+
+namespace App;
+
+// checked
+final class First
+{
+}
+
+// checked
+final class Second
+{
+}
+PHP, (string) file_get_contents($basePath . '/src/Example.php'));
+        } finally {
+            $this->removeTempDirectory($basePath);
+        }
+    }
+
     public function testAnalyseCommandFixesCascadingYagniViolationsInOneRun(): void
     {
         $basePath = $this->createProjectDirectory();

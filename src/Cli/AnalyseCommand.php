@@ -30,6 +30,7 @@ use RuntimeException;
 
 use function count;
 use function explode;
+use function file_get_contents;
 use function getenv;
 use function in_array;
 use function is_dir;
@@ -38,6 +39,7 @@ use function max;
 use function microtime;
 use function sprintf;
 use function str_starts_with;
+use function substr_count;
 
 use const PHP_EOL;
 
@@ -453,6 +455,11 @@ final readonly class AnalyseCommand
     private function fixViolations(Architecture $architecture, RuleViolationCollection $ruleViolationCollection): int
     {
         $fixedCount = 0;
+        // The violations were collected before any fix ran, so once a fix adds
+        // or removes lines in a file, the lines of that file's remaining
+        // violations are stale and could point a line-based fixer at other
+        // code. Those are left to the next pass, which re-analyses the file.
+        $lineShiftedFiles = [];
 
         foreach ($architecture->getRules() as $ruleKey => $rule) {
             if (! $rule instanceof FixableInterface) {
@@ -469,8 +476,18 @@ final readonly class AnalyseCommand
                 && ! $rule instanceof AbstractJsonRecastFixableRule
             ) {
                 foreach ($ruleViolations as $ruleViolation) {
+                    if (isset($lineShiftedFiles[$ruleViolation->file])) {
+                        continue;
+                    }
+
+                    $lineCount = $this->lineCount($ruleViolation->file);
+
                     if ($rule->fix($ruleViolation)) {
                         $fixedCount++;
+
+                        if ($this->lineCount($ruleViolation->file) !== $lineCount) {
+                            $lineShiftedFiles[$ruleViolation->file] = true;
+                        }
                     }
                 }
 
@@ -483,14 +500,29 @@ final readonly class AnalyseCommand
                 $violationsByFile[$ruleViolation->file][] = $ruleViolation;
             }
 
-            foreach ($violationsByFile as $violations) {
+            foreach ($violationsByFile as $file => $violations) {
+                if (isset($lineShiftedFiles[$file])) {
+                    continue;
+                }
+
+                $lineCount = $this->lineCount($file);
+
                 if ($rule->fix(...$violations)) {
                     $fixedCount += count($violations);
+
+                    if ($this->lineCount($file) !== $lineCount) {
+                        $lineShiftedFiles[$file] = true;
+                    }
                 }
             }
         }
 
         return $fixedCount;
+    }
+
+    private function lineCount(string $file): int
+    {
+        return is_file($file) ? substr_count((string) file_get_contents($file), "\n") : 0;
     }
 
     private function reportError(RuntimeException $runtimeException): int
