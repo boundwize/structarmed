@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Tests\Rule\Usage;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Rule\Rules\Usage\MayNotCallFunctionRule;

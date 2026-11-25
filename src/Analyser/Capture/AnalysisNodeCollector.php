@@ -2,14 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\Capture;
 
-use Boundwize\StructArmed\Analyser\CollectorState\ClassLikeAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\FileReferenceAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\FileSyntaxAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\FunctionLikeAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\MethodAnalysis;
-use Boundwize\StructArmed\Analyser\CollectorState\NamespaceAnalysis;
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\ClassLikeAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\FileReferenceAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\FileSyntaxAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\FunctionLikeAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\MethodAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\NamespaceAnalysis;
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\ClassSignature;
+use Boundwize\StructArmed\Analyser\ConstantNode;
+use Boundwize\StructArmed\Analyser\EnumCaseNode;
+use Boundwize\StructArmed\Analyser\FunctionNode;
+use Boundwize\StructArmed\Analyser\MethodNode;
+use Boundwize\StructArmed\Analyser\PropertyNode;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;
 use Boundwize\StructArmed\Util\PhpParser\AnonymousClassParentheses;
 use Boundwize\StructArmed\Util\PhpParser\EmptyParentheses;

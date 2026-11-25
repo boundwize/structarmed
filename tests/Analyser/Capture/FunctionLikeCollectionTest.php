@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Analyser;
+namespace Boundwize\StructArmed\Tests\Analyser\Capture;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
-use Boundwize\StructArmed\Analyser\CollectorState\FunctionLikeAnalysis;
+use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeCollector;
+use Boundwize\StructArmed\Analyser\Capture\CollectorState\FunctionLikeAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\LayerResolver\Resolvers\NamespaceLayerResolver;
 use Boundwize\StructArmed\Util\PhpParser\ObjectBoundAnonymousFunction;

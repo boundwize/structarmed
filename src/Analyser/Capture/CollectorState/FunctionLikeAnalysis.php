@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser\CollectorState;
+namespace Boundwize\StructArmed\Analyser\Capture\CollectorState;
 
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Name;
