@@ -20,6 +20,7 @@ use function array_merge;
 use function array_unique;
 use function array_values;
 use function is_callable;
+use function is_file;
 use function is_int;
 use function realpath;
 use function sprintf;
@@ -147,6 +148,12 @@ final class Architecture
      */
     public function import(string $file): self
     {
+        if (! is_file($file)) {
+            throw new InvalidArgumentException(
+                sprintf('Imported configuration file [%s] does not exist.', $file)
+            );
+        }
+
         $importedFile = realpath($file) ?: $file;
 
         // only imports still in progress are tracked, so a file imported twice

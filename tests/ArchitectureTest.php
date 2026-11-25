@@ -538,4 +538,58 @@ final class ArchitectureTest extends TestCase
 
         Architecture::define()->import($directory . '/foo.php');
     }
+
+    public function testImportThrowsWhenFileDoesNotExistOrIsNotAFile(): void
+    {
+        $directory = $this->makeTemporaryDirectory('structarmed-import');
+
+        foreach ([$directory . '/missing.php', $directory] as $path) {
+            try {
+                Architecture::define()->import($path);
+                $this->fail('Expected an InvalidArgumentException for ' . $path);
+            } catch (InvalidArgumentException $invalidArgumentException) {
+                $this->assertSame(InvalidArgumentException::class, $invalidArgumentException::class);
+                $this->assertSame(
+                    sprintf('Imported configuration file [%s] does not exist.', $path),
+                    $invalidArgumentException->getMessage()
+                );
+            }
+        }
+    }
+
+    public function testImportThrowsWhenNestedImportedFileDoesNotExist(): void
+    {
+        // __DIR__ in the imported file is symlink-resolved
+        $directory = (string) realpath($this->makeTemporaryDirectory('structarmed-import'));
+        file_put_contents($directory . '/foo.php', <<<'PHP'
+            <?php
+
+            use Boundwize\StructArmed\Architecture;
+
+            return static function (Architecture $architecture): void {
+                $architecture->import(__DIR__ . '/missing.php');
+            };
+
+            PHP);
+
+        $architecture = Architecture::define();
+
+        try {
+            $architecture->import($directory . '/foo.php');
+            $this->fail('Expected an InvalidArgumentException');
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            $this->assertSame(
+                sprintf('Imported configuration file [%s] does not exist.', $directory . '/missing.php'),
+                $invalidArgumentException->getMessage()
+            );
+        }
+
+        // the failed import is no longer in progress, so a retry is not reported as circular
+        file_put_contents($directory . '/missing.php', "<?php\n\nreturn static function (): void {\n};\n");
+
+        $this->assertSame(
+            [realpath($directory . '/missing.php'), realpath($directory . '/foo.php')],
+            $architecture->import($directory . '/foo.php')->getImportedFiles()
+        );
+    }
 }

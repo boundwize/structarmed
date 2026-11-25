@@ -28,6 +28,7 @@ use Boundwize\StructArmed\Rule\Fixer\PhpParser\AbstractPhpParserFixableRule;
 use Boundwize\StructArmed\Rule\Fixer\PhpParser\PhpParserFixerProcessor;
 use Boundwize\StructArmed\Rule\RuleViolationCollection;
 use Boundwize\StructArmed\Util\Path;
+use InvalidArgumentException;
 use RuntimeException;
 
 use function count;
@@ -161,8 +162,8 @@ final readonly class AnalyseCommand
         try {
             $configFile   = $options['config'] ?? ConfigLoader::discover($workingDirectory, $basePath);
             $architecture = ConfigLoader::load($configFile);
-        } catch (RuntimeException $runtimeException) {
-            return $this->reportError($runtimeException);
+        } catch (RuntimeException | InvalidArgumentException $exception) {
+            return $this->reportError($exception);
         }
 
         $baseline               = $architecture->getBaseline();
@@ -521,9 +522,9 @@ final readonly class AnalyseCommand
         return $fixedCount;
     }
 
-    private function reportError(RuntimeException $runtimeException): int
+    private function reportError(RuntimeException|InvalidArgumentException $exception): int
     {
-        echo 'Error: ' . $runtimeException->getMessage() . PHP_EOL;
+        echo 'Error: ' . $exception->getMessage() . PHP_EOL;
 
         return 1;
     }
