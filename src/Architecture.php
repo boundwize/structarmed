@@ -191,7 +191,8 @@ final class Architecture
      * @param string|list<string>      $path
      * @param string|list<string>|null $excludePath Optional path prefixes; files under these are excluded
      *                                              from the layer even when $path matches, e.g. a nested
-     *                                              directory registered as its own layer.
+     *                                              directory registered as its own layer. Not supported
+     *                                              for the Source layer; use skip() there instead.
      */
     public function layer(string $name, string|array $path, string|array|null $excludePath = null): self
     {
