@@ -68,6 +68,46 @@ JSON);
         $this->assertStringContainsString('tests', $violation->message);
     }
 
+    public function testPassesWhenSourcePathIsSubDirectoryOfComposerPsr4Path(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}
+JSON);
+
+        $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/Domain/', 'src/Domain/Model']);
+
+        $this->assertNotInstanceOf(
+            RuleViolation::class,
+            $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define())
+        );
+    }
+
+    public function testFailsWhenSourcePathOnlySharesNamePrefixWithComposerPsr4Path(): void
+    {
+        $basePath = $this->makeTempProject(<<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}
+JSON);
+
+        $psr4SourcePathsRule = new Psr4SourcePathsRule(['src-legacy/']);
+
+        $violation = $psr4SourcePathsRule->evaluateProject($basePath, Architecture::define());
+
+        $this->assertInstanceOf(RuleViolation::class, $violation);
+        $this->assertStringContainsString('src-legacy', $violation->message);
+    }
+
     public function testPassesWhenComposerJsonIsMissing(): void
     {
         $psr4SourcePathsRule = new Psr4SourcePathsRule(['src/']);

@@ -50,7 +50,7 @@ Namespace: `Boundwize\StructArmed\Rule\Rules\Composer`.
 | `Psr4EmptyNamespacePrefixRule` | `new Psr4EmptyNamespacePrefixRule()` | `autoload` and `autoload-dev` PSR-4 mappings do not use an empty namespace prefix. |
 | `Psr4NamespaceRule` | `new Psr4NamespaceRule(layer: 'Source')` | A class name matches the namespace expected from its PSR-4 path. |
 | `Psr4RootPathRule` | `new Psr4RootPathRule()` | PSR-4 mappings do not point directly to the project root. |
-| `Psr4SourcePathsRule` | `new Psr4SourcePathsRule(sourcePaths: ['src/', 'tests/'])` | Configured source paths are present in `composer.json` PSR-4 mappings. |
+| `Psr4SourcePathsRule` | `new Psr4SourcePathsRule(sourcePaths: ['src/', 'tests/'])` | Configured source paths are present in `composer.json` PSR-4 mappings, either as a mapped path or as a directory under one (`src/Domain/` is covered by `src/`). |
 {: .rule-table }
 
 ## File Rules
