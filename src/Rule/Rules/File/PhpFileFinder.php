@@ -13,6 +13,7 @@ use Boundwize\StructArmed\Util\Path;
 use function array_keys;
 use function array_unique;
 use function array_values;
+use function dirname;
 use function is_dir;
 use function is_file;
 use function str_ends_with;
@@ -81,6 +82,7 @@ final readonly class PhpFileFinder
         $skipPathMatcher   = SkipPathMatcher::compile($basePath, $skipPaths);
         $directoryPrefixes = [];
         $sourceFiles       = [];
+        $isSourceDirectory = [];
 
         foreach ($this->sourcePaths($basePath, $architecture) as $sourcePath) {
             $normalisedSourcePath = Path::normalise(Path::resolve($sourcePath, $basePath), canonicalise: true);
@@ -112,11 +114,23 @@ final readonly class PhpFileFinder
                 continue;
             }
 
-            foreach ($directoryPrefixes as $directoryPrefix) {
-                if (str_starts_with($scopeFile, $directoryPrefix)) {
-                    $files[$scopeFile] = true;
-                    continue 2;
+            // the files of one directory sit under the same source paths,
+            // so those are matched once per directory, not once per file
+            $directory = dirname($scopeFile) . '/';
+
+            if (! isset($isSourceDirectory[$directory])) {
+                $isSourceDirectory[$directory] = false;
+
+                foreach ($directoryPrefixes as $directoryPrefix) {
+                    if (str_starts_with($directory, $directoryPrefix)) {
+                        $isSourceDirectory[$directory] = true;
+                        break;
+                    }
                 }
+            }
+
+            if ($isSourceDirectory[$directory]) {
+                $files[$scopeFile] = true;
             }
         }
 
