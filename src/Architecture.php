@@ -195,8 +195,18 @@ final class Architecture
      */
     public function layer(string $name, string|array $path, string|array|null $excludePath = null): self
     {
+        $excludePath = (array) $excludePath;
+        if ($excludePath !== [] && SourceLayerName::matches($name)) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Layer "%s" does not support excludePath. Use ->skip() to exclude specific paths.',
+                    $name
+                )
+            );
+        }
+
         $this->layers[$name]            = $path;
-        $this->layerExcludePaths[$name] = (array) $excludePath;
+        $this->layerExcludePaths[$name] = $excludePath;
 
         return $this;
     }
