@@ -7,8 +7,9 @@ namespace Boundwize\StructArmed\Analyser\Capture\CollectorState;
 use PhpParser\Token;
 
 /**
- * Source context and spelling facts for one file. Retained after traversal so
- * the extractor can read the facts, then replaced when starting the next file.
+ * Source context and spelling facts for one file. The facts are retained after
+ * traversal so the extractor can read them, then replaced when starting the
+ * next file; the token reference is released as soon as traversal completes.
  *
  * @internal
  */
@@ -31,7 +32,7 @@ final class FileSyntaxAnalysis
     /** @param array<Token> $tokens The source tokens for facts not carried by the AST */
     public function __construct(
         public readonly string $file,
-        public readonly array $tokens,
+        public array $tokens,
     ) {
     }
 }

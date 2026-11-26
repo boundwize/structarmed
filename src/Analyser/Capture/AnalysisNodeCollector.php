@@ -854,6 +854,10 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
         $this->activeFunctionLikeAnalyses = [];
         $this->fileFunctionLikeAnalyses   = [];
 
+        // Every token-dependent fact is collected by now; dropping the reference
+        // here keeps this file's tokens from outliving the next file's parse.
+        $this->fileSyntaxAnalysis->tokens = [];
+
         return null;
     }
 
