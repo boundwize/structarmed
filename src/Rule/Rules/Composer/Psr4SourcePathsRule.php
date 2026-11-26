@@ -12,7 +12,6 @@ use Boundwize\StructArmed\Util\Path;
 
 use function array_map;
 use function implode;
-use function in_array;
 use function rtrim;
 use function sprintf;
 use function str_starts_with;
@@ -50,7 +49,7 @@ final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
         $missingPaths  = [];
 
         foreach ($this->normalisePaths($this->sourcePaths, $basePath) as $sourcePath) {
-            if (! in_array($sourcePath, $autoloadPaths, true)) {
+            if (! $this->isCoveredByAutoloadPath($sourcePath, $autoloadPaths)) {
                 $missingPaths[] = $sourcePath;
             }
         }
@@ -67,6 +66,22 @@ final readonly class Psr4SourcePathsRule implements ComposerJsonRuleInterface
             ),
             $composerFile
         );
+    }
+
+    /**
+     * A source path is covered by the PSR-4 path it equals or lies under.
+     *
+     * @param list<string> $autoloadPaths
+     */
+    private function isCoveredByAutoloadPath(string $sourcePath, array $autoloadPaths): bool
+    {
+        foreach ($autoloadPaths as $autoloadPath) {
+            if (str_starts_with($sourcePath . '/', $autoloadPath . '/')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
