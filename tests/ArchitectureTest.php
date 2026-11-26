@@ -80,6 +80,28 @@ final class ArchitectureTest extends TestCase
         $this->assertSame(['Logger' => []], $architecture->getLayerExcludePaths());
     }
 
+    #[DataProvider('provideReservedSourceLayerNames')]
+    public function testSourceLayerRejectsExcludePath(string $name): void
+    {
+        $architecture = Architecture::define();
+
+        try {
+            $architecture->layer($name, 'src/', excludePath: 'src/Foo/');
+            $this->fail('Expected InvalidArgumentException was not thrown.');
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            $this->assertSame(
+                sprintf(
+                    'Layer "%s" does not support excludePath. Use ->skip() to exclude specific paths.',
+                    $name
+                ),
+                $invalidArgumentException->getMessage()
+            );
+        }
+
+        $this->assertSame([], $architecture->getLayers());
+        $this->assertSame([], $architecture->getLayerExcludePaths());
+    }
+
     public function testSkipPathsAreRegistered(): void
     {
         $architecture = Architecture::define()
