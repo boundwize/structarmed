@@ -36,7 +36,7 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
 
     private ?string $projectBasePath = null;
 
-    /** @var array<string, array<string, list<string>>> Base path => namespace => canonical path prefixes */
+    /** @var array<string, array<string, list<string>>> Base path => namespace => canonical directory prefixes */
     private array $mappingsByBasePath = [];
 
     /** @var array<string, string|null> */
@@ -91,9 +91,8 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
      */
     private function expectedClassNames(string $file): array
     {
+        $file      = Path::normalise($file, canonicalise: true);
         $basePaths = array_unique([$this->projectBasePath, $this->basePathFor($file)]);
-
-        $file = Path::normalise($file, canonicalise: true);
 
         $candidates = [];
 
@@ -104,11 +103,11 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
 
             foreach ($this->mappingsFor($basePath) as $namespace => $prefixes) {
                 foreach ($prefixes as $prefix) {
-                    if (! str_starts_with($file, $prefix . '/')) {
+                    if (! str_starts_with($file, $prefix)) {
                         continue;
                     }
 
-                    $relativeClass = substr($file, strlen($prefix) + 1);
+                    $relativeClass = substr($file, strlen($prefix));
 
                     if (! str_ends_with($relativeClass, '.php')) {
                         continue;
@@ -129,9 +128,9 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
         return $candidates;
     }
 
-    private function basePathFor(string $file): ?string
+    private function basePathFor(string $normalisedFile): ?string
     {
-        $directory = dirname(Path::normalise($file, canonicalise: true));
+        $directory = dirname($normalisedFile);
 
         if (array_key_exists($directory, $this->basePathByDirectory)) {
             return $this->basePathByDirectory[$directory];
@@ -172,7 +171,7 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
     /**
      * PSR-4 paths are resolved once per base path, not once per class.
      *
-     * @return array<string, list<string>> Namespace => canonical path prefixes
+     * @return array<string, list<string>> Namespace => canonical directory prefixes, each ending in a slash
      */
     private function mappingsFor(string $basePath): array
     {
@@ -184,7 +183,7 @@ final class Psr4NamespaceRule implements RuleInterface, ProjectRuleInterface
 
         foreach ($this->psr4PathResolver->namespacePaths($basePath) as $namespace => $paths) {
             foreach ($paths as $path) {
-                $mappings[$namespace][] = Path::normalise(Path::resolve($path, $basePath), canonicalise: true);
+                $mappings[$namespace][] = Path::normalise(Path::resolve($path, $basePath), canonicalise: true) . '/';
             }
         }
 
