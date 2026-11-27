@@ -18,6 +18,7 @@ StructArmed ships rule classes you can register directly in `structarmed.php`, r
 ## Using Built-In Rules Directly
 
 Register built-in rules with `rule()` and give each rule a stable project-specific key.
+No preset is loaded in this example, so the keys are defined by your configuration:
 
 ```php
 <?php
@@ -39,6 +40,10 @@ return Architecture::define()
 ```
 
 Class, method, layer, and usage rules evaluate classes already assigned to layers. Composer and file rules evaluate project-level structure, such as `composer.json` PSR-4 mappings or source file contents.
+
+The key identifies a registered rule in reports, skips, and baselines; it is separate from the rule class and its `layer` argument. Using `MustBeFinalRule` in the `Domain` layer does not require a `DddPreset` constant. The `domain.*` keys above belong to this configuration and do not imply missing built-in constants.
+
+When you load a preset with `withPreset()` or `withPresets()`, use its [rule key constants](../presets/#rule-key-constants) to skip or replace the rules it registers. For reusable project rules, you can [create a custom preset](../custom-rules-and-presets/#custom-presets) and expose your own constants.
 
 ## Composer And PSR-4 Rules
 
