@@ -51,13 +51,9 @@ final class Path
         if ($isUnc) {
             $path = '//' . ltrim($path, '/');
         } elseif (str_starts_with($path, './')) {
-            $offset = 2;
-
-            while (isset($path[$offset + 1]) && $path[$offset] === '.' && $path[$offset + 1] === '/') {
-                $offset += 2;
-            }
-
-            $path = substr($path, $offset);
+            do {
+                $path = substr($path, 2);
+            } while (str_starts_with($path, './'));
 
             if ($path === '') {
                 $path = '.';
