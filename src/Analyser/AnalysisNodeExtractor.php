@@ -21,8 +21,6 @@ use function count;
  */
 final readonly class AnalysisNodeExtractor
 {
-    private FileAnalysisProvider $fileAnalysisProvider;
-
     /**
      * @param LayerResolverInterface   $layerResolver       Resolves no layers by default, which is enough
      *                                                      for rules that only need the file facts and
@@ -32,11 +30,10 @@ final readonly class AnalysisNodeExtractor
      */
     public function __construct(
         private LayerResolverInterface $layerResolver = new ChainLayerResolver(),
-        ?FileAnalysisProvider $fileAnalysisProvider = null,
+        private FileAnalysisProvider $fileAnalysisProvider = new FileAnalysisProvider(),
         private ?AnalysisResultCache $analysisResultCache = null,
         private string $analysisNodeCacheNamespace = '',
     ) {
-        $this->fileAnalysisProvider = $fileAnalysisProvider ?? new FileAnalysisProvider();
     }
 
     /**
