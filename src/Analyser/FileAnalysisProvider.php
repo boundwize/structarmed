@@ -121,7 +121,7 @@ final class FileAnalysisProvider
         private array $analyses = [],
         ?array $scopeFiles = null,
     ) {
-        $this->analyses = self::normaliseAnalyses($this->analyses);
+        $this->analyses = $this->normaliseAnalyses($this->analyses);
 
         if ($scopeFiles !== null) {
             $scopedAnalyses = [];
@@ -150,7 +150,7 @@ final class FileAnalysisProvider
      * @param array<string, FileAnalysis> $analyses
      * @return array<string, FileAnalysis>
      */
-    private static function normaliseAnalyses(array $analyses): array
+    private function normaliseAnalyses(array $analyses): array
     {
         $normalisedAnalyses = [];
 
