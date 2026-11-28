@@ -22,6 +22,9 @@ final class PathTest extends TestCase
         yield 'dot-relative' => ['./src', 'src'];
         yield 'dot-relative backslash' => ['.\\src\\', 'src'];
         yield 'repeated dot-relative' => ['././src/Domain', 'src/Domain'];
+        yield 'repeated dot slash only' => ['./././', '.'];
+        yield 'dot-relative parent' => ['././../src', '../src'];
+        yield 'dot-relative hidden file' => ['././.hidden', '.hidden'];
         yield 'dot slash only' => ['./', '.'];
         yield 'dot only' => ['.', '.'];
         yield 'unix absolute' => ['/project//src/', '/project/src'];
@@ -42,6 +45,10 @@ final class PathTest extends TestCase
     public static function provideResolve(): Iterator
     {
         yield 'relative' => ['src', '/project', '/project/src'];
+        yield 'same relative path with another base' => ['src', '/other', '/other/src'];
+        yield 'empty' => ['', '/project', '/project/'];
+        yield 'single character' => ['a', '/project', '/project/a'];
+        yield 'drive only' => ['C:', '/project', '/project/C:'];
         yield 'dot-relative' => ['./src', '/project', '/project/./src'];
         yield 'parent-relative' => ['../src', '/project', '/project/../src'];
         yield 'base with trailing slash' => ['src', '/project/', '/project/src'];

@@ -26,7 +26,7 @@ final class Path
     /** @var array<string, string> */
     private static array $normalisedPaths = [];
 
-    /** @var array<string, string> */
+    /** @var array<string, array<string, string>> */
     private static array $resolvedPaths = [];
 
     public static function normalise(string $path, bool $canonicalise = false): string
@@ -51,9 +51,13 @@ final class Path
         if ($isUnc) {
             $path = '//' . ltrim($path, '/');
         } elseif (str_starts_with($path, './')) {
-            do {
-                $path = substr($path, 2);
-            } while (str_starts_with($path, './'));
+            $offset = 2;
+
+            while (isset($path[$offset + 1]) && $path[$offset] === '.' && $path[$offset + 1] === '/') {
+                $offset += 2;
+            }
+
+            $path = substr($path, $offset);
 
             if ($path === '') {
                 $path = '.';
@@ -65,11 +69,8 @@ final class Path
 
     public static function resolve(string $path, string $basePath): string
     {
-        $cacheKey = $basePath . "\0" . $path;
-
-        return self::$resolvedPaths[$cacheKey] ?? self::$resolvedPaths[$cacheKey] = self::isAbsolute($path)
-            ? $path
-            : rtrim($basePath, '/\\') . '/' . $path;
+        return self::$resolvedPaths[$basePath][$path] ?? self::$resolvedPaths[$basePath][$path] =
+            self::isAbsolute($path) ? $path : rtrim($basePath, '/\\') . '/' . $path;
     }
 
     public static function isAnalysableFile(string $path, string $basePath): bool
@@ -129,6 +130,6 @@ final class Path
     {
         return str_starts_with($path, '/')
             || str_starts_with($path, '\\\\')
-            || preg_match('#^[A-Za-z]:[/\\\\]#', $path) === 1;
+            || (isset($path[2]) && $path[1] === ':' && preg_match('#^[A-Za-z]:[/\\\\]#', $path) === 1);
     }
 }
