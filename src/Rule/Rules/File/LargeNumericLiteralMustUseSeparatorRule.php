@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Rules\File;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
@@ -58,10 +57,9 @@ final readonly class LargeNumericLiteralMustUseSeparatorRule extends AbstractPhp
      */
     public function evaluateProjectAll(string $basePath, Architecture $architecture, array $skipPaths = []): array
     {
-        $files            = $this->phpFileFinder->files($basePath, $architecture, $skipPaths);
-        $extractionResult = (new AnalysisNodeExtractor())->extract($files);
+        $files = $this->phpFileFinder->files($basePath, $architecture, $skipPaths);
 
-        return $this->evaluateFiles($files, new FileAnalysisProvider($extractionResult->fileAnalyses));
+        return $this->evaluateFiles($files, FileAnalysisProvider::forFiles($files));
     }
 
     /**

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser\Parallel;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Analyser\Extract\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Throwable;

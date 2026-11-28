@@ -757,6 +757,20 @@ final class FileAnalysisProviderTest extends TestCase
         $this->assertSame($hasSideEffects, $fileAnalysis->hasSideEffects);
     }
 
+    public function testForFilesCarriesFactsRecordedByAnalysisNodeTraversal(): void
+    {
+        $file = $this->source(<<<'PHP'
+            <?php
+
+            return TRUE;
+            PHP);
+
+        $fileAnalysisProvider = FileAnalysisProvider::forFiles([$file]);
+
+        $this->assertSame([Path::normalise($file)], $fileAnalysisProvider->scopeFiles());
+        $this->assertSame([[3, 'TRUE']], $fileAnalysisProvider->analyse($file)->nonCanonicalKeywordConstants);
+    }
+
     private function source(string $contents): string
     {
         return 'data://text/plain;base64,' . base64_encode($contents);

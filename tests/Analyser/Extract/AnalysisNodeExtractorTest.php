@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Tests\Analyser;
+namespace Boundwize\StructArmed\Tests\Analyser\Extract;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeVisitor;
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Analyser\ExtractionResult;
+use Boundwize\StructArmed\Analyser\Extract\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Analyser\Extract\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\Cache\FileHashProvider;

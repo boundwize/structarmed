@@ -7,7 +7,7 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 use Boundwize\StructArmed\Analyser\AnonymousClassNode;
 use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
 use Boundwize\StructArmed\Analyser\ClassNode;
-use Boundwize\StructArmed\Analyser\ExtractionResult;
+use Boundwize\StructArmed\Analyser\Extract\ExtractionResult;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;

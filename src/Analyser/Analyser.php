@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeCollector;
+use Boundwize\StructArmed\Analyser\Extract\AnalysisNodeExtractor;
+use Boundwize\StructArmed\Analyser\Extract\ExtractionResult;
 use Boundwize\StructArmed\Analyser\Parallel\ParallelAnalysisNodeExtractor;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
