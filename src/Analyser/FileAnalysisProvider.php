@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Analyser;
 
+use Boundwize\StructArmed\Analyser\Extract\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Util\InlineHtmlOpeningTagMatcher;
 use Boundwize\StructArmed\Util\Path;
 use Boundwize\StructArmed\Util\PhpParser\UnconditionallyDeclaredFunctions;
@@ -110,6 +111,17 @@ final class FileAnalysisProvider
         }
 
         return new self($scopedAnalyses);
+    }
+
+    /**
+     * Creates a provider for files analysed outside the analyser: the facts only the
+     * analysis-node traversal records come from the same extraction the analyser runs.
+     *
+     * @param list<string> $files
+     */
+    public static function forFiles(array $files): self
+    {
+        return new self((new AnalysisNodeExtractor())->extract($files)->fileAnalyses);
     }
 
     /** @param array<string, FileAnalysis> $analyses */

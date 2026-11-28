@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\Extract;
 
 use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeCollector;
 use Boundwize\StructArmed\Analyser\Capture\AnalysisNodeVisitor;
+use Boundwize\StructArmed\Analyser\FileAnalysis;
+use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Cache\AnalysisResultCache;
 use Boundwize\StructArmed\LayerResolver\ChainLayerResolver;
 use Boundwize\StructArmed\LayerResolver\LayerResolverInterface;

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Boundwize\StructArmed\Rule\Rules\File;
 
-use Boundwize\StructArmed\Analyser\AnalysisNodeExtractor;
 use Boundwize\StructArmed\Analyser\FileAnalysisProvider;
 use Boundwize\StructArmed\Architecture;
 use Boundwize\StructArmed\Rule\FileAnalysisRuleInterface;
@@ -50,9 +49,7 @@ final readonly class AttributeMayNotHaveEmptyParenthesesRule extends AbstractPhp
 
         // Outside the analyser the attributes come from the same traversal it
         // runs, so there is a single place that recognises them.
-        $extractionResult = (new AnalysisNodeExtractor())->extract($files);
-
-        return $this->evaluateFiles($files, new FileAnalysisProvider($extractionResult->fileAnalyses));
+        return $this->evaluateFiles($files, FileAnalysisProvider::forFiles($files));
     }
 
     /**

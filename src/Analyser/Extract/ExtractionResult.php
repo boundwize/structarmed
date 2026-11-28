@@ -2,7 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Boundwize\StructArmed\Analyser;
+namespace Boundwize\StructArmed\Analyser\Extract;
+
+use Boundwize\StructArmed\Analyser\AnonymousClassNode;
+use Boundwize\StructArmed\Analyser\AnonymousFunctionNode;
+use Boundwize\StructArmed\Analyser\ClassNode;
+use Boundwize\StructArmed\Analyser\FileAnalysis;
+use Boundwize\StructArmed\Analyser\FunctionNode;
 
 final readonly class ExtractionResult
 {
