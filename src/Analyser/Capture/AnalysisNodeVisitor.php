@@ -21,7 +21,7 @@ final class AnalysisNodeVisitor extends NameResolver
         parent::__construct();
     }
 
-    public function enterNode(Node $node): null
+    public function enterNode(Node $node): ?int
     {
         parent::enterNode($node);
 

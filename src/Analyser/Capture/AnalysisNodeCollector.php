@@ -98,6 +98,7 @@ use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\Node\UnionType;
+use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
@@ -127,6 +128,10 @@ use function substr;
  * Collects every analysis node from a file's AST: ClassNodes (with their
  * anonymous-class, file-reference, and instantiation side data), FunctionNodes,
  * and AnonymousFunctionNodes.
+ *
+ * enterNode() returns NodeVisitor::DONT_TRAVERSE_CHILDREN for a `use`
+ * statement. It stops every visitor from traversing the children, so only
+ * the last visitor may return it: keep the collector last.
  *
  * @internal
  */
@@ -583,7 +588,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             : null;
     }
 
-    public function enterNode(Node $node): null
+    public function enterNode(Node $node): ?int
     {
         if (! isset(self::ENTER_NODES[$node::class])) {
             return null;
@@ -627,7 +632,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     }
                 }
 
-                return null;
+                return NodeVisitor::DONT_TRAVERSE_CHILDREN;
             }
 
             if ($node instanceof GroupUse) {
@@ -647,7 +652,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     }
                 }
 
-                return null;
+                return NodeVisitor::DONT_TRAVERSE_CHILDREN;
             }
 
             if ($node instanceof Function_) {
