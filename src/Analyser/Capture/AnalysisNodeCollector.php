@@ -632,8 +632,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     }
                 }
 
-                // The NameResolver has read the imports from this node as
-                // well; the items and names below carry nothing more.
                 return NodeVisitor::DONT_TRAVERSE_CHILDREN;
             }
 
