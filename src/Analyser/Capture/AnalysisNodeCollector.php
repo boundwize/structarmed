@@ -98,6 +98,7 @@ use PhpParser\Node\Stmt\Unset_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\Stmt\While_;
 use PhpParser\Node\UnionType;
+use PhpParser\NodeVisitor;
 use PhpParser\NodeVisitorAbstract;
 use PhpParser\Token;
 
@@ -127,6 +128,11 @@ use function substr;
  * Collects every analysis node from a file's AST: ClassNodes (with their
  * anonymous-class, file-reference, and instantiation side data), FunctionNodes,
  * and AnonymousFunctionNodes.
+ *
+ * enterNode() returns NodeVisitor::DONT_TRAVERSE_CHILDREN for a node whose
+ * children carry nothing to collect. It stops every visitor from traversing
+ * the children, so only the last visitor may return it: keep the collector
+ * last.
  *
  * @internal
  */
@@ -289,6 +295,16 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             Include_::class       => true,
             Attribute::class      => true,
         ];
+
+    /**
+     * Collected node classes without child nodes: nothing to traverse below.
+     */
+    private const LEAF_NODES = [
+        String_::class        => true,
+        Int_::class           => true,
+        Float_::class         => true,
+        FullyQualified::class => true,
+    ];
 
     /**
      * Every node class leaveNode() acts on, see ENTER_NODES.
@@ -583,7 +599,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             : null;
     }
 
-    public function enterNode(Node $node): null
+    public function enterNode(Node $node): ?int
     {
         if (! isset(self::ENTER_NODES[$node::class])) {
             return null;
@@ -603,7 +619,8 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $this->addSuperglobal('$' . $node->name);
             }
 
-            return null;
+            // Only a variable variable (`$$name`, `${expr}`) has a child node.
+            return is_string($node->name) ? NodeVisitor::DONT_TRAVERSE_CHILDREN : null;
         }
 
         // The scope-tracking node types are all statements, so the far more
@@ -627,7 +644,9 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     }
                 }
 
-                return null;
+                // The NameResolver has read the imports from this node as
+                // well; the items and names below carry nothing more.
+                return NodeVisitor::DONT_TRAVERSE_CHILDREN;
             }
 
             if ($node instanceof GroupUse) {
@@ -647,7 +666,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                     }
                 }
 
-                return null;
+                return NodeVisitor::DONT_TRAVERSE_CHILDREN;
             }
 
             if ($node instanceof Function_) {
@@ -681,7 +700,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $this->collectNodeAnalysis($node);
 
-        return null;
+        return isset(self::LEAF_NODES[$node::class]) ? NodeVisitor::DONT_TRAVERSE_CHILDREN : null;
     }
 
     public function leaveNode(Node $node): null
