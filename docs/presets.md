@@ -69,12 +69,27 @@ return Architecture::define()
 
 ## Rule Key Constants
 
-Every preset rule has a public constant. Use constants instead of raw strings so IDEs and static analysis can catch mistakes.
+Every built-in preset rule has a public constant for its registration key. When referring to a rule supplied by a preset, use that constant instead of retyping its string value so IDEs and static analysis can catch misspelled constant names.
+
+Load the preset before replacing one of its rules:
 
 ```php
-// Good: caught by IDE and static analysis.
-DddPreset::ENTITY_MUST_BE_FINAL
+<?php
 
-// Bad: typo silently does nothing.
-'ddd.entity.must_be_fnal'
+use Boundwize\StructArmed\Architecture;
+use Boundwize\StructArmed\Preset\Preset;
+use Boundwize\StructArmed\Preset\Presets\DddPreset;
+use Boundwize\StructArmed\Rule\Rules\Class_\MustBeFinalRule;
+
+return Architecture::define()
+    ->withPreset(Preset::DDD())
+    ->skipRule(DddPreset::DOMAIN_NO_BASE_EXCEPTION)
+    ->replaceRule(
+        DddPreset::ENTITY_MUST_BE_FINAL,
+        new MustBeFinalRule(layer: 'Domain', classNamePattern: '/(?:Entity|Aggregate)$/')
+    );
 ```
+
+`DddPreset::ENTITY_MUST_BE_FINAL` is the string `'ddd.entity.must_be_final'`. Referencing the constant alone does not load the preset or register a rule. `replaceRule()` requires an existing key and throws `RuleNotFoundException` if it is missing; `rule()` registers a rule and overwrites any existing rule with the same key.
+
+When [using built-in rules directly](../available-rules/#using-built-in-rules-directly) without a preset, choose your own stable keys, such as `'domain.entities_must_be_final'`. String keys are valid for these registrations. If you package them in a [custom preset](../custom-rules-and-presets/#custom-presets), expose your own public constants and use those when skipping or replacing its rules.
