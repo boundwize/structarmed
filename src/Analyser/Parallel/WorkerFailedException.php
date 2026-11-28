@@ -6,6 +6,9 @@ namespace Boundwize\StructArmed\Analyser\Parallel;
 
 use RuntimeException;
 
+/**
+ * @internal
+ */
 final class WorkerFailedException extends RuntimeException
 {
 }

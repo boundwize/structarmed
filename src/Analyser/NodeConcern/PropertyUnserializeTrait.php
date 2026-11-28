@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Boundwize\StructArmed\Analyser\NodeConcern;
 
 /**
+ * @internal
+ *
  * Without __unserialize(), unserialize() builds a property hash table on every
  * object and keeps it, which roughly doubles what a node graph costs. Worker
  * results reach the coordinator through serialize(), so on a large project

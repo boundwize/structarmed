@@ -10,6 +10,9 @@ use Boundwize\StructArmed\Analyser\ClassNode;
 use Boundwize\StructArmed\Analyser\FileAnalysis;
 use Boundwize\StructArmed\Analyser\FunctionNode;
 
+/**
+ * @internal
+ */
 final readonly class ExtractionResult
 {
     /**
