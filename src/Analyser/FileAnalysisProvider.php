@@ -99,18 +99,7 @@ final class FileAnalysisProvider
      */
     public static function forScope(array $analyses, array $scopeFiles): self
     {
-        $normalisedAnalyses = self::normaliseAnalyses($analyses);
-        $scopedAnalyses     = [];
-
-        foreach ($scopeFiles as $scopeFile) {
-            $scopeFile = Path::normalise($scopeFile, canonicalise: true);
-
-            if (isset($normalisedAnalyses[$scopeFile])) {
-                $scopedAnalyses[$scopeFile] = $normalisedAnalyses[$scopeFile];
-            }
-        }
-
-        return new self($scopedAnalyses);
+        return new self($analyses, $scopeFiles);
     }
 
     /**
@@ -124,10 +113,30 @@ final class FileAnalysisProvider
         return new self((new AnalysisNodeExtractor())->extract($files)->fileAnalyses);
     }
 
-    /** @param array<string, FileAnalysis> $analyses */
-    public function __construct(private array $analyses = [])
-    {
-        $this->analyses   = self::normaliseAnalyses($this->analyses);
+    /**
+     * @param array<string, FileAnalysis> $analyses
+     * @param list<string>|null $scopeFiles
+     */
+    public function __construct(
+        private array $analyses = [],
+        ?array $scopeFiles = null,
+    ) {
+        $this->analyses = self::normaliseAnalyses($this->analyses);
+
+        if ($scopeFiles !== null) {
+            $scopedAnalyses = [];
+
+            foreach ($scopeFiles as $scopeFile) {
+                $scopeFile = Path::normalise($scopeFile, canonicalise: true);
+
+                if (isset($this->analyses[$scopeFile])) {
+                    $scopedAnalyses[$scopeFile] = $this->analyses[$scopeFile];
+                }
+            }
+
+            $this->analyses = $scopedAnalyses;
+        }
+
         $this->scopeFiles = array_keys($this->analyses);
     }
 
