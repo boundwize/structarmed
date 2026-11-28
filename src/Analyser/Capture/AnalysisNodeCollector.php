@@ -129,10 +129,9 @@ use function substr;
  * anonymous-class, file-reference, and instantiation side data), FunctionNodes,
  * and AnonymousFunctionNodes.
  *
- * enterNode() returns NodeVisitor::DONT_TRAVERSE_CHILDREN for a node whose
- * children carry nothing to collect. It stops every visitor from traversing
- * the children, so only the last visitor may return it: keep the collector
- * last.
+ * enterNode() returns NodeVisitor::DONT_TRAVERSE_CHILDREN for a `use`
+ * statement. It stops every visitor from traversing the children, so only
+ * the last visitor may return it: keep the collector last.
  *
  * @internal
  */
@@ -295,16 +294,6 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
             Include_::class       => true,
             Attribute::class      => true,
         ];
-
-    /**
-     * Collected node classes without child nodes: nothing to traverse below.
-     */
-    private const LEAF_NODES = [
-        String_::class        => true,
-        Int_::class           => true,
-        Float_::class         => true,
-        FullyQualified::class => true,
-    ];
 
     /**
      * Every node class leaveNode() acts on, see ENTER_NODES.
@@ -619,8 +608,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
                 $this->addSuperglobal('$' . $node->name);
             }
 
-            // Only a variable variable (`$$name`, `${expr}`) has a child node.
-            return is_string($node->name) ? NodeVisitor::DONT_TRAVERSE_CHILDREN : null;
+            return null;
         }
 
         // The scope-tracking node types are all statements, so the far more
@@ -700,7 +688,7 @@ final class AnalysisNodeCollector extends NodeVisitorAbstract
 
         $this->collectNodeAnalysis($node);
 
-        return isset(self::LEAF_NODES[$node::class]) ? NodeVisitor::DONT_TRAVERSE_CHILDREN : null;
+        return null;
     }
 
     public function leaveNode(Node $node): null
